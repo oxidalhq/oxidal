@@ -49,10 +49,13 @@ export function DialogHeader({
   className,
   title,
   description,
+  closable = true,
   ...props
 }: React.ComponentProps<'header'> & {
   title: React.ReactNode;
   description?: React.ReactNode;
+  /** Off for a question that must be answered, such as a change waiting to be kept. */
+  closable?: boolean;
 }) {
   return (
     <header
@@ -77,11 +80,13 @@ export function DialogHeader({
           </DialogPrimitive.Description>
         )}
       </div>
-      <DialogPrimitive.Close asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="Close">
-          <X />
-        </Button>
-      </DialogPrimitive.Close>
+      {closable && (
+        <DialogPrimitive.Close asChild>
+          <Button variant="ghost" size="icon-sm" aria-label="Close">
+            <X />
+          </Button>
+        </DialogPrimitive.Close>
+      )}
     </header>
   );
 }

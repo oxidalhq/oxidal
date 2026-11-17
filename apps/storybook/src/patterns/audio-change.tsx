@@ -11,6 +11,7 @@ import {
 import { Segment, SegmentedControl } from '../components/ui/segmented';
 import { Progress } from '../components/ui/states';
 import { Caption } from '../components/ui/text';
+import { ConfirmChange } from './confirm-change';
 
 const RATES = ['44100', '48000', '96000'];
 const FRAMES = ['48', '64', '96', '128', '256'];
@@ -129,7 +130,7 @@ export function AudioChange({
           </SegmentedControl>
         </div>
       </div>
-      {phase === 'idle' ? (
+      {phase === 'idle' && (
         <div className="flex flex-wrap items-center gap-2">
           <Button disabled={!changed} onClick={() => apply(draft)}>
             Apply and restart audio
@@ -144,35 +145,24 @@ export function AudioChange({
             </Caption>
           )}
         </div>
-      ) : (
-        <div
-          role="status"
-          className="flex flex-wrap items-center gap-2 rounded-lg border border-foreground px-3 py-2"
-        >
-          {phase === 'restarting' ? (
-            <span className="text-sm">Restarting audio…</span>
-          ) : (
-            <>
-              <span className="text-sm">
-                Audio is back with no dropouts. Keep this setting? It goes back
-                on its own in {left} s.
-              </span>
-              <span className="ml-auto flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => settle(false)}
-                >
-                  Go back
-                </Button>
-                <Button size="sm" onClick={() => settle(true)}>
-                  Keep
-                </Button>
-              </span>
-            </>
-          )}
-        </div>
       )}
+      <ConfirmChange
+        open={phase !== 'idle'}
+        title="Keep this audio setting?"
+        applying={phase === 'restarting' ? 'Restarting audio…' : undefined}
+        body={
+          <>
+            Audio is back at {current.frames} × {current.periods},{' '}
+            {current.rate / 1000} kHz, with no dropouts. If it sounds right,
+            keep it.
+          </>
+        }
+        secondsLeft={left}
+        totalSeconds={15}
+        keepLabel="Keep"
+        onKeep={() => settle(true)}
+        onGoBack={() => settle(false)}
+      />
       <BufferFinder
         {...finder}
         open={finding}

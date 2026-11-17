@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { AudioChangeDemo } from './audio-change.demo';
 
 /**
@@ -18,13 +18,17 @@ export const ApplyAndKeep: StoryObj = {
   render: () => <AudioChangeDemo />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
     await userEvent.click(canvas.getByRole('radio', { name: '96' }));
     await userEvent.click(
       canvas.getByRole('button', { name: 'Apply and restart audio' }),
     );
-    await userEvent.click(
-      await canvas.findByRole('button', { name: 'Keep' }, { timeout: 3000 }),
+    const dialog = within(
+      await page.findByRole('dialog', { name: 'Keep this audio setting?' }),
     );
+    const keep = dialog.getByRole('button', { name: 'Keep' });
+    await waitFor(() => expect(keep).toBeEnabled(), { timeout: 3000 });
+    await userEvent.click(keep);
     await expect(canvas.getByText(/96 × 3 · 48 kHz/)).toBeVisible();
   },
 };
@@ -47,7 +51,7 @@ export const Finder: StoryObj = {
       ),
     );
     await expect(
-      await canvas.findByRole('button', { name: 'Keep' }, { timeout: 3000 }),
+      await page.findByRole('dialog', { name: 'Keep this audio setting?' }),
     ).toBeVisible();
   },
 };

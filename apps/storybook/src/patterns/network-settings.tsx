@@ -17,8 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-import { Caption } from '../components/ui/text';
 import { SettingGroup, SettingRow } from './settings-page';
+import { ConfirmChange } from './confirm-change';
 
 export type WifiNetwork = {
   ssid: string;
@@ -93,33 +93,21 @@ export function NetworkSettings({
   };
   return (
     <>
-      {pending && (
-        <div
-          role="status"
-          className="grid gap-2 rounded-lg border border-foreground bg-card px-4 py-3"
-        >
-          <span className="text-sm font-semibold">
-            Joined {pending.ssid}. Can you still see this screen?
-          </span>
-          <Caption>
-            If you can, keep it. If nothing is confirmed in{' '}
-            {pending.secondsLeft} s, the device goes back to {current} so you
-            can reach it again.
-          </Caption>
-          <div className="flex gap-2">
-            <Button size="sm" onClick={() => onConfirm(true)}>
-              Keep {pending.ssid}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onConfirm(false)}
-            >
-              Go back now
-            </Button>
-          </div>
-        </div>
-      )}
+      <ConfirmChange
+        open={Boolean(pending)}
+        title={`Keep ${pending?.ssid ?? ''}?`}
+        body={
+          <>
+            The device joined {pending?.ssid}. If you can see this, keep it.
+            Otherwise it goes back to {current} so you can reach it again.
+          </>
+        }
+        secondsLeft={pending?.secondsLeft ?? 0}
+        totalSeconds={60}
+        keepLabel={`Keep ${pending?.ssid ?? ''}`}
+        onKeep={() => onConfirm(true)}
+        onGoBack={() => onConfirm(false)}
+      />
       <SettingGroup title="Wi-Fi">
         <List aria-label="Networks">
           {networks.map((n) => (
@@ -128,13 +116,17 @@ export function NetworkSettings({
               leading={<Bars n={n.strength} />}
               title={n.ssid}
               caption={
-                n.ssid === current
-                  ? `Connected · ${address}`
-                  : n.known
-                    ? 'Saved'
-                    : n.secured
-                      ? 'Needs a password'
-                      : 'Open network'
+                n.ssid === pending?.ssid
+                  ? 'Joined · waiting for you to keep it'
+                  : n.ssid === current && pending
+                    ? 'Previous network · goes back here if not kept'
+                    : n.ssid === current
+                      ? `Connected · ${address}`
+                      : n.known
+                        ? 'Saved'
+                        : n.secured
+                          ? 'Needs a password'
+                          : 'Open network'
               }
               trailing={
                 <span className="flex items-center gap-1">
@@ -144,8 +136,14 @@ export function NetworkSettings({
                       className="size-4 text-muted-foreground"
                     />
                   )}
-                  {n.ssid === current ? (
-                    <Badge size="sm">Connected</Badge>
+                  {n.ssid === pending?.ssid ? (
+                    <Badge size="sm" tone="selected">
+                      Joined
+                    </Badge>
+                  ) : n.ssid === current ? (
+                    <Badge size="sm">
+                      {pending ? 'Previous' : 'Connected'}
+                    </Badge>
                   ) : (
                     <>
                       {n.known && (

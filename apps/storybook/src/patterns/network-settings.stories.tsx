@@ -14,14 +14,18 @@ export const JoinAndKeep: StoryObj = {
   render: () => <NetworkSettingsDemo />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
     await userEvent.click(
       canvas.getByRole('button', { name: 'Join Rehearsal Room' }),
     );
-    await expect(canvas.getByRole('status')).toHaveTextContent(
-      'Can you still see this screen?',
+    const dialog = within(
+      await page.findByRole('dialog', { name: 'Keep Rehearsal Room?' }),
     );
+    await expect(
+      canvas.getByText('Joined · waiting for you to keep it'),
+    ).toBeVisible();
     await userEvent.click(
-      canvas.getByRole('button', { name: 'Keep Rehearsal Room' }),
+      dialog.getByRole('button', { name: 'Keep Rehearsal Room' }),
     );
     await expect(canvas.getByText('Connected · 192.168.1.169')).toBeVisible();
   },
