@@ -70,6 +70,23 @@ function Arrow({ down = false }: { down?: boolean }) {
   );
 }
 
+/** In the top-to-bottom route: centres a port or pill on the wire, whatever its width. */
+function OnWire({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="relative flex h-7 pl-[1.6rem]">
+      <span className="relative flex flex-col items-center">
+        <span className="invisible flex flex-col items-center">
+          <span className="h-3 w-0.5" />
+          <Arrow down />
+        </span>
+        <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap">
+          {children}
+        </span>
+      </span>
+    </div>
+  );
+}
+
 function Wire({ level, vertical }: { level?: number; vertical: boolean }) {
   const hot = level !== undefined && level > -1;
   if (vertical)
@@ -278,6 +295,7 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
   inputLevel,
   onAudition,
   sceneChanged,
+  sceneColour,
   onAdd,
   disabled = false,
   label = 'Signal route',
@@ -296,6 +314,11 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
   onAudition?: (id: string | null) => void;
   /** Blocks the playing scene changes. */
   sceneChanged?: string[];
+  /**
+   * The playing scene's colour: a faint wash behind the branches and
+   * blocks it plays. Never changes a size.
+   */
+  sceneColour?: string;
   onAdd?: (path: ListPath, index: number) => void;
   disabled?: boolean;
   label?: string;
@@ -459,7 +482,11 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
     </div>
   );
 
-  const list = (steps: Route, path: ListPath): React.ReactNode[] => {
+  const list = (
+    steps: Route,
+    path: ListPath,
+    audible = true,
+  ): React.ReactNode[] => {
     const out: React.ReactNode[] = [];
     const gap = (index: number) =>
       editing ? (
@@ -492,7 +519,7 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
               className={cn(
                 vertical
                   ? 'grid gap-3'
-                  : 'grid shrink-0 grid-cols-[max-content_max-content] gap-y-3 border-x border-wire py-1',
+                  : 'grid shrink-0 grid-cols-[max-content_max-content] gap-y-3 py-1',
               )}
             >
               {step.branches
@@ -504,10 +531,17 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
                     blocksOf(branch).some((x) => x.id === selected)
                   );
                 })
-                .map(({ branch, b }) => (
+                .map(({ branch, b }, row, rows) => (
                   <div
                     key={b}
+                    data-in-scene={
+                      (sceneColour &&
+                        audible &&
+                        (step.levels?.[b] ?? 0) > SILENT_DB) ||
+                      undefined
+                    }
                     className={cn(
+                      'relative',
                       vertical
                         ? 'ml-3 grid border-l-2 border-wire pl-3'
                         : 'col-span-2 grid grid-cols-subgrid items-center',
@@ -518,6 +552,37 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
                       (step.levels?.[b] ?? 0) <= SILENT_DB || undefined
                     }
                   >
+                    {sceneColour &&
+                      audible &&
+                      (step.levels?.[b] ?? 0) > SILENT_DB && (
+                        // The playing scene's band: inside the split's
+                        // bars, behind the blocks, never changing a size.
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            'pointer-events-none absolute inset-y-0 rounded-md',
+                            vertical ? 'right-0 left-1' : 'right-1.5 left-1.5',
+                          )}
+                          style={{
+                            backgroundColor: `color-mix(in oklab, ${sceneColour} 7%, transparent)`,
+                          }}
+                        />
+                      )}
+                    {!vertical &&
+                      (['left-0', 'right-0'] as const).map((side) => (
+                        // The split's side bars, from the first branch's wire
+                        // to the last one's, with no tail past either.
+                        <span
+                          key={side}
+                          aria-hidden="true"
+                          className={cn('absolute w-px bg-wire', side)}
+                          style={{
+                            top: row === 0 ? '50%' : '-0.375rem',
+                            bottom:
+                              row === rows.length - 1 ? '50%' : '-0.375rem',
+                          }}
+                        />
+                      ))}
                     {vertical ? (
                       <span className="py-1 small-caps text-xs font-medium text-muted-foreground">
                         {`${step.names?.[b]?.trim() ? '' : 'Branch '}${branchName(step, b)}${branch.length ? '' : ' · dry'}${(step.levels?.[b] ?? 0) <= SILENT_DB ? ' · silent' : ''}`}
@@ -549,7 +614,11 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
                       )}
                     >
                       {branch.length ? (
-                        list(branch, [...path, index, b])
+                        list(
+                          branch,
+                          [...path, index, b],
+                          audible && (step.levels?.[b] ?? 0) > SILENT_DB,
+                        )
                       ) : (
                         <>
                           {editing ? (
@@ -619,9 +688,11 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
               )}
             </div>
             {vertical ? (
-              <span className="justify-self-start rounded-full border border-wire px-2.5 py-1 small-caps text-xs text-muted-foreground">
-                Join
-              </span>
+              <OnWire>
+                <span className="rounded-full border border-wire bg-background px-2.5 py-1 small-caps text-xs text-muted-foreground">
+                  Join
+                </span>
+              </OnWire>
             ) : (
               <span className="flex items-center" aria-hidden="true">
                 <span className="h-px w-2 bg-wire" />
@@ -680,20 +751,26 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
         )}
         style={!vertical && scale < 1 ? { zoom: scale } : undefined}
       >
-        <ChainPort
-          label="In"
-          className={cn(vertical && 'justify-self-start')}
-        />
+        {vertical ? (
+          <OnWire>
+            <ChainPort label="In" />
+          </OnWire>
+        ) : (
+          <ChainPort label="In" />
+        )}
         <Wire level={inputLevel} vertical={vertical} />
         {list(route, [])}
         <Wire
           level={last ? levels?.[last.id] : undefined}
           vertical={vertical}
         />
-        <ChainPort
-          label="Out"
-          className={cn(vertical && 'justify-self-start')}
-        />
+        {vertical ? (
+          <OnWire>
+            <ChainPort label="Out" />
+          </OnWire>
+        ) : (
+          <ChainPort label="Out" />
+        )}
       </div>
       {heard && (
         <span role="status" className="sr-only">

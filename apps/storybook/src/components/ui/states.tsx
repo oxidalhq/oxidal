@@ -4,6 +4,7 @@ import { CircleNotch } from '@phosphor-icons/react';
 import { cn } from '../../lib/cn';
 import { Button } from './button';
 import { Caption } from './text';
+import { StableLabel } from './stable-label';
 
 /**
  * The states a section passes through: loading (Skeleton, Loading), empty
@@ -196,7 +197,10 @@ export function StepProgress({
           disabled={cancelling}
           onClick={onCancel}
         >
-          {cancelling ? 'Stopping…' : 'Cancel'}
+          <StableLabel
+            value={cancelling ? 'Stopping…' : 'Cancel'}
+            options={['Cancel', 'Stopping…']}
+          />
         </Button>
       )}
     </div>

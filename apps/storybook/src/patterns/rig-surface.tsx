@@ -57,6 +57,7 @@ import {
 } from '../widgets/block-editor';
 import { RouteView } from '../widgets/route-view';
 import { ScenePads, type Scene } from '../widgets/scene-pad';
+import { sceneColour } from '../lib/scene-colours';
 import { SceneEditor, type SceneModel } from '../widgets/scene-editor';
 import { SceneChange, type SceneChangeSettings } from '../widgets/scene-change';
 import {
@@ -239,6 +240,7 @@ export function RigSurface({
   );
   const [sheet, setSheet] = React.useState(false);
   const [full, setFull] = React.useState(false);
+  const activeIndex = scenes.findIndex((sc) => sc.id === activeScene);
   const sceneModel =
     scope === 'scene' && compare !== 'saved'
       ? sceneModels.find((m) => m.id === activeScene)
@@ -530,7 +532,14 @@ export function RigSurface({
 
       {showScenes && (
         <div className="grid gap-2 px-page">
-          <ScenePads scenes={scenes} active={activeScene} onSelect={onScene} />
+          <ScenePads
+            scenes={scenes.map((sc, i) => ({
+              ...sc,
+              colour: sc.colour ?? sceneColour(i),
+            }))}
+            active={activeScene}
+            onSelect={onScene}
+          />
         </div>
       )}
 
@@ -545,6 +554,11 @@ export function RigSurface({
         onAudition={onAudition}
         sceneChanged={
           sceneModel ? sceneDifferences(route, sceneModel) : sceneChanged
+        }
+        sceneColour={
+          activeIndex >= 0
+            ? (scenes[activeIndex]?.colour ?? sceneColour(activeIndex))
+            : undefined
         }
         onAdd={effects ? (path, index) => setAdding({ path, index }) : onAdd}
       />

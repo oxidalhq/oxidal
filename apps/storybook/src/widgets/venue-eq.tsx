@@ -34,6 +34,7 @@ import {
 import { Switch } from '../components/ui/switch';
 import { Toggle } from '../components/ui/toggle';
 import { Caption } from '../components/ui/text';
+import { StableLabel } from '../components/ui/stable-label';
 
 export type VenueProfile = {
   id: string;
@@ -454,7 +455,10 @@ export function VenueEq({
           />
         </div>
         <Toggle size="sm" pressed={bypass} onPressedChange={setBypass}>
-          {bypass ? 'Bypassed' : 'Bypass'}
+          <StableLabel
+            value={bypass ? 'Bypassed' : 'Bypass'}
+            options={['Bypass', 'Bypassed']}
+          />
         </Toggle>
         <Toggle
           size="sm"
@@ -462,7 +466,10 @@ export function VenueEq({
           disabled={!changed}
           onPressedChange={setCompare}
         >
-          {compare ? 'Hearing saved' : 'Compare to saved'}
+          <StableLabel
+            value={compare ? 'Hearing saved' : 'Compare to saved'}
+            options={['Compare to saved', 'Hearing saved']}
+          />
         </Toggle>
         <span
           role="status"

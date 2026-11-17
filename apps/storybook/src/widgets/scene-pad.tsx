@@ -2,7 +2,13 @@ import * as React from 'react';
 import { cn } from '../lib/cn';
 import { MidiTarget } from './midi';
 
-export type Scene = { id: string; name: string; number?: number };
+export type Scene = {
+  id: string;
+  name: string;
+  number?: number;
+  /** The scene's colour (see lib/scene-colours): a stripe on its pad. */
+  colour?: string;
+};
 
 /**
  * One scene: a pad with its number in small caps and its name large. The
@@ -65,7 +71,7 @@ export function ScenePad({
         onSelect(scene.id);
       }}
       className={cn(
-        'grid min-w-0 content-start gap-0.5 rounded-pad border border-input bg-card px-3 py-2 text-left transition-[background-color,transform] duration-[var(--duration-fast)] select-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40',
+        'relative grid min-w-0 content-start gap-0.5 overflow-hidden rounded-pad border border-input bg-card px-3 py-2 text-left transition-[background-color,transform] duration-[var(--duration-fast)] select-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40',
         size === 'md' ? 'min-h-14' : 'min-h-20 px-4 py-3',
         active &&
           'border-foreground bg-foreground text-background hover:bg-foreground',
@@ -73,6 +79,14 @@ export function ScenePad({
         className,
       )}
     >
+      {scene.colour && (
+        <span
+          aria-hidden="true"
+          data-slot="scene-colour"
+          className="absolute inset-x-0 top-0 h-1"
+          style={{ backgroundColor: scene.colour }}
+        />
+      )}
       {scene.number !== undefined && (
         <span
           className={cn(

@@ -57,6 +57,14 @@
   --led-time: #2f6fb0;
   --led-lv2: #23807a;
   --led-mod: #7a5ea8;
+  --scene-1: #2a8c8c;
+  --scene-2: #b8486e;
+  --scene-3: #b8862a;
+  --scene-4: #3f6fb5;
+  --scene-5: #4f8a3c;
+  --scene-6: #7b5cb0;
+  --scene-7: #c46a2a;
+  --scene-8: #5f7186;
 
   /* The ink faceplate (header) and the readout panel. */
   --enclosure: #1b1a17;
@@ -117,6 +125,14 @@
   --led-time: #5d8fc8;
   --led-lv2: #45a198;
   --led-mod: #9d86c9;
+  --scene-1: #5cc0c0;
+  --scene-2: #e07a9e;
+  --scene-3: #e0b45a;
+  --scene-4: #7aa3e6;
+  --scene-5: #86c070;
+  --scene-6: #a98ee0;
+  --scene-7: #ec9a5c;
+  --scene-8: #94a6bb;
   --enclosure: #0c0c0b;
   --enclosure-foreground: #ece9e2;
   --enclosure-border: #36342f;
@@ -143,6 +159,14 @@
   --led-time: #0b4f99;
   --led-lv2: #00625b;
   --led-mod: #5a3d8c;
+  --scene-1: #006b6b;
+  --scene-2: #93244d;
+  --scene-3: #8a5f00;
+  --scene-4: #1f4f99;
+  --scene-5: #2e6a1c;
+  --scene-6: #5a3a94;
+  --scene-7: #9a4500;
+  --scene-8: #3c4d61;
   --enclosure: #000000;
   --enclosure-foreground: #ffffff;
   --enclosure-border: #000000;
@@ -174,6 +198,14 @@
   --led-time: #000000;
   --led-lv2: #000000;
   --led-mod: #000000;
+  --scene-1: #000000;
+  --scene-2: #000000;
+  --scene-3: #000000;
+  --scene-4: #000000;
+  --scene-5: #000000;
+  --scene-6: #000000;
+  --scene-7: #000000;
+  --scene-8: #000000;
   --enclosure: #000000;
   --enclosure-foreground: #ffffff;
   --enclosure-border: #000000;

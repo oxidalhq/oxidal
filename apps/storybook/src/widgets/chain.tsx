@@ -3,7 +3,7 @@ import { Plus } from '@phosphor-icons/react';
 import { cn } from '../lib/cn';
 import { glyphForBlock } from '../lib/block-glyphs';
 import { BlockGlyph } from './block-glyph';
-import { Badge, Led } from '../components/ui/badge';
+import { Led } from '../components/ui/badge';
 
 export type BlockKind = 'amp' | 'cab' | 'pedal' | 'time' | 'mod' | 'lv2';
 
@@ -41,6 +41,7 @@ export function ChainBlock({
   sceneMark = false,
   muted = false,
   size = 'md',
+  tint,
   onSelect,
   onPointerDown,
   className,
@@ -54,6 +55,8 @@ export function ChainBlock({
   /** Held out of the sound for a moment (hold-to-hear). */
   muted?: boolean;
   size?: 'md' | 'lg';
+  /** A scene colour: a faint wash showing the playing scene uses this block. */
+  tint?: string;
   onSelect: (id: string) => void;
   onPointerDown?: (event: React.PointerEvent<HTMLButtonElement>) => void;
   className?: string;
@@ -65,9 +68,9 @@ export function ChainBlock({
       aria-label={[
         block.label,
         block.caption ?? block.kind,
+        block.preview,
         !block.on && 'Off',
         block.on && block.unsaved && 'Unsaved',
-        block.preview,
         sceneMark && 'changed by this scene',
       ]
         .filter(Boolean)
@@ -82,6 +85,15 @@ export function ChainBlock({
       disabled={disabled}
       onClick={() => onSelect(block.id)}
       onPointerDown={onPointerDown}
+      data-in-scene={tint ? true : undefined}
+      style={
+        tint && !selected
+          ? {
+              backgroundColor: `color-mix(in oklab, ${tint} 12%, var(--card))`,
+              borderColor: `color-mix(in oklab, ${tint} 45%, var(--input))`,
+            }
+          : undefined
+      }
       className={cn(
         'group/block relative grid shrink-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2.5 rounded-pad border border-input bg-card text-left transition-[background-color,transform,box-shadow] duration-[var(--duration-fast)] select-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-40',
         size === 'md'
@@ -140,24 +152,6 @@ export function ChainBlock({
           )}
         >
           <span className="truncate">{block.caption ?? block.kind}</span>{' '}
-          {!block.on && (
-            <Badge
-              size="sm"
-              tone={selected ? 'neutral' : 'warning'}
-              className={cn(selected && 'border-background/60 text-background')}
-            >
-              Off
-            </Badge>
-          )}
-          {block.on && block.unsaved && (
-            <Badge
-              size="sm"
-              tone="warning"
-              className={cn(selected && 'border-background/60 text-background')}
-            >
-              Unsaved
-            </Badge>
-          )}
         </span>{' '}
         {block.preview && (
           <span
@@ -170,6 +164,25 @@ export function ChainBlock({
           </span>
         )}
       </span>
+      {(!block.on || block.unsaved) && ' '}
+      {(!block.on || block.unsaved) && (
+        // On the top edge, over the border: a state tag never changes the
+        // block's size, so switching a block never moves the route.
+        <span
+          aria-hidden="true"
+          data-slot="block-state"
+          className={cn(
+            'absolute -top-2 right-2 rounded-full border px-1.5 small-caps text-2xs leading-4 font-medium',
+            selected
+              ? 'border-background/60 bg-foreground text-background'
+              : !block.on
+                ? 'border-border bg-background text-muted-foreground'
+                : 'border-brand bg-background text-foreground',
+          )}
+        >
+          {!block.on ? 'Off' : 'Unsaved'}
+        </span>
+      )}
       {sceneMark && (
         <span
           aria-hidden="true"

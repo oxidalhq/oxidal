@@ -13,6 +13,7 @@ import { useConfirm } from '../components/ui/confirm';
 import { List, ListRow } from '../components/ui/list-row';
 import { Caption } from '../components/ui/text';
 import { useMidi } from './midi-context';
+import { StableLabel } from '../components/ui/stable-label';
 
 /**
  * Settings › MIDI: every control you can map, grouped, with what it is
@@ -106,7 +107,12 @@ export function MidiMap() {
                             midi.learn(midi.learning === t.id ? null : t.id)
                           }
                         >
-                          {midi.learning === t.id ? 'Listening…' : 'Learn'}
+                          <StableLabel
+                            value={
+                              midi.learning === t.id ? 'Listening…' : 'Learn'
+                            }
+                            options={['Learn', 'Listening…']}
+                          />
                         </Button>
                         {mapping && (
                           <Button

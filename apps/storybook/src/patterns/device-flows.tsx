@@ -13,6 +13,7 @@ import { Segment, SegmentedControl } from '../components/ui/segmented';
 import { Slider } from '../components/ui/slider';
 import { Caption } from '../components/ui/text';
 import { Toggle } from '../components/ui/toggle';
+import { StableLabel } from '../components/ui/stable-label';
 
 export type EqBand = { id: number; name: string; hz: number };
 export type EqPosition = 'before' | 'after';
@@ -176,7 +177,11 @@ export function DiReamps({
           onPressedChange={onRecording}
           aria-label="Record DI"
         >
-          <Microphone /> {recording ? 'Stop and keep' : 'Record DI'}
+          <Microphone />{' '}
+          <StableLabel
+            value={recording ? 'Stop and keep' : 'Record DI'}
+            options={['Record DI', 'Stop and keep']}
+          />
         </Toggle>
       </CardHeader>
       {recording && (

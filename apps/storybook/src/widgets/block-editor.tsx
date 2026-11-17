@@ -29,6 +29,7 @@ import { VisualControl } from './visual-control';
 import type { ChainBlockModel } from './chain';
 import type { BlockSource } from './block-source';
 import { SourceLine } from './block-source';
+import { StableLabel } from '../components/ui/stable-label';
 
 export type BlockControl = {
   id: string;
@@ -107,7 +108,10 @@ export function BlockQuickEditor({
         </div>
         <Toggle size="sm" pressed={block.on} onPressedChange={onToggle}>
           <span className="sr-only">{block.label} </span>
-          {block.on ? 'On' : 'Off'}
+          <StableLabel
+            value={block.on ? 'On' : 'Off'}
+            options={['On', 'Off']}
+          />
         </Toggle>
       </div>
       {block.mics ? (
