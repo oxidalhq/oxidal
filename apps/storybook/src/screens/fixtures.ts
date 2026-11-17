@@ -31,33 +31,6 @@ export const PRESETS: LibraryItem[] = [
   { id: 'p6', title: 'Cold Cathedral', caption: 'Oxidal sound · 7 blocks' },
 ];
 
-export const SOUNDS: LibraryItem[] = [
-  'Brown Crunch',
-  'Arena Chorus',
-  'Power Stack',
-  'Cold Steel',
-  'Neon Clean',
-  'Glass Pop',
-  'Grunge Wall',
-  'Groove Hammer',
-  'Pocket Chime',
-  'Britpop Shimmer',
-  'Low Orbit',
-  'Stadium Alt',
-  'Fuzz Hook',
-  'Tight Eight',
-  'Black Gate',
-  'Cold Cathedral',
-].map((title, i) => ({
-  id: `s${i}`,
-  title,
-  caption:
-    ['Rock', 'Pop', 'Metal', 'Clean', 'Alt', 'Bass'][i % 6] +
-    ' · ' +
-    (4 + (i % 4)) +
-    ' blocks',
-}));
-
 export const TONES: LibraryItem[] = [
   {
     id: 't1',

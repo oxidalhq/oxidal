@@ -13,13 +13,14 @@ import { SetListSection } from './set-list-section';
 import {
   DI,
   PRESETS,
-  SOUNDS,
   STARTING_FAVOURITES,
   STEM_SONGS,
   TONES,
   TRACKS,
   withUsage,
 } from './fixtures';
+import { SoundBrowser } from '../patterns/sound-browser';
+import { SOUNDS as OXIDAL_SOUNDS } from '../patterns/sound-browser.data';
 
 /**
  * Library: eight sections in one workspace, each a LibraryList with its
@@ -102,25 +103,15 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
           />
         )}
         {section === 'oxidal' && (
-          <LibraryList
-            {...common}
-            items={use(SOUNDS)}
-            view={view}
-            onView={setView}
-            filters={[
-              { id: 'all', label: 'All' },
-              { id: 'rock', label: 'Rock' },
-              { id: 'clean', label: 'Clean' },
-              { id: 'metal', label: 'Metal' },
-              { id: 'bass', label: 'Bass' },
-            ]}
-            filter={filter}
-            onFilter={setFilter}
-            empty={{ title: 'No sounds' }}
-            actions={[
-              { label: 'Save a copy to Mine', run: () => {} },
-              { label: 'Add to set list', run: () => {} },
-            ]}
+          <SoundBrowser
+            sounds={OXIDAL_SOUNDS}
+            status={{ state: 'ready' }}
+            onTry={() => {}}
+            onSaveCopy={() => {}}
+            onAddToSetList={() => {}}
+            onGetTone={() => {}}
+            onInstallPack={() => {}}
+            onRetry={() => {}}
           />
         )}
         {section === 'tone3000' && (
