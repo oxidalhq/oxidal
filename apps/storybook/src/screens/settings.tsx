@@ -23,19 +23,23 @@ import {
   SettingsPage,
 } from '../patterns/settings-page';
 import { SETTINGS_SECTIONS } from './settings.sections';
-import { AudioChange } from '../patterns/audio-change';
-import { Tone3000Account } from '../patterns/tone3000';
-import { NetworkSettings } from '../patterns/network-settings';
+import { AudioChangeDemo } from '../patterns/audio-change.demo';
+import { Tone3000AccountDemo } from '../patterns/tone3000.demo';
+import { NetworkSettingsDemo } from '../patterns/network-settings.demo';
 import {
-  BootPlayback,
-  DebugConsole,
-  StorageLock,
-} from '../patterns/device-flows';
+  BootPlaybackDemo,
+  DebugConsoleDemo,
+  StorageLockDemo,
+} from '../patterns/device-flows.demo';
 import {
-  ControllerSetup,
-  ExtraControllers,
-} from '../patterns/controller-setup';
-import { Effects, NamEngine, PluginPacks } from './settings.effects';
+  ControllerSetupDemo,
+  ExtraControllersDemo,
+} from '../patterns/controller-setup.demo';
+import {
+  BuiltInEffectsDemo,
+  NamEngineDemo,
+  PluginPacksDemo,
+} from '../patterns/engine-settings.demo';
 import { DEFAULT_MAP } from '../lib/midi';
 import { MidiBar, MidiProvider } from '../widgets/midi';
 import { PretendController, WebMidiButton } from '../widgets/midi-controller';
@@ -61,8 +65,8 @@ function Audio() {
           </Select>
         </SettingRow>
       </SettingGroup>
-      <AudioChange />
-      <BootPlayback />
+      <AudioChangeDemo />
+      <BootPlaybackDemo />
       <SettingGroup title="Playback">
         <SettingRow label="Audio" caption="Running · 0 xruns in 12 min">
           <Button size="sm" variant="outline">
@@ -80,7 +84,7 @@ function Audio() {
 function Accounts() {
   return (
     <>
-      <Tone3000Account initial="connected" />
+      <Tone3000AccountDemo initial="connected" />
       <SettingGroup title="TONE3000">
         <SettingRow
           id="auto"
@@ -110,8 +114,8 @@ function Midi() {
           </Button>
         </SettingRow>
       </SettingGroup>
-      <ControllerSetup />
-      <ExtraControllers />
+      <ControllerSetupDemo />
+      <ExtraControllersDemo />
       <SettingGroup title="Switches">
         {[
           'A · Scene 1',
@@ -284,8 +288,8 @@ function Maintenance() {
           </Button>
         </SettingRow>
       </CollapsibleSection>
-      <StorageLock />
-      <DebugConsole />
+      <StorageLockDemo />
+      <DebugConsoleDemo />
     </>
   );
 }
@@ -341,12 +345,12 @@ function About() {
 
 const PAGES: Record<string, () => React.JSX.Element> = {
   audio: Audio,
-  connections: NetworkSettings,
+  connections: NetworkSettingsDemo,
   accounts: Accounts,
   midi: Midi,
-  nam: NamEngine,
-  effects: Effects,
-  plugins: () => <PluginPacks />,
+  nam: NamEngineDemo,
+  effects: BuiltInEffectsDemo,
+  plugins: () => <PluginPacksDemo />,
   display: Display,
   device: Device,
   maintenance: Maintenance,

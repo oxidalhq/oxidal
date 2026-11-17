@@ -11,38 +11,48 @@ import { Toggle } from '../components/ui/toggle';
 const SPEEDS = [50, 75, 100, 125, 150];
 
 /** A steady, made-up waveform: louder in the choruses. */
-function peaks(n: number) {
-  return Array.from({ length: n }, (_, i) => {
-    const section = Math.sin((i / n) * Math.PI * 4) * 0.25 + 0.6;
-    return Math.max(
-      0.12,
-      Math.min(
-        1,
-        section + Math.sin(i * 1.7) * 0.18 + Math.sin(i * 0.31) * 0.1,
-      ),
-    );
-  });
-}
 
 /**
  * Practice tools in the backing player: the waveform (tap to move the
  * playhead, drag to choose a loop), A–B loop, speed that keeps the pitch,
  * and a click that follows the song's own beats or a steady tempo.
  */
+export type PracticeState = {
+  /** Seconds. */
+  position: number;
+  loop: { a: number; b: number } | null;
+  looping: boolean;
+  /** Percent of normal speed; pitch stays. */
+  speed: number;
+  click: boolean;
+  /** The click follows the song's beats, or a steady tempo. */
+  timing: 'beats' | 'steady';
+  /** Beats per minute of the steady click. */
+  steady: number;
+  /** Click level in dB. */
+  level: number;
+};
+
 export function PracticePanel({
   duration,
+  waveform,
   position: initial = 0,
   bpm,
+  onChange,
   className,
 }: {
   /** Seconds. */
   duration: number;
+  /** Peak heights from 0 to 1, evenly spread across the song. */
+  waveform: number[];
   position?: number;
   /** Tempo found in the song, or undefined when uncertain. */
   bpm?: number;
+  /** Everything the player engine needs to follow, on every change. */
+  onChange?: (state: PracticeState) => void;
   className?: string;
 }) {
-  const bars = React.useMemo(() => peaks(120), []);
+  const bars = waveform;
   const [position, setPosition] = React.useState(initial);
   const [loop, setLoop] = React.useState<{ a: number; b: number } | null>(null);
   const [looping, setLooping] = React.useState(false);
@@ -52,6 +62,22 @@ export function PracticePanel({
   const [timing, setTiming] = React.useState('beats');
   const [steady, setSteady] = React.useState(bpm ?? 120);
   const [level, setLevel] = React.useState(-12);
+  const report = React.useRef(onChange);
+  React.useEffect(() => {
+    report.current = onChange;
+  }, [onChange]);
+  React.useEffect(() => {
+    report.current?.({
+      position,
+      loop,
+      looping,
+      speed: Number(speed),
+      click,
+      timing: timing === 'steady' ? 'steady' : 'beats',
+      steady,
+      level,
+    });
+  }, [position, loop, looping, speed, click, timing, steady, level]);
   const wave = React.useRef<HTMLDivElement>(null);
   const drag = React.useRef<number | null>(null);
 

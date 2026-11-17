@@ -25,7 +25,7 @@ describe('editing a scene from the chain', () => {
     expect(split?.levels).toEqual([0, -60, -60, -8]);
   });
 
-  it('sends settings to the preset', () => {
+  it('sends settings to the scene, leaving the preset as it was', () => {
     const shown = applyScene(FOUR_JOBS, verse);
     const next = updateBlock(shown, 'ts9', (b) => ({
       ...b,
@@ -33,7 +33,12 @@ describe('editing a scene from the chain', () => {
     }));
     const edit = splitSceneEdit(next, FOUR_JOBS, verse);
     const ts9 = blocksOf(edit.route).find((b) => b.id === 'ts9')!;
-    expect(ts9.controls.every((c) => c.value === 9)).toBe(true);
+    expect(ts9.controls.some((c) => c.value === 9)).toBe(false);
+    expect(edit.scene.values?.ts9?.drive).toBe(9);
     expect(edit.scene.on.ts9).toBe(false);
+    const heard = blocksOf(applyScene(edit.route, edit.scene)).find(
+      (b) => b.id === 'ts9',
+    )!;
+    expect(heard.controls.every((c) => c.value === 9)).toBe(true);
   });
 });

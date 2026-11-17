@@ -58,7 +58,14 @@ import {
 import { RouteView } from '../widgets/route-view';
 import { ScenePads, type Scene } from '../widgets/scene-pad';
 import { SceneEditor, type SceneModel } from '../widgets/scene-editor';
-import { applyScene, sceneDifferences, splitSceneEdit } from '../lib/scene';
+import { SceneChange, type SceneChangeSettings } from '../widgets/scene-change';
+import {
+  applyScene,
+  sceneDifferences,
+  sceneValueCount,
+  setSceneValue,
+  splitSceneEdit,
+} from '../lib/scene';
 import {
   ChangeList,
   CompareToggle,
@@ -67,7 +74,6 @@ import {
 } from '../widgets/versions';
 import { CabMics } from '../widgets/cab-mics';
 import { BlockChooser, type EffectChoice } from './block-chooser';
-import { NamBlockTools } from './nam-block';
 import { BlockActions } from './block-actions';
 import { useConfirm } from '../components/ui/confirm';
 import {
@@ -160,6 +166,9 @@ export function RigSurface({
   models,
   blockTypes,
   effects,
+  blockTools,
+  downloads,
+  onGetModel,
   className,
 }: {
   presetName: string;
@@ -191,6 +200,12 @@ export function RigSurface({
   blockTypes?: BlockType[];
   /** With effects, each + opens the block chooser instead of calling onAdd. */
   effects?: EffectChoice[];
+  /** Extra tools at the end of a block's full editor, such as NAM capture tools for amps. */
+  blockTools?: (block: BlockModel) => React.ReactNode;
+  /** TONE3000 downloads in progress for the Change sheet: model id → percent. */
+  downloads?: Record<string, number>;
+  /** Download a TONE3000 model from the Change sheet. */
+  onGetModel?: (choice: ModelChoice) => void;
   className?: string;
 }) {
   const phone = usePhone();
@@ -205,6 +220,11 @@ export function RigSurface({
   const [editing, setEditing] = React.useState(false);
   const [showScenes, setShowScenes] = React.useState(false);
   const [sceneEditor, setSceneEditor] = React.useState(false);
+  const [sceneChange, setSceneChange] = React.useState<SceneChangeSettings>({
+    mode: 'trails',
+    fadeMs: 30,
+    presetTrails: true,
+  });
   const [sceneModels, setSceneModels] = React.useState<SceneModel[]>(() =>
     scenes.map(
       (s) =>
@@ -304,6 +324,15 @@ export function RigSurface({
     latest.current = route;
   }, [route]);
   const control = (id: string, controlId: string, value: number) => {
+    // In "This scene", a value belongs to the playing scene (H-1).
+    if (sceneModel) {
+      setSceneModels((all) =>
+        all.map((m) =>
+          m.id === sceneModel.id ? setSceneValue(m, id, controlId, value) : m,
+        ),
+      );
+      return;
+    }
     const next = updateBlock(latest.current, id, (b) => ({
       ...b,
       unsaved: true,
@@ -489,10 +518,10 @@ export function RigSurface({
           {reading && <Badge tone="selected">Hearing the saved version</Badge>}
           {sceneModel && (
             <Caption as="p" role="status" className="basis-full text-xs">
-              Editing {sceneModel.name}: switching a block off (it keeps
-              running) and branch levels change this scene only, and a block you
-              add plays in this scene only. Settings and moves change the whole
-              preset; for other settings in one scene, duplicate the block.
+              Editing {sceneModel.name}: on or off (an off block keeps running),
+              branch levels and every value you change belong to this scene
+              only, and a block you add plays in this scene only. Moving or
+              removing blocks changes the whole preset.
             </Caption>
           )}
         </div>
@@ -604,6 +633,33 @@ export function RigSurface({
                   <CaretRight />
                 </Button>
               </div>
+              {sceneModel && sceneValueCount(sceneModel, block.id) > 0 && (
+                <div
+                  data-slot="scene-values"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed border-foreground px-3 py-1.5"
+                >
+                  <Caption as="span" className="text-xs">
+                    {sceneModel.name} sets{' '}
+                    {sceneValueCount(sceneModel, block.id)} of its values
+                  </Caption>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      setSceneModels((all) =>
+                        all.map((m) => {
+                          if (m.id !== sceneModel.id) return m;
+                          const values = { ...m.values };
+                          delete values[block.id];
+                          return { ...m, values, edited: true };
+                        }),
+                      )
+                    }
+                  >
+                    Use the preset's values
+                  </Button>
+                </div>
+              )}
               <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-1.5">
                 <label
                   htmlFor={`on-${block.id}`}
@@ -760,7 +816,8 @@ export function RigSurface({
             title="Edit scenes"
             description={`What each scene of ${presetName} plays. Tap a scene name to hear it.`}
           />
-          <SheetBody>
+          <SheetBody className="grid content-start gap-3">
+            <SceneChange value={sceneChange} onChange={setSceneChange} />
             <SceneEditor
               route={route}
               onRoute={onRoute}
@@ -781,6 +838,8 @@ export function RigSurface({
           models={models ?? []}
           types={blockTypes ?? []}
           onTry={trySwap}
+          downloads={downloads}
+          onGet={onGetModel}
           onBack={() => {
             const was = before.current;
             if (was) onRoute(updateBlock(route, was.id, () => was));
@@ -800,7 +859,7 @@ export function RigSurface({
                 block={block}
                 onControl={(c, v) => control(block.id, c, v)}
               />
-              {block.kind === 'amp' && <NamBlockTools />}
+              {blockTools?.(block)}
             </SheetBody>
             <SheetFooter>
               <Button variant="outline" onClick={() => setFull(false)}>

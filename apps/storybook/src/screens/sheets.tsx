@@ -17,6 +17,9 @@ import {
   type StemRole,
 } from '../widgets/stem-strip';
 import { Transport, type TransportState } from '../widgets/transport';
+import { exampleWaveform } from '../widgets/practice.data';
+
+const WAVEFORM = exampleWaveform();
 
 /**
  * The backing player as a sheet over any screen: transport, position with
@@ -61,7 +64,12 @@ export function PlayerSheet({
             onPrevious={() => {}}
             onNext={() => {}}
           />
-          <PracticePanel duration={222} position={64} bpm={118} />
+          <PracticePanel
+            waveform={WAVEFORM}
+            duration={222}
+            position={64}
+            bpm={118}
+          />
           <div className="grid gap-2">
             <div className="flex items-center justify-between">
               <Label as="span">Stems</Label>

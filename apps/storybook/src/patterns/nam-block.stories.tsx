@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
-import { NamBlockTools } from './nam-block';
+import { NamBlockToolsDemo } from './nam-block.demo';
 
 /** A NAM amp block's own tools, from its full editor. */
 const meta: Meta = {
@@ -11,7 +11,7 @@ export default meta;
 
 export const FromTone3000: StoryObj = {
   name: 'A TONE3000 capture: size, own copy, separate',
-  render: () => <NamBlockTools />,
+  render: () => <NamBlockToolsDemo />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);

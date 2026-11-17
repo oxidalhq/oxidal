@@ -95,6 +95,8 @@ export function SwapSheet({
   types,
   onTry,
   onBack,
+  downloads = {},
+  onGet,
 }: {
   block: BlockModel | null;
   open: boolean;
@@ -105,21 +107,20 @@ export function SwapSheet({
   onTry: (trial: Trial) => void;
   /** Put the block back the way it was when the sheet opened. */
   onBack: () => void;
+  /** TONE3000 downloads in progress: model id → percent. */
+  downloads?: Record<string, number>;
+  /** Download a TONE3000 model; the sheet tries it once the model is marked downloaded. */
+  onGet?: (choice: ModelChoice) => void;
 }) {
   const [query, setQuery] = React.useState('');
   const [tried, setTried] = React.useState<ModelChoice[]>([]);
   const [current, setCurrent] = React.useState<string | null>(null);
-  const [downloading, setDownloading] = React.useState<{
-    id: string;
-    progress: number;
-  } | null>(null);
-  const [downloaded, setDownloaded] = React.useState<Set<string>>(new Set());
+  const [wanted, setWanted] = React.useState<string | null>(null);
   const [original, setOriginal] = React.useState<string | null>(null);
   const [originalLoudness, setOriginalLoudness] = React.useState<
     number | undefined
   >(undefined);
   const [matching, setMatching] = React.useState(true);
-  const timer = React.useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Each time the sheet opens, the block as it is becomes the way back.
   const [openedFor, setOpenedFor] = React.useState<string | null>(null);
@@ -133,12 +134,6 @@ export function SwapSheet({
     setCurrent(null);
   }
   if (!open && openedFor) setOpenedFor(null);
-  React.useEffect(
-    () => () => {
-      if (timer.current) clearInterval(timer.current);
-    },
-    [],
-  );
 
   if (!block) return null;
   const kind = modelKind(block);
@@ -164,26 +159,20 @@ export function SwapSheet({
   const playing = models.find((m) => m.id === current);
   const trim = playing ? trimFor(playing) : 0;
   const get = (choice: ModelChoice) => {
-    if (timer.current) clearInterval(timer.current);
-    let progress = 0;
-    setDownloading({ id: choice.id, progress });
-    timer.current = setInterval(() => {
-      progress += 25;
-      if (progress <= 100) {
-        setDownloading({ id: choice.id, progress });
-        return;
-      }
-      if (timer.current) clearInterval(timer.current);
-      setDownloading(null);
-      setDownloaded((all) => new Set(all).add(choice.id));
-      tryModel(choice);
-    }, 120);
+    setWanted(choice.id);
+    onGet?.(choice);
   };
+  // A model asked for is tried as soon as it has arrived.
+  const arrived = models.find((m) => m.id === wanted && m.downloaded);
+  if (arrived) {
+    setWanted(null);
+    tryModel(arrived);
+  }
 
   const row = (m: ModelChoice) => {
-    const ready = m.from === 'mine' || m.downloaded || downloaded.has(m.id);
+    const ready = m.from === 'mine' || m.downloaded;
     const playing = current === m.id;
-    const busy = downloading?.id === m.id;
+    const busy = downloads[m.id] !== undefined;
     return (
       <ListRow
         key={m.id}
@@ -204,7 +193,7 @@ export function SwapSheet({
         trailing={
           busy ? (
             <Progress
-              value={downloading.progress}
+              value={downloads[m.id] ?? 0}
               label={`Downloading ${m.label}`}
               className="w-20"
             />

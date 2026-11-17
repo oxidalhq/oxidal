@@ -11,6 +11,7 @@ import {
   PresetDetails,
 } from './preset-dialogs';
 import { SERIAL_ROUTE } from './rig.fixtures';
+import { BROWN_CRUNCH } from './preset-dialogs.data';
 
 /**
  * Library presets: make a new one, open its details, edit it without
@@ -53,17 +54,23 @@ function Flow() {
         </>
       )}
       <NewPresetDialog
+        playing="Rhythm section"
         open={dialog === 'new'}
         onOpenChange={(o) => setDialog(o ? 'new' : null)}
         onCreate={(name, from) => setNote(`Created ${name} from ${from}`)}
       />
       <PresetDetails
+        preset={BROWN_CRUNCH}
+        onDuplicate={() => setNote('Duplicated')}
+        onExport={() => setNote('Exported')}
         open={dialog === 'details'}
         onOpenChange={(o) => setDialog(o ? 'details' : null)}
         onDelete={() => setDialog('delete')}
         onEditOffline={() => (setDialog(null), setOffline(true))}
       />
       <DeletePresetDialog
+        name={BROWN_CRUNCH.name}
+        usedIn={BROWN_CRUNCH.usedIn}
         open={dialog === 'delete'}
         onOpenChange={(o) => setDialog(o ? 'delete' : null)}
         onDelete={() => (setDialog(null), setNote('Deleted Brown Crunch'))}

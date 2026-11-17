@@ -20,12 +20,23 @@ import {
 import { Caption } from '../components/ui/text';
 import { SettingGroup, SettingRow } from './settings-page';
 
-const NETWORKS = [
-  { ssid: 'Home 5G', strength: 3, secured: true, known: true, current: true },
-  { ssid: 'Rehearsal Room', strength: 2, secured: true, known: true },
-  { ssid: 'Venue Guest', strength: 1, secured: false, known: false },
-  { ssid: 'Neighbour', strength: 1, secured: true, known: false },
-];
+export type WifiNetwork = {
+  ssid: string;
+  /** Signal bars, 1 to 3. */
+  strength: number;
+  secured: boolean;
+  /** Saved on the device. */
+  known: boolean;
+};
+export type HotspotPolicy = 'no-wifi' | 'always' | 'boot' | 'button' | 'never';
+export type Hotspot = {
+  policy: HotspotPolicy;
+  /** Name and when its password last changed, such as "Oxidal-7F2A · changed on 2 Nov". */
+  name: string;
+  /** Country and channel, such as "United Kingdom · channel 6". */
+  radio: string;
+};
+
 const Bars = ({ n }: { n: number }) =>
   n >= 3 ? (
     <WifiHigh aria-hidden="true" />
@@ -41,38 +52,45 @@ const Bars = ({ n }: { n: number }) =>
  * network, a new hotspot password) has to be confirmed from the new
  * connection within a minute, or the device goes back to how it was.
  */
-export function NetworkSettings() {
+export function NetworkSettings({
+  networks,
+  current,
+  address,
+  pending,
+  hotspot,
+  onJoin,
+  onForget,
+  onScan,
+  onConfirm,
+  onPolicy,
+  onChangeName,
+  onChangeRadio,
+}: {
+  networks: WifiNetwork[];
+  /** The network the device is on now. */
+  current: string;
+  /** The device's address on it. */
+  address: string;
+  /** A network just joined, waiting for confirmation, and the seconds left. */
+  pending?: { ssid: string; secondsLeft: number };
+  hotspot: Hotspot;
+  /** Join a network; the password only for a new secured one. */
+  onJoin: (ssid: string, password?: string) => void;
+  onForget: (ssid: string) => void;
+  onScan: () => void;
+  /** Keep the new network (true) or go back now (false). */
+  onConfirm: (keep: boolean) => void;
+  onPolicy: (policy: HotspotPolicy) => void;
+  onChangeName: () => void;
+  onChangeRadio: () => void;
+}) {
   const [joining, setJoining] = React.useState<string | null>(null);
-  const [pending, setPending] = React.useState<string | null>(null);
-  const [left, setLeft] = React.useState(60);
-  const [current, setCurrent] = React.useState('Home 5G');
-  const [policy, setPolicy] = React.useState('no-wifi');
-  const timer = React.useRef<ReturnType<typeof setInterval> | null>(null);
-  React.useEffect(
-    () => () => void (timer.current && clearInterval(timer.current)),
-    [],
-  );
-
-  const join = (ssid: string) => {
+  const [password, setPassword] = React.useState('');
+  const join = (ssid: string, secret?: string) => {
     setJoining(null);
-    setPending(ssid);
-    let n = 60;
-    setLeft(n);
-    timer.current = setInterval(() => {
-      n -= 1;
-      setLeft(n);
-      if (n <= 0) {
-        if (timer.current) clearInterval(timer.current);
-        setPending(null);
-      }
-    }, 1000);
+    setPassword('');
+    onJoin(ssid, secret);
   };
-  const confirm = (keep: boolean) => {
-    if (timer.current) clearInterval(timer.current);
-    if (keep && pending) setCurrent(pending);
-    setPending(null);
-  };
-
   return (
     <>
       {pending && (
@@ -81,17 +99,22 @@ export function NetworkSettings() {
           className="grid gap-2 rounded-lg border border-foreground bg-card px-4 py-3"
         >
           <span className="text-sm font-semibold">
-            Joined {pending}. Can you still see this screen?
+            Joined {pending.ssid}. Can you still see this screen?
           </span>
           <Caption>
-            If you can, keep it. If nothing is confirmed in {left} s, the device
-            goes back to {current} so you can reach it again.
+            If you can, keep it. If nothing is confirmed in{' '}
+            {pending.secondsLeft} s, the device goes back to {current} so you
+            can reach it again.
           </Caption>
           <div className="flex gap-2">
-            <Button size="sm" onClick={() => confirm(true)}>
-              Keep {pending}
+            <Button size="sm" onClick={() => onConfirm(true)}>
+              Keep {pending.ssid}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => confirm(false)}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onConfirm(false)}
+            >
               Go back now
             </Button>
           </div>
@@ -99,14 +122,14 @@ export function NetworkSettings() {
       )}
       <SettingGroup title="Wi-Fi">
         <List aria-label="Networks">
-          {NETWORKS.map((n) => (
+          {networks.map((n) => (
             <ListRow
               key={n.ssid}
               leading={<Bars n={n.strength} />}
               title={n.ssid}
               caption={
                 n.ssid === current
-                  ? 'Connected · 192.168.1.169'
+                  ? `Connected · ${address}`
                   : n.known
                     ? 'Saved'
                     : n.secured
@@ -130,6 +153,7 @@ export function NetworkSettings() {
                           size="sm"
                           variant="ghost"
                           aria-label={`Forget ${n.ssid}`}
+                          onClick={() => onForget(n.ssid)}
                         >
                           Forget
                         </Button>
@@ -153,7 +177,12 @@ export function NetworkSettings() {
             />
           ))}
         </List>
-        <Button size="sm" variant="ghost" className="justify-self-start">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="justify-self-start"
+          onClick={onScan}
+        >
           Scan again
         </Button>
       </SettingGroup>
@@ -163,7 +192,10 @@ export function NetworkSettings() {
           caption="The device's own network, for gigs with no Wi-Fi."
           stacked
         >
-          <Select value={policy} onValueChange={setPolicy}>
+          <Select
+            value={hotspot.policy}
+            onValueChange={(v) => onPolicy(v as HotspotPolicy)}
+          >
             <SelectTrigger aria-label="Turn the hotspot on" className="w-full">
               <SelectValue />
             </SelectTrigger>
@@ -180,19 +212,13 @@ export function NetworkSettings() {
             </SelectContent>
           </Select>
         </SettingRow>
-        <SettingRow
-          label="Name and password"
-          caption="Oxidal-7F2A · changed on 2 Nov"
-        >
-          <Button size="sm" variant="outline">
+        <SettingRow label="Name and password" caption={hotspot.name}>
+          <Button size="sm" variant="outline" onClick={onChangeName}>
             Change…
           </Button>
         </SettingRow>
-        <SettingRow
-          label="Country and channel"
-          caption="United Kingdom · channel 6"
-        >
-          <Button size="sm" variant="outline">
+        <SettingRow label="Country and channel" caption={hotspot.radio}>
+          <Button size="sm" variant="outline" onClick={onChangeRadio}>
             Change…
           </Button>
         </SettingRow>
@@ -214,6 +240,8 @@ export function NetworkSettings() {
               <input
                 type="password"
                 autoComplete="off"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="h-10 rounded-md border border-input bg-background px-3 text-sm"
               />
             </label>
@@ -222,7 +250,9 @@ export function NetworkSettings() {
             <Button variant="outline" onClick={() => setJoining(null)}>
               Cancel
             </Button>
-            <Button onClick={() => joining && join(joining)}>Join</Button>
+            <Button onClick={() => joining && join(joining, password)}>
+              Join
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

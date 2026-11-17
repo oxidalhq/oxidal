@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
-import { StemWorkspace } from './stem-workspace';
+import { StemWorkspaceDemo } from './stem-workspace.demo';
 
 /**
  * Library › Stems › a song: split it on the device, shape a mix from the
@@ -14,7 +14,7 @@ export default meta;
 
 export const SplitAndMix: StoryObj = {
   name: 'Split a song, then save a mix',
-  render: () => <StemWorkspace split={false} />,
+  render: () => <StemWorkspaceDemo split={false} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(
@@ -41,5 +41,5 @@ export const SplitAndMix: StoryObj = {
 
 export const Mixing: StoryObj = {
   name: 'A song with stems',
-  render: () => <StemWorkspace />,
+  render: () => <StemWorkspaceDemo />,
 };

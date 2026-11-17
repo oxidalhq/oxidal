@@ -64,9 +64,15 @@ const dbAt = (py: number) =>
  */
 export function VenueEq({
   profiles: initial,
+  onHear,
+  onProfiles,
   className,
 }: {
   profiles: VenueProfile[];
+  /** What the output should play now: the EQ, or null when bypassed. */
+  onHear?: (eq: VenueSettings | null) => void;
+  /** The saved profiles after Save, Save as, rename or delete. */
+  onProfiles?: (profiles: VenueProfile[]) => void;
   className?: string;
 }) {
   const [profiles, setProfiles] = React.useState(initial);
@@ -78,9 +84,28 @@ export function VenueEq({
   const [compare, setCompare] = React.useState(false);
   const svg = React.useRef<SVGSVGElement>(null);
   const dragging = React.useRef<number | null>(null);
+  const hear = React.useRef(onHear);
+  const keep = React.useRef(onProfiles);
+  React.useEffect(() => {
+    hear.current = onHear;
+    keep.current = onProfiles;
+  }, [onHear, onProfiles]);
+  const first = React.useRef(true);
+  React.useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    keep.current?.(profiles);
+  }, [profiles]);
 
   const changed = JSON.stringify(eq) !== JSON.stringify(saved.eq);
   const heard = compare ? saved.eq : eq;
+  const live = bypass ? null : heard;
+  const liveKey = JSON.stringify(live);
+  React.useEffect(() => {
+    hear.current?.(JSON.parse(liveKey) as VenueSettings | null);
+  }, [liveKey]);
   const room = headroom(heard);
   const curve = responseCurve(heard, 160);
   const path = curve

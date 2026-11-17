@@ -1,4 +1,3 @@
-import * as React from 'react';
 import { CheckCircle, Warning } from '@phosphor-icons/react';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -16,27 +15,29 @@ import { Progress } from '../components/ui/states';
 import { Caption } from '../components/ui/text';
 import { PoweredByTone3000 } from './credits';
 
-type Account = 'none' | 'requesting' | 'waiting' | 'connected';
+export type Tone3000AccountState =
+  'none' | 'requesting' | 'waiting' | 'connected';
 
 /**
  * The TONE3000 account, signed in on the device: Oxidal asks TONE3000 for a
  * code, you enter it on TONE3000 from any phone or laptop, and the
  * device keeps the sign-in. Only the code reaches this screen.
  */
-export function Tone3000Account({ initial = 'none' }: { initial?: Account }) {
-  const [state, setState] = React.useState<Account>(initial);
-  const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  React.useEffect(
-    () => () => void (timer.current && clearTimeout(timer.current)),
-    [],
-  );
-  const signIn = () => {
-    setState('requesting');
-    timer.current = setTimeout(() => {
-      setState('waiting');
-      timer.current = setTimeout(() => setState('connected'), 1500);
-    }, 500);
-  };
+export function Tone3000Account({
+  state,
+  code,
+  user,
+  onSignIn,
+  onSignOut,
+}: {
+  state: Tone3000AccountState;
+  /** The sign-in code TONE3000 issued, while waiting. */
+  code?: string;
+  /** The signed-in TONE3000 user name. */
+  user?: string;
+  onSignIn: () => void;
+  onSignOut: () => void;
+}) {
   return (
     <Card>
       <CardHeader>
@@ -50,7 +51,7 @@ export function Tone3000Account({ initial = 'none' }: { initial?: Account }) {
           <Caption>
             Sign in to get tones from TONE3000 straight onto this device.
           </Caption>
-          <Button className="justify-self-start" onClick={signIn}>
+          <Button className="justify-self-start" onClick={onSignIn}>
             Sign in to TONE3000
           </Button>
         </div>
@@ -64,7 +65,7 @@ export function Tone3000Account({ initial = 'none' }: { initial?: Account }) {
             Open TONE3000 on any phone or laptop and enter this code:
           </span>
           <span className="justify-self-start rounded-lg border border-foreground px-4 py-2 font-mono text-2xl font-semibold tracking-widest">
-            WXKD-4821
+            {code}
           </span>
           <Caption className="text-xs">
             Waiting for sign-in. This screen updates on its own.
@@ -74,9 +75,9 @@ export function Tone3000Account({ initial = 'none' }: { initial?: Account }) {
       {state === 'connected' && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="inline-flex items-center gap-2 text-sm">
-            <CheckCircle aria-hidden="true" /> Signed in as jane.capture
+            <CheckCircle aria-hidden="true" /> Signed in as {user}
           </span>
-          <Button size="sm" variant="outline" onClick={() => setState('none')}>
+          <Button size="sm" variant="outline" onClick={onSignOut}>
             Sign out
           </Button>
         </div>
@@ -86,21 +87,16 @@ export function Tone3000Account({ initial = 'none' }: { initial?: Account }) {
   );
 }
 
-const TONES = [
-  {
-    id: 'a',
-    name: 'Overdrive special',
-    caption: 'NAM A2 · Standard · Jane Capture',
-    got: true,
-  },
-  {
-    id: 'b',
-    name: 'High gain lead',
-    caption: 'NAM · Standard · Studio Pack',
-    fails: true,
-  },
-  { id: 'c', name: 'Deluxe reverb', caption: 'NAM · Feather · Porch Tones' },
-];
+export type ToneDownload = {
+  id: string;
+  name: string;
+  caption: string;
+  status: 'got' | 'ready' | 'waiting' | 'downloading' | 'done' | 'failed';
+  /** 0 to 100 while downloading. */
+  progress?: number;
+  /** For a failure: what happened in plain words, and the technical details. */
+  error?: { message: string; details: string };
+};
 
 /**
  * Get tones from TONE3000: the tones you picked download one by one; ones
@@ -110,28 +106,22 @@ const TONES = [
 export function GetTones({
   open,
   onOpenChange,
+  tones,
+  onDownload,
+  onRetry,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  tones: ToneDownload[];
+  onDownload: () => void;
+  onRetry: () => void;
 }) {
-  const [step, setStep] = React.useState(-1);
-  const [retried, setRetried] = React.useState(false);
-  const timer = React.useRef<ReturnType<typeof setInterval> | null>(null);
-  React.useEffect(
-    () => () => void (timer.current && clearInterval(timer.current)),
-    [],
+  const started = tones.some((t) => t.status !== 'got' && t.status !== 'ready');
+  const busy = tones.some(
+    (t) => t.status === 'waiting' || t.status === 'downloading',
   );
-  const run = () => {
-    let n = 0;
-    setStep(0);
-    timer.current = setInterval(() => {
-      n += 1;
-      setStep(n);
-      if (n >= TONES.length && timer.current) clearInterval(timer.current);
-    }, 500);
-  };
-  const failed = (t: (typeof TONES)[number]) => t.fails && !retried;
-  const done = step >= TONES.length;
+  const done = started && !busy;
+  const failures = tones.filter((t) => t.status === 'failed');
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -141,35 +131,33 @@ export function GetTones({
         />
         <DialogBody className="grid gap-3">
           <List aria-label="Tones">
-            {TONES.map((t, i) => (
+            {tones.map((t) => (
               <ListRow
                 key={t.id}
                 title={t.name}
                 caption={t.caption}
                 trailing={
-                  t.got ? (
+                  t.status === 'got' ? (
                     <Caption as="span" className="text-xs">
                       Already in Tones and IRs
                     </Caption>
-                  ) : step < 0 ? (
+                  ) : t.status === 'ready' ? (
                     <Caption as="span" className="text-xs">
                       Ready
                     </Caption>
-                  ) : step === i ? (
+                  ) : t.status === 'downloading' ? (
                     <Progress
-                      value={60}
+                      value={t.progress ?? 0}
                       label={`Downloading ${t.name}`}
                       className="w-20"
                     />
-                  ) : step > i ? (
-                    failed(t) ? (
-                      <Warning
-                        aria-label="Failed"
-                        className="size-5 text-brand"
-                      />
-                    ) : (
-                      <CheckCircle aria-label="Downloaded" className="size-5" />
-                    )
+                  ) : t.status === 'failed' ? (
+                    <Warning
+                      aria-label="Failed"
+                      className="size-5 text-brand"
+                    />
+                  ) : t.status === 'done' ? (
+                    <CheckCircle aria-label="Downloaded" className="size-5" />
                   ) : (
                     <Caption as="span" className="text-xs">
                       Waiting
@@ -179,30 +167,34 @@ export function GetTones({
               />
             ))}
           </List>
-          {done && TONES.some(failed) && (
-            <div
-              role="alert"
-              className="grid gap-2 rounded-lg border border-brand px-3 py-2"
-            >
-              <span className="text-sm font-semibold">
-                High gain lead did not download: TONE3000 is busy right now.
-              </span>
-              <CollapsibleSection title="Details">
-                <code className="text-xs">
-                  HTTP 503 · service_unavailable · GET /api/v1/tones/b/model
-                </code>
-              </CollapsibleSection>
-              <Button
-                size="sm"
-                variant="outline"
-                className="justify-self-start"
-                onClick={() => (setRetried(true), run())}
+          {done &&
+            failures.map((t) => (
+              <div
+                key={t.id}
+                role="alert"
+                className="grid gap-2 rounded-lg border border-brand px-3 py-2"
               >
-                Try again
-              </Button>
-            </div>
+                <span className="text-sm font-semibold">
+                  {t.name} did not download: {t.error?.message}
+                </span>
+                {t.error?.details && (
+                  <CollapsibleSection title="Details">
+                    <code className="text-xs">{t.error.details}</code>
+                  </CollapsibleSection>
+                )}
+              </div>
+            ))}
+          {done && failures.length > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="justify-self-start"
+              onClick={onRetry}
+            >
+              Try again
+            </Button>
           )}
-          {done && !TONES.some(failed) && (
+          {done && !failures.length && (
             <Caption role="status">
               Ready. The tones are in Library › Tones and IRs.
             </Caption>
@@ -213,7 +205,7 @@ export function GetTones({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {done ? 'Done' : 'Cancel'}
           </Button>
-          {step < 0 && <Button onClick={run}>Download all</Button>}
+          {!started && <Button onClick={onDownload}>Download all</Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>

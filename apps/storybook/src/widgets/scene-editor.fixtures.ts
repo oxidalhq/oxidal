@@ -69,6 +69,7 @@ export const FOUR_SCENES: SceneModel[] = [
     id: 'chorus',
     name: 'Chorus',
     on: { ts9: true },
+    values: { ts9: { drive: 6, level: 8 } },
     levels: { jobs: [0, SILENT, SILENT, -6] },
   },
   {

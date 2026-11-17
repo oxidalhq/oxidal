@@ -1,19 +1,8 @@
 import { useState } from 'react';
-import { Plus } from '@phosphor-icons/react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 import { isSplit, updateBlock, type Step } from '../lib/route';
-import { Badge } from '../components/ui/badge';
-import { Button } from '../components/ui/button';
-import { Card, CardHeader, CardTitle } from '../components/ui/card';
-import { List, ListRow } from '../components/ui/list-row';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '../components/ui/popover';
 import { Segment, SegmentedControl } from '../components/ui/segmented';
-import { Progress } from '../components/ui/states';
 import { Caption, Eyebrow, Title } from '../components/ui/text';
 import type { BlockModel } from '../widgets/block-editor';
 import { RouteView } from '../widgets/route-view';
@@ -34,22 +23,23 @@ import {
   type CaptureSize,
 } from './big-rig.fixtures';
 import { MODELS } from './swap.fixtures';
+import { ProcessingCard, type BranchPolicy } from './processing-card';
 
 const SIZES: CaptureSize[] = ['Standard', 'Lite', 'Feather', 'Nano'];
 const CANDIDATES = MODELS.filter((m) => m.kind === 'amp').map((m) => ({
   model: m,
   size: SIZES.find((size) => m.caption.includes(size)) ?? 'Standard',
 }));
-const percent = (share: number) => `${Math.round(share * 100)}%`;
 const loadOf = (list: Branch[]) =>
   list.reduce((sum, b) => sum + ESTIMATE[b.size], 0);
 
 /**
  * One preset with five, seven or ten complete amp sounds side by side, each
  * its own NAM capture and cab, some with pedals or a second split inside.
- * Scenes pick one amp or blend two, with their own reverb. Every branch
- * keeps running, so a scene change is a crossfade with no gap and no
- * loading, and delay and reverb trails carry on. Hardware modelers stop at
+ * Scenes pick one amp or blend two, with their own reverb. Amps not in the
+ * playing scene sleep (H-11): they use no processing, and because an amp
+ * whose input faded to silence is already warm, it wakes with no gap. Only
+ * the busiest scene change counts against the processing limit. Hardware modelers stop at
  * two or four amps per preset because of their DSP; the Pi 5 has room for
  * more, and the processing card says how much this rig uses.
  */
@@ -59,7 +49,7 @@ const meta: Meta = {
 };
 export default meta;
 
-type Policy = 'running' | 'pause';
+type Policy = BranchPolicy;
 
 function apply(route: Step<BlockModel>[], scene: BigScene | undefined) {
   if (!scene) return route;
@@ -86,8 +76,7 @@ function ManyAmps({ initial }: { initial: BranchCount }) {
   const count = branches.length;
   const scenes = scenesFor(count);
   const [sceneId, setSceneId] = useState(scenes[0]!.id);
-  const [policy, setPolicy] = useState<Policy>('running');
-  const [crossfade, setCrossfade] = useState('30');
+  const [policy, setPolicy] = useState<Policy>('sleep');
   const [added, setAdded] = useState<string | null>(null);
   const scene = scenes.find((s) => s.id === sceneId) ?? scenes[0];
   const route = apply(base, scene);
@@ -96,13 +85,27 @@ function ManyAmps({ initial }: { initial: BranchCount }) {
   const audible = audibleIn(scene);
   const running = policy === 'running' ? branches : audible;
   const load = SHARED_ESTIMATE + loadOf(running);
-  const pct = Math.round(load * 100);
-  // What the rig can need at once: every branch when they keep running,
-  // otherwise the busiest scene. A new amp must fit on top of that.
-  const busiest = Math.max(0, ...scenes.map((sc) => loadOf(audibleIn(sc))));
+  // What the rig can need at once: every branch when they keep running.
+  // Asleep, it is the busiest change: during a change the scene you leave
+  // drains while the next one plays, so both count. A new amp must fit on
+  // top of that.
+  const changes = scenes.flatMap((from) =>
+    scenes
+      .filter((to) => to.id !== from.id)
+      .map((to) => {
+        const both = branches.filter(
+          (b) => audibleIn(from).includes(b) || audibleIn(to).includes(b),
+        );
+        return { from, to, both, load: loadOf(both) };
+      }),
+  );
+  const worst = changes.reduce<(typeof changes)[number] | undefined>(
+    (a, c) => (!a || c.load > a.load ? c : a),
+    undefined,
+  );
+  const busiest = worst?.load ?? 0;
   const committed =
     SHARED_ESTIMATE + (policy === 'running' ? loadOf(branches) : busiest);
-  const fits = (size: CaptureSize) => committed + ESTIMATE[size] <= LIMIT;
 
   const pick = (next: BranchCount) => {
     setBranches(branchesOf(next));
@@ -129,7 +132,9 @@ function ManyAmps({ initial }: { initial: BranchCount }) {
             <Title size="md">Stage rig, every sound loaded</Title>
             <Caption>
               Playing {scene?.name}: {audible.map((b) => b.name).join(' and ')}.
-              Dashed branches are silent in this scene but keep running.
+              {policy === 'sleep'
+                ? 'Dashed branches are asleep: they use no processing and wake with no gap when a scene needs them.'
+                : 'Dashed branches are silent in this scene but keep running.'}
             </Caption>
           </div>
           <SegmentedControl
@@ -160,143 +165,38 @@ function ManyAmps({ initial }: { initial: BranchCount }) {
           />
         </div>
       </section>
-      <Card className="mx-page h-fit lg:mx-0 lg:mr-page">
-        <CardHeader>
-          <CardTitle>Processing</CardTitle>
-        </CardHeader>
-        <div className="grid gap-1.5">
-          <div className="flex items-baseline justify-between text-sm">
-            <span>
-              {running.length} of {count} amps running
-            </span>
-            <span className="font-mono tabular-nums">{pct}%</span>
-          </div>
-          <Progress
-            value={Math.min(100, pct)}
-            label="Share of each audio period"
-          />
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                size="sm"
-                variant="outline"
-                className="justify-self-start"
-              >
-                <Plus /> Add an amp…
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent aria-label="Add an amp" className="grid w-80 gap-2">
-              <span className="text-sm font-semibold">Add an amp branch</span>
-              <Caption className="text-xs">
-                {percent(Math.max(0, LIMIT - committed))} is free. The device
-                keeps {percent(1 - LIMIT)} of each audio period spare so a busy
-                moment never drops out.
-              </Caption>
-              <List>
-                {CANDIDATES.map((c) => (
-                  <ListRow
-                    key={c.model.id}
-                    title={c.model.label}
-                    caption={`NAM ${c.size} · needs ${percent(ESTIMATE[c.size])}`}
-                    trailing={
-                      fits(c.size) ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          aria-label={`Add ${c.model.label}`}
-                          onClick={() => add(c)}
-                        >
-                          Add
-                        </Button>
-                      ) : (
-                        <Badge tone="warning" size="sm">
-                          No room
-                        </Badge>
-                      )
-                    }
-                  />
-                ))}
-              </List>
-              {CANDIDATES.some((c) => !fits(c.size)) && (
-                <div className="grid gap-2 border-t border-border pt-2">
-                  <Caption className="text-xs">
-                    To make room, choose a lighter capture size
-                    {policy === 'running'
-                      ? `, or pause silent branches: then only the busiest scene counts and ${percent(loadOf(branches) - busiest)} is freed.`
-                      : ', or take an amp out of the busiest scene.'}
-                  </Caption>
-                  {policy === 'running' && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="justify-self-start"
-                      onClick={() => setPolicy('pause')}
-                    >
-                      Pause silent branches
-                    </Button>
-                  )}
-                </div>
-              )}
-            </PopoverContent>
-          </Popover>
-          {added && (
-            <Caption className="text-xs">
-              Added {added}. It stays silent until a scene plays it.
-            </Caption>
-          )}
-          <Caption className="text-xs">
-            Estimate for this example. On the device, the health word at the top
-            reports the measured load.
-          </Caption>
-        </div>
-        <div className="grid gap-1.5">
-          <span className="text-sm font-semibold">Silent branches</span>
-          <SegmentedControl
-            size="sm"
-            value={policy}
-            onValueChange={(v) => setPolicy(v as Policy)}
-            aria-label="Silent branches"
-            className="w-full"
-          >
-            <Segment value="running">Keep running</Segment>
-            <Segment value="pause">Pause</Segment>
-          </SegmentedControl>
-          <Caption className="text-xs">
-            {policy === 'running'
-              ? 'Every scene change is instant: the amp is already warm. Uses the most processing.'
-              : 'Saves processing, but a paused amp needs a moment to start, so switching to it is not gapless.'}
-          </Caption>
-        </div>
-        <div className="grid gap-1.5">
-          <span className="text-sm font-semibold">Scene crossfade</span>
-          <SegmentedControl
-            size="sm"
-            value={crossfade}
-            onValueChange={setCrossfade}
-            aria-label="Scene crossfade"
-            className="w-full"
-          >
-            <Segment value="0">Cut</Segment>
-            <Segment value="30">30 ms</Segment>
-            <Segment value="120">120 ms</Segment>
-            <Segment value="500">Swell</Segment>
-          </SegmentedControl>
-        </div>
-        <ul className="m-0 grid gap-1 border-t border-border pt-2 pl-4 text-sm">
-          {branches.map((b, i) => (
-            <li
-              key={b.name}
-              className={
-                (scene?.amps[i] ?? SILENT) > SILENT
-                  ? 'font-semibold'
-                  : 'text-muted-foreground'
-              }
-            >
-              {String.fromCharCode(65 + i)} · {b.name} · NAM {b.size}
-            </li>
-          ))}
-        </ul>
-      </Card>
+      <ProcessingCard
+        className="mx-page h-fit lg:mx-0 lg:mr-page"
+        amps={branches.map((b, i) => ({
+          name: b.name,
+          size: b.size,
+          playing: (scene?.amps[i] ?? SILENT) > SILENT,
+        }))}
+        policy={policy}
+        onPolicy={setPolicy}
+        load={load}
+        committed={committed}
+        limit={LIMIT}
+        busiest={
+          worst && {
+            from: worst.from.name,
+            to: worst.to.name,
+            amps: worst.both.length,
+          }
+        }
+        freedBySleep={loadOf(branches) - busiest}
+        candidates={CANDIDATES.map((c) => ({
+          id: c.model.id,
+          label: c.model.label,
+          size: c.size,
+          cost: ESTIMATE[c.size],
+        }))}
+        onAdd={(c) => {
+          const found = CANDIDATES.find((x) => x.model.id === c.id);
+          if (found) add(found);
+        }}
+        added={added ?? undefined}
+      />
     </div>
   );
 }
@@ -320,7 +220,7 @@ export const TenAmps: StoryObj = {
 TenAmps.play = async ({ canvasElement }) => {
   const canvas = within(canvasElement);
   const page = within(canvasElement.ownerDocument.body);
-  await expect(canvas.getByText(/10 of 10 amps running/)).toBeVisible();
+  await expect(canvas.getByText(/1 playing · 9 asleep/)).toBeVisible();
   await userEvent.click(canvas.getByRole('button', { name: /^Scene 3/ }));
   await expect(canvas.getByText(/Playing Crunch: Crunch\./)).toBeVisible();
   await userEvent.click(canvas.getByRole('button', { name: /Heavy \+ bass/ }));
@@ -337,7 +237,10 @@ TenAmps.play = async ({ canvasElement }) => {
       name: phone ? /Fold 8 silent branches/ : /Show 8 silent/,
     }),
   ).toHaveAttribute('aria-expanded', phone ? 'true' : 'false');
-  // Ten amps leave room for a Feather capture only, until silent branches pause.
+  // Kept running, ten amps leave room for a Feather capture only, until
+  // silent branches sleep again.
+  await userEvent.click(canvas.getByRole('radio', { name: 'Keep running' }));
+  await expect(canvas.getByText(/10 of 10 amps running/)).toBeVisible();
   await userEvent.click(canvas.getByRole('button', { name: /Add an amp/ }));
   const popover = within(
     await page.findByRole('dialog', { name: 'Add an amp' }),
@@ -354,7 +257,7 @@ TenAmps.play = async ({ canvasElement }) => {
   await expect(canvas.getByText(/Added Deluxe reverb/)).toBeVisible();
   // The popover stays open: nothing else fits now, so it offers to make room.
   await userEvent.click(
-    popover.getByRole('button', { name: 'Pause silent branches' }),
+    popover.getByRole('button', { name: 'Sleep silent branches' }),
   );
-  await expect(canvas.getByText(/2 of 11 amps running/)).toBeVisible();
+  await expect(canvas.getByText(/2 playing · 9 asleep/)).toBeVisible();
 };

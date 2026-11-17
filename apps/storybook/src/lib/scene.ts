@@ -31,22 +31,59 @@ export function applyScene(route: Route, scene: SceneModel | undefined): Route {
   if (!scene) return route;
   return mapRoute(
     route,
-    (b) => (b.id in scene.on ? { ...b, on: scene.on[b.id]! } : b),
+    (b) => {
+      const values = scene.values?.[b.id];
+      const on = b.id in scene.on ? scene.on[b.id]! : b.on;
+      return values || on !== b.on
+        ? {
+            ...b,
+            on,
+            controls: values
+              ? b.controls.map((c) =>
+                  c.id in values ? { ...c, value: values[c.id]! } : c,
+                )
+              : b.controls,
+          }
+        : b;
+    },
     (levels, id) => scene.levels[id] ?? levels,
   );
 }
 
+/** A scene with one control value set (or, with null, back to the preset's). */
+export function setSceneValue(
+  scene: SceneModel,
+  block: string,
+  control: string,
+  value: number | null,
+): SceneModel {
+  const own = { ...scene.values?.[block] };
+  if (value === null) delete own[control];
+  else own[control] = value;
+  const values = { ...scene.values, [block]: own };
+  if (!Object.keys(own).length) delete values[block];
+  return { ...scene, values, edited: true };
+}
+
+/** How many of a block's values this scene sets. */
+export const sceneValueCount = (scene: SceneModel, block: string) =>
+  Object.keys(scene.values?.[block] ?? {}).length;
+
 /** Blocks whose on or off in this scene differs from the preset. */
 export function sceneDifferences(route: Route, scene: SceneModel): string[] {
   return blocksOf(route)
-    .filter((b) => b.id in scene.on && scene.on[b.id] !== b.on)
+    .filter(
+      (b) =>
+        (b.id in scene.on && scene.on[b.id] !== b.on) ||
+        Boolean(scene.values?.[b.id]),
+    )
     .map((b) => b.id);
 }
 
 /**
  * An edit made in the chain while a scene is being edited: on or off and
- * branch levels go to the scene; everything else (settings, moves, new
- * blocks) goes to the preset.
+ * branch levels and control values go to the scene; the shape of the rig
+ * (moves, new blocks, removals) goes to the preset.
  */
 export function splitSceneEdit(
   next: Route,
@@ -56,11 +93,16 @@ export function splitSceneEdit(
   const baseBlocks = new Map(blocksOf(base).map((b) => [b.id, b]));
   const baseLevels = new Map(splitsOf(base).map((s) => [s.id, s.levels]));
   const on = { ...scene.on };
+  const values: Record<string, Record<string, number>> = {};
   for (const b of blocksOf(next)) {
     const was = baseBlocks.get(b.id);
     if (!was) continue;
     if (b.on === was.on) delete on[b.id];
     else on[b.id] = b.on;
+    for (const c of b.controls) {
+      const from = was.controls.find((x) => x.id === c.id);
+      if (from && from.value !== c.value) (values[b.id] ??= {})[c.id] = c.value;
+    }
   }
   const levels = { ...scene.levels };
   for (const s of splitsOf(next)) {
@@ -76,9 +118,9 @@ export function splitSceneEdit(
     next,
     (b) => {
       const was = baseBlocks.get(b.id);
-      return was ? { ...b, on: was.on } : b;
+      return was ? { ...b, on: was.on, controls: was.controls } : b;
     },
     (lv, id) => (baseLevels.has(id) ? baseLevels.get(id) : lv),
   );
-  return { route, scene: { ...scene, on, levels, edited: true } };
+  return { route, scene: { ...scene, on, levels, values, edited: true } };
 }

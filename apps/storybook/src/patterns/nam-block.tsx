@@ -19,17 +19,39 @@ import { SettingGroup, SettingRow } from './settings-page';
  * tone before changing it, reload from the file, and separating a capture
  * that has its cab built in into an amp block and a cab block.
  */
+export type CaptureSize = 'standard' | 'lite' | 'feather' | 'nano';
+
 export function NamBlockTools({
-  fromTone3000 = true,
+  size,
+  capture,
+  separated,
+  onSize,
+  onSaveCopy,
+  onReload,
+  onSeparate,
 }: {
-  fromTone3000?: boolean;
+  /** The size the block runs at now. */
+  size: CaptureSize;
+  capture: {
+    name: string;
+    /** Your own copy, with settings saved with it. */
+    mine: boolean;
+    /** Creator and licence of a TONE3000 tone, such as "Jane Capture · CC BY 4.0". */
+    credit?: string;
+  };
+  /** The capture's cab has been separated into its own block. */
+  separated: boolean;
+  /** Apply a new size; the block reloads for a moment. */
+  onSize: (size: CaptureSize) => void;
+  onSaveCopy: () => void;
+  onReload: () => void;
+  /** Make an amp block and a cab block from this capture, as a new preset. */
+  onSeparate: () => void;
 }) {
-  const [size, setSize] = React.useState('standard');
-  const [staged, setStaged] = React.useState('standard');
-  const [mine, setMine] = React.useState(!fromTone3000);
+  const [staged, setStaged] = React.useState<CaptureSize>(size);
   const [separating, setSeparating] = React.useState(false);
   const [headOnly, setHeadOnly] = React.useState(false);
-  const [separated, setSeparated] = React.useState(false);
+  const mine = capture.mine;
   return (
     <>
       <SettingGroup title="Capture">
@@ -37,7 +59,7 @@ export function NamBlockTools({
           label="Size"
           caption={
             staged !== size
-              ? `Lite uses less processing. Apply reloads this block for a moment.`
+              ? 'Smaller sizes use less processing. Apply reloads this block for a moment.'
               : 'Smaller sizes leave room for more amps.'
           }
           stacked
@@ -46,7 +68,7 @@ export function NamBlockTools({
             <SegmentedControl
               size="sm"
               value={staged}
-              onValueChange={setStaged}
+              onValueChange={(v) => v && setStaged(v as CaptureSize)}
               aria-label="Capture size"
             >
               <Segment value="standard">Standard</Segment>
@@ -56,7 +78,7 @@ export function NamBlockTools({
             </SegmentedControl>
             {staged !== size && (
               <>
-                <Button size="sm" onClick={() => setSize(staged)}>
+                <Button size="sm" onClick={() => onSize(staged)}>
                   Apply
                 </Button>
                 <Button
@@ -74,14 +96,14 @@ export function NamBlockTools({
           label={mine ? 'Your copy' : 'From TONE3000'}
           caption={
             mine
-              ? 'Plexi 50 (mine) · your settings are saved with it.'
-              : 'Plexi 50 by Jane Capture · CC BY 4.0. Save your own copy to keep changes to it.'
+              ? `${capture.name} (mine) · your settings are saved with it.`
+              : `${capture.name}${capture.credit ? ` by ${capture.credit}` : ''}. Save your own copy to keep changes to it.`
           }
         >
           {mine ? (
             <Badge size="sm">Mine</Badge>
           ) : (
-            <Button size="sm" variant="outline" onClick={() => setMine(true)}>
+            <Button size="sm" variant="outline" onClick={onSaveCopy}>
               Save a copy
             </Button>
           )}
@@ -90,7 +112,7 @@ export function NamBlockTools({
           label="Reload from the file"
           caption="Undo every change since the capture was loaded."
         >
-          <Button size="sm" variant="ghost">
+          <Button size="sm" variant="ghost" onClick={onReload}>
             Reload
           </Button>
         </SettingRow>
@@ -145,7 +167,7 @@ export function NamBlockTools({
             <Button
               disabled={headOnly}
               onClick={() => {
-                setSeparated(true);
+                onSeparate();
                 setSeparating(false);
               }}
             >

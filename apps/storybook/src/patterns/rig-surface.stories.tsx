@@ -13,8 +13,10 @@ import { RigSurface, type RigRoute } from './rig-surface';
 import { bigRig } from './big-rig.fixtures';
 import { BLOCK_TYPES, MODELS } from './swap.fixtures';
 import { EFFECTS } from './block-chooser.data';
-import { useRigDemo } from './use-rig-demo';
+import { useRigDemo } from './use-rig.demo';
+import { useModelDownloads } from './swap.demo';
 import { FOUR_JOBS, FOUR_SCENES } from '../widgets/scene-editor.fixtures';
+import { NamBlockToolsDemo } from './nam-block.demo';
 
 /**
  * The rig: shape a sound. Try: hold a block to hear the rig without it;
@@ -39,8 +41,10 @@ function Rig({
   name?: string;
 }) {
   const rig = useRigDemo(initial);
+  const store = useModelDownloads(MODELS);
   return (
     <RigSurface
+      blockTools={(b) => b.kind === 'amp' && <NamBlockToolsDemo />}
       presetName={name}
       playing
       route={rig.route}
@@ -60,7 +64,9 @@ function Rig({
       inputLevel={rig.input}
       onAudition={rig.onAudition}
       onAdd={rig.onAdd}
-      models={swap ? MODELS : undefined}
+      models={swap ? store.models : undefined}
+      downloads={store.downloads}
+      onGetModel={store.onGet}
       blockTypes={swap ? BLOCK_TYPES : undefined}
       effects={swap ? EFFECTS : undefined}
     />
@@ -346,6 +352,7 @@ function ScenesRig() {
   const [scene, setScene] = useState('verse');
   return (
     <RigSurface
+      blockTools={(b) => b.kind === 'amp' && <NamBlockToolsDemo />}
       presetName="Worship rig"
       playing
       route={rig.route}
@@ -393,7 +400,7 @@ export const EditingScenes: StoryObj = {
     // The same thing from the chain: This scene, then switch a block off.
     await userEvent.click(canvas.getByRole('radio', { name: 'This scene' }));
     await expect(
-      await canvas.findByText(/Editing Verse: switching a block/),
+      await canvas.findByText(/Editing Verse: on or off/),
     ).toBeVisible();
   },
 };

@@ -15,7 +15,7 @@ import { PretendController, WebMidiButton } from '../widgets/midi-controller';
 import { MidiMap } from '../widgets/midi-map';
 import { SCENES, SERIAL_ROUTE } from './rig.fixtures';
 import { RigSurface } from './rig-surface';
-import { useRigDemo } from './use-rig-demo';
+import { useRigDemo } from './use-rig.demo';
 
 /**
  * MIDI Learn on every control. Turn on the MIDI view: every control you can

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { ArrowSquareOut } from '@phosphor-icons/react';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -15,8 +15,23 @@ import { Segment, SegmentedControl } from '../components/ui/segmented';
 import { Progress } from '../components/ui/states';
 import { Switch } from '../components/ui/switch';
 import { Caption } from '../components/ui/text';
-import { SettingGroup, SettingRow } from '../patterns/settings-page';
-import { PACKS, type Pack } from './settings.effects.data';
+import { SettingGroup, SettingRow } from './settings-page';
+
+/** An LV2 plugin pack Oxidal has qualified but does not ship. */
+export type Pack = {
+  id: string;
+  name: string;
+  website: string;
+  licence: string;
+  effects: number;
+  sizeMib: number;
+  qualification: string;
+  installed: boolean;
+  /** Saved presets that use it. */
+  usedBy: string[];
+};
+
+export type BuiltInEffect = { name: string; caption: string };
 
 /**
  * Effects that come with Oxidal. Oxidal's own four are original Rust; the
@@ -24,31 +39,27 @@ import { PACKS, type Pack } from './settings.effects.data';
  * packs (LV2, made by others and installed by the player) have their own
  * page, because installing is a different job.
  */
-export function Effects() {
+export function BuiltInEffects({
+  own,
+  engine,
+}: {
+  /** Oxidal's own effects. */
+  own: BuiltInEffect[];
+  /** Effects that are part of the TONE3000 engine. */
+  engine: BuiltInEffect[];
+}) {
   return (
     <>
       <SettingGroup title="Oxidal effects">
-        {['Bloom reverb', 'Echo delay', 'Motion', 'Sustain'].map((e) => (
-          <SettingRow
-            key={e}
-            label={e}
-            caption="Oxidal's own · Rust · built in"
-          >
+        {own.map((e) => (
+          <SettingRow key={e.name} label={e.name} caption={e.caption}>
             <Badge size="sm">Built in</Badge>
           </SettingRow>
         ))}
       </SettingGroup>
       <SettingGroup title="From the TONE3000 engine">
-        {[
-          ['Hold', 'Freezes a note'],
-          ['Swell', 'Volume swells'],
-          ['Pitch', 'Pitch shift; needs the pitch engine on in NAM engine'],
-        ].map(([e, what]) => (
-          <SettingRow
-            key={e}
-            label={e}
-            caption={`${what} · part of the TONE3000 engine`}
-          >
+        {engine.map((e) => (
+          <SettingRow key={e.name} label={e.name} caption={e.caption}>
             <Badge size="sm">Built in</Badge>
           </SettingRow>
         ))}
@@ -68,38 +79,26 @@ export function Effects() {
  * the device, so the page can be left. Removing names the saved presets
  * that use the pack and asks for an acknowledgement before it goes.
  */
-export function PluginPacks({ playing = false }: { playing?: boolean }) {
-  const [packs, setPacks] = useState<Pack[]>(PACKS);
-  const [job, setJob] = useState<{ id: string; progress: number } | null>(null);
+export function PluginPacks({
+  packs,
+  job,
+  playing = false,
+  onInstall,
+  onRemove,
+}: {
+  packs: Pack[];
+  /** The install running on the device, if any. */
+  job?: { id: string; progress: number };
+  /** Audio is playing: installs and removals wait for it to stop. */
+  playing?: boolean;
+  onInstall: (pack: Pack) => void;
+  onRemove: (pack: Pack) => void;
+}) {
   const [removing, setRemoving] = useState<Pack | null>(null);
   const [understood, setUnderstood] = useState(false);
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
-  useEffect(
-    () => () => {
-      if (timer.current) clearInterval(timer.current);
-    },
-    [],
-  );
-
-  const install = (pack: Pack) => {
-    let progress = 0;
-    setJob({ id: pack.id, progress });
-    timer.current = setInterval(() => {
-      progress += 20;
-      if (progress <= 100) return setJob({ id: pack.id, progress });
-      if (timer.current) clearInterval(timer.current);
-      setJob(null);
-      setPacks((all) =>
-        all.map((p) => (p.id === pack.id ? { ...p, installed: true } : p)),
-      );
-    }, 150);
-  };
+  const install = onInstall;
   const remove = (pack: Pack) => {
-    setPacks((all) =>
-      all.map((p) =>
-        p.id === pack.id ? { ...p, installed: false, usedBy: [] } : p,
-      ),
-    );
+    onRemove(pack);
     setRemoving(null);
     setUnderstood(false);
   };
@@ -117,7 +116,7 @@ export function PluginPacks({ playing = false }: { playing?: boolean }) {
           safe from disk activity.
         </p>
       )}
-      {working && (
+      {working && job && (
         <div
           role="status"
           className="grid gap-1.5 rounded-lg border border-border bg-card px-3 py-2"
@@ -126,10 +125,7 @@ export function PluginPacks({ playing = false }: { playing?: boolean }) {
             Installing {working.name}… You can leave this page; the device
             finishes the job.
           </span>
-          <Progress
-            value={job!.progress}
-            label={`Installing ${working.name}`}
-          />
+          <Progress value={job.progress} label={`Installing ${working.name}`} />
         </div>
       )}
       <SettingGroup title="Installed">
@@ -263,11 +259,25 @@ export function PluginPacks({ playing = false }: { playing?: boolean }) {
  * files or TONE3000). These are unit-wide: kept across presets, not saved
  * in them. Changing one restarts audio briefly.
  */
-export function NamEngine() {
-  const [loudness, setLoudness] = useState('-18');
-  const [over, setOver] = useState('2');
-  const [size, setSize] = useState('standard');
-  const [pitch, setPitch] = useState(true);
+export type NamEngine = {
+  /** LUFS every capture is levelled to. */
+  loudness: '-24' | '-18' | '-14';
+  calibrate: boolean;
+  oversampling: '1' | '2' | '4';
+  size: 'standard' | 'lite' | 'feather' | 'nano';
+  allCores: boolean;
+  sleep: boolean;
+  pitch: boolean;
+};
+
+export function NamEngineSettings({
+  value,
+  onChange,
+}: {
+  value: NamEngine;
+  onChange: (change: Partial<NamEngine>) => void;
+}) {
+  const { loudness, oversampling: over, size, pitch } = value;
   return (
     <>
       <SettingGroup title="Loudness">
@@ -278,7 +288,9 @@ export function NamEngine() {
         >
           <SegmentedControl
             value={loudness}
-            onValueChange={setLoudness}
+            onValueChange={(v) =>
+              v && onChange({ loudness: v as NamEngine['loudness'] })
+            }
             aria-label="Model loudness"
             className="w-full"
           >
@@ -292,7 +304,11 @@ export function NamEngine() {
           label="Match my interface's input"
           caption="Sets the input to the level the captures expect. Set the level itself in Guitars › Sound check."
         >
-          <Switch id="calibrate" defaultChecked />
+          <Switch
+            id="calibrate"
+            checked={value.calibrate}
+            onCheckedChange={(calibrate) => onChange({ calibrate })}
+          />
         </SettingRow>
       </SettingGroup>
       <SettingGroup title="Quality and processing">
@@ -303,7 +319,9 @@ export function NamEngine() {
         >
           <SegmentedControl
             value={over}
-            onValueChange={setOver}
+            onValueChange={(v) =>
+              v && onChange({ oversampling: v as NamEngine['oversampling'] })
+            }
             aria-label="Oversampling"
             className="w-full"
           >
@@ -319,7 +337,9 @@ export function NamEngine() {
         >
           <SegmentedControl
             value={size}
-            onValueChange={setSize}
+            onValueChange={(v) =>
+              v && onChange({ size: v as NamEngine['size'] })
+            }
             aria-label="Size for new NAM blocks"
             className="w-full"
           >
@@ -334,7 +354,22 @@ export function NamEngine() {
           label="Use every core"
           caption="Spreads amps across the Pi's four cores."
         >
-          <Switch id="cores" defaultChecked />
+          <Switch
+            id="cores"
+            checked={value.allCores}
+            onCheckedChange={(allCores) => onChange({ allCores })}
+          />
+        </SettingRow>
+        <SettingRow
+          id="sleep"
+          label="Sleep silent branches"
+          caption="Amps not in the playing scene stop using processing and wake with no gap when a scene needs them. Delays and reverbs ring out before they sleep."
+        >
+          <Switch
+            id="sleep"
+            checked={value.sleep}
+            onCheckedChange={(sleep) => onChange({ sleep })}
+          />
         </SettingRow>
       </SettingGroup>
       <SettingGroup title="Pitch engine">
@@ -347,7 +382,11 @@ export function NamEngine() {
               : 'Off: the Pitch effect is silent until you turn this on.'
           }
         >
-          <Switch id="pitch" checked={pitch} onCheckedChange={setPitch} />
+          <Switch
+            id="pitch"
+            checked={pitch}
+            onCheckedChange={(on) => onChange({ pitch: on })}
+          />
         </SettingRow>
       </SettingGroup>
     </>

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
-import { FirstRun } from './first-run';
+import { FirstRun } from '../patterns/first-run';
 
 /** The first time Oxidal opens (R-8): your old unit's words, then four steps. */
 const meta: Meta = {

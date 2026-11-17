@@ -25,26 +25,14 @@ import {
   type StemRole,
 } from '../widgets/stem-strip';
 
-type Mix = Partial<Record<StemRole, StemControls>>;
-const on = (level = 0): StemControls => ({ level, muted: false, solo: false });
-const off: StemControls = { level: -60, muted: true, solo: false };
-const ALL: StemRole[] = ['vocals', 'drums', 'bass', 'guitar', 'piano', 'other'];
-const full = (): Mix => Object.fromEntries(ALL.map((r) => [r, on()])) as Mix;
-
-const MIXES: Record<string, { name: string; mix: Mix }> = {
-  all: { name: 'Every stem', mix: full() },
-  noguitar: { name: 'No guitar', mix: { ...full(), guitar: off } },
-  rhythm: {
-    name: 'Drums and bass',
-    mix: {
-      drums: on(),
-      bass: on(-2),
-      vocals: off,
-      guitar: off,
-      piano: off,
-      other: off,
-    },
-  },
+export type StemMix = Partial<Record<StemRole, StemControls>>;
+export type StemSplit =
+  | { state: 'none' }
+  | { state: 'splitting'; progress: number }
+  | { state: 'ready'; count: number };
+export type StemImport = {
+  song: string;
+  files: { name: string; caption: string }[];
 };
 
 /**
@@ -55,71 +43,86 @@ const MIXES: Record<string, { name: string; mix: Mix }> = {
  * in through Import.
  */
 export function StemWorkspace({
-  split: initiallySplit = true,
+  song,
+  split,
+  starts,
+  saved,
+  pendingImport,
+  onSplit,
+  onMix,
+  onSave,
+  onLink,
+  onImport,
+  onConfirmImport,
+  onCancelImport,
 }: {
-  split?: boolean;
+  song: { name: string; length: string };
+  split: StemSplit;
+  /** Mixes to start from; the first is selected. */
+  starts: { id: string; name: string; mix: StemMix }[];
+  /** Backing tracks saved from this song. */
+  saved: string[];
+  /** Files chosen for import, before they are imported. */
+  pendingImport?: StemImport;
+  onSplit: () => void;
+  /** The mix you hear, as you change it. */
+  onMix?: (mix: StemMix) => void;
+  onSave: (name: string, mix: StemMix) => void;
+  onLink: (name: string) => void;
+  /** Choose stem files to import. */
+  onImport: () => void;
+  onConfirmImport: () => void;
+  onCancelImport: () => void;
 }) {
-  const [split, setSplit] = React.useState(initiallySplit);
-  const [progress, setProgress] = React.useState<number | null>(null);
-  const [start, setStart] = React.useState('noguitar');
-  const [history, setHistory] = React.useState<Mix[]>([MIXES.noguitar!.mix]);
+  const [start, setStart] = React.useState(starts[0]?.id ?? '');
+  const [history, setHistory] = React.useState<StemMix[]>([
+    starts[0]?.mix ?? {},
+  ]);
   const [at, setAt] = React.useState(0);
-  const [name, setName] = React.useState('No guitar, for the gig');
-  const [saved, setSaved] = React.useState<string[]>(['No guitar']);
-  const [importing, setImporting] = React.useState(false);
-  const timer = React.useRef<ReturnType<typeof setInterval> | null>(null);
-  React.useEffect(
-    () => () => void (timer.current && clearInterval(timer.current)),
-    [],
+  const [name, setName] = React.useState(
+    starts[0] ? `${starts[0].name}, for the gig` : '',
   );
   const mix = history[at]!;
-
-  const begin = () => {
-    let p = 0;
-    setProgress(p);
-    timer.current = setInterval(() => {
-      p += 20;
-      if (p <= 100) return setProgress(p);
-      if (timer.current) clearInterval(timer.current);
-      setProgress(null);
-      setSplit(true);
-    }, 150);
-  };
-  const push = (next: Mix) => {
+  const progress = split.state === 'splitting' ? split.progress : null;
+  const ready = split.state === 'ready';
+  const push = (next: StemMix) => {
     setHistory((h) => [...h.slice(0, at + 1), next]);
     setAt((n) => n + 1);
+    onMix?.(next);
   };
 
   return (
     <div className="grid gap-4">
       <Card>
         <CardHeader>
-          <CardTitle>Iron Pulse</CardTitle>
-          {split ? (
-            <Badge size="sm">6 stems · split on this device</Badge>
+          <CardTitle>{song.name}</CardTitle>
+          {ready ? (
+            <Badge size="sm">{split.count} stems · split on this device</Badge>
           ) : (
             <Badge size="sm">No stems yet</Badge>
           )}
         </CardHeader>
-        {!split && progress === null && (
+        {split.state === 'none' && (
           <div className="grid gap-2">
             <Caption>
               Split this song into vocals, drums, bass, guitar, piano and the
               rest, on the device. It takes a few minutes and pauses if the Pi
               gets hot. You can keep playing while it works.
             </Caption>
-            <Button className="justify-self-start" onClick={begin}>
+            <Button className="justify-self-start" onClick={onSplit}>
               Split into stems
             </Button>
           </div>
         )}
         {progress !== null && (
           <div role="status" className="grid gap-1.5">
-            <span className="text-sm">Splitting Iron Pulse… {progress}%</span>
+            <span className="text-sm">
+              Splitting {song.name}… {progress}%
+            </span>
             <Progress value={progress} label="Split progress" />
           </div>
         )}
-        {split && (
+        {ready && (
           <div className="grid gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="small-caps text-xs text-muted-foreground">
@@ -129,13 +132,15 @@ export function StemWorkspace({
                 size="sm"
                 value={start}
                 onValueChange={(v) => {
+                  const from = starts.find((m) => m.id === v);
+                  if (!from) return;
                   setStart(v);
-                  push(MIXES[v]!.mix);
+                  push(from.mix);
                 }}
                 aria-label="Start from"
               >
-                {Object.entries(MIXES).map(([id, m]) => (
-                  <Segment key={id} value={id}>
+                {starts.map((m) => (
+                  <Segment key={m.id} value={m.id}>
                     {m.name}
                   </Segment>
                 ))}
@@ -179,11 +184,11 @@ export function StemWorkspace({
               </label>
               <Button
                 disabled={!name.trim()}
-                onClick={() => setSaved((s) => [...s, name.trim()])}
+                onClick={() => onSave(name.trim(), mix)}
               >
                 Save as backing track
               </Button>
-              <Button variant="outline">
+              <Button variant="outline" onClick={() => onLink(name.trim())}>
                 <Link /> Link to…
               </Button>
             </div>
@@ -193,11 +198,7 @@ export function StemWorkspace({
       <Card>
         <CardHeader>
           <CardTitle>Saved mixes</CardTitle>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setImporting(true)}
-          >
+          <Button size="sm" variant="outline" onClick={onImport}>
             <UploadSimple /> Import stems…
           </Button>
         </CardHeader>
@@ -206,12 +207,15 @@ export function StemWorkspace({
             <ListRow
               key={m}
               title={m}
-              caption="Backing track · Iron Pulse · 3:42"
+              caption={`Backing track · ${song.name} · ${song.length}`}
             />
           ))}
         </List>
       </Card>
-      <Dialog open={importing} onOpenChange={setImporting}>
+      <Dialog
+        open={Boolean(pendingImport)}
+        onOpenChange={(o) => !o && onCancelImport()}
+      >
         <DialogContent>
           <DialogHeader
             title="Import stems"
@@ -223,13 +227,13 @@ export function StemWorkspace({
                 Song name
               </span>
               <input
-                defaultValue="Glass Room"
+                defaultValue={pendingImport?.song}
                 className="h-10 rounded-md border border-input bg-background px-3 text-sm"
               />
             </label>
             <List aria-label="Stem files">
-              {['drums.wav', 'bass.wav', 'keys.wav', 'vocals.wav'].map((f) => (
-                <ListRow key={f} title={f} caption="48 kHz · 2:58" />
+              {pendingImport?.files.map((f) => (
+                <ListRow key={f.name} title={f.name} caption={f.caption} />
               ))}
             </List>
             <Caption className="text-xs">
@@ -237,10 +241,12 @@ export function StemWorkspace({
             </Caption>
           </DialogBody>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setImporting(false)}>
+            <Button variant="outline" onClick={onCancelImport}>
               Cancel
             </Button>
-            <Button onClick={() => setImporting(false)}>Import 4 files</Button>
+            <Button onClick={onConfirmImport}>
+              Import {pendingImport?.files.length} files
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

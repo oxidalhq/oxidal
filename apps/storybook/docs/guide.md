@@ -100,7 +100,7 @@ src/lib/cn.ts             class merging
 src/components/ui/        primitives: <name>.tsx + .stories.tsx + .test.tsx
 src/widgets/              instrument widgets (meter, chain block, scene pad …)
 src/patterns/             page patterns (app shell, settings page, rig surface …)
-src/screens/              every product screen rebuilt with fixture data
+src/screens/              every product screen rebuilt with demo data (not exported)
 src/guide/                these pages as MDX for Storybook
 docs/guide.md             this file; docs/migration.md maps product files to replacements
 scripts/sync.mjs          copies styles, ui, widgets and patterns into the product
@@ -109,6 +109,25 @@ scripts/sync.mjs          copies styles, ui, widgets and patterns into the produ
 A component is one file with its variants in `cva`, its own stories for
 every state and a test for behaviour. Widgets compose primitives; patterns
 compose widgets; screens compose patterns. Nothing imports upward.
+
+### Ready for the app
+
+Everything in `components/ui`, `widgets` and `patterns` is imported by the
+app as `@oxidal/design-system/<folder>/<name>`, so it must work with real
+data:
+
+- **Data comes in as props, changes go out as callbacks.** A component never
+  holds example presets, networks or readings, and never pretends to be the
+  device with timers. State that only the screen cares about (an open
+  dialog, a selected tab, a half-typed name) may stay inside.
+- **Examples live beside the component**: `<name>.data.ts` or
+  `<name>.fixtures.ts` for example data, `<name>.demo.tsx` for a stand-in
+  device (download progress, a 15-second confirmation). Only stories and
+  `src/screens/` use them; the package does not export them.
+- **Screens are reference compositions.** They show how the parts fit with
+  demo data; the app builds its own screens from the same parts.
+- `src/package.test.ts` checks that every module is exported and that none
+  imports example data or a demo.
 
 ## 7. Component table
 

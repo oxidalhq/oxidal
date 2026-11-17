@@ -1,15 +1,4 @@
-/** An LV2 plugin pack Oxidal has qualified but does not ship. */
-export type Pack = {
-  id: string;
-  name: string;
-  website: string;
-  licence: string;
-  effects: number;
-  sizeMib: number;
-  qualification: string;
-  installed: boolean;
-  usedBy: string[];
-};
+import type { BuiltInEffect, NamEngine, Pack } from './engine-settings';
 
 /** Example packs; the device lists the real catalogue and its qualification. */
 export const PACKS: Pack[] = [
@@ -47,3 +36,29 @@ export const PACKS: Pack[] = [
     usedBy: [],
   },
 ];
+
+/** Oxidal's own effects and the TONE3000 engine's, as built in today. */
+export const OWN_EFFECTS: BuiltInEffect[] = [
+  'Bloom reverb',
+  'Echo delay',
+  'Motion',
+  'Sustain',
+].map((name) => ({ name, caption: "Oxidal's own · Rust · built in" }));
+export const ENGINE_EFFECTS: BuiltInEffect[] = [
+  ['Hold', 'Freezes a note'],
+  ['Swell', 'Volume swells'],
+  ['Pitch', 'Pitch shift; needs the pitch engine on in NAM engine'],
+].map(([name, what]) => ({
+  name: name!,
+  caption: `${what} · part of the TONE3000 engine`,
+}));
+
+export const NAM_ENGINE: NamEngine = {
+  loudness: '-18',
+  calibrate: true,
+  oversampling: '2',
+  size: 'standard',
+  allCores: true,
+  sleep: true,
+  pitch: true,
+};

@@ -20,23 +20,27 @@ import {
 import { Caption, Eyebrow } from '../components/ui/text';
 import { PoweredByTone3000 } from './credits';
 
-const STARTS = [
-  ['empty', 'Empty', 'Input straight to output; add blocks from there'],
+const starts = (playing: string) =>
   [
-    'copy',
-    'A copy of what is playing',
-    'Rhythm section, with its scenes and versions',
-  ],
-  ['oxidal', 'An Oxidal sound', 'Finished presets that come with Oxidal'],
-  ['tone3000', 'A TONE3000 tone', 'A capture you have, with a cab after it'],
-] as const;
+    ['empty', 'Empty', 'Input straight to output; add blocks from there'],
+    [
+      'copy',
+      'A copy of what is playing',
+      `${playing}, with its scenes and versions`,
+    ],
+    ['oxidal', 'An Oxidal sound', 'Finished presets that come with Oxidal'],
+    ['tone3000', 'A TONE3000 tone', 'A capture you have, with a cab after it'],
+  ] as const;
 
 /** New preset: a name and where it starts from. */
 export function NewPresetDialog({
   open,
   onOpenChange,
   onCreate,
+  playing,
 }: {
+  /** The preset playing now, for "A copy of what is playing". */
+  playing: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreate: (name: string, from: string) => void;
@@ -67,7 +71,7 @@ export function NewPresetDialog({
             aria-label="Start from"
             className="grid gap-1.5"
           >
-            {STARTS.map(([id, title, caption]) => (
+            {starts(playing).map(([id, title, caption]) => (
               <button
                 key={id}
                 type="button"
@@ -106,16 +110,33 @@ export function NewPresetDialog({
  * it holds and their credits, and what you can do with it, including
  * editing it while audio is stopped.
  */
+export type PresetSummary = {
+  name: string;
+  /** Such as "Mine · 5 blocks · 3 scenes · changed 14 Nov". */
+  summary: string;
+  versions: { name: string; caption: string; isDefault?: boolean }[];
+  /** Set list entries that use it, such as "Friday set, song 4". */
+  usedIn: string[];
+  /** Captures and IRs, with their credit, such as "NAM A2 · by Jane Capture · CC BY 4.0". */
+  sources: { name: string; caption: string; tone3000?: boolean }[];
+};
+
 export function PresetDetails({
+  preset,
   open,
   onOpenChange,
   onDelete,
   onEditOffline,
+  onDuplicate,
+  onExport,
 }: {
+  preset: PresetSummary;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDelete: () => void;
   onEditOffline: () => void;
+  onDuplicate: () => void;
+  onExport: () => void;
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -123,47 +144,51 @@ export function PresetDetails({
         onOpenChange={onOpenChange}
         className="md:w-[min(28rem,100vw)]"
       >
-        <SheetHeader
-          title="Brown Crunch"
-          description="Mine · 5 blocks · 3 scenes · changed 14 Nov"
-        />
+        <SheetHeader title={preset.name} description={preset.summary} />
         <SheetBody className="grid content-start gap-4">
           <section className="grid gap-1">
             <Eyebrow>Versions</Eyebrow>
             <List>
-              <ListRow
-                title="Default"
-                caption="Saved at home · 12 Nov"
-                trailing={<Badge size="sm">Default</Badge>}
-              />
-              <ListRow
-                title="Friday gig"
-                caption="Saved at the venue · 14 Nov"
-              />
+              {preset.versions.map((v) => (
+                <ListRow
+                  key={v.name}
+                  title={v.name}
+                  caption={v.caption}
+                  trailing={
+                    v.isDefault ? <Badge size="sm">Default</Badge> : undefined
+                  }
+                />
+              ))}
             </List>
           </section>
           <section className="grid gap-1">
             <Eyebrow>Used in</Eyebrow>
-            <Caption>Friday set (song 4) · Rehearsal set (song 2)</Caption>
+            <Caption>
+              {preset.usedIn.length
+                ? preset.usedIn.join(' · ')
+                : 'No set list yet'}
+            </Caption>
           </section>
           <section className="grid gap-1">
             <Eyebrow>Captures and IRs</Eyebrow>
             <List>
-              <ListRow
-                title="Plexi 50"
-                caption="NAM A2 · by Jane Capture · CC BY 4.0"
-              />
-              <ListRow title="4×12 Greenback" caption="IR · yours" />
+              {preset.sources.map((c) => (
+                <ListRow key={c.name} title={c.name} caption={c.caption} />
+              ))}
             </List>
-            <PoweredByTone3000 />
+            {preset.sources.some((c) => c.tone3000) && <PoweredByTone3000 />}
           </section>
         </SheetBody>
         <SheetFooter className="flex-wrap">
           <Button variant="outline" onClick={onEditOffline}>
             Edit without playing
           </Button>
-          <Button variant="outline">Duplicate</Button>
-          <Button variant="outline">Export</Button>
+          <Button variant="outline" onClick={onDuplicate}>
+            Duplicate
+          </Button>
+          <Button variant="outline" onClick={onExport}>
+            Export
+          </Button>
           <Button variant="destructive" onClick={onDelete}>
             Delete…
           </Button>
@@ -175,15 +200,21 @@ export function PresetDetails({
 
 /** Delete a preset: names the set lists it is in and asks before it goes. */
 export function DeletePresetDialog({
+  name,
+  usedIn,
   open,
   onOpenChange,
   onDelete,
 }: {
+  name: string;
+  /** Set list entries that use it. */
+  usedIn: string[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDelete: () => void;
 }) {
   const [understood, setUnderstood] = React.useState(false);
+  const ready = understood || usedIn.length === 0;
   return (
     <Dialog
       open={open}
@@ -191,32 +222,37 @@ export function DeletePresetDialog({
     >
       <DialogContent>
         <DialogHeader
-          title="Delete Brown Crunch?"
+          title={`Delete ${name}?`}
           description="Its versions and scenes go with it. Captures and IRs stay in Tones and IRs."
         />
         <DialogBody className="grid gap-2">
-          <p className="m-0 text-sm">It is in 2 set lists:</p>
-          <ul className="m-0 pl-5 text-sm">
-            <li>Friday set, song 4</li>
-            <li>Rehearsal set, song 2</li>
-          </ul>
-          <label className="flex min-h-touch items-center gap-2 text-sm">
-            <Checkbox
-              checked={understood}
-              onCheckedChange={(v) => setUnderstood(v === true)}
-            />
-            Take it out of those set lists too
-          </label>
+          {usedIn.length > 0 && (
+            <>
+              <p className="m-0 text-sm">
+                It is in {usedIn.length}{' '}
+                {usedIn.length === 1 ? 'set list' : 'set lists'}:
+              </p>
+              <ul className="m-0 pl-5 text-sm">
+                {usedIn.map((u) => (
+                  <li key={u}>{u}</li>
+                ))}
+              </ul>
+              <label className="flex min-h-touch items-center gap-2 text-sm">
+                <Checkbox
+                  checked={understood}
+                  onCheckedChange={(v) => setUnderstood(v === true)}
+                />
+                Take it out of{' '}
+                {usedIn.length === 1 ? 'that set list' : 'those set lists'} too
+              </label>
+            </>
+          )}
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Keep it
           </Button>
-          <Button
-            variant="destructive"
-            disabled={!understood}
-            onClick={onDelete}
-          >
+          <Button variant="destructive" disabled={!ready} onClick={onDelete}>
             Delete preset
           </Button>
         </DialogFooter>

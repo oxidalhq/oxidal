@@ -17,7 +17,18 @@ const FRAMES = ['48', '64', '96', '128', '256'];
 const ms = (frames: number, periods: number, rate: number) =>
   ((frames * periods * 2) / rate) * 1000;
 
-type Setting = { rate: number; frames: number; periods: number };
+export type AudioSetting = { rate: number; frames: number; periods: number };
+export type AudioChangePhase = 'idle' | 'restarting' | 'proving';
+export type BufferTrial = { frames: number; periods: number; xruns: number };
+export type BufferFinderRun = {
+  /** Sizes tried so far, in order. */
+  trials: BufferTrial[];
+  /** How many sizes the finder will try. */
+  total: number;
+  state: 'idle' | 'running' | 'done';
+  onStart: () => void;
+  onCancel: () => void;
+};
 
 /**
  * Change the running session's rate or buffer without touching the tone:
@@ -26,53 +37,32 @@ type Setting = { rate: number; frames: number; periods: number };
  * it, or it goes back on its own.
  */
 export function AudioChange({
-  initial = { rate: 48000, frames: 128, periods: 3 },
+  current,
+  phase,
+  secondsLeft,
+  finder,
+  onApply,
+  onSettle,
 }: {
-  initial?: Setting;
+  current: AudioSetting;
+  phase: AudioChangePhase;
+  /** While proving: seconds until it goes back on its own. */
+  secondsLeft: number;
+  finder: BufferFinderRun;
+  onApply: (setting: AudioSetting) => void;
+  /** Keep the new setting (true) or go back now (false). */
+  onSettle: (keep: boolean) => void;
 }) {
-  const [current, setCurrent] = React.useState(initial);
-  const [draft, setDraft] = React.useState(initial);
-  const [phase, setPhase] = React.useState<'idle' | 'restarting' | 'proving'>(
-    'idle',
-  );
-  const [left, setLeft] = React.useState(15);
-  const [finder, setFinder] = React.useState(false);
-  const timer = React.useRef<ReturnType<typeof setInterval> | null>(null);
-  const before = React.useRef(initial);
-  React.useEffect(
-    () => () => void (timer.current && clearInterval(timer.current)),
-    [],
-  );
-
-  const apply = (next: Setting) => {
-    before.current = current;
-    setCurrent(next);
-    setDraft(next);
-    setPhase('restarting');
-    let n = 15;
-    setLeft(n);
-    timer.current = setTimeout(() => {
-      setPhase('proving');
-      timer.current = setInterval(() => {
-        n -= 1;
-        setLeft(n);
-        if (n <= 0) {
-          if (timer.current) clearInterval(timer.current);
-          setCurrent(before.current);
-          setDraft(before.current);
-          setPhase('idle');
-        }
-      }, 1000);
-    }, 600) as unknown as ReturnType<typeof setInterval>;
-  };
-  const settle = (keep: boolean) => {
-    if (timer.current) clearInterval(timer.current);
-    if (!keep) {
-      setCurrent(before.current);
-      setDraft(before.current);
-    }
-    setPhase('idle');
-  };
+  const [draft, setDraft] = React.useState(current);
+  const [finding, setFinding] = React.useState(false);
+  const [seen, setSeen] = React.useState(current);
+  if (seen !== current) {
+    setSeen(current);
+    setDraft(current);
+  }
+  const apply = (next: AudioSetting) => onApply(next);
+  const settle = onSettle;
+  const left = secondsLeft;
   const changed = JSON.stringify(draft) !== JSON.stringify(current);
 
   return (
@@ -144,7 +134,7 @@ export function AudioChange({
           <Button disabled={!changed} onClick={() => apply(draft)}>
             Apply and restart audio
           </Button>
-          <Button variant="outline" onClick={() => setFinder(true)}>
+          <Button variant="outline" onClick={() => setFinding(true)}>
             Find the smallest safe buffer…
           </Button>
           {changed && (
@@ -184,21 +174,15 @@ export function AudioChange({
         </div>
       )}
       <BufferFinder
-        open={finder}
-        onOpenChange={setFinder}
+        {...finder}
+        open={finding}
+        onOpenChange={setFinding}
         rate={current.rate}
         onUse={(s) => apply({ ...s, rate: current.rate })}
       />
     </section>
   );
 }
-
-const TRIALS: { frames: number; periods: number; xruns: number }[] = [
-  { frames: 128, periods: 3, xruns: 0 },
-  { frames: 96, periods: 3, xruns: 0 },
-  { frames: 64, periods: 3, xruns: 2 },
-  { frames: 96, periods: 2, xruns: 0 },
-];
 
 /**
  * The buffer finder: steps the buffer down while you play hard, listens for
@@ -210,39 +194,24 @@ export function BufferFinder({
   onOpenChange,
   rate,
   onUse,
-}: {
+  trials,
+  total,
+  state,
+  onStart,
+  onCancel,
+}: BufferFinderRun & {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   rate: number;
   onUse: (setting: { frames: number; periods: number }) => void;
 }) {
-  const [step, setStep] = React.useState(-1);
-  const timer = React.useRef<ReturnType<typeof setInterval> | null>(null);
-  React.useEffect(
-    () => () => void (timer.current && clearInterval(timer.current)),
-    [],
-  );
-  const done = step >= TRIALS.length;
-  const best = TRIALS.slice(0, Math.max(0, step))
-    .filter((t) => t.xruns === 0)
-    .at(-1);
-  const start = () => {
-    let n = 0;
-    setStep(0);
-    timer.current = setInterval(() => {
-      n += 1;
-      setStep(n);
-      if (n >= TRIALS.length && timer.current) clearInterval(timer.current);
-    }, 700);
-  };
+  const done = state === 'done';
+  const best = trials.filter((t) => t.xruns === 0).at(-1);
   return (
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (!o) {
-          if (timer.current) clearInterval(timer.current);
-          setStep(-1);
-        }
+        if (!o) onCancel();
         onOpenChange(o);
       }}
     >
@@ -252,9 +221,9 @@ export function BufferFinder({
           description="Play hard, with your loudest preset, while each size is tried for ten seconds."
         />
         <DialogBody className="grid gap-3">
-          {step >= 0 && !done && (
+          {state === 'running' && (
             <Progress
-              value={(step / TRIALS.length) * 100}
+              value={(trials.length / total) * 100}
               label="Finder progress"
             />
           )}
@@ -262,7 +231,7 @@ export function BufferFinder({
             aria-label="Buffer sizes tried"
             className="m-0 grid list-none gap-1 p-0 text-sm"
           >
-            {TRIALS.slice(0, Math.max(0, step)).map((t) => (
+            {trials.map((t) => (
               <li
                 key={`${t.frames}x${t.periods}`}
                 className="flex items-center gap-2"
@@ -293,7 +262,7 @@ export function BufferFinder({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {done ? 'Keep current' : 'Cancel'}
           </Button>
-          {step < 0 && <Button onClick={start}>Start</Button>}
+          {state === 'idle' && <Button onClick={onStart}>Start</Button>}
           {done && best && (
             <Button
               onClick={() => {

@@ -1,6 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 import { PracticePanel } from './practice';
+import { exampleWaveform } from './practice.data';
+
+const WAVEFORM = exampleWaveform();
 
 /**
  * Practice tools from the backing player: drag across the waveform for a
@@ -10,7 +13,7 @@ import { PracticePanel } from './practice';
 const meta: Meta<typeof PracticePanel> = {
   title: 'Widgets/Practice',
   component: PracticePanel,
-  args: { duration: 222, position: 64, bpm: 118 },
+  args: { duration: 222, position: 64, bpm: 118, waveform: WAVEFORM },
   parameters: { layout: 'padded' },
 };
 export default meta;

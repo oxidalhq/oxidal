@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 import { Button } from '../components/ui/button';
-import { GetTones, Tone3000Account } from './tone3000';
+import { GetTonesDemo, Tone3000AccountDemo } from './tone3000.demo';
 
 /** Sign in to TONE3000 on the device, and get tones with plain-word failures. */
 const meta: Meta = {
@@ -13,7 +13,7 @@ export default meta;
 
 export const SignIn: StoryObj = {
   name: 'Sign in with a code',
-  render: () => <Tone3000Account />,
+  render: () => <Tone3000AccountDemo />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(
@@ -35,7 +35,7 @@ function Get() {
   return (
     <>
       <Button onClick={() => setOpen(true)}>Get tones…</Button>
-      <GetTones open={open} onOpenChange={setOpen} />
+      <GetTonesDemo open={open} onOpenChange={setOpen} />
     </>
   );
 }

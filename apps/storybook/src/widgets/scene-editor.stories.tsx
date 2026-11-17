@@ -34,7 +34,10 @@ function Demo() {
   );
 }
 
-/** Four branches with a job each (Rhythm, Lead, Swells, Wet) and four scenes. */
+/**
+ * Four branches with a job each (Rhythm, Lead, Swells, Wet) and four
+ * scenes. Chorus also sets two of the TS9's values ("2 set").
+ */
 export const FourBranchesFourScenes: StoryObj = {
   name: 'Four branches, four scenes',
   render: () => <Demo />,

@@ -73,7 +73,14 @@ const STEPS = [
  * match what you know), then four steps to your first sound. Every step
  * can be skipped and found again in its own place.
  */
-export function FirstRun({ onDone }: { onDone?: () => void }) {
+export function FirstRun({
+  onDone,
+  onStep,
+}: {
+  onDone?: () => void;
+  /** A step's "Do it": where to take the player, such as "Settings › MIDI". */
+  onStep?: (where: string) => void;
+}) {
   const [from, setFrom] = React.useState<string | null>(null);
   const [done, setDone] = React.useState<Set<number>>(new Set());
   const unit = FROM.find((f) => f.id === from);
@@ -152,7 +159,10 @@ export function FirstRun({ onDone }: { onDone?: () => void }) {
               <Button
                 size="sm"
                 variant={done.has(i) ? 'ghost' : 'outline'}
-                onClick={() => setDone((d) => new Set(d).add(i))}
+                onClick={() => {
+                  setDone((d) => new Set(d).add(i));
+                  onStep?.(where);
+                }}
               >
                 {done.has(i) ? 'Done' : 'Do it'}
               </Button>

@@ -9,7 +9,11 @@
     "./components/*": "./src/components/ui/*.tsx",
     "./notices": "./src/components/ui/notices.ts",
     "./widgets/*": "./src/widgets/*.tsx",
+    "./widgets/controllers": "./src/widgets/controllers.ts",
+    "./widgets/midi-context": "./src/widgets/midi-context.ts",
+    "./widgets/*.demo": null,
     "./patterns/*": "./src/patterns/*.tsx",
+    "./patterns/*.demo": null,
     "./lib/*": "./src/lib/*.ts"
   },
   "scripts": {

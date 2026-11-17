@@ -6,7 +6,11 @@ import { Card, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { List, ListRow } from '../components/ui/list-row';
 import { NumberField } from '../components/ui/number-field';
 import { StepProgress } from '../components/ui/states';
-import { EvenOut, LevelMatch, SoundCheck } from '../patterns/guitar-tools';
+import {
+  EvenOutDemo,
+  LevelMatchDemo,
+  SoundCheckDemo,
+} from '../patterns/guitar-tools.demo';
 import { Caption, Readout } from '../components/ui/text';
 import { PageHeading } from '../patterns/app-shell';
 import { Meter } from '../widgets/meter';
@@ -84,7 +88,7 @@ export function Guitars() {
           </div>
         </Card>
         <div className="grid content-start gap-4">
-          <SoundCheck />
+          <SoundCheckDemo />
           <Card>
             <CardHeader>
               <CardTitle>Input level</CardTitle>
@@ -116,8 +120,8 @@ export function Guitars() {
               </CardFooter>
             )}
           </Card>
-          <LevelMatch />
-          <EvenOut />
+          <LevelMatchDemo />
+          <EvenOutDemo />
         </div>
       </div>
     </>

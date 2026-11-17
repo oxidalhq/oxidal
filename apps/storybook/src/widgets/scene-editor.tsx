@@ -36,6 +36,8 @@ export type SceneModel = {
   on: Record<string, boolean>;
   /** Split id → level of each branch in dB; SILENT is off. */
   levels: Record<string, number[]>;
+  /** Block id → control id → value this scene sets instead of the preset's. */
+  values?: Record<string, Record<string, number>>;
   edited?: boolean;
 };
 
@@ -334,6 +336,16 @@ export function SceneEditor({
                           }))
                         }
                       />
+                      {Object.keys(scene.values?.[row.block.id] ?? {}).length >
+                        0 && (
+                        <span className="block font-mono text-2xs text-muted-foreground">
+                          {
+                            Object.keys(scene.values?.[row.block.id] ?? {})
+                              .length
+                          }{' '}
+                          set
+                        </span>
+                      )}
                     </td>
                   ))}
                   <td className="p-1">
@@ -364,10 +376,12 @@ export function SceneEditor({
         </table>
       </div>
       <Caption className="text-xs">
-        Filled squares play in that scene. Nothing here stops: an off block is
-        bypassed and a silent branch is muted, but both keep running, so a scene
-        change has no gap. To use the same pedal or capture with other settings,
-        duplicate it: the copy starts off everywhere.
+        Filled squares play in that scene; "2 set" means the scene sets two of
+        that block's values (choose This scene in the chain and change them
+        there). Nothing here stops: an off block is bypassed and a silent branch
+        is muted, but both keep running, so a scene change has no gap. To use
+        the same pedal or capture with other settings, duplicate it: the copy
+        starts off everywhere.
       </Caption>
     </div>
   );

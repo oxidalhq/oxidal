@@ -7,7 +7,8 @@ import { Switch } from '../components/ui/switch';
 import { Caption, Readout } from '../components/ui/text';
 import { PageHeading } from '../patterns/app-shell';
 import { StereoMeter } from '../widgets/meter';
-import { DeviceDashboard } from './device-dashboard';
+import { DeviceDashboard } from '../patterns/device-dashboard';
+import { READINGS } from '../patterns/device-dashboard.data';
 import { VenueEq } from '../widgets/venue-eq';
 import { VENUE_PROFILES } from '../widgets/venue-eq.data';
 
@@ -194,7 +195,7 @@ export function Levels({
         }
       />
       {view === 'device' ? (
-        <DeviceDashboard />
+        <DeviceDashboard readings={READINGS} />
       ) : (
         <div className="grid gap-4 px-page lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
           <Output />

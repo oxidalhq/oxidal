@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { Caption } from '../components/ui/text';
-import { CONTROLLERS, type SwitchAction } from '../widgets/controllers';
+import type { ControllerProfile, SwitchAction } from '../widgets/controllers';
 
 const DOES: Record<SwitchAction['kind'], string> = {
   scene: 'Scene',
@@ -36,14 +36,39 @@ const does = (a: SwitchAction) =>
  * Oxidal cannot see which mode the pedal is in, so pressing each switch is
  * the check. Save names the layout; any preset can still change it.
  */
-export function ControllerSetup() {
+export type SwitchHeard = { switch: string; message: string };
+
+export function ControllerSetup({
+  profiles,
+  heard,
+  saved,
+  onPress,
+  onSave,
+}: {
+  profiles: ControllerProfile[];
+  /** Switches the device has heard during the check, oldest first, with what each sent ("CC 16 · ch 1"). */
+  heard: SwitchHeard[];
+  saved: boolean;
+  /** A tile pressed on screen, to try a switch without the pedal. */
+  onPress?: (profile: ControllerProfile, switchId: string) => void;
+  onSave: (layout: {
+    name: string;
+    controller: string;
+    start: 'scenes' | 'presets' | 'stomps';
+  }) => void;
+}) {
   const [step, setStep] = React.useState(0);
-  const [controller, setController] = React.useState(CONTROLLERS[0]!.id);
-  const [layout, setLayout] = React.useState('scenes');
-  const [pressed, setPressed] = React.useState<Set<string>>(new Set());
-  const [last, setLast] = React.useState<string | null>(null);
-  const [saved, setSaved] = React.useState(false);
-  const profile = CONTROLLERS.find((c) => c.id === controller)!;
+  const [controller, setController] = React.useState(profiles[0]?.id ?? '');
+  const [layout, setLayout] = React.useState<'scenes' | 'presets' | 'stomps'>(
+    'scenes',
+  );
+  const [name, setName] = React.useState('');
+  const profile = profiles.find((c) => c.id === controller) ?? profiles[0]!;
+  const pressed = new Set(heard.map((h) => h.switch));
+  const lastHeard = heard.at(-1);
+  const last = lastHeard?.switch ?? null;
+  const sent = (id: string) =>
+    [...heard].reverse().find((h) => h.switch === id)?.message;
   const steps = ['Controller', 'Layout', 'Check each switch', 'Save'];
 
   return (
@@ -59,7 +84,7 @@ export function ControllerSetup() {
       <StepProgress label="Controller setup" steps={steps} current={step} />
       {step === 0 && (
         <div className="grid gap-2">
-          {CONTROLLERS.map((c) => (
+          {profiles.map((c) => (
             <button
               key={c.id}
               type="button"
@@ -82,7 +107,9 @@ export function ControllerSetup() {
         <div className="grid gap-2">
           <SegmentedControl
             value={layout}
-            onValueChange={setLayout}
+            onValueChange={(v) =>
+              v && setLayout(v as 'scenes' | 'presets' | 'stomps')
+            }
             aria-label="Starting layout"
           >
             <Segment value="scenes">Scenes</Segment>
@@ -115,14 +142,11 @@ export function ControllerSetup() {
               gridTemplateColumns: `repeat(${Math.min(profile.columns, 5)}, minmax(0, 1fr))`,
             }}
           >
-            {profile.switches.map((s, i) => (
+            {profile.switches.map((s) => (
               <button
                 key={s.id}
                 type="button"
-                onClick={() => {
-                  setPressed((p) => new Set(p).add(s.id));
-                  setLast(s.id);
-                }}
+                onClick={() => onPress?.(profile, s.id)}
                 className={cn(
                   'grid min-h-20 content-center gap-0.5 rounded-lg border border-input px-2 text-center text-xs hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring',
                   pressed.has(s.id) && 'border-foreground',
@@ -130,15 +154,17 @@ export function ControllerSetup() {
                 )}
               >
                 <span className="text-lg font-semibold">{s.name}</span>{' '}
-                <span className="font-mono">CC {16 + i} · ch 1</span>{' '}
+                <span className="font-mono">
+                  {sent(s.id) ?? 'Not heard yet'}
+                </span>{' '}
                 <span>{does(s.tap)}</span>
               </button>
             ))}
           </div>
           <Caption role="status">
             {pressed.size}/{profile.switches.length} switches checked
-            {last &&
-              ` · last: ${profile.switches.find((s) => s.id === last)!.name} sent CC ${16 + profile.switches.findIndex((s) => s.id === last)}`}
+            {lastHeard &&
+              ` · last: ${profile.switches.find((s) => s.id === lastHeard.switch)?.name ?? lastHeard.switch} sent ${lastHeard.message}`}
           </Caption>
           <Button className="justify-self-end" onClick={() => setStep(3)}>
             {pressed.size === profile.switches.length
@@ -154,7 +180,8 @@ export function ControllerSetup() {
               Layout name
             </span>
             <input
-              defaultValue={`${profile.switches.length} switches · ${layout}`}
+              value={name || `${profile.switches.length} switches · ${layout}`}
+              onChange={(e) => setName(e.target.value)}
               className="h-10 rounded-md border border-input bg-background px-3 text-sm"
             />
           </label>
@@ -163,7 +190,17 @@ export function ControllerSetup() {
               Saved. Every preset uses it unless the preset sets its own.
             </Caption>
           ) : (
-            <Button className="justify-self-end" onClick={() => setSaved(true)}>
+            <Button
+              className="justify-self-end"
+              onClick={() =>
+                onSave({
+                  name:
+                    name || `${profile.switches.length} switches · ${layout}`,
+                  controller: profile.id,
+                  start: layout,
+                })
+              }
+            >
               Save layout
             </Button>
           )}
@@ -174,18 +211,29 @@ export function ControllerSetup() {
 }
 
 /** More than one controller: say which one Oxidal listens to. */
-export function ExtraControllers() {
-  const [policy, setPolicy] = React.useState('all');
+export type ListenPolicy = 'all' | 'first' | 'each';
+
+export function ExtraControllers({
+  controllers,
+  policy,
+  onPolicy,
+}: {
+  /** Connected controllers, such as "M-Vave Chocolate · USB · connected". */
+  controllers: string[];
+  policy: ListenPolicy;
+  onPolicy: (policy: ListenPolicy) => void;
+}) {
   return (
     <Card>
       <CardHeader>
         <CardTitle>Additional controllers</CardTitle>
       </CardHeader>
       <ul className="m-0 grid list-none gap-1 p-0 text-sm">
-        <li>M-Vave Chocolate · USB · connected</li>
-        <li>MIDI Captain STD 10 · USB · connected</li>
+        {controllers.map((c) => (
+          <li key={c}>{c}</li>
+        ))}
       </ul>
-      <Select value={policy} onValueChange={setPolicy}>
+      <Select value={policy} onValueChange={(v) => onPolicy(v as ListenPolicy)}>
         <SelectTrigger aria-label="Listen to" className="w-full">
           <SelectValue />
         </SelectTrigger>

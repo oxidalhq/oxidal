@@ -1,12 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 import {
-  BlockEq,
-  BootPlayback,
-  DebugConsole,
-  DiReamps,
-  StorageLock,
-} from './device-flows';
+  BlockEqDemo,
+  BootPlaybackDemo,
+  DebugConsoleDemo,
+  DiReampsDemo,
+  StorageLockDemo,
+} from './device-flows.demo';
 
 /** Block EQ, DI and reamps, startup playback, storage lock and the debug console. */
 const meta: Meta = {
@@ -17,7 +17,7 @@ export default meta;
 
 export const Eq: StoryObj = {
   name: 'Block EQ: hear it, then cancel',
-  render: () => <BlockEq />,
+  render: () => <BlockEqDemo />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const low = canvas.getAllByRole('slider')[0]!;
@@ -35,7 +35,7 @@ export const Eq: StoryObj = {
 
 export const Di: StoryObj = {
   name: 'Record a DI',
-  render: () => <DiReamps />,
+  render: () => <DiReampsDemo />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: 'Record DI' }));
@@ -46,15 +46,15 @@ export const Di: StoryObj = {
 
 export const Startup: StoryObj = {
   name: 'When Oxidal starts',
-  render: () => <BootPlayback />,
+  render: () => <BootPlaybackDemo />,
 };
 export const Storage: StoryObj = {
   name: 'System storage lock',
-  render: () => <StorageLock />,
+  render: () => <StorageLockDemo />,
 };
 export const Debug: StoryObj = {
   name: 'Debug console',
-  render: () => <DebugConsole />,
+  render: () => <DebugConsoleDemo />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(

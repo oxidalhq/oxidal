@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
-import { NetworkSettings } from './network-settings';
+import { NetworkSettingsDemo } from './network-settings.demo';
 
 /** Settings › Network: join a network and confirm it from the new connection. */
 const meta: Meta = {
@@ -11,7 +11,7 @@ export default meta;
 
 export const JoinAndKeep: StoryObj = {
   name: 'Join a saved network and keep it',
-  render: () => <NetworkSettings />,
+  render: () => <NetworkSettingsDemo />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(

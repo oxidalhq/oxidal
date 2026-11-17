@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
-import { AudioChange } from './audio-change';
+import { AudioChangeDemo } from './audio-change.demo';
 
 /**
  * Settings › Audio: change the buffer or rate of the running session, keep
@@ -15,7 +15,7 @@ export default meta;
 
 export const ApplyAndKeep: StoryObj = {
   name: 'Apply a smaller buffer, then keep it',
-  render: () => <AudioChange />,
+  render: () => <AudioChangeDemo />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('radio', { name: '96' }));
@@ -31,7 +31,7 @@ export const ApplyAndKeep: StoryObj = {
 
 export const Finder: StoryObj = {
   name: 'Find the smallest safe buffer',
-  render: () => <AudioChange />,
+  render: () => <AudioChangeDemo />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);

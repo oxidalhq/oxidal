@@ -1,6 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
-import { EvenOut, LevelMatch, SoundCheck } from './guitar-tools';
+import {
+  EvenOutDemo,
+  LevelMatchDemo,
+  SoundCheckDemo,
+} from './guitar-tools.demo';
 
 /** Guitars: what to fix next, level match one preset, even out all of them. */
 const meta: Meta = {
@@ -11,12 +15,12 @@ export default meta;
 
 export const FixNext: StoryObj = {
   name: 'Sound check, fix next',
-  render: () => <SoundCheck />,
+  render: () => <SoundCheckDemo />,
 };
 
 export const MatchOne: StoryObj = {
   name: 'Level match a preset',
-  render: () => <LevelMatch />,
+  render: () => <LevelMatchDemo />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(
@@ -33,7 +37,7 @@ export const MatchOne: StoryObj = {
 
 export const EvenAll: StoryObj = {
   name: 'Even out all presets',
-  render: () => <EvenOut />,
+  render: () => <EvenOutDemo />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(

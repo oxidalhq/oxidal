@@ -2,7 +2,8 @@ import { Button } from '../components/ui/button';
 import { Card, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { RigSurface } from '../patterns/rig-surface';
 import { SCENES, SERIAL_ROUTE } from '../patterns/rig.fixtures';
-import { useRigDemo } from '../patterns/use-rig-demo';
+import { useRigDemo } from '../patterns/use-rig.demo';
+import { NamBlockToolsDemo } from '../patterns/nam-block.demo';
 
 /** The Rig screen: the rig surface, or the card that says why audio is not playing. */
 export function Rig({ audio = true }: { audio?: boolean }) {
@@ -28,6 +29,7 @@ export function Rig({ audio = true }: { audio?: boolean }) {
     );
   return (
     <RigSurface
+      blockTools={(b) => b.kind === 'amp' && <NamBlockToolsDemo />}
       presetName="Rhythm section"
       playing
       route={rig.route}

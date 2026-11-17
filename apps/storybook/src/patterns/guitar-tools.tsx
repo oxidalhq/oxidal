@@ -1,63 +1,26 @@
-import * as React from 'react';
 import { CheckCircle, Warning } from '@phosphor-icons/react';
 import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle } from '../components/ui/card';
 import { Progress } from '../components/ui/states';
 import { Caption } from '../components/ui/text';
 
-/** Runs a fake measurement: progress 0–100 over `ms`, then done. */
-function useMeasure(ms: number) {
-  const [progress, setProgress] = React.useState<number | null>(null);
-  const [done, setDone] = React.useState(false);
-  const timer = React.useRef<ReturnType<typeof setInterval> | null>(null);
-  React.useEffect(
-    () => () => void (timer.current && clearInterval(timer.current)),
-    [],
-  );
-  const start = () => {
-    let p = 0;
-    setDone(false);
-    setProgress(0);
-    timer.current = setInterval(() => {
-      p += 10;
-      if (p <= 100) return setProgress(p);
-      if (timer.current) clearInterval(timer.current);
-      setProgress(null);
-      setDone(true);
-    }, ms / 10);
-  };
-  return { progress, done, start, reset: () => setDone(false) };
-}
-
-const CHECKS = [
-  {
-    ok: false,
-    title: 'Input peaks at −3 dBFS',
-    fix: 'Turn the interface gain down a little; aim for −12 when you play hard.',
-    action: 'Show input meter',
-  },
-  {
-    ok: false,
-    title: 'Lead boost clips twice a minute',
-    fix: "Lower that preset's Level by about 2 dB.",
-    action: 'Open Lead boost',
-  },
-  {
-    ok: true,
-    title: 'No dropouts in the last hour',
-    fix: '128 × 3 at 48 kHz is holding.',
-    action: undefined,
-  },
-  {
-    ok: true,
-    title: 'Presets are within 1.5 dB of each other',
-    fix: 'Even out ran on Monday.',
-    action: undefined,
-  },
-];
+export type SoundCheckItem = {
+  ok: boolean;
+  title: string;
+  /** What to do, or why it is fine. */
+  fix: string;
+  /** The one action that fixes it, if any. */
+  action?: string;
+};
 
 /** Sound check: what to fix next, most useful first, each with one action. */
-export function SoundCheck() {
+export function SoundCheck({
+  checks,
+  onAction,
+}: {
+  checks: SoundCheckItem[];
+  onAction?: (check: SoundCheckItem) => void;
+}) {
   return (
     <Card>
       <CardHeader>
@@ -67,7 +30,7 @@ export function SoundCheck() {
         </Caption>
       </CardHeader>
       <ul aria-label="Fix next" className="m-0 grid list-none gap-0 p-0">
-        {CHECKS.map((c) => (
+        {checks.map((c) => (
           <li
             key={c.title}
             className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 border-t border-border py-2 first:border-t-0"
@@ -84,7 +47,7 @@ export function SoundCheck() {
               </Caption>
             </span>
             {c.action ? (
-              <Button size="sm" variant="outline">
+              <Button size="sm" variant="outline" onClick={() => onAction?.(c)}>
                 {c.action}
               </Button>
             ) : (
@@ -102,9 +65,30 @@ export function SoundCheck() {
  * Output level is then set so it sits at the shared reference loudness.
  * Saved with the preset when you save.
  */
-export function LevelMatch({ preset = 'Rhythm section' }: { preset?: string }) {
-  const m = useMeasure(1600);
-  const [kept, setKept] = React.useState<boolean | null>(null);
+export type LevelMatchState =
+  | { step: 'ready'; kept?: boolean }
+  | { step: 'listening'; progress: number }
+  | {
+      step: 'measured';
+      before: string;
+      target: string;
+      /** The Output level Oxidal set, such as "−4.2 dB". */
+      level: string;
+    };
+
+export function LevelMatch({
+  preset,
+  state,
+  onStart,
+  onKeep,
+  onUndo,
+}: {
+  preset: string;
+  state: LevelMatchState;
+  onStart: () => void;
+  onKeep: () => void;
+  onUndo: () => void;
+}) {
   return (
     <Card>
       <CardHeader>
@@ -113,40 +97,37 @@ export function LevelMatch({ preset = 'Rhythm section' }: { preset?: string }) {
           {preset}
         </Caption>
       </CardHeader>
-      {m.progress === null && !m.done && (
+      {state.step === 'ready' && (
         <div className="grid gap-2">
           <Caption>
             Play the way you normally do for eight seconds. Oxidal sets this
             preset's Output level to the shared loudness.
           </Caption>
-          <Button
-            className="justify-self-start"
-            onClick={() => (setKept(null), m.start())}
-          >
+          <Button className="justify-self-start" onClick={onStart}>
             Start listening
           </Button>
-          {kept !== null && (
+          {state.kept !== undefined && (
             <Caption role="status">
-              {kept
+              {state.kept
                 ? 'Output level kept. Save the preset to keep it for good.'
                 : 'Back to how it was.'}
             </Caption>
           )}
         </div>
       )}
-      {m.progress !== null && (
+      {state.step === 'listening' && (
         <div role="status" className="grid gap-1.5">
           <span className="text-sm">Listening… keep playing.</span>
-          <Progress value={m.progress} label="Listening" />
+          <Progress value={state.progress} label="Listening" />
         </div>
       )}
-      {m.done && (
+      {state.step === 'measured' && (
         <div className="grid gap-2">
           <dl className="m-0 grid grid-cols-3 gap-2 text-sm">
             {[
-              ['Before', '−13.8 LUFS'],
-              ['Target', '−18.0 LUFS'],
-              ['Output level', '−4.2 dB'],
+              ['Before', state.before],
+              ['Target', state.target],
+              ['Output level', state.level],
             ].map(([k, v]) => (
               <div
                 key={k}
@@ -160,11 +141,8 @@ export function LevelMatch({ preset = 'Rhythm section' }: { preset?: string }) {
             ))}
           </dl>
           <div className="flex gap-2">
-            <Button onClick={() => (setKept(true), m.reset())}>Keep</Button>
-            <Button
-              variant="outline"
-              onClick={() => (setKept(false), m.reset())}
-            >
+            <Button onClick={onKeep}>Keep</Button>
+            <Button variant="outline" onClick={onUndo}>
               Undo
             </Button>
           </div>
@@ -174,40 +152,52 @@ export function LevelMatch({ preset = 'Rhythm section' }: { preset?: string }) {
   );
 }
 
-const PRESETS = [
-  ['Rhythm section', -18.2, -18.0],
-  ['Ambient swell', -22.9, -18.3],
-  ['Lead boost', -13.4, -17.6],
-  ['Brown Crunch', -16.1, -18.1],
-  ['Neon Clean', -21.0, -18.4],
-] as const;
+export type PresetLoudness = {
+  name: string;
+  /** Loudness in LUFS, now. */
+  lufs: number;
+};
 
 /**
  * Even out all: every preset and scene to the same loudness so switching
  * never jumps. Corrections are bounded (±6 dB); only new or changed presets
  * are measured again.
  */
-export function EvenOut() {
-  const m = useMeasure(2000);
-  const after = m.done;
-  const spread = (i: 1 | 2) => {
-    const v = PRESETS.map((p) => p[i]);
-    return (Math.max(...v) - Math.min(...v)).toFixed(1);
-  };
+export function EvenOut({
+  presets,
+  target = -18,
+  progress,
+  evened,
+  scenes,
+  onStart,
+}: {
+  presets: PresetLoudness[];
+  /** The shared loudness in LUFS. */
+  target?: number;
+  /** 0 to 100 while measuring. */
+  progress?: number;
+  /** True once presets have been evened out. */
+  evened: boolean;
+  /** How many scenes are measured with the presets. */
+  scenes: number;
+  onStart: () => void;
+}) {
+  const measuring = progress !== undefined;
+  const values = presets.map((p) => p.lufs);
+  const spread = (Math.max(...values) - Math.min(...values)).toFixed(1);
   return (
     <Card>
       <CardHeader>
         <CardTitle>Even out all</CardTitle>
         <Caption as="span" className="text-xs">
-          Loudest to quietest: {after ? spread(2) : spread(1)} dB
+          Loudest to quietest: {spread} dB
         </Caption>
       </CardHeader>
       <ul
         aria-label="Preset loudness"
         className="m-0 grid list-none gap-1.5 p-0"
       >
-        {PRESETS.map(([name, before, fixed]) => {
-          const v = after ? fixed : before;
+        {presets.map(({ name, lufs: v }) => {
           return (
             <li
               key={name}
@@ -224,7 +214,7 @@ export function EvenOut() {
                 />
                 <span
                   className="absolute inset-y-[-3px] w-0.5 bg-brand"
-                  style={{ left: `${((-18 + 30) / 20) * 100}%` }}
+                  style={{ left: `${((target + 30) / 20) * 100}%` }}
                 />
               </span>
               <span className="font-mono text-xs tabular-nums">
@@ -234,19 +224,17 @@ export function EvenOut() {
           );
         })}
       </ul>
-      {m.progress !== null && (
-        <Progress value={m.progress} label="Measuring presets" />
-      )}
+      {measuring && <Progress value={progress} label="Measuring presets" />}
       <div className="flex flex-wrap items-center gap-2">
-        <Button disabled={m.progress !== null} onClick={m.start}>
-          {after ? 'Even out again' : 'Even out all'}
+        <Button disabled={measuring} onClick={onStart}>
+          {evened ? 'Even out again' : 'Even out all'}
         </Button>
         <Caption as="span" role="status" className="text-xs">
-          {m.progress !== null
-            ? 'Measuring 5 presets and 14 scenes…'
-            : after
+          {measuring
+            ? `Measuring ${presets.length} presets and ${scenes} scenes…`
+            : evened
               ? 'Done. Corrections stay within ±6 dB; the oxide line is the target.'
-              : 'The oxide line is the shared loudness, −18 LUFS.'}
+              : `The oxide line is the shared loudness, ${target} LUFS.`}
         </Caption>
       </div>
     </Card>

@@ -16,17 +16,7 @@ import { Card, CardHeader, CardTitle } from '../components/ui/card';
 import { ChartContainer, ChartTooltipContent } from '../components/ui/chart';
 import { Segment, SegmentedControl } from '../components/ui/segmented';
 import { Caption } from '../components/ui/text';
-import {
-  AUDIT,
-  CORES,
-  CORE_HISTORY,
-  DISK,
-  DROPOUTS,
-  MEMORY,
-  PROCESSING,
-  STREAM,
-  TEMPERATURE,
-} from './device-dashboard.data';
+import type { AuditRecord } from './device-dashboard.data';
 
 const INK = 'var(--foreground)';
 const LIMIT = 'var(--brand)';
@@ -43,18 +33,58 @@ const ago = (t: string | number) => {
  * the storage goes, dropouts per minute, the audio stream and engines, and
  * the audit log. Readings marked "New" are not reported by the device yet.
  */
-export function DeviceDashboard() {
+type Reading = { t: number; v: number };
+
+/** Every reading the dashboard shows, in the shape the device reports. */
+export type DeviceReadings = {
+  uptime: string;
+  stream: {
+    device: string;
+    rate: number;
+    frames: number;
+    periods: number;
+    /** Hours of audio processed since boot. */
+    hours: number;
+    xruns: number;
+    recovered: number;
+  };
+  cores: { load: number; audio: boolean }[];
+  disk: { used: number; total: number; parts: { name: string; gb: number }[] };
+  /** Ten minutes of readings, t in minutes before now. */
+  processing: Reading[];
+  temperature: Reading[];
+  memory: Reading[];
+  coreHistory: Reading[][];
+  dropouts: { minute: number; count: number }[];
+  audit: AuditRecord[];
+};
+
+export function DeviceDashboard({ readings }: { readings: DeviceReadings }) {
+  const {
+    stream,
+    cores,
+    disk,
+    processing,
+    temperature,
+    memory,
+    coreHistory,
+    dropouts,
+    audit,
+  } = readings;
   const last = (d: { v: number }[]) => d[d.length - 1]!.v;
   return (
     <div className="grid gap-4 px-page">
       <dl className="m-0 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
         {[
-          ['Processing', `${last(PROCESSING)}%`],
-          ['CPU', `${Math.round(CORES.reduce((s, c) => s + c.load, 0) / 4)}%`],
-          ['Memory', `${last(MEMORY)} GB`],
-          ['Temperature', `${last(TEMPERATURE)} °C`],
-          ['Storage', `${DISK.used} / ${DISK.total} GB`],
-          ['Uptime', '2 d 4 h'],
+          ['Processing', `${last(processing)}%`],
+          [
+            'CPU',
+            `${Math.round(cores.reduce((s, c) => s + c.load, 0) / cores.length)}%`,
+          ],
+          ['Memory', `${last(memory)} GB`],
+          ['Temperature', `${last(temperature)} °C`],
+          ['Storage', `${disk.used} / ${disk.total} GB`],
+          ['Uptime', readings.uptime],
         ].map(([k, v]) => (
           <div
             key={k}
@@ -72,7 +102,7 @@ export function DeviceDashboard() {
         <Card>
           <Trend
             label="Processing, share of each audio period"
-            data={PROCESSING}
+            data={processing}
             unit="%"
             domain={[0, 100]}
             limit={85}
@@ -82,7 +112,7 @@ export function DeviceDashboard() {
         <Card>
           <Trend
             label="Temperature"
-            data={TEMPERATURE}
+            data={temperature}
             unit=" °C"
             domain={[40, 90]}
             limit={80}
@@ -95,11 +125,11 @@ export function DeviceDashboard() {
             <Badge size="sm">New</Badge>
           </CardHeader>
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-            {CORE_HISTORY.map((data, i) => (
+            {coreHistory.map((data, i) => (
               <Trend
                 key={i}
                 compact
-                label={`Core ${i + 1}${CORES[i]!.audio ? ' · audio' : ''}`}
+                label={`Core ${i + 1}${cores[i]!.audio ? ' · audio' : ''}`}
                 data={data}
                 unit="%"
                 domain={[0, 100]}
@@ -110,7 +140,7 @@ export function DeviceDashboard() {
         <Card>
           <Trend
             label="Memory · of 8 GB"
-            data={MEMORY}
+            data={memory}
             unit=" GB"
             domain={[0, 8]}
           />
@@ -121,12 +151,12 @@ export function DeviceDashboard() {
             <Badge size="sm">New</Badge>
           </CardHeader>
           <ChartContainer
-            label={`${DISK.used} of ${DISK.total} GB used`}
+            label={`${disk.used} of ${disk.total} GB used`}
             config={{ gb: { label: 'GB', color: INK } }}
             height="h-44"
           >
             <BarChart
-              data={DISK.parts}
+              data={disk.parts}
               layout="vertical"
               margin={{ left: 0, right: 56 }}
             >
@@ -164,11 +194,11 @@ export function DeviceDashboard() {
         <Card>
           <ChartContainer
             label="Dropouts per minute"
-            value={`${STREAM.xruns} now`}
+            value={`${stream.xruns} now`}
             config={{ count: { label: 'Dropouts', color: INK } }}
             height="h-32"
           >
-            <BarChart data={DROPOUTS} margin={{ left: -24, right: 4 }}>
+            <BarChart data={dropouts} margin={{ left: -24, right: 4 }}>
               <CartesianGrid vertical={false} stroke="var(--border)" />
               <XAxis
                 dataKey="minute"
@@ -204,7 +234,7 @@ export function DeviceDashboard() {
             </BarChart>
           </ChartContainer>
           <Caption className="text-xs">
-            {STREAM.recovered} recovered on their own since boot.
+            {stream.recovered} recovered on their own since boot.
           </Caption>
         </Card>
         <Card>
@@ -213,14 +243,14 @@ export function DeviceDashboard() {
           </CardHeader>
           <Facts
             rows={[
-              ['Interface', STREAM.device],
-              ['Sample rate', `${STREAM.rate / 1000} kHz`],
-              ['Period', `${STREAM.frames} frames × ${STREAM.periods}`],
+              ['Interface', stream.device],
+              ['Sample rate', `${stream.rate / 1000} kHz`],
+              ['Period', `${stream.frames} frames × ${stream.periods}`],
               [
                 'Round trip',
-                `${(((STREAM.frames * STREAM.periods * 2) / STREAM.rate) * 1000).toFixed(1)} ms`,
+                `${(((stream.frames * stream.periods * 2) / stream.rate) * 1000).toFixed(1)} ms`,
               ],
-              ['Processed', `${STREAM.hours.toFixed(1)} h since boot`],
+              ['Processed', `${stream.hours.toFixed(1)} h since boot`],
             ]}
           />
         </Card>
@@ -239,7 +269,7 @@ export function DeviceDashboard() {
           />
         </Card>
       </div>
-      <AuditLog />
+      <AuditLog records={audit} />
     </div>
   );
 }
@@ -336,9 +366,11 @@ function Trend({
   );
 }
 
-function AuditLog() {
+function AuditLog({ records }: { records: AuditRecord[] }) {
   const [show, setShow] = useState<'all' | 'refused'>('all');
-  const rows = AUDIT.filter((r) => show === 'all' || r.outcome !== 'Accepted');
+  const rows = records.filter(
+    (r) => show === 'all' || r.outcome !== 'Accepted',
+  );
   return (
     <Card>
       <CardHeader>
