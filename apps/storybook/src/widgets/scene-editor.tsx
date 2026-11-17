@@ -364,9 +364,10 @@ export function SceneEditor({
         </table>
       </div>
       <Caption className="text-xs">
-        Filled squares play in that scene. Off blocks and silent branches keep
-        running, so a scene change has no gap. To use the same pedal or capture
-        with other settings, duplicate it: the copy starts off everywhere.
+        Filled squares play in that scene. Nothing here stops: an off block is
+        bypassed and a silent branch is muted, but both keep running, so a scene
+        change has no gap. To use the same pedal or capture with other settings,
+        duplicate it: the copy starts off everywhere.
       </Caption>
     </div>
   );

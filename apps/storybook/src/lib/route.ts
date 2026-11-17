@@ -310,3 +310,24 @@ function mapSplit<B extends Keyed>(
     return step.id === id ? change(inner) : inner;
   });
 }
+
+/** Every list a block can sit in: the main line, then each branch of each split, in order. */
+export function placesOf<B extends Keyed>(
+  route: Step<B>[],
+  path: ListPath = [],
+  prefix = '',
+): { path: ListPath; label: string }[] {
+  const here = path.length ? [] : [{ path, label: 'Main line' }];
+  return [
+    ...here,
+    ...getList(route, path).flatMap((step, index) =>
+      isSplit(step)
+        ? step.branches.flatMap((_, b) => {
+            const label = `${prefix}${branchName(step, b)}`;
+            const at = [...path, index, b];
+            return [{ path: at, label }, ...placesOf(route, at, `${label} › `)];
+          })
+        : [],
+    ),
+  ];
+}

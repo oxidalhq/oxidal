@@ -363,6 +363,8 @@ function ScenesRig() {
       onScene={setScene}
       levels={rig.levels}
       inputLevel={rig.input}
+      models={MODELS}
+      effects={EFFECTS}
     />
   );
 }
@@ -393,5 +395,59 @@ export const EditingScenes: StoryObj = {
     await expect(
       await canvas.findByText(/Editing Verse: switching a block/),
     ).toBeVisible();
+  },
+};
+
+/**
+ * Any block can be removed, the first one included, and moved to any line
+ * or branch: from its ⋯ in Edit (or the docked panel), or by holding and
+ * dragging it in Edit.
+ */
+export const MoveAndRemove: StoryObj = {
+  name: 'Move a block between branches, remove the first',
+  render: () => <ScenesRig />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole('button', { name: 'Edit' }));
+    await userEvent.click(
+      canvas.getAllByRole('button', { name: /^Echo long/ })[0]!,
+    );
+    const toolbar = within(
+      canvas.getByRole('toolbar', { name: 'Edit Echo long' }),
+    );
+    await userEvent.click(
+      toolbar.getByRole('button', { name: 'More for Echo long' }),
+    );
+    await userEvent.click(
+      await page.findByRole('menuitem', { name: 'Move to…' }),
+    );
+    const move = within(
+      await page.findByRole('dialog', { name: 'Move Echo long' }),
+    );
+    await userEvent.click(move.getByRole('combobox', { name: 'Move to' }));
+    await userEvent.click(
+      await page.findByRole('option', { name: 'Branch Lead' }),
+    );
+    await userEvent.click(move.getByRole('button', { name: 'Move' }));
+    await waitFor(() =>
+      expect(page.queryByRole('dialog', { name: 'Move Echo long' })).toBeNull(),
+    );
+
+    await userEvent.click(canvas.getAllByRole('button', { name: /^Gate/ })[0]!);
+    await userEvent.click(
+      within(canvas.getByRole('toolbar', { name: 'Edit Gate' })).getByRole(
+        'button',
+        { name: 'Remove' },
+      ),
+    );
+    await userEvent.click(
+      within(
+        await page.findByRole('dialog', { name: 'Remove Gate?' }),
+      ).getByRole('button', { name: 'Remove' }),
+    );
+    await waitFor(() =>
+      expect(canvas.queryByRole('button', { name: /^Gate/ })).toBeNull(),
+    );
   },
 };

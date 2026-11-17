@@ -68,6 +68,8 @@ import {
 import { CabMics } from '../widgets/cab-mics';
 import { BlockChooser, type EffectChoice } from './block-chooser';
 import { NamBlockTools } from './nam-block';
+import { BlockActions } from './block-actions';
+import { useConfirm } from '../components/ui/confirm';
 import {
   SwapSheet,
   type BlockType,
@@ -223,13 +225,69 @@ export function RigSurface({
   const shown = compare === 'saved' ? saved : applyScene(route, sceneModel);
   // In "This scene", on or off and branch levels go to the playing scene;
   // settings, moves and new blocks still change the whole preset.
+  // A block added while editing a scene plays in that scene only.
   const change = (next: RigRoute) => {
     if (!sceneModel) return onRoute(next);
     const edit = splitSceneEdit(next, route, sceneModel);
+    const known = new Set(blocksOf(route).map((b) => b.id));
+    const added = blocksOf(next)
+      .filter((b) => !known.has(b.id))
+      .map((b) => b.id);
     setSceneModels((all) =>
-      all.map((m) => (m.id === sceneModel.id ? edit.scene : m)),
+      all.map((m) =>
+        m.id === sceneModel.id
+          ? edit.scene
+          : {
+              ...m,
+              on: {
+                ...m.on,
+                ...Object.fromEntries(added.map((id) => [id, false])),
+              },
+            },
+      ),
     );
     onRoute(edit.route);
+  };
+  const { ask, dialog: confirmDialog } = useConfirm();
+  const duplicate = (b: BlockModel) => {
+    const at = locate(route, b.id);
+    if (!at) return;
+    const taken = new Set(blocksOf(route).map((x) => x.label));
+    let n = 2;
+    while (taken.has(`${b.label} (${n})`)) n++;
+    const copy: BlockModel = {
+      ...structuredClone(b),
+      id: `${b.id}-${n}`,
+      label: `${b.label} (${n})`,
+    };
+    // The copy plays only where you are: this scene, or nowhere until a scene uses it.
+    setSceneModels((all) =>
+      all.map((m) => ({
+        ...m,
+        on: { ...m.on, [copy.id]: m.id === sceneModel?.id },
+      })),
+    );
+    onRoute(insertStep(route, at.path, at.index + 1, copy));
+    setSelected(copy.id);
+  };
+  const removeBlock = async (b: BlockModel) => {
+    const ok = await ask({
+      title: `Remove ${b.label}?`,
+      body: scenes.length
+        ? `It leaves ${presetName} and every scene. To leave it out of one scene only, choose This scene and switch it off.`
+        : `It leaves ${presetName}. The change list can put it back until you save.`,
+      confirm: 'Remove',
+      destructive: true,
+    });
+    if (!ok) return;
+    onRoute(removeStep(route, b.id));
+    setSceneModels((all) =>
+      all.map((m) => {
+        const on = { ...m.on };
+        delete on[b.id];
+        return { ...m, on };
+      }),
+    );
   };
   const blocks = blocksOf(shown);
   const [selected, setSelected] = React.useState<string | null>(
@@ -431,8 +489,9 @@ export function RigSurface({
           {reading && <Badge tone="selected">Hearing the saved version</Badge>}
           {sceneModel && (
             <Caption as="p" role="status" className="basis-full text-xs">
-              Editing {sceneModel.name}: switching a block on or off and branch
-              levels change this scene only. Settings and moves change the whole
+              Editing {sceneModel.name}: switching a block off (it keeps
+              running) and branch levels change this scene only, and a block you
+              add plays in this scene only. Settings and moves change the whole
               preset; for other settings in one scene, duplicate the block.
             </Caption>
           )}
@@ -483,10 +542,17 @@ export function RigSurface({
           <Button
             size="sm"
             variant="destructive"
-            onClick={() => onRoute(removeStep(route, block.id))}
+            onClick={() => removeBlock(block)}
           >
             <Trash /> Remove
           </Button>
+          <BlockActions
+            block={block}
+            route={route}
+            onRoute={onRoute}
+            onDuplicate={() => duplicate(block)}
+            onRemove={() => removeBlock(block)}
+          />
           <Caption as="span" className="text-xs">
             Or hold a block and drag it; drop on “Parallel” to run it beside
             another.
@@ -582,6 +648,14 @@ export function RigSurface({
                 >
                   <Faders /> All controls · {block.controls.length}
                 </Button>
+                <BlockActions
+                  block={block}
+                  route={route}
+                  onRoute={onRoute}
+                  onDuplicate={() => duplicate(block)}
+                  onRemove={() => removeBlock(block)}
+                  disabled={reading}
+                />
               </div>
             </div>
             <div className="min-w-0">
@@ -670,12 +744,13 @@ export function RigSurface({
           effects={effects}
           onChoose={(added) => {
             if (adding)
-              onRoute(insertStep(route, adding.path, adding.index, added));
+              change(insertStep(shown, adding.path, adding.index, added));
             setSelected(added.id);
           }}
         />
       )}
 
+      {confirmDialog}
       <Sheet open={sceneEditor} onOpenChange={setSceneEditor}>
         <SheetContent
           onOpenChange={setSceneEditor}
