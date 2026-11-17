@@ -2,6 +2,7 @@ import * as React from 'react';
 import {
   ArrowsDownUp,
   DotsThree,
+  Info,
   MagnifyingGlass,
   Play,
   Star,
@@ -25,6 +26,19 @@ import { EmptyState } from '../components/ui/states';
 import { Caption } from '../components/ui/text';
 import { Toggle } from '../components/ui/toggle';
 import type { BlockKind } from '../widgets/chain';
+import { BlockGlyph } from '../widgets/block-glyph';
+import { glyphForBlock } from '../lib/block-glyphs';
+import {
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetHeader,
+} from '../components/ui/sheet';
+import {
+  SourceCard,
+  SourceLine,
+  type BlockSource,
+} from '../widgets/block-source';
 
 export type LibraryItem = {
   id: string;
@@ -35,6 +49,8 @@ export type LibraryItem = {
   badge?: { text: string; tone?: 'neutral' | 'live' | 'warning' | 'selected' };
   playable?: boolean;
   favourite?: boolean;
+  /** Where it comes from: shown on the row, and in full from About. */
+  origin?: BlockSource;
   /** For sorting: when it was last used, how often, when it was added (any increasing numbers). */
   lastUsed?: number;
   plays?: number;
@@ -130,8 +146,9 @@ export function LibraryList({
   );
   const shown = sortable ? sortItems(filtered, sort) : filtered;
   const sortLabel = SORTS.find((s) => s.id === sort)!.label;
+  const [about, setAbout] = React.useState<LibraryItem | null>(null);
   const menu = (item: LibraryItem) =>
-    actions.length > 0 && (
+    (actions.length > 0 || item.origin) && (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -143,6 +160,11 @@ export function LibraryList({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent>
+          {item.origin && (
+            <DropdownMenuItem onSelect={() => setAbout(item)}>
+              <Info /> About {item.title}
+            </DropdownMenuItem>
+          )}
           {actions
             .filter((a) => !a.destructive)
             .map((action) => (
@@ -315,6 +337,7 @@ export function LibraryList({
                     {item.caption}
                   </Caption>
                 )}
+                {item.origin && <SourceLine source={item.origin} plain />}
               </button>
               <span className="absolute top-1 right-1 flex gap-1">
                 {menu(item)}
@@ -328,7 +351,24 @@ export function LibraryList({
             <ListRow
               key={item.id}
               title={item.title}
-              caption={item.caption}
+              caption={
+                item.origin ? (
+                  <>
+                    {item.caption && (
+                      <span className="block truncate">{item.caption}</span>
+                    )}
+                    <SourceLine
+                      source={item.origin}
+                      plain
+                      className={cn(
+                        item.id === selected && 'text-background/80',
+                      )}
+                    />
+                  </>
+                ) : (
+                  item.caption
+                )
+              }
               selected={item.id === selected}
               onClick={() => onOpen(item.id)}
               leading={
@@ -346,7 +386,20 @@ export function LibraryList({
                     <Play weight="fill" />
                   </Button>
                 ) : item.kind ? (
-                  <Led kind={item.kind} className="ml-2" />
+                  <span className="relative ml-1 grid size-9 place-items-center rounded-md border border-border">
+                    <BlockGlyph
+                      glyph={glyphForBlock({
+                        kind: item.kind,
+                        label: item.title,
+                        caption: item.caption,
+                        origin: item.origin,
+                      })}
+                    />
+                    <Led
+                      kind={item.kind}
+                      className="absolute -top-1 -right-1 size-2"
+                    />
+                  </span>
                 ) : item.artwork ? (
                   <img
                     src={item.artwork}
@@ -391,6 +444,20 @@ export function LibraryList({
           ))}
         </List>
       )}
+      <Sheet open={Boolean(about)} onOpenChange={(o) => !o && setAbout(null)}>
+        <SheetContent
+          onOpenChange={(o) => !o && setAbout(null)}
+          className="md:w-[min(28rem,100vw)]"
+        >
+          <SheetHeader
+            title={about?.title ?? ''}
+            description="Where it comes from"
+          />
+          <SheetBody>
+            {about?.origin && <SourceCard source={about.origin} />}
+          </SheetBody>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

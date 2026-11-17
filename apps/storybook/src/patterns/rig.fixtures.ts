@@ -2,6 +2,7 @@ import type { BlockControl, BlockModel } from '../widgets/block-editor';
 import type { Scene } from '../widgets/scene-pad';
 import type { Step } from '../lib/route';
 import type { ChainLaneModel } from '../widgets/chain';
+import { SOURCES } from '../widgets/block-source.data';
 
 type RigLane = Omit<ChainLaneModel, 'blocks'> & { blocks: BlockModel[] };
 
@@ -30,6 +31,7 @@ export const amp = (
   label,
   kind: 'amp',
   caption: 'Amp · NAM',
+  origin: model === 'twin' ? SOURCES.twin : { ...SOURCES.plexi, title: label },
   on: true,
   unsaved,
   source: { label: 'Model', value: model, options: AMPS },
@@ -100,6 +102,7 @@ export const cab = (
   label,
   kind: 'cab',
   caption: 'Cabinet · IR',
+  origin: { ...SOURCES.greenback, title: label },
   on: true,
   source: { label: 'Impulse response', value: ir, options: CABS },
   mics,
@@ -209,6 +212,7 @@ export const delay = (id: string): BlockModel => ({
   id,
   label: 'Echo',
   kind: 'time',
+  origin: SOURCES.echo,
   role: 'delay',
   caption: 'Delay · Tape',
   on: false,
@@ -279,6 +283,7 @@ export const reverb = (id: string, caption: string): BlockModel => ({
   id,
   label: 'Bloom',
   kind: 'time',
+  origin: SOURCES.bloom,
   role: 'reverb',
   caption,
   on: true,
@@ -350,6 +355,7 @@ export const drive = (id: string): BlockModel => ({
   id,
   label: 'TS9',
   kind: 'pedal',
+  origin: SOURCES.ts9,
   role: 'drive',
   caption: 'Drive',
   on: true,
@@ -364,6 +370,7 @@ export const gate = (id: string): BlockModel => ({
   id,
   label: 'Gate',
   kind: 'lv2',
+  origin: SOURCES.gate,
   role: 'gate',
   caption: 'Noise gate',
   on: true,
@@ -394,6 +401,7 @@ export const mod = (id: string): BlockModel => ({
   id,
   label: 'Motion',
   kind: 'mod',
+  origin: SOURCES.motion,
   caption: 'Chorus',
   on: true,
   controls: [

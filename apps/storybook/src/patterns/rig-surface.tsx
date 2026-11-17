@@ -85,6 +85,7 @@ import {
 import { VisualControl } from '../widgets/visual-control';
 import { MidiTarget } from '../widgets/midi';
 import { scaleFromMidi } from '../lib/midi';
+import { SourceCard, SourceLine } from '../widgets/block-source';
 
 export type RigRoute = Step<BlockModel>[];
 
@@ -622,6 +623,7 @@ export function RigSurface({
                   <Caption as="span" className="truncate small-caps text-xs">
                     {block.caption ?? block.kind}
                   </Caption>
+                  {block.origin && <SourceLine source={block.origin} />}
                 </div>
                 <Button
                   size="icon"
@@ -855,6 +857,9 @@ export function RigSurface({
               description={block.caption ?? block.kind}
             />
             <SheetBody>
+              {block.origin && (
+                <SourceCard source={block.origin} className="mb-4" />
+              )}
               <BlockFullEditor
                 block={block}
                 onControl={(c, v) => control(block.id, c, v)}

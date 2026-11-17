@@ -1,14 +1,8 @@
 import * as React from 'react';
-import {
-  ClockCounterClockwise,
-  Lightning,
-  Plug,
-  Plus,
-  SpeakerHifi,
-  SpeakerSimpleHigh,
-  WaveSine,
-} from '@phosphor-icons/react';
+import { Plus } from '@phosphor-icons/react';
 import { cn } from '../lib/cn';
+import { glyphForBlock } from '../lib/block-glyphs';
+import { BlockGlyph } from './block-glyph';
 import { Badge, Led } from '../components/ui/badge';
 
 export type BlockKind = 'amp' | 'cab' | 'pedal' | 'time' | 'mod' | 'lv2';
@@ -30,15 +24,6 @@ export type ChainLaneModel = {
   id: string;
   name?: string;
   blocks: ChainBlockModel[];
-};
-
-const GLYPHS: Record<BlockKind, React.ReactNode> = {
-  amp: <SpeakerHifi />,
-  cab: <SpeakerSimpleHigh />,
-  pedal: <Lightning />,
-  time: <ClockCounterClockwise />,
-  mod: <WaveSine />,
-  lv2: <Plug />,
 };
 
 /**
@@ -120,7 +105,16 @@ export function ChainBlock({
           !block.on && 'border-dashed [&_svg]:opacity-60',
         )}
       >
-        {block.icon ?? GLYPHS[block.kind]}
+        {block.icon ?? (
+          <BlockGlyph
+            glyph={glyphForBlock(
+              block as ChainBlockModel & {
+                role?: string;
+                origin?: { kind: string; gear?: string; type?: string };
+              },
+            )}
+          />
+        )}
         <Led
           kind={block.kind}
           on={block.on}

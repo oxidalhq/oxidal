@@ -12,6 +12,9 @@ import {
 import { Caption, Eyebrow } from '../components/ui/text';
 import type { BlockModel } from '../widgets/block-editor';
 import type { ModelChoice } from './swap-sheet';
+import { SourceLine, type BlockSource } from '../widgets/block-source';
+import { BlockGlyph } from '../widgets/block-glyph';
+import { glyphFor } from '../lib/block-glyphs';
 
 /** An effect the chooser offers. LV2 effects come from packs the player installs. */
 export type EffectChoice = {
@@ -22,6 +25,8 @@ export type EffectChoice = {
   /** For LV2: the pack, and whether it is installed. */
   pack?: string;
   installed?: boolean;
+  /** Who made it and where it comes from. */
+  origin?: BlockSource;
   make: (id: string) => BlockModel;
 };
 
@@ -222,8 +227,23 @@ export function BlockChooser({
                       {list.map((e) => (
                         <ListRow
                           key={e.id}
+                          leading={
+                            <BlockGlyph
+                              glyph={glyphFor('', `${e.kind} ${e.label}`)}
+                              className="ml-1"
+                            />
+                          }
                           title={e.label}
-                          caption={`${e.kind}${e.pack ? ` · ${e.pack}` : ''}`}
+                          caption={
+                            e.origin ? (
+                              <>
+                                <span className="block">{e.kind}</span>
+                                <SourceLine source={e.origin} plain />
+                              </>
+                            ) : (
+                              `${e.kind}${e.pack ? ` · ${e.pack}` : ''}`
+                            )
+                          }
                           trailing={
                             e.from === 'lv2' && !e.installed ? (
                               <Button
@@ -239,7 +259,10 @@ export function BlockChooser({
                                 variant="outline"
                                 aria-label={`Add ${e.label}`}
                                 onClick={() => {
-                                  const block = e.make(id());
+                                  const made = e.make(id());
+                                  const block = e.origin
+                                    ? { ...made, origin: e.origin }
+                                    : made;
                                   if (tone3000Chain) {
                                     setPending(block);
                                     setStep('where');

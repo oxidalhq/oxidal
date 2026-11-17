@@ -27,6 +27,8 @@ import { Toggle } from '../components/ui/toggle';
 import { CabMics } from './cab-mics';
 import { VisualControl } from './visual-control';
 import type { ChainBlockModel } from './chain';
+import type { BlockSource } from './block-source';
+import { SourceLine } from './block-source';
 
 export type BlockControl = {
   id: string;
@@ -52,6 +54,8 @@ export type BlockModel = ChainBlockModel & {
   source?: { label: string; value: string; options: ComboboxOption[] };
   /** For cabs: the microphones, A then B (drawn by CabMics). */
   mics?: string[];
+  /** Where the block comes from: its maker, provider and links. */
+  origin?: BlockSource;
 };
 
 /**
@@ -99,6 +103,7 @@ export function BlockQuickEditor({
           <Caption as="span" className="small-caps text-xs">
             {block.caption ?? block.kind}
           </Caption>
+          {block.origin && <SourceLine source={block.origin} />}
         </div>
         <Toggle size="sm" pressed={block.on} onPressedChange={onToggle}>
           <span className="sr-only">{block.label} </span>

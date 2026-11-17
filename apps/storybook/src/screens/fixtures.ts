@@ -1,5 +1,6 @@
 import type { LibraryItem } from '../patterns/library-list';
 import type { ResourceReadings } from '../widgets/resource-strip';
+import { SOURCES } from '../widgets/block-source.data';
 
 /** Realistic data for the screen stories; names from the product's showcase recipes. */
 export const READINGS: ResourceReadings = {
@@ -61,34 +62,53 @@ export const TONES: LibraryItem[] = [
   {
     id: 't1',
     title: 'Plexi 50',
-    caption: 'Amp · NAM A2 · 48 kHz · Jane Capture',
+    caption: 'Amp · NAM A2 · 48 kHz',
     kind: 'amp',
+    artwork: SOURCES.plexi.image,
+    origin: SOURCES.plexi,
   },
   {
     id: 't2',
     title: 'JCM 800 crunch',
-    caption: 'Amp · NAM · 48 kHz · Studio Pack',
+    caption: 'Amp · NAM · 48 kHz',
     kind: 'amp',
+    origin: {
+      ...SOURCES.plexi,
+      title: 'JCM 800 crunch',
+      creator: { name: 'Studio Pack', username: 'studiopack' },
+      image: undefined,
+      format: 'NAM',
+      licence: 'TONE3000 licence',
+    },
   },
   {
     id: 't3',
     title: 'AC30 top boost',
     caption: 'Amp · NAM A2 · 48 kHz',
     kind: 'amp',
+    origin: { ...SOURCES.twin, title: 'AC30 top boost', author: 'You' },
   },
   {
     id: 't4',
     title: '4×12 Greenback',
     caption: 'IR · SM57 · 2 cm',
     kind: 'cab',
+    origin: SOURCES.greenback,
   },
-  { id: 't5', title: '2×12 Blue', caption: 'IR · SM57 · edge', kind: 'cab' },
+  {
+    id: 't5',
+    title: '2×12 Blue',
+    caption: 'IR · SM57 · edge',
+    kind: 'cab',
+    origin: { ...SOURCES.greenback, title: '2×12 Blue' },
+  },
   {
     id: 't6',
     title: 'Rat',
     caption: 'Pedal · NAM · 48 kHz',
     kind: 'pedal',
     badge: { text: 'New', tone: 'neutral' },
+    origin: { ...SOURCES.ts9, title: 'Rat' },
   },
 ];
 
