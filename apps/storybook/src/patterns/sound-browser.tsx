@@ -10,7 +10,7 @@ import {
 import { cn } from '../lib/cn';
 import { glyphForBlock } from '../lib/block-glyphs';
 import { useMedia } from '../lib/use-media';
-import { Badge } from '../components/ui/badge';
+import { Badge, Led } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { List, ListRow } from '../components/ui/list-row';
 import {
@@ -85,29 +85,92 @@ const COMPLEXITY: Record<SoundComplexity, string> = {
   complex: 'Complex',
 };
 
-function Readiness({
-  readiness,
-  inverse = false,
+const KIND_VAR: Record<BlockKind, string> = {
+  amp: 'var(--led-amp)',
+  cab: 'var(--led-cab)',
+  pedal: 'var(--led-pedal)',
+  time: 'var(--led-time)',
+  mod: 'var(--led-mod)',
+  lv2: 'var(--led-lv2)',
+};
+
+/** The block that gives the sound its character: its amp, else its first block. */
+const mainBlock = (sound: OxidalSound) =>
+  sound.blocks.find((b) => b.kind === 'amp') ?? sound.blocks[0];
+
+/** A square tinted by the main block's category colour, with its glyph. */
+function VoiceTile({
+  sound,
+  size = 'md',
 }: {
-  readiness: SoundReadiness;
-  inverse?: boolean;
+  sound: OxidalSound;
+  size?: 'md' | 'lg';
 }) {
+  const main = mainBlock(sound);
+  const colour = KIND_VAR[main?.kind ?? 'lv2'];
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        'grid shrink-0 place-items-center rounded-lg border',
+        size === 'md' ? 'size-12' : 'size-16',
+      )}
+      style={{
+        background: `color-mix(in oklab, ${colour} 16%, var(--card))`,
+        borderColor: `color-mix(in oklab, ${colour} 45%, var(--border))`,
+        color: `color-mix(in oklab, ${colour} 70%, var(--foreground))`,
+      }}
+    >
+      {main && (
+        <BlockGlyph
+          glyph={glyphForBlock(main)}
+          className={size === 'md' ? 'size-6' : 'size-8'}
+        />
+      )}
+    </span>
+  );
+}
+
+/** The sound's blocks as a small signal chain: LED and glyph per block, joined by a wire. */
+function MiniChain({ sound }: { sound: OxidalSound }) {
+  const shown = sound.blocks.slice(0, 6);
+  return (
+    <span aria-hidden="true" className="inline-flex items-center">
+      {shown.map((b, i) => (
+        <span key={`${b.label}-${i}`} className="inline-flex items-center">
+          {i > 0 && <span className="h-px w-2 bg-wire" />}
+          <span className="rounded inline-flex items-center gap-1 border border-border bg-background px-1 py-0.5">
+            <Led kind={b.kind} className="size-1.5" />
+            <BlockGlyph glyph={glyphForBlock(b)} className="size-3.5" />
+          </span>
+        </span>
+      ))}
+      {sound.blocks.length > shown.length && (
+        <span className="ml-1 text-2xs text-muted-foreground">
+          +{sound.blocks.length - shown.length}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function ReadyPill({ readiness }: { readiness: SoundReadiness }) {
+  const base =
+    'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-2xs font-semibold small-caps';
   if (readiness.state === 'checking')
     return (
-      <span
-        className={cn(
-          'inline-flex items-center gap-1 text-xs',
-          inverse ? 'text-background/70' : 'text-muted-foreground',
-        )}
-      >
-        <CircleNotch aria-hidden="true" className="size-3.5 animate-spin" />
+      <span className={cn(base, 'border-border text-muted-foreground')}>
+        <CircleNotch aria-hidden="true" className="size-3 animate-spin" />
         Checking
       </span>
     );
   if (readiness.state === 'ready')
     return (
-      <span className="inline-flex items-center gap-1 text-xs">
-        <CheckCircle aria-hidden="true" className="size-4" /> Ready
+      <span
+        className={cn(base, 'border-foreground bg-foreground text-background')}
+      >
+        <CheckCircle aria-hidden="true" weight="fill" className="size-3" />
+        Ready
       </span>
     );
   const parts = [
@@ -117,28 +180,96 @@ function Readiness({
       `${readiness.packs.length} ${readiness.packs.length === 1 ? 'pack' : 'packs'}`,
   ].filter(Boolean);
   return (
-    <span className="inline-flex items-center gap-1 text-xs">
-      <Warning aria-hidden="true" className="size-4 text-brand" /> Needs{' '}
-      {parts.join(' and ')}
+    <span className={cn(base, 'border-brand text-foreground')}>
+      <Warning aria-hidden="true" weight="fill" className="size-3 text-brand" />
+      Needs {parts.join(' and ')}
     </span>
   );
 }
 
-function Glyphs({ sound }: { sound: OxidalSound }) {
-  const shown = sound.blocks.slice(0, 7);
+function SoundRow({
+  sound: s,
+  active,
+  offline,
+  onSelect,
+  onTry,
+}: {
+  sound: OxidalSound;
+  active: boolean;
+  offline: boolean;
+  onSelect: () => void;
+  onTry: () => void;
+}) {
   return (
-    <span aria-hidden="true" className="inline-flex items-center gap-1">
-      {shown.map((b, i) => (
-        <BlockGlyph
-          key={`${b.label}-${i}`}
-          glyph={glyphForBlock(b)}
-          className="size-4 opacity-80"
-        />
-      ))}
-      {sound.blocks.length > shown.length && (
-        <span className="text-2xs">+{sound.blocks.length - shown.length}</span>
+    <li
+      data-active={active || undefined}
+      className={cn(
+        'relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border bg-card p-3 transition-[border-color,box-shadow] duration-[var(--duration-fast)] hover:border-foreground/40',
+        active &&
+          'before:rounded-r border-foreground shadow-raised before:absolute before:inset-y-3 before:left-0 before:w-1 before:bg-brand',
       )}
-    </span>
+    >
+      <VoiceTile sound={s} />
+      <button
+        type="button"
+        aria-pressed={active}
+        onClick={onSelect}
+        className="grid min-w-0 gap-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-ring"
+      >
+        <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="font-display text-lg leading-tight font-semibold">
+            {s.name}
+          </span>
+          {s.era && (
+            <span className="rounded border border-border px-1 small-caps text-2xs text-muted-foreground">
+              {s.era}
+            </span>
+          )}
+          <span className="text-xs text-muted-foreground">
+            {s.genres.join(' · ')}
+          </span>
+        </span>
+        <span className="line-clamp-2 text-sm text-muted-foreground md:line-clamp-1">
+          {s.description}
+        </span>
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-0.5">
+          <MiniChain sound={s} />
+          <span className="small-caps text-2xs text-muted-foreground">
+            {ENGINE[s.engine]} · {s.scenes.length} scenes
+          </span>
+          <ReadyPill readiness={s.readiness} />
+        </span>
+      </button>
+      <span className="relative z-10">
+        {s.readiness.state === 'ready' ? (
+          <button
+            type="button"
+            aria-label={`Try ${s.name}`}
+            disabled={offline}
+            onClick={onTry}
+            className="grid size-11 place-items-center rounded-full bg-foreground text-background transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-95 disabled:opacity-40"
+          >
+            <Play weight="fill" className="size-5" />
+          </button>
+        ) : s.readiness.state === 'needs' ? (
+          <Button
+            size="sm"
+            variant="outline"
+            aria-label={`Get what ${s.name} needs`}
+            onClick={onSelect}
+          >
+            Get…
+          </Button>
+        ) : (
+          <span
+            aria-hidden="true"
+            className="grid size-11 place-items-center rounded-full border border-dashed border-border text-muted-foreground"
+          >
+            <CircleNotch className="size-4 animate-spin" />
+          </span>
+        )}
+      </span>
+    </li>
   );
 }
 
@@ -335,59 +466,21 @@ export function SoundBrowser({
         )}
       >
         {shown.length ? (
-          <List aria-label="Oxidal sounds">
-            {shown.map((s) => {
-              const active = s.id === sound?.id;
-              return (
-                <ListRow
-                  key={s.id}
-                  selected={active}
-                  onClick={() => setSelected(s.id)}
-                  title={
-                    <span className="flex min-w-0 items-baseline gap-2">
-                      <span className="truncate">{s.name}</span>
-                      <span
-                        className={cn(
-                          'shrink-0 text-xs font-normal',
-                          active
-                            ? 'text-background/70'
-                            : 'text-muted-foreground',
-                        )}
-                      >
-                        {[s.era, ...s.genres].filter(Boolean).join(' · ')}
-                      </span>
-                    </span>
-                  }
-                  caption={
-                    <span className="grid gap-1">
-                      <span className="truncate">{s.description}</span>
-                      <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <Glyphs sound={s} />
-                        <span className="small-caps text-2xs">
-                          {ENGINE[s.engine]} · {s.scenes.length} scenes
-                        </span>
-                        <Readiness readiness={s.readiness} inverse={active} />
-                      </span>
-                    </span>
-                  }
-                  trailing={
-                    <Button
-                      size="sm"
-                      variant={active ? 'secondary' : 'outline'}
-                      disabled={
-                        s.readiness.state !== 'ready' ||
-                        status.state === 'offline'
-                      }
-                      aria-label={`Try ${s.name}`}
-                      onClick={() => onTry(s)}
-                    >
-                      <Play weight="fill" /> Try
-                    </Button>
-                  }
-                />
-              );
-            })}
-          </List>
+          <ul
+            aria-label="Oxidal sounds"
+            className="m-0 grid list-none gap-2 p-0"
+          >
+            {shown.map((s) => (
+              <SoundRow
+                key={s.id}
+                sound={s}
+                active={s.id === sound?.id}
+                offline={status.state === 'offline'}
+                onSelect={() => setSelected(s.id)}
+                onTry={() => onTry(s)}
+              />
+            ))}
+          </ul>
         ) : (
           <div className="grid justify-items-start gap-2 rounded-lg border border-dashed border-border p-4">
             <span className="text-sm font-semibold">
@@ -481,11 +574,14 @@ function SoundDetail({
   return (
     <section aria-label={`About ${sound.name}`} className="grid gap-4">
       <div className="grid gap-1">
-        {showTitle && (
-          <Title as="h2" size="md">
-            {sound.name}
-          </Title>
-        )}
+        <div className="flex items-center gap-3">
+          <VoiceTile sound={sound} size="lg" />
+          {showTitle && (
+            <Title as="h2" size="md">
+              {sound.name}
+            </Title>
+          )}
+        </div>
         <div className="flex flex-wrap gap-1">
           {[sound.era, ...sound.genres].filter(Boolean).map((g) => (
             <Badge key={g} size="sm">
