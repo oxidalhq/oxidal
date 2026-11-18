@@ -39,8 +39,10 @@ async function fits(page: Page) {
         problems.push(`${name}: effect content overflows`);
     }
     const navigation = Array.from(
-      document.querySelectorAll<HTMLElement>('.masthead nav > button'),
-    );
+      document.querySelectorAll<HTMLElement>(
+        '[data-slot=app-shell] > header nav > button',
+      ),
+    ).filter((button) => button.checkVisibility());
     for (const [index, button] of navigation.entries()) {
       const rect = button.getBoundingClientRect();
       if (button.scrollWidth > button.clientWidth + 1)

@@ -12,7 +12,7 @@ import { cn } from '../../lib/cn';
  * for settings that persist (switch).
  */
 const toggleVariants = cva(
-  'inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-input bg-transparent font-semibold whitespace-nowrap text-foreground transition-[background-color,transform] duration-[var(--duration-fast)] select-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40 data-[state=on]:border-foreground data-[state=on]:bg-foreground data-[state=on]:text-background [&_svg]:size-[1.125em] [&_svg]:shrink-0',
+  'inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-input bg-transparent font-semibold whitespace-nowrap text-foreground transition-[background-color,transform] duration-[var(--duration-fast)] select-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40 data-[state=on]:border-foreground data-[state=on]:bg-foreground data-[state=on]:text-background [&_svg]:size-[1.125em] [&_svg]:shrink-0 [@media(pointer:coarse)]:min-h-touch [@media(pointer:coarse)]:min-w-touch',
   {
     variants: {
       size: {

@@ -154,7 +154,7 @@ export function NumberField({
   };
 
   const sizes = {
-    sm: 'h-9 min-w-16 text-sm',
+    sm: 'h-9 min-w-16 text-sm [@media(pointer:coarse)]:min-h-touch',
     md: 'min-h-touch min-w-20 text-md',
     lg: 'min-h-13 min-w-28 text-2xl',
   }[size];

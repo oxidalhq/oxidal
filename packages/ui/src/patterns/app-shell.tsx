@@ -126,7 +126,7 @@ export function AppShell({
         </div>
         <nav
           aria-label="Instrument navigation"
-          className="hidden items-center gap-1 md:flex"
+          className="hidden items-center gap-1 md:flex [@media(pointer:coarse)]:gap-2"
         >
           {DESTINATIONS.map((item) => (
             <Button

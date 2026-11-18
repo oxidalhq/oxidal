@@ -12,7 +12,7 @@ import { cn } from '../../lib/cn';
  * Delete never looks like a Save.
  */
 const buttonVariants = cva(
-  'inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border font-semibold whitespace-nowrap transition-[transform,background-color] duration-[var(--duration-fast)] ease-[var(--ease-out)] select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-[1.125em] [&_svg]:shrink-0',
+  'inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border font-semibold whitespace-nowrap transition-[transform,background-color] duration-[var(--duration-fast)] ease-[var(--ease-out)] select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-[1.125em] [&_svg]:shrink-0 [@media(pointer:coarse)]:min-h-touch [@media(pointer:coarse)]:min-w-touch',
   {
     variants: {
       variant: {
