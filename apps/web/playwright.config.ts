@@ -32,12 +32,12 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testIgnore: /device-layout\.spec\.ts/,
+      testIgnore: /(device-layout|product-layout)\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },
     },
     {
       name: 'mobile',
-      testIgnore: /device-layout\.spec\.ts/,
+      testIgnore: /(device-layout|product-layout)\.spec\.ts/,
       use: { ...devices['iPhone 13'], defaultBrowserType: 'chromium' },
     },
     {

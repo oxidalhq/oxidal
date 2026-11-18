@@ -75,6 +75,33 @@ The AppShell reads one shared monitor feed through the product adapter. Simple
 health stays visible with the sticky masthead; Detailed shows the full strip.
 Navigation retains the product's leave guards and existing hash aliases.
 
+### Product layout review
+
+`pnpm --dir apps/web layout` checks the actual product pages, rather than the
+Storybook examples, at the six representative Storybook widths in Default,
+Night, Sunlight and E-paper, in both orientations. It reuses the isolated
+Playwright daemon/web servers and the port overrides above. These are Chromium
+viewport checks; existing functional WebKit coverage and physical phone/e-paper
+acceptance remain separate.
+
+The initial sweep visits the stopped Rig, Guitars, Levels and existing Library
+and Settings sections. It verifies content/theme readiness and reports horizontal
+overflow, visible control geometry and page errors, attaching full-page captures
+for findings and a JSON report for every case. A failure does not stop inspection
+of later surfaces. The command fails when findings exist; it is not a visual
+approval or an audio measurement. Add populated rigs, Stage, overlays and new
+sections as their product integrations land. Reviewers distinguish primary touch
+targets from secondary compact controls when classifying geometry findings.
+
+Run a focused case while developing:
+
+```sh
+pnpm --dir apps/web layout --project=iphone-16 --grep 'default · portrait'
+```
+
+The layout command is separate from root checks while its existing-product
+baseline is being established; no existing failures are suppressed as passes.
+
 ## Import order
 
 ESLint enforces import order using `eslint-plugin-simple-import-sort`, with one

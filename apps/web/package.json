@@ -13,6 +13,7 @@
     "knip": "knip",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "layout": "playwright test --config=playwright.layout.config.ts",
     "check": "pnpm format:check && pnpm lint && pnpm knip && pnpm test && pnpm build"
   },
   "dependencies": {

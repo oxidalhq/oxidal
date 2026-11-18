@@ -104,7 +104,7 @@ export function useResourceStatus(
         : null,
   );
   return {
-    connected: connected && !disconnected,
+    connected: connected && state !== null && !disconnected,
     label: status,
     state: (!connected || disconnected
       ? 'disconnected'
