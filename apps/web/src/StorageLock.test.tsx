@@ -95,3 +95,27 @@ it('explains why pre-layout installations cannot be locked', () => {
   expect(screen.getByRole('button', { name: /Locked/ })).toBeDisabled();
   expect(screen.getByRole('status')).toHaveTextContent('writable-data layout');
 });
+
+it('keeps unknown storage explicit and never offers a restart without a known next mode', () => {
+  render(
+    <StorageLock
+      connected
+      state={{
+        available: false,
+        current: null,
+        next_boot: null,
+        reboot_required: true,
+        message: 'Storage state is unavailable',
+      }}
+      onState={() => {}}
+    />,
+  );
+  expect(screen.getByText('Current state unknown')).toBeInTheDocument();
+  expect(screen.getByText('Next boot: Unknown.')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Locked/ })).toBeDisabled();
+  expect(
+    screen.queryByRole('button', { name: 'Reboot now' }),
+  ).not.toBeInTheDocument();
+  expect(changeStorage).not.toHaveBeenCalled();
+  expect(deviceNetwork).not.toHaveBeenCalled();
+});

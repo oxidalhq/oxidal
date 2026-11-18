@@ -1,12 +1,9 @@
-import {
-  ArrowClockwise,
-  LockSimple,
-  LockSimpleOpen,
-} from '@phosphor-icons/react';
+import { ArrowClockwise } from '@phosphor-icons/react';
 import { useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { Loading } from '@oxidal/design-system/components/states';
+import { StorageLock as StorageLockView } from '@oxidal/design-system/patterns/device-flows';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { changeStorage, deviceNetwork, type StorageState } from './api';
@@ -14,6 +11,9 @@ import { RecoveryAction } from './FailureNotice';
 import { friendlyError } from './lib/friendlyError';
 import { useFailure } from './lib/useFailure';
 
+/** Next-boot storage selection with independently confirmed power.
+ * @see docs/device-service.md
+ */
 export function StorageLock({
   connected,
   state,
@@ -44,7 +44,7 @@ export function StorageLock({
   }
 
   async function reboot() {
-    if (busy || !state?.reboot_required) return;
+    if (busy || !state?.reboot_required || !state.next_boot) return;
     setBusy(true);
     setError('');
     try {
@@ -66,99 +66,46 @@ export function StorageLock({
   const current = state?.current;
   const next = state?.next_boot;
   return (
-    <section className="panel space-y-4" aria-label="Storage lock">
-      <div>
-        <h2>System storage</h2>
-        <p className="caption mt-1 max-w-2xl">
-          Locking protects system files at the next boot. Presets and unit data
-          stay on the writable data partition. This never remounts a playing
-          system.
-        </p>
-      </div>
-
-      {state ? (
-        <div className="storage-current" data-mode={current ?? 'unknown'}>
-          {current === 'locked' ? (
-            <LockSimple aria-hidden="true" />
-          ) : (
-            <LockSimpleOpen aria-hidden="true" />
-          )}
-          <span>
-            <strong>
-              {current === 'locked'
-                ? 'Locked now'
-                : current === 'unlocked'
-                  ? 'Unlocked now'
-                  : 'Current state unknown'}
-            </strong>
-            <small>
-              {current === 'locked'
-                ? 'System packages cannot change.'
-                : current === 'unlocked'
-                  ? 'System updates and effect packs are allowed.'
-                  : 'No storage change is available.'}
-            </small>
-          </span>
-        </div>
-      ) : (
-        <Loading label="Reading storage state…" />
-      )}
-
-      <div
-        className="storage-choice"
-        role="group"
-        aria-label="Mode at next boot"
-      >
-        <Button
-          variant="outline"
-          aria-pressed={next === 'unlocked'}
-          disabled={!connected || !state?.available || busy || sent}
-          onClick={() => void choose('unlocked')}
-        >
-          <LockSimpleOpen aria-hidden="true" />
-          <span>
-            <strong>Unlocked</strong>
-            <small>Updates and installs work</small>
-          </span>
-        </Button>
-        <Button
-          variant="outline"
-          aria-pressed={next === 'locked'}
-          disabled={!connected || !state?.available || busy || sent}
-          onClick={() => void choose('locked')}
-        >
-          <LockSimple aria-hidden="true" />
-          <span>
-            <strong>Locked</strong>
-            <small>System files read-only</small>
-          </span>
-        </Button>
-      </div>
-
-      {state?.message && (
-        <p role="status" className="caption">
-          {state.message}
-        </p>
-      )}
-      {state?.reboot_required && !sent && (
-        <div className="storage-restart rounded-md bg-muted px-3 py-3">
-          <p>
-            <strong>
-              {next === 'locked' ? 'Locked' : 'Unlocked'} is ready for the next
-              boot.
-            </strong>{' '}
-            Restart when you are ready; audio will stop and the browser will
-            reconnect afterward.
-          </p>
-          <Button
-            variant="outline"
-            disabled={!connected || busy}
-            onClick={() => setConfirmReboot(true)}
-          >
-            <ArrowClockwise aria-hidden="true" /> Reboot now
-          </Button>
-        </div>
-      )}
+    <section aria-label="Storage lock">
+      <StorageLockView
+        current={current ?? null}
+        nextBoot={next ?? null}
+        disabled={!connected || !state?.available || busy || sent}
+        onChange={(mode) => void choose(mode)}
+        notice={
+          <>
+            {!state && <Loading label="Reading storage state…" />}
+            {state?.message && (
+              <p role="status" className="caption">
+                {state.message}
+              </p>
+            )}
+          </>
+        }
+        restart={
+          <>
+            {state?.reboot_required && next && !sent && (
+              <div className="grid gap-3 rounded-md bg-muted px-3 py-3">
+                <p>
+                  <strong>
+                    {next === 'locked' ? 'Locked' : 'Unlocked'} is ready for the
+                    next boot.
+                  </strong>{' '}
+                  Restart when you are ready; audio will stop and the browser
+                  will reconnect afterward.
+                </p>
+                <Button
+                  variant="outline"
+                  disabled={!connected || busy}
+                  onClick={() => setConfirmReboot(true)}
+                >
+                  <ArrowClockwise aria-hidden="true" /> Reboot now
+                </Button>
+              </div>
+            )}
+          </>
+        }
+      />
       {sent && (
         <p role="status">
           Restart requested. Oxidal will reconnect in the selected storage mode.
@@ -167,7 +114,7 @@ export function StorageLock({
       {error && !confirmReboot && <p role="alert">{error}</p>}
       {error && <RecoveryAction failure={recoverFailure} />}
 
-      {confirmReboot && (
+      {confirmReboot && next && (
         <AdjustmentDialog
           title={`Restart into ${next === 'locked' ? 'Locked' : 'Unlocked'} mode?`}
           onCancel={() => {
