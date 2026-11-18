@@ -22,6 +22,9 @@ pub enum Command {
     Power {
         action: PowerAction,
     },
+    RestartStorage {
+        expected_mode: storage::StorageMode,
+    },
     Status {},
     Scan {},
     NetworkCapabilities {},
@@ -78,6 +81,7 @@ impl std::fmt::Debug for Command {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Self::Power { .. } => "Power",
+            Self::RestartStorage { .. } => "RestartStorage",
             Self::Status {} => "Status",
             Self::Scan {} => "Scan",
             Self::NetworkCapabilities {} => "NetworkCapabilities",
@@ -202,6 +206,8 @@ fn validate_uuid(uuid: &str) -> Result<(), &'static str> {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct NetworkCapabilities {
+    #[serde(default)]
+    pub guarded_power: bool,
     #[serde(default)]
     pub open_join: bool,
     #[serde(default)]
@@ -429,7 +435,26 @@ mod tests {
         let old: NetworkCapabilities =
             serde_json::from_value(serde_json::json!({"schema_version":1,"saved_connect":true}))
                 .unwrap();
-        assert!(!old.open_join && !old.hotspot_radio);
+        assert!(!old.open_join && !old.hotspot_radio && !old.guarded_power);
+    }
+
+    #[test]
+    fn storage_restart_accepts_only_a_named_expected_mode() {
+        for mode in ["locked", "unlocked"] {
+            let command: Command = serde_json::from_value(
+                serde_json::json!({"type":"restart_storage","expected_mode":mode}),
+            )
+            .unwrap();
+            assert!(command.validate().is_ok());
+        }
+        for value in [
+            serde_json::json!({"type":"restart_storage"}),
+            serde_json::json!({"type":"restart_storage","expected_mode":"../cmdline.txt"}),
+            serde_json::json!({"type":"restart_storage","expected_mode":"locked","action":"shutdown"}),
+            serde_json::json!({"type":"restart_storage","expected_mode":"locked","path":"/boot/firmware/cmdline.txt"}),
+        ] {
+            assert!(serde_json::from_value::<Command>(value).is_err());
+        }
     }
 
     #[test]

@@ -678,6 +678,10 @@ export type Command3 =
       type: "power";
     }
   | {
+      expected_mode: StorageMode;
+      type: "restart_storage";
+    }
+  | {
       type: "status";
     }
   | {
@@ -748,8 +752,8 @@ export type Command3 =
       type: "storage";
     };
 export type PowerAction = "reboot" | "shutdown";
-export type Mode = "never" | "no_ethernet" | "not_at_home" | "no_remembered" | "always";
 export type StorageMode = "unlocked" | "locked";
+export type Mode = "never" | "no_ethernet" | "not_at_home" | "no_remembered" | "always";
 export type PlayerCommand =
   | {
       kind: "toggle_play";
@@ -2924,6 +2928,7 @@ export interface NetworkState {
  * @see docs/device-service.md
  */
 export interface NetworkCapabilities {
+  guarded_power?: boolean;
   hotspot_radio?: boolean;
   open_join?: boolean;
   saved_connect: boolean;

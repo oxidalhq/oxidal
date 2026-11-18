@@ -92,7 +92,7 @@ state and that interface before enabling persistence. Failure, cancellation,
 timeout or restart restores the original profile bytes and recovery path.
 
 The new read-only `network_capabilities` helper command reports schema version 1
-and capability flags `saved_connect`, `open_join` and `hotspot_radio`. Missing
+and capability flags `saved_connect`, `open_join`, `hotspot_radio` and `guarded_power`. Missing
 additional flags default false. Ordinary helper status replies omit this field so older strict
 daemons can still read them. The HTTP bridge adds optional `capabilities` and
 `capabilities_message` to network state after a read. Old, missing or future
@@ -125,6 +125,32 @@ budget for their entire sequence, including active readback, autoconnect and
 checkpoint finalisation. A stalled confirmation rolls back instead of persisting
 a late candidate. An already expired trial cannot issue activation commands. Readback reports time from that same clock; this software
 limit does not establish physical radio or reconnection timing.
+
+## Confirmed storage restart and power admission
+
+Updated daemons require a fresh cached `guarded_power` capability for both ordinary
+Power and the typed `restart_storage` operation. Read network Status first; writes
+never start or wait for a capability probe. Missing or old helpers require the
+explicit administrator update below. Ordinary helper Status stays compatible with
+older strict daemons; the separate capability reply carries the new default-false
+flag.
+
+`restart_storage` carries only the reviewed `expected_mode` (`locked` or `unlocked`).
+The helper checks the current fixed storage manager, requiring an available layout,
+known current mode, pending restart and the exact queued mode. A stale or unknown
+mode is refused. The browser keeps its review target fixed and also refuses local
+queue changes before sending. The queue API and storage files are unchanged.
+
+Both power operations refuse pending/unavailable network recovery and the helper's
+active pack install/removal. The pack busy check examines its owned task without
+running inventory commands. After an acceptance reply is fully sent, the helper
+latches power admission, keeps the existing two-second receipt delay and calls the
+fixed, five-second-bounded systemctl --no-block operation. Further mutations are
+refused and automatic network ticks pause. Status, capabilities, pack status and
+storage status remain readable. A failed reply sends no power command; an explicit
+systemctl failure clears the latch. Successful queueing keeps it until helper exit.
+Acceptance means requested, not proof that reboot/shutdown completed. Physical
+power transitions remain an owner check; automated tests send no real power action.
 
 ## Administrator service updates
 

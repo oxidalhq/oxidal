@@ -943,6 +943,7 @@ impl Network {
             Command::NetworkCapabilities {} => {
                 return Ok(NetworkState {
                     capabilities: Some(crate::NetworkCapabilities {
+                        guarded_power: true,
                         schema_version: 1,
                         saved_connect: true,
                         open_join: true,
@@ -1190,7 +1191,12 @@ mod tests {
                     1
                 );
                 let flags = capabilities.capabilities.unwrap();
-                assert!(flags.saved_connect && flags.open_join && flags.hotspot_radio);
+                assert!(
+                    flags.saved_connect
+                        && flags.open_join
+                        && flags.hotspot_radio
+                        && flags.guarded_power
+                );
                 let ordinary = network.command(Command::Status {}).await.unwrap();
                 assert!(ordinary.capabilities.is_none());
                 assert!(

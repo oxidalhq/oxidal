@@ -34,7 +34,7 @@ class DeviceServiceProtocolTests(unittest.TestCase):
             self.assertEqual(path.stat().st_mode & 0o777, 0o660)
             deploy.device_service_ready(deploy.query_device_service)
             reply = deploy.query_device_service('network_capabilities')
-            self.assertEqual(reply['state']['capabilities'], {'schema_version': 1, 'saved_connect': True, 'open_join': True, 'hotspot_radio': True})
+            self.assertEqual(reply['state']['capabilities'], {'schema_version': 1, 'saved_connect': True, 'open_join': True, 'hotspot_radio': True, 'guarded_power': True})
             packs = deploy.query_device_service('packs')['packs']
             self.assertTrue(packs['available'])
             self.assertIsNone(packs['job'])

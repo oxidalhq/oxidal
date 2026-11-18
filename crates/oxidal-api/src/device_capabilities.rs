@@ -10,7 +10,7 @@ use tokio::sync::Mutex;
 
 type Reading = Result<NetworkCapabilities, &'static str>;
 const UNAVAILABLE: &str = "Device service capabilities could not be read";
-const UPDATE: &str = "Update the device service to join saved Wi-Fi networks";
+const UPDATE: &str = "Update the device service to use current device controls";
 const SUCCESS_AGE: Duration = Duration::from_secs(30);
 const FAILURE_AGE: Duration = Duration::from_secs(2);
 
@@ -30,6 +30,10 @@ impl DeviceCapabilities {
             .filter(|(time, value)| fresh(*time, value))
             .map(|(_, value)| value.clone())
             .unwrap_or(Err(UNAVAILABLE))
+    }
+    pub(super) fn guarded_power(&self) -> bool {
+        self.known()
+            .is_ok_and(|value| value.schema_version == 1 && value.guarded_power)
     }
     async fn cached<F, R>(&self, read: F) -> Reading
     where
@@ -87,6 +91,36 @@ fn decode(reply: Reply) -> Reading {
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    #[tokio::test]
+    async fn power_requires_a_fresh_positive_cache_without_waiting_for_a_probe() {
+        let reader = DeviceCapabilities::default();
+        assert!(!reader.guarded_power());
+        reader
+            .cached(|| async {
+                Ok(NetworkCapabilities {
+                    schema_version: 1,
+                    saved_connect: true,
+                    ..Default::default()
+                })
+            })
+            .await
+            .unwrap();
+        assert!(!reader.guarded_power());
+        *reader.cache.lock().await = Some((
+            Instant::now(),
+            Ok(NetworkCapabilities {
+                schema_version: 1,
+                guarded_power: true,
+                ..Default::default()
+            }),
+        ));
+        assert!(reader.guarded_power());
+        let held = reader.cache.lock().await;
+        assert!(!reader.guarded_power());
+        drop(held);
+        reader.cache.lock().await.as_mut().unwrap().0 = Instant::now() - SUCCESS_AGE;
+        assert!(!reader.guarded_power());
+    }
     fn reply(capabilities: Option<NetworkCapabilities>, error: Option<&str>) -> Reply {
         Reply {
             state: Some(oxidal_device::NetworkState {

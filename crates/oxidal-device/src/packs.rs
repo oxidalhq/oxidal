@@ -183,6 +183,11 @@ pub struct Manager {
 }
 
 impl Manager {
+    /// Check owned work without querying the installed plugin inventory.
+    pub async fn busy(&mut self) -> bool {
+        self.finish().await;
+        self.active.is_some()
+    }
     pub async fn start(&mut self, id: &str, action: PackAction) -> Result<(), &'static str> {
         self.finish().await;
         match crate::storage::current_mode() {
@@ -317,6 +322,33 @@ async fn change(package: &str, action: PackAction) -> Result<(), &'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn busy_checks_only_owned_work_and_reaps_a_completed_task() {
+        let mut manager = Manager::default();
+        assert!(!manager.busy().await);
+        manager.active = Some(Active {
+            pack: "fomp",
+            action: PackAction::Install,
+            task: tokio::spawn(std::future::pending()),
+        });
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), manager.busy())
+                .await
+                .unwrap()
+        );
+        manager.active.take().unwrap().task.abort();
+        manager.active = Some(Active {
+            pack: "fomp",
+            action: PackAction::Install,
+            task: tokio::spawn(async { Ok(()) }),
+        });
+        while !manager.active.as_ref().unwrap().task.is_finished() {
+            tokio::task::yield_now().await;
+        }
+        assert!(!manager.busy().await);
+        assert_eq!(manager.message, "Effect pack installed");
+    }
 
     #[test]
     fn allowlist_has_only_qualified_nonempty_packs() {

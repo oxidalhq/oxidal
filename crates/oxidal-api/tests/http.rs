@@ -4332,3 +4332,61 @@ async fn record_di_and_reamp_need_running_audio_and_say_so() {
     let _ = std::fs::remove_dir_all(mapping.with_extension("media"));
     let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn power_without_a_verified_capability_never_contacts_the_helper() {
+    let root = std::env::temp_dir().join(format!(
+        "gp-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    let socket = root.join("control.sock");
+    let helper = tokio::net::UnixListener::bind(&socket).unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!(
+        "http://{}/api/v1/device/network",
+        listener.local_addr().unwrap()
+    );
+    let app = router(Config {
+        debug_socket: None,
+        device_socket: Some(socket),
+        graph_worker: None,
+        rig_worker: None,
+        audio_worker: None,
+        native_worker: None,
+        shutdown: None,
+        simulator: false,
+        mapping_path: root.join("mappings.json"),
+        preset_dir: root.join("presets"),
+        media_dir: None,
+        ui_dir: root.join("nonexistent"),
+    })
+    .unwrap();
+    let task = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let client = reqwest::Client::new();
+    for body in [
+        json!({"type":"power","action":"reboot"}),
+        json!({"type":"power","action":"shutdown"}),
+        json!({"type":"restart_storage","expected_mode":"locked"}),
+    ] {
+        let response = client.post(&url).json(&body).send().await.unwrap();
+        assert_eq!(response.status(), 503);
+        assert!(
+            response.json::<Value>().await.unwrap()["error"]
+                .as_str()
+                .unwrap()
+                .contains("Read device status")
+        );
+    }
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(50), helper.accept())
+            .await
+            .is_err(),
+        "A write must not probe or command an unverified helper"
+    );
+    task.abort();
+}

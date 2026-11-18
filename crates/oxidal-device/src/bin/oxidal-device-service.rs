@@ -14,6 +14,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut network = Network::default();
     let mut packs = Manager::default();
     let storage = StorageManager::default();
+    let mut power_guard = oxidal_device::power::PowerGuard::default();
     network.recover().await?;
     // /run/oxidal-device is created by systemd, root-owned with a restricted group.
     match fs::remove_file(SOCKET) {
@@ -26,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut tick = tokio::time::interval(Duration::from_secs(1));
     loop {
         tokio::select! {
-            _=tick.tick()=>network.tick().await,
+            _=tick.tick()=>{if !power_guard.accepted() {network.tick().await;}},
             accepted=listener.accept()=>{
                 let (mut stream,_)=accepted?;
                 let uid=stream.peer_cred()?.uid();
@@ -36,17 +37,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if uid!=0 && !allowed {continue;}
                 let input=tokio::time::timeout(Duration::from_secs(3),ipc::read(&mut stream)).await;
                 let command=match input {Ok(Ok(bytes))=>serde_json::from_slice::<Command>(&bytes).ok(),_=>None};
-                if let Some(Command::Power { action }) = &command {
-                    let action=*action;
+                if command.as_ref().is_some_and(|command| power_guard.blocks(command)) {
+                    let reply=Reply{state:None,packs:None,storage:None,error:Some("A system power request is already accepted".into())};
+                    let _=tokio::time::timeout(Duration::from_secs(2),ipc::write(&mut stream,&serde_json::to_vec(&reply)?)).await;
+                    continue;
+                }
+                let power = match &command {
+                    Some(Command::Power { action }) => Some((*action,None)),
+                    Some(Command::RestartStorage { expected_mode }) => Some((oxidal_device::PowerAction::Reboot,Some(*expected_mode))),
+                    _ => None,
+                };
+                if let Some((action,expected_mode)) = power {
                     let reply=match network.status(false).await {
-                        Ok(state) if state.pending.is_none()=>Reply{state:Some(oxidal_device::NetworkState{message:"System power request accepted; unsaved edits will be lost".into(),..state}),packs:None,storage:None,error:None},
+                        Ok(state)=> {
+                            let queued = expected_mode.map(|mode| (mode,storage.state()));
+                            match power_guard.admit(&state,packs.busy().await,queued.as_ref().map(|(mode,state)|(*mode,state))) {
+                                Ok(())=>Reply{state:Some(oxidal_device::NetworkState{message:"System power request accepted; unsaved edits will be lost".into(),..state}),packs:None,storage:None,error:None},
+                                Err(error)=>Reply{state:None,packs:None,storage:None,error:Some(error.into())},
+                            }
+                        },
                         _=>Reply{state:None,packs:None,storage:None,error:Some("Finish network recovery before a system power request".into())}
                     };
                     let accepted=reply.error.is_none();
                     let sent=tokio::time::timeout(Duration::from_secs(2),ipc::write(&mut stream,&serde_json::to_vec(&reply)?)).await;
                     if accepted && matches!(sent,Ok(Ok(()))) {
+                        power_guard.mark_accepted();
                         tokio::time::sleep(Duration::from_secs(2)).await;
-                        if oxidal_device::power::request(action).await.is_err() { eprintln!("System power request failed"); }
+                        if oxidal_device::power::request(action).await.is_err() {
+                            power_guard.dispatch_failed();
+                            eprintln!("System power request failed");
+                        }
                     }
                     continue;
                 }

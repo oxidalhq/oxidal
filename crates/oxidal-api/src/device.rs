@@ -27,9 +27,22 @@ async fn dispatch(shared: Arc<Shared>, command: Command) -> Response {
         };
     };
     let refresh_capabilities = matches!(&command, Command::Status {} | Command::Scan {});
+    if matches!(
+        &command,
+        Command::Power { .. } | Command::RestartStorage { .. }
+    ) && !shared.device_capabilities.guarded_power()
+    {
+        return failure(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Read device status and update the device service for guarded power controls",
+        );
+    }
     let new_network_action = matches!(
         &command,
-        Command::Connect { .. } | Command::JoinOpen { .. } | Command::HotspotRadio { .. }
+        Command::Connect { .. }
+            | Command::JoinOpen { .. }
+            | Command::HotspotRadio { .. }
+            | Command::RestartStorage { .. }
     );
     #[cfg(unix)]
     let result = oxidal_device::ipc::request(path, &command).await;
@@ -95,7 +108,7 @@ async fn dispatch(shared: Arc<Shared>, command: Command) -> Response {
             }
             (_, Some(error)) if new_network_action && error == "Invalid device request" => failure(
                 StatusCode::SERVICE_UNAVAILABLE,
-                "Update the device service for this network change",
+                "Update the device service for this device change",
             ),
             (_, Some(error)) => failure(StatusCode::CONFLICT, &error),
             _ => failure(StatusCode::BAD_GATEWAY, "Invalid device response"),

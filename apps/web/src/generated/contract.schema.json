@@ -3325,6 +3325,23 @@
         {
           "type": "object",
           "properties": {
+            "expected_mode": {
+              "$ref": "#/$defs/StorageMode"
+            },
+            "type": {
+              "type": "string",
+              "const": "restart_storage"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "expected_mode"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "type": {
               "type": "string",
               "const": "status"
@@ -8339,6 +8356,10 @@
       "description": "Versioned privileged features; ordinary helper status replies omit this record.\n@see docs/device-service.md",
       "type": "object",
       "properties": {
+        "guarded_power": {
+          "type": "boolean",
+          "default": false
+        },
         "hotspot_radio": {
           "type": "boolean",
           "default": false
