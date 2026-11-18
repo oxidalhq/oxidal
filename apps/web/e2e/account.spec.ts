@@ -16,7 +16,7 @@ test('TONE3000 account rejects secret keys before any sign-in request', async ({
     .getByLabel('Publishable API key')
     .fill('t3k_cs_not-a-real-secret');
   await expect(
-    panel.getByRole('button', { name: 'Connect TONE3000' }),
+    panel.getByRole('button', { name: 'Sign in to TONE3000' }),
   ).toBeDisabled();
   await expect(panel.getByRole('alert')).toContainText(
     'Use the publishable key',
@@ -83,7 +83,7 @@ test('TONE3000 account offers code sign-in and preserves it through rotation', a
   await selectSettingsSection(page, 'Accounts');
   const panel = page.getByRole('region', { name: 'TONE3000 account' });
   await panel.getByLabel('Publishable API key').fill('fixture-publishable');
-  await panel.getByRole('button', { name: 'Connect TONE3000' }).click();
+  await panel.getByRole('button', { name: 'Sign in to TONE3000' }).click();
   await expect(panel.getByLabel('Sign-in code')).toHaveText('ABCD-EFGH');
   await expect(
     panel.getByRole('link', { name: 'Open TONE3000 sign-in' }),
@@ -115,11 +115,11 @@ test('TONE3000 account offers code sign-in and preserves it through rotation', a
   }
   await panel.getByRole('button', { name: 'Cancel sign-in' }).click();
   await expect(panel.getByRole('status')).toHaveText('Not connected');
-  await panel.getByRole('button', { name: 'Connect TONE3000' }).click();
+  await panel.getByRole('button', { name: 'Sign in to TONE3000' }).click();
   await expect(panel.getByLabel('Sign-in code')).toBeVisible();
   authorized = true;
   await expect(panel.getByRole('status')).toHaveText('Account connected');
   await expect(panel.getByLabel('Sign-in code')).toHaveCount(0);
-  await panel.getByRole('button', { name: 'Disconnect TONE3000' }).click();
+  await panel.getByRole('button', { name: 'Sign out' }).click();
   await expect(panel.getByRole('status')).toHaveText('Not connected');
 });
