@@ -7,7 +7,7 @@ import { parseSong } from '@oxidal/design-system/lib/song';
 afterEach(cleanup);
 
 /**
- * The web app builds against the design system package (`apps/storybook`,
+ * The web app builds against the design system package (`packages/ui`,
  * `@oxidal/design-system`) through its `exports` map. Screens move onto it
  * one at a time in the product rewrite; this proves the path.
  * @see docs/architecture.md

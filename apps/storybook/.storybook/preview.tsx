@@ -1,6 +1,6 @@
 import { createElement, useEffect } from 'react';
 import type { Preview } from '@storybook/react-vite';
-import '../src/styles/index.css';
+import '@oxidal/design-system/styles/index.css';
 
 /** The four display modes the product ships; the toolbar switches them. */
 const DISPLAYS = ['default', 'stage', 'sunlight', 'epaper'] as const;

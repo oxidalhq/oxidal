@@ -8,42 +8,13 @@ import { playwright } from '@vitest/browser-playwright';
 const storybook = fileURLToPath(new URL('./.storybook', import.meta.url));
 
 /**
- * Two test projects:
- * - `unit`: behaviour tests in jsdom (`src/**\/*.test.ts(x)`).
- * - `storybook`: every story rendered in real Chromium; its play function
- *   (if any) runs as an interaction test and axe checks it (a11y: 'error').
+ * Every story in `packages/ui` rendered in real Chromium; its play function
+ * (if any) runs as an interaction test and axe checks it (a11y: 'error').
  */
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   test: {
-    coverage: {
-      provider: 'v8',
-      include: [
-        'src/components/**',
-        'src/widgets/**',
-        'src/patterns/**',
-        'src/lib/**',
-      ],
-      exclude: [
-        '**/*.stories.tsx',
-        '**/*.test.{ts,tsx}',
-        '**/*.fixtures.ts',
-        '**/*.data.ts',
-      ],
-      reporter: ['text-summary', 'html'],
-    },
     projects: [
-      {
-        extends: true,
-        test: {
-          name: 'unit',
-          environment: 'jsdom',
-          include: ['src/**/*.test.{ts,tsx}'],
-          setupFiles: ['./src/test-setup.ts'],
-          // A busy machine (a Pi, or Storybook running beside the tests) can take more than 5 s.
-          testTimeout: 15000,
-        },
-      },
       {
         extends: true,
         plugins: [storybookTest({ configDir: storybook })],

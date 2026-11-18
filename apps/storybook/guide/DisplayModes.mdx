@@ -19,14 +19,14 @@ See **Foundations › Display modes** for the same composition in all four.
 ## Structure of the repository
 
 ```
-src/styles/theme.css      tokens (colour per mode; type, space, radius, layers, motion in @theme)
-src/styles/index.css      Tailwind, base text and focus
-src/lib/cn.ts             class merging
-src/components/ui/        primitives: <name>.tsx + .stories.tsx + .test.tsx
-src/widgets/              instrument widgets (meter, chain block, scene pad …)
-src/patterns/             page patterns (app shell, settings page, rig surface …)
-src/screens/              every product screen rebuilt with fixture data
-src/guide/                these pages
+packages/ui/src/styles/theme.css      tokens (colour per mode; type, space, radius, layers, motion in @theme)
+packages/ui/src/styles/index.css      Tailwind, base text and focus
+packages/ui/src/lib/cn.ts             class merging
+packages/ui/src/components/ui/        primitives: <name>.tsx + .stories.tsx + .test.tsx
+packages/ui/src/widgets/              instrument widgets (meter, chain block, scene pad …)
+packages/ui/src/patterns/             page patterns (app shell, settings page, rig surface …)
+packages/ui/src/screens/              every product screen rebuilt with fixture data
+apps/storybook/guide/     these pages
 docs/guide.md             the written guide; docs/migration.md maps product files to replacements
 scripts/sync.mjs          copies styles, ui, widgets and patterns into the product
 ```

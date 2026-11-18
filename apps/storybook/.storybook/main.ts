@@ -2,7 +2,11 @@ import type { StorybookConfig } from '@storybook/react-vite';
 import remarkGfm from 'remark-gfm';
 
 const config: StorybookConfig = {
-  stories: ['../src/**/*.mdx', '../src/**/*.stories.@(ts|tsx)'],
+  stories: [
+    '../guide/*.mdx',
+    '../baseline/*.stories.@(ts|tsx)',
+    '../../../packages/ui/src/**/*.stories.@(ts|tsx)',
+  ],
   addons: [
     {
       // Tables in the guide pages need GitHub-flavoured Markdown.
@@ -15,7 +19,7 @@ const config: StorybookConfig = {
     '@storybook/addon-vitest',
   ],
   framework: { name: '@storybook/react-vite', options: {} },
-  staticDirs: ['../public'],
+  staticDirs: ['../../../packages/ui/public'],
   core: { disableTelemetry: true },
 };
 

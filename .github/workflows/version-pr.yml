@@ -9,6 +9,7 @@ on:
       - 'Cargo.lock'
       - 'scripts/**'
       - 'apps/web/**'
+      - 'packages/ui/**'
       - 'os/**'
       - '.release-please*'
 permissions:

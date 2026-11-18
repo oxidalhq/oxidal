@@ -2,7 +2,7 @@
 
 This maps every interface file in `apps/web/src` to the part of
 `@oxidal/design-system` that replaces it, in the order to do it. The design
-system lives in `apps/storybook`; the product imports it as
+system lives in `packages/ui`; the product imports it as
 `@oxidal/design-system/<folder>/<name>`.
 
 ## How the product connects
@@ -11,7 +11,7 @@ Two lines in `apps/web/src/styles.css`:
 
 ```css
 @import '@oxidal/design-system/styles/theme.css'; /* in place of ./theme.css */
-@source '../../storybook/src'; /* so Tailwind sees the design system's classes */
+@source '../../../packages/ui/src'; /* so Tailwind sees the design system's classes */
 ```
 
 Checked on 2026-11-18: with those two lines and three patterns imported

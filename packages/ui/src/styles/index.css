@@ -1,6 +1,9 @@
 @import 'tailwindcss';
 @import './theme.css';
 
+/* Scan this package wherever it is used from. */
+@source '../';
+
 /* Base text and surfaces come from the tokens, never from utilities. */
 html,
 body,

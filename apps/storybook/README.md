@@ -1,28 +1,26 @@
-# Oxidal design system
+# Oxidal Storybook
 
-The visual language and React component library for Oxidal, shown and tested
-in Storybook. Same stack as `apps/web`: React 19, TypeScript, Vite, Tailwind
-CSS 4, Radix primitives, class-variance-authority and Phosphor icons. The
-web app imports it as the workspace package `@oxidal/design-system`.
+The place to see and test the design system. The components themselves live in
+[`packages/ui`](../../packages/ui/README.md) as the workspace package
+`@oxidal/design-system`, which this Storybook and `apps/web` both import.
 
 ## Commands
 
 ```bash
 pnpm --dir apps/storybook dev     # Storybook at http://127.0.0.1:6006
-pnpm --dir apps/storybook check   # format, lint, tests and a Storybook build
+pnpm --dir apps/storybook check   # the package's checks, every story, the build and the layout sweep
 ```
 
 `pnpm check` from the repository root runs the same check.
 
 ## Layout
 
-- `src/styles/` — tokens (`theme.css`) and the stylesheet Storybook loads.
-- `src/foundations/` — stories for colours, type, space, layers and the
-  display modes.
-- `src/components/ui/` — the component library: `<name>.tsx` with its
-  stories and tests beside it.
-- `src/widgets/` — instrument widgets (meter, chain block, scene pad …).
-- `src/patterns/` — page patterns (app shell, settings page, rig surface …).
-- `src/guide/` — the guide pages shown in Storybook.
+- `.storybook/` — Storybook configuration; it loads the stories from
+  `packages/ui/src`.
+- `guide/` — the guide pages shown in Storybook.
+- `baseline/` — the product's current chain view beside the new one.
+- `scripts/layout.mjs` — overflow and colour contrast on every device and
+  display mode.
 - `docs/guide.md` — the written guide: which component and container to use
   when, and why.
+- `docs/migration.md` — how `apps/web` moves onto the package.

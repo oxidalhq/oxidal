@@ -94,14 +94,14 @@ is a token that is missing.
 ## 6. Structure of the repository
 
 ```
-src/styles/theme.css      tokens (colour per mode; type, space, radius, layers, motion in @theme)
-src/styles/index.css      Tailwind, base text and focus
-src/lib/cn.ts             class merging
-src/components/ui/        primitives: <name>.tsx + .stories.tsx + .test.tsx
-src/widgets/              instrument widgets (meter, chain block, scene pad …)
-src/patterns/             page patterns (app shell, settings page, rig surface …)
-src/screens/              every product screen rebuilt with demo data (not exported)
-src/guide/                these pages as MDX for Storybook
+packages/ui/src/styles/theme.css      tokens (colour per mode; type, space, radius, layers, motion in @theme)
+packages/ui/src/styles/index.css      Tailwind, base text and focus
+packages/ui/src/lib/cn.ts             class merging
+packages/ui/src/components/ui/        primitives: <name>.tsx + .stories.tsx + .test.tsx
+packages/ui/src/widgets/              instrument widgets (meter, chain block, scene pad …)
+packages/ui/src/patterns/             page patterns (app shell, settings page, rig surface …)
+packages/ui/src/screens/              every product screen rebuilt with demo data (not exported)
+apps/storybook/guide/     these pages as MDX for Storybook
 docs/guide.md             this file; docs/migration.md maps product files to replacements
 scripts/layout.mjs        checks every device and display mode for overflow and contrast
 ```
@@ -123,17 +123,17 @@ data:
 - **Examples live beside the component**: `<name>.data.ts` or
   `<name>.fixtures.ts` for example data, `<name>.demo.tsx` for a stand-in
   device (download progress, a 15-second confirmation). Only stories and
-  `src/screens/` use them; the package does not export them.
+  `packages/ui/src/screens/` use them; the package does not export them.
 - **Screens are reference compositions.** They show how the parts fit with
   demo data; the app builds its own screens from the same parts.
-- `src/package.test.ts` checks that every module is exported and that none
+- `packages/ui/src/package.test.ts` checks that every module is exported and that none
   imports example data or a demo.
 
 ## 7. Component table
 
 The table of every component — what to use it for, what not, and the
 product files it replaces — is the Storybook page **Guide › Components**
-(`src/guide/Components.mdx`), kept next to the live stories so it cannot
+(`apps/storybook/guide/Components.mdx`), kept next to the live stories so it cannot
 drift. In short:
 
 - Actions: Button. States that stay: Toggle. One of a few: SegmentedControl.

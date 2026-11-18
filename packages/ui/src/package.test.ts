@@ -50,7 +50,7 @@ function resolve(subpath: string): string | null | undefined {
   return target.replace('*', star);
 }
 
-describe('the design-system package', () => {
+describe('the @oxidal/design-system package', () => {
   it.each(modules.map(([path]) => path))('exports %s', (path) => {
     const file = path.replace(/^\.\//, '');
     const [folder, name] = file.startsWith('components/ui/')

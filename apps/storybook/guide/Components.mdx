@@ -4,7 +4,7 @@ import { Meta } from '@storybook/addon-docs/blocks';
 
 # Components: which, when, when not
 
-Every component in `src/components/ui`, with the rule for using it and the
+Every component in `packages/ui/src/components/ui`, with the rule for using it and the
 product files it replaces. Read the container ladder first.
 
 | Component                     | Use it for                                                                                                                                                      | Not for                                                                | Replaces in `apps/web`                                                           |
@@ -39,7 +39,7 @@ product files it replaces. Read the container ladder first.
 
 ## Writing the component
 
-One file per component in `src/components/ui/<name>.tsx`, its variants in
+One file per component in `packages/ui/src/components/ui/<name>.tsx`, its variants in
 `cva`, `data-slot` on the root, `cn()` last so callers can override, and
 beside it `<name>.stories.tsx` with a story per state and `<name>.test.tsx`
 for behaviour (keyboard, touch, announcements). `pnpm a11y` runs axe over

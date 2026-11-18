@@ -1,4 +1,5 @@
 packages:
   - apps/web
   - apps/storybook
+  - packages/ui
 minimumReleaseAge: 1440
