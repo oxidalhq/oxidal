@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../lib/cn';
+import { sceneColour } from '../lib/scene-colours';
 import { MidiTarget } from './midi';
 
 export type Scene = {
@@ -9,6 +10,18 @@ export type Scene = {
   /** The scene's colour (see lib/scene-colours): a stripe on its pad. */
   colour?: string;
 };
+
+/** A scene's colour along the top of whatever stands for it. */
+export function SceneStripe({ colour }: { colour: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      data-slot="scene-colour"
+      className="absolute inset-x-0 top-0 h-1"
+      style={{ backgroundColor: colour }}
+    />
+  );
+}
 
 /**
  * One scene: a pad with its number in small caps and its name large. The
@@ -79,14 +92,7 @@ export function ScenePad({
         className,
       )}
     >
-      {scene.colour && (
-        <span
-          aria-hidden="true"
-          data-slot="scene-colour"
-          className="absolute inset-x-0 top-0 h-1"
-          style={{ backgroundColor: scene.colour }}
-        />
-      )}
+      {scene.colour && <SceneStripe colour={scene.colour} />}
       {scene.number !== undefined && (
         <span
           className={cn(
@@ -109,7 +115,10 @@ export function ScenePad({
   );
 }
 
-/** The scene grid: two columns on phones, up to four on wider screens. */
+/**
+ * The scene grid: two columns on phones, up to four on wider screens. Each
+ * scene takes its colour from its place unless it has its own.
+ */
 export function ScenePads({
   scenes,
   active,
@@ -146,7 +155,11 @@ export function ScenePads({
           onMidi={(m) => (m.kind === 'pc' || m.value > 0) && onSelect(scene.id)}
         >
           <ScenePad
-            scene={{ number: index + 1, ...scene }}
+            scene={{
+              number: index + 1,
+              ...scene,
+              colour: scene.colour ?? sceneColour(index),
+            }}
             active={scene.id === active}
             fading={fading && scene.id === active}
             disabled={disabled}

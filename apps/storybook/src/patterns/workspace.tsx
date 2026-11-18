@@ -93,7 +93,7 @@ export function Workspace({
             </TabsTrigger>
           ))}
         </TabsList>
-        <TabsContent value={value} forceMount className="px-page">
+        <TabsContent value={value} forceMount className="grid gap-4 px-page">
           {children}
         </TabsContent>
       </Tabs>

@@ -1,5 +1,7 @@
 import { Copy, DotsThree, Plus, Trash } from '@phosphor-icons/react';
 import { cn } from '../lib/cn';
+import { sceneColour } from '../lib/scene-colours';
+import { SceneStripe } from './scene-pad';
 import {
   blocksOf,
   branchName,
@@ -212,11 +214,12 @@ export function SceneEditor({
                     aria-pressed={scene.id === active}
                     onClick={() => onSelect(scene.id)}
                     className={cn(
-                      'grid min-h-touch w-full min-w-[4.5rem] content-center rounded-md px-2 text-center hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring',
+                      'relative grid min-h-touch w-full min-w-[4.5rem] content-center overflow-hidden rounded-md px-2 text-center hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring',
                       scene.id === active &&
                         'bg-foreground text-background hover:bg-foreground',
                     )}
                   >
+                    <SceneStripe colour={sceneColour(i)} />
                     <span className="small-caps text-xs opacity-70">
                       {i + 1}
                     </span>

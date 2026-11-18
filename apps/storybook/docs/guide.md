@@ -103,7 +103,7 @@ src/patterns/             page patterns (app shell, settings page, rig surface â
 src/screens/              every product screen rebuilt with demo data (not exported)
 src/guide/                these pages as MDX for Storybook
 docs/guide.md             this file; docs/migration.md maps product files to replacements
-scripts/sync.mjs          copies styles, ui, widgets and patterns into the product
+scripts/layout.mjs        checks every device and display mode for overflow and contrast
 ```
 
 A component is one file with its variants in `cva`, its own stories for

@@ -17,19 +17,24 @@ export type SoundCheckItem = {
 export function SoundCheck({
   checks,
   onAction,
+  title = 'Sound check',
+  caption = 'Most useful first',
 }: {
   checks: SoundCheckItem[];
   onAction?: (check: SoundCheckItem) => void;
+  /** The same list serves "Before you play" in Settings. */
+  title?: string;
+  caption?: string;
 }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Sound check</CardTitle>
+        <CardTitle>{title}</CardTitle>
         <Caption as="span" className="text-xs">
-          Most useful first
+          {caption}
         </Caption>
       </CardHeader>
-      <ul aria-label="Fix next" className="m-0 grid list-none gap-0 p-0">
+      <ul aria-label={title} className="m-0 grid list-none gap-0 p-0">
         {checks.map((c) => (
           <li
             key={c.title}

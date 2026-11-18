@@ -89,11 +89,14 @@ export function SheetHeader({
   className,
   title,
   description,
+  actions,
   children,
   ...props
 }: React.ComponentProps<'header'> & {
   title: React.ReactNode;
   description?: React.ReactNode;
+  /** Small controls beside Close, such as where to keep the sheet. */
+  actions?: React.ReactNode;
 }) {
   return (
     <header
@@ -118,11 +121,14 @@ export function SheetHeader({
         </DialogPrimitive.Description>
         {children}
       </div>
-      <DialogPrimitive.Close asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="Close">
-          <X />
-        </Button>
-      </DialogPrimitive.Close>
+      <div className="flex items-center gap-0.5">
+        {actions}
+        <DialogPrimitive.Close asChild>
+          <Button variant="ghost" size="icon-sm" aria-label="Close">
+            <X />
+          </Button>
+        </DialogPrimitive.Close>
+      </div>
     </header>
   );
 }

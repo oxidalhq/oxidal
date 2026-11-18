@@ -1,4 +1,5 @@
 import type { LibraryItem } from '../patterns/library-list';
+import type { BlockKind } from '../widgets/chain';
 import type { ResourceReadings } from '../widgets/resource-strip';
 import { SOURCES } from '../widgets/block-source.data';
 
@@ -12,23 +13,103 @@ export const READINGS: ResourceReadings = {
   temperature: 58,
 };
 
+const block = (kind: BlockKind, label: string) => ({ kind, label });
+const CRUNCH = [
+  block('pedal', 'Gate'),
+  block('pedal', 'TS9'),
+  block('amp', 'Plexi 50'),
+  block('cab', '4×12 Greenback'),
+  block('time', 'Echo'),
+  block('time', 'Bloom'),
+];
+const WIDE = [
+  block('pedal', 'Compressor'),
+  block('amp', 'AC30'),
+  block('cab', '2×12 Blue'),
+  block('mod', 'Motion'),
+  block('time', 'Echo'),
+  block('time', 'Bloom'),
+  block('time', 'Sustain'),
+];
+
 export const PRESETS: LibraryItem[] = [
   {
     id: 'p1',
     title: 'Rhythm section',
     caption: 'Plexi 50 · 6 blocks · 4 scenes',
+    about: 'Tight crunch for verses, with a boost and an echo on its scenes.',
     badge: { text: 'Playing', tone: 'live' },
+    chain: CRUNCH,
+    facts: [
+      ['Scenes', 'Clean, Crunch, Lead, Ambient'],
+      ['Versions', 'Default, Friday gig'],
+      ['Set lists', 'Friday set'],
+      ['Saved', '14 Nov'],
+    ],
   },
-  { id: 'p2', title: 'Ambient swell', caption: 'AC30 · 7 blocks · 2 scenes' },
+  {
+    id: 'p2',
+    title: 'Ambient swell',
+    caption: 'AC30 · 7 blocks · 2 scenes',
+    about: 'Long reverb and slow movement for pads and swells.',
+    badge: { text: 'In Friday set' },
+    chain: WIDE,
+    facts: [
+      ['Scenes', 'Pad, Swell'],
+      ['Versions', 'Default'],
+      ['Set lists', 'Friday set'],
+      ['Saved', '9 Nov'],
+    ],
+  },
   {
     id: 'p3',
     title: 'Lead boost',
     caption: 'JCM 800 · 5 blocks',
+    about: 'A singing lead that sits above the band.',
     badge: { text: 'Unsaved', tone: 'warning' },
+    chain: CRUNCH.slice(0, 5),
+    facts: [
+      ['Scenes', 'None'],
+      ['Versions', 'Default'],
+      ['Saved', '2 Nov'],
+    ],
   },
-  { id: 'p4', title: 'Brown Crunch', caption: 'Oxidal sound · 5 blocks' },
-  { id: 'p5', title: 'Neon Clean', caption: 'Oxidal sound · 6 blocks' },
-  { id: 'p6', title: 'Cold Cathedral', caption: 'Oxidal sound · 7 blocks' },
+  {
+    id: 'p4',
+    title: 'Brown Crunch',
+    caption: 'Oxidal sound · 5 blocks',
+    about: 'Your copy of an Oxidal sound: warm, loose classic rock.',
+    badge: { text: 'Ready' },
+    chain: CRUNCH.slice(0, 5),
+    facts: [
+      ['From', 'Oxidal sounds'],
+      ['Saved', '28 Oct'],
+    ],
+  },
+  {
+    id: 'p5',
+    title: 'Neon Clean',
+    caption: 'Oxidal sound · 6 blocks',
+    about: 'Your copy of an Oxidal sound: bright, glassy cleans.',
+    badge: { text: 'Ready' },
+    chain: WIDE.slice(0, 6),
+    facts: [
+      ['From', 'Oxidal sounds'],
+      ['Saved', '28 Oct'],
+    ],
+  },
+  {
+    id: 'p6',
+    title: 'Cold Cathedral',
+    caption: 'Oxidal sound · 7 blocks',
+    about: 'Your copy of an Oxidal sound: huge, slow and icy.',
+    badge: { text: 'Ready' },
+    chain: WIDE,
+    facts: [
+      ['From', 'Oxidal sounds'],
+      ['Saved', '28 Oct'],
+    ],
+  },
 ];
 
 export const TONES: LibraryItem[] = [
@@ -39,6 +120,7 @@ export const TONES: LibraryItem[] = [
     kind: 'amp',
     artwork: SOURCES.plexi.image,
     origin: SOURCES.plexi,
+    badge: { text: 'In 2 presets' },
   },
   {
     id: 't2',
@@ -53,6 +135,7 @@ export const TONES: LibraryItem[] = [
       format: 'NAM',
       licence: 'TONE3000 licence',
     },
+    badge: { text: 'Kept' },
   },
   {
     id: 't3',
@@ -60,20 +143,23 @@ export const TONES: LibraryItem[] = [
     caption: 'Amp · NAM A2 · 48 kHz',
     kind: 'amp',
     origin: { ...SOURCES.twin, title: 'AC30 top boost', author: 'You' },
+    badge: { text: 'Your file' },
   },
   {
     id: 't4',
     title: '4×12 Greenback',
-    caption: 'IR · SM57 · 2 cm',
+    caption: 'IR · 48 kHz · 24-bit · mono',
     kind: 'cab',
     origin: SOURCES.greenback,
+    badge: { text: 'In 3 presets' },
   },
   {
     id: 't5',
     title: '2×12 Blue',
-    caption: 'IR · SM57 · edge',
+    caption: 'IR · 44.1 kHz · 24-bit · mono',
     kind: 'cab',
     origin: { ...SOURCES.greenback, title: '2×12 Blue' },
+    badge: { text: 'Your file' },
   },
   {
     id: 't6',
@@ -90,17 +176,42 @@ export const TRACKS: LibraryItem[] = [
     id: 'b1',
     title: 'Iron Pulse',
     caption: '3:42 · 118 BPM · 6 stems',
+    about: 'Full band, with the guitar stem ready to mute.',
     playable: true,
     badge: { text: 'Playing', tone: 'live' },
+    facts: [
+      ['Length', '3:42'],
+      ['Tempo', '118 BPM'],
+      ['Stems', '6 ready'],
+      ['Set lists', 'Friday set'],
+    ],
   },
   {
     id: 'b2',
     title: 'Slow Burn',
     caption: '4:10 · 92 BPM · 4 stems',
+    about: 'A slow blues backing for long solos.',
     playable: true,
     badge: { text: 'Cued', tone: 'neutral' },
+    facts: [
+      ['Length', '4:10'],
+      ['Tempo', '92 BPM'],
+      ['Stems', '4 ready'],
+    ],
   },
-  { id: 'b3', title: 'Glass Room', caption: '2:58 · 124 BPM', playable: true },
+  {
+    id: 'b3',
+    title: 'Glass Room',
+    caption: '2:58 · 124 BPM',
+    about: 'Not split yet. Split it to mute any part while you play.',
+    playable: true,
+    badge: { text: 'Ready' },
+    facts: [
+      ['Length', '2:58'],
+      ['Tempo', '124 BPM'],
+      ['Stems', 'Not split'],
+    ],
+  },
   {
     id: 'b4',
     title: 'Northern Lights',
@@ -131,13 +242,27 @@ export const STEM_SONGS: LibraryItem[] = [
     id: 'ss1',
     title: 'Iron Pulse',
     caption: '6 stems · 2 mixes · guitar off, vocals off',
+    about: 'Play along with your part taken out.',
     playable: true,
+    badge: { text: '2 mixes saved' },
+    facts: [
+      ['Stems', 'Vocals, drums, bass, guitar, piano, other'],
+      ['Mixes', 'No guitar, Rehearsal'],
+      ['Split', 'On this device'],
+    ],
   },
   {
     id: 'ss2',
     title: 'Slow Burn',
     caption: '4 stems · 1 mix · rehearsal mix',
+    about: 'A rehearsal mix with the bass pushed up.',
     playable: true,
+    badge: { text: '1 mix saved' },
+    facts: [
+      ['Stems', 'Vocals, drums, bass, other'],
+      ['Mixes', 'Rehearsal'],
+      ['Split', 'Imported'],
+    ],
   },
 ];
 
@@ -146,9 +271,27 @@ export const DI: LibraryItem[] = [
     id: 'd1',
     title: 'Verse take 3',
     caption: 'DI · 0:48 · reamped through Rhythm section',
+    about: 'Your dry playing. Reamp it to hear it through any preset.',
     playable: true,
+    badge: { text: 'Reamped' },
+    facts: [
+      ['Length', '0:48'],
+      ['Recorded', '12 Nov'],
+      ['Last reamp', 'Rhythm section'],
+    ],
   },
-  { id: 'd2', title: 'Riff idea', caption: 'DI · 0:21', playable: true },
+  {
+    id: 'd2',
+    title: 'Riff idea',
+    caption: 'DI · 0:21',
+    about: 'Your dry playing. Reamp it to hear it through any preset.',
+    playable: true,
+    badge: { text: 'Dry only' },
+    facts: [
+      ['Length', '0:21'],
+      ['Recorded', '15 Nov'],
+    ],
+  },
 ];
 
 export const GUITARS = [

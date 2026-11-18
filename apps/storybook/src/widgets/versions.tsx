@@ -86,13 +86,10 @@ export function VersionPicker({
             type="button"
             data-slot="version-picker"
             className={cn(
-              'inline-flex min-h-9 items-center gap-1.5 rounded-full border border-input bg-background px-3 text-sm font-medium hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+              'inline-flex min-h-9 items-center gap-1 rounded-md px-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
               className,
             )}
           >
-            {version.isDefault && (
-              <Star weight="fill" className="size-3.5" aria-hidden="true" />
-            )}
             <span className="max-w-40 truncate">{version.name}</span>
             {changes > 0 && (
               <Badge tone="warning" size="sm">

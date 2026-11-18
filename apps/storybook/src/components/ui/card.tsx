@@ -11,7 +11,7 @@ export function Card({ className, ...props }: ComponentProps<'section'>) {
     <section
       data-slot="card"
       className={cn(
-        'grid gap-4 rounded-lg border border-border bg-card p-panel text-card-foreground',
+        'grid content-start gap-4 rounded-lg border border-border bg-card p-panel text-card-foreground',
         className,
       )}
       {...props}

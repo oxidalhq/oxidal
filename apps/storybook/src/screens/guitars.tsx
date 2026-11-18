@@ -42,7 +42,7 @@ export function Guitars() {
           </Button>
         }
       />
-      <div className="grid gap-4 px-page lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="grid items-start gap-4 px-page lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <Card>
           <CardHeader>
             <CardTitle>Your guitars</CardTitle>

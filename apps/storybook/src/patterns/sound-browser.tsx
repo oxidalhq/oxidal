@@ -14,18 +14,12 @@ import { Badge, Led } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { List, ListRow } from '../components/ui/list-row';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select';
-import {
   Sheet,
   SheetBody,
   SheetContent,
   SheetHeader,
 } from '../components/ui/sheet';
+import { FilterSelect } from '../components/ui/filter-select';
 import { Switch } from '../components/ui/switch';
 import { Caption, Eyebrow, Title } from '../components/ui/text';
 import type { BlockKind } from '../widgets/chain';
@@ -399,19 +393,19 @@ export function SoundBrowser({
           />
         </label>
         <div className="flex flex-wrap items-center gap-2">
-          <Filter
+          <FilterSelect
             label="Genre"
             value={genre}
             onValue={setGenre}
             options={genres.map((g) => [g, g])}
           />
-          <Filter
+          <FilterSelect
             label="Engine"
             value={engine}
             onValue={setEngine}
             options={Object.entries(ENGINE)}
           />
-          <Filter
+          <FilterSelect
             label="Complexity"
             value={complexity}
             onValue={setComplexity}
@@ -513,40 +507,6 @@ export function SoundBrowser({
         </Sheet>
       )}
     </div>
-  );
-}
-
-function Filter({
-  label,
-  value,
-  onValue,
-  options,
-}: {
-  label: string;
-  value: string;
-  onValue: (v: string) => void;
-  options: [string, string][];
-}) {
-  return (
-    <Select value={value} onValueChange={onValue}>
-      <SelectTrigger
-        aria-label={label}
-        className={cn(
-          'h-9 w-auto min-w-36',
-          value !== 'all' && 'border-foreground',
-        )}
-      >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all">Every {label.toLowerCase()}</SelectItem>
-        {options.map(([v, text]) => (
-          <SelectItem key={v} value={v}>
-            {text}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   );
 }
 

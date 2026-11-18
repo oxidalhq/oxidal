@@ -6,6 +6,8 @@ import {
   Plus,
 } from '@phosphor-icons/react';
 import { cn } from '../lib/cn';
+import { sceneColour } from '../lib/scene-colours';
+import { SceneStripe } from './scene-pad';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { useConfirm } from '../components/ui/confirm';
@@ -142,11 +144,12 @@ export function SceneManager({
                     setMenu(scene.id);
                   }}
                   className={cn(
-                    'grid min-h-16 w-full content-start gap-0.5 rounded-pad border border-input bg-card py-2 pr-10 pl-3 text-left select-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                    'relative grid min-h-16 w-full content-start gap-0.5 overflow-hidden rounded-pad border border-input bg-card py-2 pr-10 pl-3 text-left select-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
                     on &&
                       'border-foreground bg-foreground text-background hover:bg-foreground',
                   )}
                 >
+                  <SceneStripe colour={sceneColour(index)} />
                   <span
                     className={cn(
                       'small-caps text-xs font-medium',

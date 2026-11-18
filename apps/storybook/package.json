@@ -12,6 +12,7 @@
     "./widgets/controllers": "./src/widgets/controllers.ts",
     "./widgets/midi-context": "./src/widgets/midi-context.ts",
     "./widgets/*.demo": null,
+    "./patterns/dock-context": "./src/patterns/dock-context.ts",
     "./patterns/*": "./src/patterns/*.tsx",
     "./patterns/*.demo": null,
     "./lib/*": "./src/lib/*.ts"

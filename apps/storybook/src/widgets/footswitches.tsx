@@ -1,5 +1,7 @@
 import * as React from 'react';
 import { cn } from '../lib/cn';
+import { sceneColour } from '../lib/scene-colours';
+import { SceneStripe } from './scene-pad';
 import type {
   ControllerProfile,
   Footswitch,
@@ -8,7 +10,7 @@ import type {
 
 export type StageState = {
   scene: string | null;
-  scenes: { id: string; name: string }[];
+  scenes: { id: string; name: string; colour?: string }[];
   blocks: Record<string, { label: string; on: boolean }>;
   boost: boolean;
   tuner: boolean;
@@ -20,14 +22,16 @@ export type StageState = {
 function describe(
   action: SwitchAction | undefined,
   state: StageState,
-): { label: string; on: boolean } {
+): { label: string; on: boolean; colour?: string } {
   if (!action) return { label: '', on: false };
   switch (action.kind) {
     case 'scene': {
-      const scene = state.scenes.find((s) => s.id === action.scene);
+      const index = state.scenes.findIndex((s) => s.id === action.scene);
+      const scene = state.scenes[index];
       return {
         label: scene?.name ?? 'Scene',
         on: state.scene === action.scene,
+        colour: scene && (scene.colour ?? sceneColour(index)),
       };
     }
     case 'previous':
@@ -107,7 +111,7 @@ function Switch({
         fire(sw.tap);
       }}
       className={cn(
-        'relative grid min-w-0 content-between gap-1 rounded-pad border-2 border-input bg-card p-2.5 text-left transition-[background-color,transform] duration-[var(--duration-fast)] select-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.97]',
+        'relative grid min-w-0 content-between gap-1 overflow-hidden rounded-pad border-2 border-input bg-card p-2.5 text-left transition-[background-color,transform] duration-[var(--duration-fast)] select-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.97]',
         size === 'lg' ? 'min-h-28' : 'min-h-20',
         tap.on &&
           (scene
@@ -116,6 +120,7 @@ function Switch({
         flash && 'scale-[0.97] bg-accent',
       )}
     >
+      {tap.colour && <SceneStripe colour={tap.colour} />}
       <span className="flex items-center justify-between gap-2">
         <span
           className={cn(
@@ -140,7 +145,9 @@ function Switch({
       <span
         className={cn(
           'line-clamp-2 leading-tight font-semibold',
-          size === 'lg' ? 'text-md sm:text-xl' : 'text-sm sm:text-md',
+          size === 'lg'
+            ? 'lg:text-4xl text-lg sm:text-xl'
+            : 'text-sm sm:text-md',
         )}
       >
         {tap.label}
@@ -185,8 +192,14 @@ export function Footswitches({
       data-slot="footswitches"
       role="group"
       aria-label={`Footswitches · ${profile.name}`}
-      className={cn('grid gap-2', className)}
-      style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+      className={cn(
+        // Rows share the height they are given, so on a stage the tiles
+        // fill the screen. Four switches sit two by two on a phone.
+        'grid auto-rows-fr grid-cols-[repeat(var(--switch-columns),minmax(0,1fr))] gap-2',
+        profile.switches.length <= 4 && 'max-sm:grid-cols-2',
+        className,
+      )}
+      style={{ ['--switch-columns' as string]: columns }}
     >
       {profile.switches.map((sw) => (
         <Switch

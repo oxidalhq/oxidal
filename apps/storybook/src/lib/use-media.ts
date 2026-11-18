@@ -13,3 +13,24 @@ export function useMedia(query: string): boolean {
   }, [query]);
   return matches;
 }
+
+/**
+ * True when movement is welcome: not when the system asks for reduced
+ * motion, and not in the E-paper display mode, where every redraw flashes.
+ */
+export function useMotion(): boolean {
+  const reduced = useMedia('(prefers-reduced-motion: reduce)');
+  const [epaper, setEpaper] = React.useState(false);
+  React.useEffect(() => {
+    const root = document.documentElement;
+    const read = () => setEpaper(root.dataset.display === 'epaper');
+    read();
+    const observer = new MutationObserver(read);
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ['data-display'],
+    });
+    return () => observer.disconnect();
+  }, []);
+  return !reduced && !epaper;
+}

@@ -1,11 +1,8 @@
-import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
-import { Button } from '../components/ui/button';
 import { Guitars } from './guitars';
 import { Levels } from './levels';
 import { Settings } from './settings';
-import { PlayerSheet } from './sheets';
 import { Screen } from './shell';
 import { Perform } from './perform';
 
@@ -57,6 +54,7 @@ const settings = (section: string, name: string): StoryObj => ({
   ),
 });
 
+export const SettingsEssentials = settings('essentials', 'Before you play');
 export const SettingsAudio = settings('audio', 'Audio');
 export const SettingsNetwork = settings('connections', 'Network');
 export const SettingsAccounts = settings('accounts', 'Accounts');
@@ -99,20 +97,11 @@ export const SettingsDevice = settings('device', 'Device');
 export const SettingsMaintenance = settings('maintenance', 'Maintenance');
 export const SettingsAbout = settings('about', 'About');
 
-function WithPlayer() {
-  const [open, setOpen] = useState(true);
-  return (
-    <Screen destination="rig">
-      <Perform />
-      <div className="fixed right-page bottom-20 z-strip md:bottom-page">
-        <Button onClick={() => setOpen(true)}>Open player</Button>
-      </div>
-      <PlayerSheet open={open} onOpenChange={setOpen} />
-    </Screen>
-  );
-}
-
 export const PlayerOverStage: StoryObj = {
   name: 'Player sheet over the stage',
-  render: () => <WithPlayer />,
+  render: () => (
+    <Screen destination="rig">
+      <Perform player />
+    </Screen>
+  ),
 };

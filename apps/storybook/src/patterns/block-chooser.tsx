@@ -130,7 +130,8 @@ export function BlockChooser({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder={placeholder}
-        className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+        style={{ outline: 'none' }}
+        className="min-w-0 flex-1 bg-transparent text-sm"
       />
     </label>
   );

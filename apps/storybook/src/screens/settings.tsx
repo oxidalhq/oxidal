@@ -44,6 +44,7 @@ import { DEFAULT_MAP } from '../lib/midi';
 import { MidiBar, MidiProvider } from '../widgets/midi';
 import { PretendController, WebMidiButton } from '../widgets/midi-controller';
 import { MidiMap } from '../widgets/midi-map';
+import { SoundCheck } from '../patterns/guitar-tools';
 
 function Audio() {
   return (
@@ -343,7 +344,62 @@ function About() {
   );
 }
 
+/** Before you play: the state of the things that matter at a gig, each with one action. */
+function Essentials() {
+  return (
+    <SoundCheck
+      title="Before you play"
+      caption="What needs a look is first"
+      checks={[
+        {
+          ok: false,
+          title: 'Lead boost is 4 dB louder than your other presets',
+          fix: 'Even out all sets every preset to the same loudness.',
+          action: 'Even out all',
+        },
+        {
+          ok: false,
+          title: 'System storage is unlocked',
+          fix: 'Lock it before the gig so a power cut cannot damage it.',
+          action: 'Lock storage',
+        },
+        {
+          ok: true,
+          title: 'Output: stereo, master −6 dB, Venue EQ "Friday gig"',
+          fix: 'Peak boost +3 dB, with 5 dB to spare.',
+          action: 'Open levels',
+        },
+        {
+          ok: true,
+          title: 'Audio: 128 × 3 at 48 kHz, 8.0 ms round trip',
+          fix: 'No dropouts in the last hour on the Hotone Jogg.',
+          action: 'Audio',
+        },
+        {
+          ok: true,
+          title: 'Foot controller: MIDI Captain, 10 switches',
+          fix: 'Scenes layout; every switch was checked on 14 Nov.',
+          action: 'MIDI',
+        },
+        {
+          ok: true,
+          title: 'Set list: Friday set, 6 songs',
+          fix: 'Every preset, capture and backing track is on the device.',
+          action: 'Open set list',
+        },
+        {
+          ok: true,
+          title: 'Reachable on the hotspot Oxidal-7F2A',
+          fix: 'It turns on by itself when no saved Wi-Fi is in range.',
+          action: 'Network',
+        },
+      ]}
+    />
+  );
+}
+
 const PAGES: Record<string, () => React.JSX.Element> = {
+  essentials: Essentials,
   audio: Audio,
   connections: NetworkSettingsDemo,
   accounts: Accounts,

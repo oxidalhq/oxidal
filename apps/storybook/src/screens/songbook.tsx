@@ -1,5 +1,14 @@
-import { useMemo, useState } from 'react';
-import { FilePlus, Link, PencilSimple, Plus } from '@phosphor-icons/react';
+import { useMemo, useRef, useState } from 'react';
+import {
+  DownloadSimple,
+  FilePlus,
+  Link,
+  MusicNotesSimple,
+  PencilSimple,
+  Plus,
+  Trash,
+} from '@phosphor-icons/react';
+import { useMedia } from '../lib/use-media';
 import { Button } from '../components/ui/button';
 import { Combobox } from '../components/ui/combobox';
 import {
@@ -184,6 +193,8 @@ export function Songbook() {
   const [query, setQuery] = useState('');
   const [linking, setLinking] = useState(false);
   const [editing, setEditing] = useState(false);
+  const wide = useMedia('(min-width: 64rem)');
+  const viewer = useRef<HTMLDivElement>(null);
   const entry = songs.find((s) => s.id === open) ?? songs[0]!;
   const song = useMemo(() => parseSong(entry.source, entry.format), [entry]);
   const update = (id: string, change: Partial<SongEntry>) =>
@@ -212,7 +223,18 @@ export function Songbook() {
         query={query}
         onQuery={setQuery}
         selected={open}
-        onOpen={setOpen}
+        onOpen={(id) => {
+          setOpen(id);
+          // On a phone the sheet sits under the list: go to it.
+          if (!wide)
+            viewer.current?.scrollIntoView({
+              block: 'start',
+              behavior: 'smooth',
+            });
+        }}
+        layout="list"
+        tile={<MusicNotesSimple />}
+        noun={['song', 'songs']}
         primary={
           <>
             <Button variant="outline">
@@ -227,32 +249,23 @@ export function Songbook() {
           title: 'No songs yet',
           text: 'Import lyrics or chord sheets as text, Markdown or ChordPro, or write one.',
         }}
-        actions={[
-          {
-            label: 'Link to…',
-            run: (id) => {
-              setOpen(id);
-              setLinking(true);
-            },
-          },
-          {
-            label: 'Edit',
-            run: (id) => {
-              setOpen(id);
-              setEditing(true);
-            },
-          },
-          { label: 'Download', run: () => {} },
-          { label: 'Delete…', destructive: true, run: () => {} },
-        ]}
       />
-      <div className="grid min-h-[32rem] gap-2 lg:h-[calc(100dvh-14rem)]">
+      <div
+        ref={viewer}
+        className="grid min-h-[32rem] scroll-mt-4 grid-rows-[auto_minmax(0,1fr)] gap-2 lg:h-[calc(100dvh-14rem)]"
+      >
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Button size="sm" variant="outline" onClick={() => setLinking(true)}>
             <Link /> Link to…
           </Button>
           <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
             <PencilSimple /> Edit
+          </Button>
+          <Button size="sm" variant="outline">
+            <DownloadSimple /> Download
+          </Button>
+          <Button size="sm" variant="destructive">
+            <Trash /> Delete…
           </Button>
         </div>
         <SheetViewer

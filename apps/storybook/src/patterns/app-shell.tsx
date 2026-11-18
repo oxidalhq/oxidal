@@ -16,6 +16,7 @@ import {
   type ResourceState,
 } from '../widgets/resource-strip';
 import { HealthStatus } from '../widgets/health-status';
+import { LauncherSlotContext } from './dock-context';
 
 export type Destination = 'rig' | 'guitars' | 'library' | 'levels' | 'settings';
 
@@ -60,6 +61,8 @@ export function AppShell({
   children: React.ReactNode;
   className?: string;
 }) {
+  // The tool dock draws its buttons here, in the masthead.
+  const [tools, setTools] = React.useState<HTMLElement | null>(null);
   return (
     <div
       data-slot="app-shell"
@@ -80,13 +83,6 @@ export function AppShell({
         <div className="min-w-0 flex-1 truncate text-sm text-enclosure-foreground/80">
           {nowPlaying}
         </div>
-        {status === 'simple' && (
-          <HealthStatus
-            readings={readings}
-            state={resourceState}
-            className="shrink-0 border-enclosure-border bg-enclosure text-enclosure-foreground hover:bg-enclosure-border"
-          />
-        )}
         <nav
           aria-label="Instrument navigation"
           className="hidden items-center gap-1 md:flex"
@@ -98,13 +94,28 @@ export function AppShell({
               size="sm"
               aria-current={destination === item.id ? 'page' : undefined}
               onClick={() => onNavigate(item.id)}
-              className="text-enclosure-foreground/70 hover:bg-enclosure-border hover:text-enclosure-foreground aria-[current=page]:bg-enclosure-border aria-[current=page]:text-enclosure-foreground"
+              // On a tablet the words stay and the icons make room.
+              className="text-enclosure-foreground/70 hover:bg-enclosure-border hover:text-enclosure-foreground aria-[current=page]:bg-enclosure-border aria-[current=page]:text-enclosure-foreground max-lg:[&_svg]:hidden"
             >
               {item.icon}
               {item.label}
             </Button>
           ))}
         </nav>
+        {/* What the device is doing and what you keep open sit together, last. */}
+        <span
+          aria-hidden="true"
+          className="hidden h-6 w-px shrink-0 bg-enclosure-border md:block"
+        />
+        {status === 'simple' && (
+          <HealthStatus
+            readings={readings}
+            state={resourceState}
+            onDetails={() => onNavigate('levels')}
+            className="shrink-0 border-enclosure-border bg-enclosure text-enclosure-foreground hover:bg-enclosure-border"
+          />
+        )}
+        <div ref={setTools} data-slot="shell-tools" className="contents" />
       </header>
       <div className="sticky top-0 z-strip">
         {status === 'detailed' && (
@@ -113,7 +124,9 @@ export function AppShell({
         <NoticeTray />
       </div>
       <main className="pb-[calc(var(--safe-bottom)+4.5rem)] md:pb-page">
-        {children}
+        <LauncherSlotContext.Provider value={tools}>
+          {children}
+        </LauncherSlotContext.Provider>
       </main>
       <nav
         aria-label="Instrument navigation"

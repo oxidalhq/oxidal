@@ -13,8 +13,9 @@ export type Health = {
 
 /**
  * The device's state in one word. The thresholds follow the audio period:
- * processing near the deadline or any new dropouts is "Busy"; a peak over
- * 90 % of the period or the chip at 80 °C is "Running hot"; the rest "All good".
+ * processing near the deadline is "Busy"; a peak over 90 % of the period or
+ * the chip at 80 °C is "Running hot"; dropouts and clipping, which you can
+ * hear, are marked the same way as running hot; the rest "All good".
  */
 export function healthOf(
   readings: ResourceReadings,
@@ -54,7 +55,7 @@ export function healthOf(
     };
   if ((readings.xruns ?? 0) > 0)
     return {
-      tone: 'busy',
+      tone: 'hot',
       word: 'Dropouts',
       advice:
         'The sound broke up for a moment. A larger buffer in Settings › Audio usually stops it.',
@@ -67,7 +68,7 @@ export function healthOf(
     };
   if ((readings.clips ?? 0) > 0)
     return {
-      tone: 'busy',
+      tone: 'hot',
       word: 'Clipping',
       advice:
         'The output is clipping. Lower the output level or the loudest block.',

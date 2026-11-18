@@ -5,6 +5,7 @@ import { isSplit, updateBlock, type Step } from '../lib/route';
 import { Segment, SegmentedControl } from '../components/ui/segmented';
 import { Caption, Eyebrow, Title } from '../components/ui/text';
 import type { BlockModel } from '../widgets/block-editor';
+import { sceneColour } from '../lib/scene-colours';
 import { RouteView } from '../widgets/route-view';
 import { ScenePads } from '../widgets/scene-pad';
 import {
@@ -131,7 +132,7 @@ function ManyAmps({ initial }: { initial: BranchCount }) {
             <Eyebrow>One preset · {count} amps</Eyebrow>
             <Title size="md">Stage rig, every sound loaded</Title>
             <Caption>
-              Playing {scene?.name}: {audible.map((b) => b.name).join(' and ')}.
+              Playing {scene?.name}: {audible.map((b) => b.name).join(' and ')}.{' '}
               {policy === 'sleep'
                 ? 'Dashed branches are asleep: they use no processing and wake with no gap when a scene needs them.'
                 : 'Dashed branches are silent in this scene but keep running.'}
@@ -155,6 +156,7 @@ function ManyAmps({ initial }: { initial: BranchCount }) {
           onChange={setBase}
           onSelect={() => {}}
           selected={null}
+          sceneColour={sceneColour(scenes.indexOf(scene!))}
           label={`Signal route with ${count} amp branches`}
         />
         <div className="px-page">

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import {
   Area,
   AreaChart,
@@ -17,6 +17,7 @@ import { ChartContainer, ChartTooltipContent } from '../components/ui/chart';
 import { Segment, SegmentedControl } from '../components/ui/segmented';
 import { Caption } from '../components/ui/text';
 import type { AuditRecord } from './device-dashboard.data';
+import { useMotion } from '../lib/use-media';
 
 const INK = 'var(--foreground)';
 const LIMIT = 'var(--brand)';
@@ -60,6 +61,7 @@ export type DeviceReadings = {
 };
 
 export function DeviceDashboard({ readings }: { readings: DeviceReadings }) {
+  const motion = useMotion();
   const {
     stream,
     cores,
@@ -179,7 +181,8 @@ export function DeviceDashboard({ readings }: { readings: DeviceReadings }) {
                 fill="var(--color-gb)"
                 radius={[0, 4, 4, 0]}
                 barSize={12}
-                isAnimationActive={false}
+                isAnimationActive={motion}
+                animationDuration={500}
               >
                 <LabelList
                   dataKey="gb"
@@ -229,7 +232,8 @@ export function DeviceDashboard({ readings }: { readings: DeviceReadings }) {
                 name="Dropouts"
                 fill="var(--color-count)"
                 radius={[4, 4, 0, 0]}
-                isAnimationActive={false}
+                isAnimationActive={motion}
+                animationDuration={500}
               />
             </BarChart>
           </ChartContainer>
@@ -293,6 +297,8 @@ function Trend({
 }) {
   const now = data[data.length - 1]!.v;
   const hot = limit !== undefined && now >= limit;
+  const motion = useMotion();
+  const gradient = useId();
   return (
     <ChartContainer
       label={label}
@@ -308,7 +314,19 @@ function Trend({
             : { top: 8, right: 8, left: -16, bottom: 0 }
         }
       >
-        {!compact && <CartesianGrid vertical={false} stroke="var(--border)" />}
+        <defs>
+          <linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="var(--color-v)" stopOpacity={0.28} />
+            <stop offset="95%" stopColor="var(--color-v)" stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
+        {!compact && (
+          <CartesianGrid
+            vertical={false}
+            stroke="var(--border)"
+            strokeDasharray="2 4"
+          />
+        )}
         <XAxis
           dataKey="t"
           type="number"
@@ -352,14 +370,17 @@ function Trend({
         <Area
           dataKey="v"
           name={compact ? label : 'Now'}
-          type="monotone"
+          type="natural"
           stroke="var(--color-v)"
           strokeWidth={2}
-          fill="var(--color-v)"
-          fillOpacity={0.08}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill={`url(#${gradient})`}
           dot={false}
           activeDot={{ r: 4, stroke: 'var(--card)', strokeWidth: 2 }}
-          isAnimationActive={false}
+          isAnimationActive={motion}
+          animationDuration={600}
+          animationEasing="ease-out"
         />
       </AreaChart>
     </ChartContainer>

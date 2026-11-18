@@ -15,6 +15,13 @@ type Handle = {
 };
 
 /** Which controls each drawing's handles move. Unknown controls are skipped. */
+/** Bass, middle and treble, as the engine names them. */
+const TONE = [
+  { id: 'bass', label: 'Bass', y: { control: 'bass' }, at: { x: 0.15 } },
+  { id: 'mid', label: 'Middle', y: { control: 'mid' }, at: { x: 0.5 } },
+  { id: 'treble', label: 'Treble', y: { control: 'treble' }, at: { x: 0.8 } },
+];
+
 const HANDLES: Record<string, Handle[]> = {
   delay: [
     {
@@ -32,31 +39,9 @@ const HANDLES: Record<string, Handle[]> = {
       y: { control: 'mix' },
     },
   ],
-  cab: [
-    {
-      id: 'low',
-      label: 'Low cut',
-      x: { control: 'lowcut', log: true },
-      at: { y: 0.2 },
-    },
-    {
-      id: 'high',
-      label: 'High cut',
-      x: { control: 'highcut', log: true },
-      at: { y: 0.2 },
-    },
-  ],
-  amp: [
-    { id: 'bass', label: 'Bass', y: { control: 'bass' }, at: { x: 0.15 } },
-    { id: 'mid', label: 'Mid', y: { control: 'mid' }, at: { x: 0.5 } },
-    { id: 'treble', label: 'Treble', y: { control: 'treble' }, at: { x: 0.8 } },
-    {
-      id: 'presence',
-      label: 'Presence',
-      y: { control: 'presence' },
-      at: { x: 0.95 },
-    },
-  ],
+  amp: TONE,
+  cab: TONE,
+  capture: TONE,
   drive: [
     {
       id: 'drive',

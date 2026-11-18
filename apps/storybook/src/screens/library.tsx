@@ -1,12 +1,35 @@
 import { useState } from 'react';
-import { FilePlus, Microphone, Plus, Scissors } from '@phosphor-icons/react';
+import {
+  ArrowsClockwise,
+  DownloadSimple,
+  FilePlus,
+  ListPlus,
+  MusicNotes,
+  Microphone,
+  PencilSimple,
+  Play,
+  Plus,
+  Queue,
+  Scissors,
+  SlidersHorizontal,
+  Copy,
+  Trash,
+} from '@phosphor-icons/react';
 import { Button } from '../components/ui/button';
 import { useConfirm } from '../components/ui/confirm';
-import { Caption } from '../components/ui/text';
 import { PageHeading } from '../patterns/app-shell';
-import { PoweredByTone3000 } from '../patterns/credits';
 import { LibraryList, type LibraryItem } from '../patterns/library-list';
+import { ModelBrowser } from '../patterns/model-browser';
+import { StemWorkspaceDemo } from '../patterns/stem-workspace.demo';
+import { useModelDownloads } from '../patterns/swap.demo';
+import { MODELS } from '../patterns/swap.fixtures';
 import { Workspace } from '../patterns/workspace';
+import {
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetHeader,
+} from '../components/ui/sheet';
 import { LIBRARY_SECTIONS } from './library.sections';
 import { Songbook } from './songbook';
 import { SetListSection } from './set-list-section';
@@ -22,10 +45,28 @@ import {
 import { SoundBrowser } from '../patterns/sound-browser';
 import { SOUNDS as OXIDAL_SOUNDS } from '../patterns/sound-browser.data';
 
+/** Library › TONE3000: the same search the rig's Change sheet uses. */
+function Tone3000Section() {
+  const store = useModelDownloads(MODELS);
+  const [playing, setPlaying] = useState<string | null>(null);
+  return (
+    <ModelBrowser
+      models={store.models}
+      only="tone3000"
+      beside
+      playing={playing}
+      downloads={store.downloads}
+      catalogue={store.catalogue}
+      onTry={(m) => setPlaying(m.id)}
+      onGet={store.onGet}
+    />
+  );
+}
+
 /**
- * Library: eight sections in one workspace, each a LibraryList with its
- * own way in (New preset, Import…, Split a track…) and its own row
- * actions. Catalogue tones carry the TONE3000 line.
+ * Library: eight sections in one workspace, each built the way Oxidal sounds
+ * is. Every row says what it is and its status and carries the one action
+ * people come for; everything else sits in the details beside the list.
  */
 export function Library({ section: initial = 'mine' }: { section?: string }) {
   const [section, setSection] = useState(initial);
@@ -33,6 +74,7 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
   const [view, setView] = useState<'list' | 'artwork'>('list');
   const [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState<string | null>('p1');
+  const [mixing, setMixing] = useState<string | null>(null);
   const [favourites, setFavourites] = useState(STARTING_FAVOURITES);
   const favourite = (id: string, on: boolean) =>
     setFavourites((all) => {
@@ -68,6 +110,7 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
         title={
           LIBRARY_SECTIONS.find((s) => s.id === section)?.label ?? 'Library'
         }
+        caption={LIBRARY_SECTIONS.find((s) => s.id === section)?.description}
       />
       <Workspace
         sections={LIBRARY_SECTIONS}
@@ -84,6 +127,7 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
             items={use(PRESETS)}
             view={view}
             onView={setView}
+            noun={['preset', 'presets']}
             primary={
               <Button>
                 <Plus /> New preset
@@ -93,12 +137,22 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
               title: 'No presets yet',
               text: 'Create one with New preset, or start from Oxidal sounds.',
             }}
+            mainAction={(item) =>
+              item.badge?.text === 'Playing'
+                ? null
+                : { label: 'Load', icon: <Play />, run: () => {} }
+            }
             actions={[
-              { label: 'Rename', run: () => {} },
-              { label: 'Duplicate', run: () => {} },
-              { label: 'Add to set list', run: () => {} },
-              { label: 'Download', run: () => {} },
-              { label: 'Delete…', destructive: true, run: remove(PRESETS) },
+              { label: 'Add to set list', icon: <ListPlus />, run: () => {} },
+              { label: 'Duplicate', icon: <Copy />, run: () => {} },
+              { label: 'Rename', icon: <PencilSimple />, run: () => {} },
+              { label: 'Download', icon: <DownloadSimple />, run: () => {} },
+              {
+                label: 'Delete…',
+                icon: <Trash />,
+                destructive: true,
+                run: remove(PRESETS),
+              },
             ]}
           />
         )}
@@ -114,38 +168,14 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
             onRetry={() => {}}
           />
         )}
-        {section === 'tone3000' && (
-          <div className="grid gap-3">
-            <Caption>
-              Search the catalogue, audition a tone through your rig and keep
-              the ones you like. Each tone shows its creator and licence.
-            </Caption>
-            <LibraryList
-              {...common}
-              items={TONES.map((t) => ({ ...t, badge: undefined }))}
-              filters={[
-                { id: 'all', label: 'All' },
-                { id: 'amp', label: 'Amps' },
-                { id: 'cab', label: 'Cabs' },
-                { id: 'pedal', label: 'Pedals' },
-              ]}
-              filter={filter}
-              onFilter={setFilter}
-              empty={{ title: 'Nothing found on TONE3000' }}
-              actions={[
-                { label: 'Audition', run: () => {} },
-                { label: 'Keep', run: () => {} },
-              ]}
-            />
-            <PoweredByTone3000 />
-          </div>
-        )}
+        {section === 'tone3000' && <Tone3000Section />}
         {section === 'setlist' && <SetListSection />}
         {section === 'songbook' && <Songbook />}
         {section === 'tones' && (
           <LibraryList
             {...common}
             items={use(byKind(TONES))}
+            noun={['tone', 'tones']}
             filters={[
               { id: 'all', label: 'All' },
               { id: 'amp', label: 'Amps' },
@@ -163,11 +193,20 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
               title: 'No tones or IRs yet',
               text: 'Import .nam and .wav files, or keep tones from TONE3000.',
             }}
+            mainAction={() => ({
+              label: 'Try',
+              icon: <Play />,
+              run: () => {},
+            })}
             actions={[
-              { label: 'Audition', run: () => {} },
-              { label: 'Use in the rig', run: () => {} },
-              { label: 'Rename', run: () => {} },
-              { label: 'Delete…', destructive: true, run: remove(TONES) },
+              { label: 'Use in the rig', icon: <Plus />, run: () => {} },
+              { label: 'Rename', icon: <PencilSimple />, run: () => {} },
+              {
+                label: 'Delete…',
+                icon: <Trash />,
+                destructive: true,
+                run: remove(TONES),
+              },
             ]}
           />
         )}
@@ -176,6 +215,8 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
             {...common}
             items={use(TRACKS)}
             onPlay={() => {}}
+            tile={<MusicNotes />}
+            noun={['track', 'tracks']}
             primary={
               <Button variant="outline">
                 <FilePlus /> Import…
@@ -185,11 +226,25 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
               title: 'No backing tracks yet',
               text: 'Import a WAV or MP3 to play over your rig.',
             }}
+            mainAction={(item) =>
+              item.playable
+                ? { label: 'Cue', icon: <Queue />, run: () => {} }
+                : null
+            }
             actions={[
-              { label: 'Cue', run: () => {} },
-              { label: 'Split into stems…', run: () => {} },
-              { label: 'Rename', run: () => {} },
-              { label: 'Delete…', destructive: true, run: remove(TRACKS) },
+              {
+                label: 'Open mixer',
+                icon: <SlidersHorizontal />,
+                run: setMixing,
+              },
+              { label: 'Split into stems…', icon: <Scissors />, run: () => {} },
+              { label: 'Rename', icon: <PencilSimple />, run: () => {} },
+              {
+                label: 'Delete…',
+                icon: <Trash />,
+                destructive: true,
+                run: remove(TRACKS),
+              },
             ]}
           />
         )}
@@ -198,6 +253,8 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
             {...common}
             items={use(STEM_SONGS)}
             onPlay={() => {}}
+            tile={<SlidersHorizontal />}
+            noun={['song', 'songs']}
             primary={
               <>
                 <Button>
@@ -212,10 +269,23 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
               title: 'No songs with stems yet',
               text: 'Split one of your backing tracks, or import stems exported from another app.',
             }}
+            mainAction={() => ({
+              label: 'Open mixer',
+              icon: <SlidersHorizontal />,
+              run: setMixing,
+            })}
             actions={[
-              { label: 'Open mixer', run: () => {} },
-              { label: 'Download stems', run: () => {} },
-              { label: 'Delete…', destructive: true, run: remove(STEM_SONGS) },
+              {
+                label: 'Download stems',
+                icon: <DownloadSimple />,
+                run: () => {},
+              },
+              {
+                label: 'Delete…',
+                icon: <Trash />,
+                destructive: true,
+                run: remove(STEM_SONGS),
+              },
             ]}
           />
         )}
@@ -224,6 +294,8 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
             {...common}
             items={use(DI)}
             onPlay={() => {}}
+            tile={<Microphone />}
+            noun={['recording', 'recordings']}
             primary={
               <Button>
                 <Microphone /> Record DI
@@ -233,15 +305,36 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
               title: 'No DI recordings yet',
               text: 'Record your dry guitar and play it back through any rig.',
             }}
+            mainAction={() => ({
+              label: 'Reamp',
+              icon: <ArrowsClockwise />,
+              run: () => {},
+            })}
             actions={[
-              { label: 'Reamp through…', run: () => {} },
-              { label: 'Download', run: () => {} },
-              { label: 'Delete…', destructive: true, run: remove(DI) },
+              { label: 'Download', icon: <DownloadSimple />, run: () => {} },
+              {
+                label: 'Delete…',
+                icon: <Trash />,
+                destructive: true,
+                run: remove(DI),
+              },
             ]}
           />
         )}
       </Workspace>
       {dialog}
+      <Sheet open={Boolean(mixing)} onOpenChange={(o) => !o && setMixing(null)}>
+        <SheetContent
+          onOpenChange={(o) => !o && setMixing(null)}
+          className="md:w-[min(44rem,100vw)]"
+        >
+          <SheetHeader
+            title="Stem mixer"
+            description="Shape the mix while it plays, then save it as a backing track."
+          />
+          <SheetBody>{mixing && <StemWorkspaceDemo />}</SheetBody>
+        </SheetContent>
+      </Sheet>
     </>
   );
 }

@@ -24,6 +24,7 @@ import {
 import { Slider } from '../components/ui/slider';
 import { Caption } from '../components/ui/text';
 import { ChainBlock, ChainPort, type ChainBlockModel } from './chain';
+import { useFlip } from '../lib/use-flip';
 
 export type RouteBlock = ChainBlockModel;
 export type Route = Step<RouteBlock>[];
@@ -363,6 +364,7 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const held = React.useRef(false);
   const [lifted, setLifted] = React.useState<string | null>(null);
+  const grabbed = React.useRef({ x: 0, y: 0 });
   const [heard, setHeard] = React.useState<string | null>(null);
   const [target, setTarget] = React.useState<string | null>(null);
   const [unfolded, setUnfolded] = React.useState<Record<string, boolean>>({});
@@ -382,6 +384,14 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
   const folded = (split: Split<RouteBlock>) =>
     foldable(split) && !(unfolded[split.id] ?? !vertical);
   const change = (edit: (r: Route) => Route) => onChange(edit(route));
+  // Blocks glide to their new places when the order or the folding changes.
+  const flip = useFlip(
+    root,
+    `${blocksOf(route)
+      .map((b) => b.id)
+      .join('|')}#${JSON.stringify(unfolded)}`,
+    scale,
+  );
 
   const clear = () => {
     if (timer.current) clearTimeout(timer.current);
@@ -392,6 +402,7 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
   const press = (id: string) => (event: React.PointerEvent) => {
     if (disabled) return;
     held.current = false;
+    grabbed.current = { x: event.clientX, y: event.clientY };
     const element = event.currentTarget as HTMLElement;
     const pointer = event.pointerId;
     timer.current = setTimeout(() => {
@@ -414,7 +425,16 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
     }
   };
 
+  const dragged = () =>
+    lifted
+      ? root.current?.querySelector<HTMLElement>(`[data-flip="${lifted}"]`)
+      : null;
   const drop = () => {
+    // Glide from where the finger left the block to where it lands.
+    flip.snapshot();
+    const node = dragged();
+    if (node) node.style.translate = '';
+    setTimeout(flip.play, 0);
     if (lifted && target) {
       if (target.startsWith('gap:')) {
         const [, path, index] = /^gap:(.*):(\d+)$/.exec(target) ?? [];
@@ -441,9 +461,11 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
   const block = (step: RouteBlock) => (
     <div
       key={step.id}
+      data-flip={step.id}
       className={cn(
         'relative',
         vertical ? 'grid' : 'inline-grid justify-items-center',
+        lifted === step.id && 'pointer-events-none z-20',
       )}
     >
       <span
@@ -729,6 +751,10 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
       tabIndex={vertical ? undefined : 0}
       onPointerMove={(event) => {
         if (!lifted) return;
+        // The lifted block follows the finger.
+        const node = dragged();
+        if (node)
+          node.style.translate = `${(event.clientX - grabbed.current.x) / scale}px ${(event.clientY - grabbed.current.y) / scale}px`;
         const under = document
           .elementFromPoint(event.clientX, event.clientY)
           ?.closest<HTMLElement>('[data-drop]');

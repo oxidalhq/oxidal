@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { useEffect, useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Caption } from '../components/ui/text';
@@ -204,7 +205,14 @@ export const Health: StoryObj = {
     const page = within(canvasElement.ownerDocument.body);
     await userEvent.click(canvas.getByRole('button', { name: /^Dropouts/ }));
     await expect(await page.findByText(/A larger buffer/)).toBeVisible();
-    await expect(page.getByText(/3 dropouts and 0 clips/)).toBeVisible();
+    const readout = within(
+      await page.findByRole('dialog', { name: 'Device health' }),
+    );
+    await expect(
+      readout.getByRole('group', { name: /^Processing:/ }),
+    ).toBeVisible();
+    await expect(readout.getAllByText('Dropouts').length).toBeGreaterThan(0);
+    await expect(readout.getByText('3')).toBeVisible();
   },
 };
 
@@ -237,6 +245,31 @@ export const Tuner: StoryObj = {
       <Tuning day />
     </div>
   ),
+};
+
+function TunerWithMute() {
+  const [muted, setMuted] = React.useState(true);
+  return (
+    <TunerFace
+      note={69}
+      cents={-2}
+      frequency={439.5}
+      muted={muted}
+      onMuted={setMuted}
+    />
+  );
+}
+
+export const TunerMute: StoryObj = {
+  name: 'Tuner, mute while tuning',
+  render: () => <TunerWithMute />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggle = canvas.getByRole('switch', { name: 'Mute while tuning' });
+    await expect(toggle).toBeChecked();
+    await userEvent.click(toggle);
+    await expect(toggle).not.toBeChecked();
+  },
 };
 
 export const TunerStage: StoryObj = {

@@ -3,7 +3,6 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 import { CONTROLLERS } from './controllers';
 import { Footswitches, type StageState } from './footswitches';
-import { CabMics } from './cab-mics';
 import { StemMixer, type StemControls, type StemRole } from './stem-strip';
 import { TapTempo } from './tap-tempo';
 import {
@@ -13,11 +12,10 @@ import {
   type PresetVersion,
 } from './versions';
 import { SceneChange, type SceneChangeSettings } from './scene-change';
-import { cab } from '../patterns/rig.fixtures';
 
 /**
  * More rig parts on their own: versions and the change list, tap tempo,
- * cab mics, the stem mixer, the foot controller and the scene change
+ * the stem mixer, the foot controller and the scene change
  * settings. Each is checked to keep its size while its state changes.
  */
 const meta: Meta = {
@@ -108,28 +106,6 @@ export const TapTempoStory: StoryObj = {
     for (let i = 0; i < 3; i++) await userEvent.click(buttons[0]!);
     await expect(size(root)[1]).toBe(start[1]);
   },
-};
-
-function Mics() {
-  const [block, setBlock] = useState(cab('c1', '4×12 Greenback', 'gb412'));
-  return (
-    <CabMics
-      block={block}
-      onControl={(id, value) =>
-        setBlock({
-          ...block,
-          controls: block.controls.map((c) =>
-            c.id === id ? { ...c, value } : c,
-          ),
-        })
-      }
-    />
-  );
-}
-
-export const CabMicsStory: StoryObj = {
-  name: 'Cab mics',
-  render: () => <Mics />,
 };
 
 const ROLES: StemRole[] = [

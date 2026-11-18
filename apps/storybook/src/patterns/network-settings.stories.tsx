@@ -30,3 +30,27 @@ export const JoinAndKeep: StoryObj = {
     await expect(canvas.getByText('Connected · 192.168.1.169')).toBeVisible();
   },
 };
+
+export const ReachAndCertificate: StoryObj = {
+  name: 'Reach the device and install its certificate',
+  render: () => <NetworkSettingsDemo />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByRole('link', { name: 'https://oxidal.local' }),
+    ).toBeVisible();
+    await expect(
+      canvas.getByRole('link', { name: 'https://192.168.1.169' }),
+    ).toBeVisible();
+    await expect(
+      canvas.getByRole('link', { name: 'https://10.42.0.1' }),
+    ).toBeVisible();
+    await expect(
+      canvas.getByRole('link', { name: 'Download certificate' }),
+    ).toHaveAttribute('download', 'oxidal-ca.crt');
+    await userEvent.click(canvas.getByRole('radio', { name: 'Windows' }));
+    await expect(
+      canvas.getByText(/Trusted Root Certification Authorities/),
+    ).toBeVisible();
+  },
+};

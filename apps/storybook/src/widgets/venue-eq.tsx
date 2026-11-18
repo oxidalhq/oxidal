@@ -379,7 +379,7 @@ export function VenueEq({
         ))}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-[auto_repeat(3,minmax(0,1fr))] sm:items-end">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(7.5rem,1fr))] items-end gap-3">
         <div className="flex items-center gap-2">
           <label htmlFor="band-on" className="text-sm font-medium">
             {info.name}

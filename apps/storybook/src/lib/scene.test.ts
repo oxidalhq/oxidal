@@ -34,7 +34,7 @@ describe('editing a scene from the chain', () => {
     const edit = splitSceneEdit(next, FOUR_JOBS, verse);
     const ts9 = blocksOf(edit.route).find((b) => b.id === 'ts9')!;
     expect(ts9.controls.some((c) => c.value === 9)).toBe(false);
-    expect(edit.scene.values?.ts9?.drive).toBe(9);
+    expect(edit.scene.values?.ts9?.['input-gain']).toBe(9);
     expect(edit.scene.on.ts9).toBe(false);
     const heard = blocksOf(applyScene(edit.route, edit.scene)).find(
       (b) => b.id === 'ts9',

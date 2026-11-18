@@ -110,3 +110,18 @@ export function Readout<T extends ElementType = 'span'>({
     />
   );
 }
+
+/**
+ * What a page or section is for, in one or two sentences, always as the
+ * same quiet line directly under the heading: Settings pages, Library sections and
+ * any screen that needs a word of orientation. One per section.
+ */
+export function Description({ className, ...props }: ComponentProps<'p'>) {
+  return (
+    <p
+      data-slot="description"
+      className={cn('m-0 max-w-prose text-sm text-muted-foreground', className)}
+      {...props}
+    />
+  );
+}

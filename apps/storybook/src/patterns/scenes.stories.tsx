@@ -5,6 +5,7 @@ import { blocksOf, isSplit, updateBlock, type Step } from '../lib/route';
 import { Card, CardHeader, CardTitle } from '../components/ui/card';
 import { Caption, Eyebrow, Title } from '../components/ui/text';
 import type { BlockModel } from '../widgets/block-editor';
+import { sceneColour } from '../lib/scene-colours';
 import { RouteView } from '../widgets/route-view';
 import { SceneManager } from '../widgets/scene-manager';
 import { THREE_SCENES, THREE_SOUNDS, type SceneModel } from './scenes.fixtures';
@@ -79,6 +80,7 @@ function ScenesDemo({ empty = false }: { empty?: boolean }) {
         </div>
         <RouteView
           route={route}
+          sceneColour={scene ? sceneColour(scenes.indexOf(scene)) : undefined}
           onChange={() => {}}
           onSelect={(id) => {
             if (!scene) return;

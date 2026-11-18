@@ -18,6 +18,8 @@ export const SOURCES = {
     },
     page: 'https://www.tone3000.com/tones/12345',
     image: '/examples/amp-head.svg',
+    images: ['/examples/amp-head.svg', '/examples/plugin-art.svg'],
+    counts: { a2: 4, standard: 2 },
     gear: 'Amp',
     format: 'NAM A2',
     models: 6,
@@ -38,6 +40,8 @@ export const SOURCES = {
     title: '4×12 Greenback',
     type: 'IR',
     author: 'You',
+    audio: { sampleRate: 48000, bits: 24, channels: 1, durationMs: 200 },
+    fingerprint: '9f2c41ab07d3',
   },
   twin: {
     kind: 'file',

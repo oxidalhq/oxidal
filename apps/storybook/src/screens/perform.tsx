@@ -6,8 +6,10 @@ import {
   LockSimpleOpen,
   MusicNote,
   Notebook,
+  Playlist,
 } from '@phosphor-icons/react';
 import { cn } from '../lib/cn';
+import { sceneColour } from '../lib/scene-colours';
 import { parseSong } from '../lib/song';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -40,11 +42,13 @@ import { Footswitches, type StageState } from '../widgets/footswitches';
 import { Meter } from '../widgets/meter';
 import { SheetViewer } from '../widgets/sheet-viewer';
 import { tempoFromTaps } from '../lib/tempo';
+import { useRemembered } from '../lib/use-remembered';
 import { TapTempo } from '../widgets/tap-tempo';
 import { MidiTarget } from '../widgets/midi';
 import { Transport } from '../widgets/transport';
 import { TunerFace } from '../widgets/tuner-face';
 import { FRIDAY_SET } from './perform.data';
+import { PlayerSheet } from './sheets';
 import { SONGS } from './songs.data';
 
 /**
@@ -66,9 +70,12 @@ import { SONGS } from './songs.data';
 export function Perform({
   controller: initialController = 'four',
   sheet: initialSheet = false,
+  player: initialPlayer = false,
 }: {
   controller?: string;
   sheet?: boolean;
+  /** Start with the full player open. */
+  player?: boolean;
 }) {
   const [index, setIndex] = useState(0);
   const [scene, setScene] = useState<string | null>('a');
@@ -85,6 +92,8 @@ export function Perform({
   const [controller, setController] = useState(initialController);
   const [showSheet, setShowSheet] = useState(initialSheet);
   const [list, setList] = useState(false);
+  const [player, setPlayer] = useState(initialPlayer);
+  const [tunerMuted, setTunerMuted] = useRemembered('oxidal.tuner.muted', true);
   const [sizes, setSizes] = useState<Record<string, number>>({});
   const [speed, setSpeed] = useState(4);
   const taps = useRef<number[]>([]);
@@ -243,7 +252,21 @@ export function Perform({
 
       {/* What is playing. */}
       <div className="grid justify-items-center gap-0.5 text-center">
-        <Eyebrow key={`scene-${scene}`} className="motion-safe:animate-arrive">
+        <Eyebrow
+          key={`scene-${scene}`}
+          className="inline-flex items-center gap-1.5 motion-safe:animate-arrive"
+        >
+          {sceneName && (
+            <span
+              aria-hidden="true"
+              className="size-2 rounded-full"
+              style={{
+                backgroundColor: sceneColour(
+                  SCENES.findIndex((s) => s.id === scene),
+                ),
+              }}
+            />
+          )}
           {sceneName ? `Scene · ${sceneName}` : 'No scene'}
           {boost ? ' · Boost' : ''}
         </Eyebrow>
@@ -293,12 +316,13 @@ export function Perform({
             className="h-full rounded-lg border border-border"
           />
         ) : (
-          <div className="grid h-full content-center">
+          <div className="grid h-full">
             <Footswitches
               profile={profile}
               state={state}
               onAction={act}
               size="lg"
+              className="h-full max-h-[32rem] self-center"
             />
           </div>
         )}
@@ -361,8 +385,17 @@ export function Perform({
             />
           </div>
           {loop && <Badge tone="live">Loop</Badge>}
+          <Button
+            variant="outline"
+            className="shrink-0"
+            onClick={() => setPlayer(true)}
+          >
+            <Playlist /> <span className="max-sm:sr-only">Player</span>
+          </Button>
         </div>
       </div>
+
+      <PlayerSheet open={player} onOpenChange={setPlayer} />
 
       <Sheet open={list} onOpenChange={setList}>
         <SheetContent onOpenChange={setList}>
@@ -413,7 +446,7 @@ export function Perform({
         <DialogContent size="lg" className="bg-[var(--tuner-surface)]">
           <DialogHeader
             title="Tuner"
-            description="Output is muted while the tuner is open. Press the switch again or tap Close."
+            description="Press the switch again or tap Close to go back to playing."
             className="border-enclosure-border text-enclosure-foreground [&_p]:text-enclosure-foreground/70"
           />
           <TunerFace
@@ -421,6 +454,8 @@ export function Perform({
             cents={-6}
             frequency={329.2}
             size="lg"
+            muted={tunerMuted}
+            onMuted={setTunerMuted}
             className="rounded-none"
           />
         </DialogContent>

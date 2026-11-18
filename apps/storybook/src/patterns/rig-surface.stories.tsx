@@ -67,6 +67,7 @@ function Rig({
       models={swap ? store.models : undefined}
       downloads={store.downloads}
       onGetModel={store.onGet}
+      catalogue={swap ? store.catalogue : undefined}
       blockTypes={swap ? BLOCK_TYPES : undefined}
       effects={swap ? EFFECTS : undefined}
     />
@@ -244,12 +245,14 @@ Serial.play = async ({ canvasElement }) => {
   if (phone) {
     await userEvent.click(canvas.getByRole('button', { name: /^Plexi 50/ }));
     const sheet = await page.findByRole('dialog');
-    const gain = within(sheet).getAllByRole('slider', { name: 'Gain' }).at(-1)!;
+    const gain = within(sheet)
+      .getAllByRole('slider', { name: 'Input gain' })
+      .at(-1)!;
     gain.focus();
     await userEvent.keyboard('{ArrowRight}');
     await userEvent.keyboard('{Escape}');
   } else {
-    const gain = canvas.getByRole('slider', { name: 'Plexi 50 Gain' });
+    const gain = canvas.getByRole('slider', { name: 'Plexi 50 Input gain' });
     gain.focus();
     await userEvent.keyboard('{ArrowUp}');
   }
@@ -258,7 +261,7 @@ Serial.play = async ({ canvasElement }) => {
   await expect(canvas.getByText('Hearing the saved version')).toBeVisible();
   await userEvent.click(canvas.getByRole('radio', { name: 'Edited' }));
   await userEvent.click(changes);
-  await expect(await page.findByText(/Plexi 50 · Gain 6\.5 →/)).toBeVisible();
+  await expect(await page.findByText(/Plexi 50 · Input gain/)).toBeVisible();
   await userEvent.keyboard('{Escape}');
   await userEvent.click(canvas.getByRole('button', { name: /Default/ }));
   await userEvent.click(
@@ -319,7 +322,7 @@ ToneChasing.play = async ({ canvasElement }) => {
     sheet.getByText(/AC30 top boost plays 2\.5 dB quieter to match Twin clean/),
   ).toBeVisible();
   await userEvent.click(
-    sheet.getByRole('button', { name: 'Get and try High gain lead' }),
+    sheet.getByRole('button', { name: 'Try High gain lead' }),
   );
   await expect(
     await sheet.findByRole(
@@ -339,7 +342,7 @@ ToneChasing.play = async ({ canvasElement }) => {
 
   // Turn the delay into a shimmer reverb in the same place.
   sheet = await change(/^Echo/, 'Echo');
-  await userEvent.click(sheet.getByRole('button', { name: 'Shimmer' }));
+  await userEvent.click(sheet.getByRole('button', { name: /^Shimmer/ }));
   await userEvent.click(sheet.getByRole('button', { name: 'Keep' }));
   await waitFor(() => expect(page.queryByRole('dialog')).toBeNull());
   await expect(
@@ -388,7 +391,12 @@ export const EditingScenes: StoryObj = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);
-    await userEvent.click(canvas.getByRole('button', { name: 'Edit scenes…' }));
+    await userEvent.click(
+      canvas.getByRole('button', { name: /^Changes: whole preset/ }),
+    );
+    await userEvent.click(
+      await page.findByRole('button', { name: 'Edit scenes…' }),
+    );
     const sheet = within(
       await page.findByRole('dialog', { name: 'Edit scenes' }),
     );
@@ -398,9 +406,14 @@ export const EditingScenes: StoryObj = {
     await userEvent.keyboard('{Escape}');
 
     // The same thing from the chain: This scene, then switch a block off.
-    await userEvent.click(canvas.getByRole('radio', { name: 'This scene' }));
+    await userEvent.click(
+      canvas.getByRole('button', { name: /^Changes: whole preset/ }),
+    );
+    await userEvent.click(
+      await page.findByRole('radio', { name: 'This scene' }),
+    );
     await expect(
-      await canvas.findByText(/Editing Verse: on or off/),
+      await canvas.findByRole('button', { name: /^Changes: Verse only/ }),
     ).toBeVisible();
   },
 };
@@ -456,5 +469,56 @@ export const MoveAndRemove: StoryObj = {
     await waitFor(() =>
       expect(canvas.queryByRole('button', { name: /^Gate/ })).toBeNull(),
     );
+  },
+};
+
+/**
+ * Tone chasing without leaving the rig: step to the next amp model in the
+ * block panel (loudness matched), then one tap back to where it started.
+ * On phones the same lives in the block's Change… sheet.
+ */
+export const StepThroughModels: StoryObj = {
+  name: 'Step through amp models',
+  render: () => <Rig initial={SERIAL_ROUTE} swap />,
+  play: async ({ canvasElement }) => {
+    if (canvasElement.ownerDocument.defaultView!.innerWidth < 768) return;
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getAllByRole('button', { name: /^Plexi 50/ })[0]!,
+    );
+    const stepper = within(
+      canvas.getByRole('group', { name: 'Try another amp model' }),
+    );
+    await userEvent.click(stepper.getByRole('button', { name: 'Next model' }));
+    await expect(
+      canvas.getByRole('heading', { name: 'JCM 800 crunch' }),
+    ).toBeVisible();
+    await userEvent.click(
+      stepper.getByRole('button', { name: 'Back to Plexi 50' }),
+    );
+    await expect(
+      canvas.getByRole('heading', { name: 'Plexi 50' }),
+    ).toBeVisible();
+  },
+};
+
+/** The block panel folds to one line, so the rig has the room while you scroll. */
+export const MinimiseControls: StoryObj = {
+  name: 'Minimise the block panel',
+  render: () => <Rig initial={SERIAL_ROUTE} />,
+  play: async ({ canvasElement }) => {
+    if (canvasElement.ownerDocument.defaultView!.innerWidth < 768) return;
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Minimise controls' }),
+    );
+    const show = await canvas.findByRole('button', { name: 'Show controls' });
+    await expect(
+      canvas.queryByRole('button', { name: /^All controls/ }),
+    ).not.toBeInTheDocument();
+    await userEvent.click(show);
+    await expect(
+      await canvas.findByRole('button', { name: 'Minimise controls' }),
+    ).toBeVisible();
   },
 };

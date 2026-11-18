@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { AppShell, type Destination } from '../patterns/app-shell';
 import { Badge } from '../components/ui/badge';
+import { ToolDockDemo } from '../patterns/tool-dock.demo';
 import { READINGS } from './fixtures';
 
 /** The shell every screen story uses, with the fixture readings and the now-playing line. */
@@ -33,7 +34,7 @@ export function Screen({
         )
       }
     >
-      {children}
+      <ToolDockDemo>{children}</ToolDockDemo>
     </AppShell>
   );
 }

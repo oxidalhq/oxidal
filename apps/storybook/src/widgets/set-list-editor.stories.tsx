@@ -95,10 +95,10 @@ FridaySet.play = async ({ canvasElement }) => {
     'Cold Cathedral',
   ]);
   await userEvent.click(
-    canvas.getByRole('button', { name: 'More for Ambient swell' }),
+    canvas.getByRole('button', { name: 'Edit Ambient swell' }),
   );
   await userEvent.click(
-    await page.findByRole('menuitem', { name: 'Remove from set' }),
+    await page.findByRole('button', { name: 'Remove from set' }),
   );
   await expect(order()).toEqual([
     'Rhythm section',

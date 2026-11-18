@@ -17,8 +17,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import { Description } from '../components/ui/text';
 import { SettingGroup, SettingRow } from './settings-page';
 import { ConfirmChange } from './confirm-change';
+import {
+  DeviceAddresses,
+  DeviceCertificate,
+  type CertificateFile,
+} from './device-access';
 
 export type WifiNetwork = {
   ssid: string;
@@ -47,9 +53,10 @@ const Bars = ({ n }: { n: number }) =>
   );
 
 /**
- * Settings › Network: the networks the device can see, joining one, and
- * the device's own hotspot. A change that could cut this screen off (a new
- * network, a new hotspot password) has to be confirmed from the new
+ * Settings › Network: the networks the device can see, joining one, the
+ * device's own hotspot, every address that reaches it, and the certificate
+ * that stops browsers warning. A change that could cut this screen off (a
+ * new network, a new hotspot password) has to be confirmed from the new
  * connection within a minute, or the device goes back to how it was.
  */
 export function NetworkSettings({
@@ -58,6 +65,9 @@ export function NetworkSettings({
   address,
   pending,
   hotspot,
+  hostName,
+  hotspotAddress,
+  certificate,
   onJoin,
   onForget,
   onScan,
@@ -74,6 +84,11 @@ export function NetworkSettings({
   /** A network just joined, waiting for confirmation, and the seconds left. */
   pending?: { ssid: string; secondsLeft: number };
   hotspot: Hotspot;
+  /** The device's name on the network, such as "oxidal.local". */
+  hostName: string;
+  /** The device's address on its own hotspot, such as "10.42.0.1". */
+  hotspotAddress: string;
+  certificate: CertificateFile;
   /** Join a network; the password only for a new secured one. */
   onJoin: (ssid: string, password?: string) => void;
   onForget: (ssid: string) => void;
@@ -92,7 +107,7 @@ export function NetworkSettings({
     onJoin(ssid, secret);
   };
   return (
-    <>
+    <div data-slot="network-settings" className="grid gap-6">
       <ConfirmChange
         open={Boolean(pending)}
         title={`Keep ${pending?.ssid ?? ''}?`}
@@ -185,11 +200,12 @@ export function NetworkSettings({
         </Button>
       </SettingGroup>
       <SettingGroup title="Hotspot">
-        <SettingRow
-          label="Turn the hotspot on"
-          caption="The device's own network, for gigs with no Wi-Fi."
-          stacked
-        >
+        <Description className="mb-1">
+          A hotspot is Oxidal's own Wi-Fi network. Where there is no Wi-Fi to
+          join, connect your phone or tablet to it like any other network. It
+          has no internet, so your phone may say so: stay connected.
+        </Description>
+        <SettingRow label="Turn the hotspot on" stacked>
           <Select
             value={hotspot.policy}
             onValueChange={(v) => onPolicy(v as HotspotPolicy)}
@@ -221,6 +237,13 @@ export function NetworkSettings({
           </Button>
         </SettingRow>
       </SettingGroup>
+      <DeviceAddresses
+        hostName={hostName}
+        wifiAddress={address}
+        wifiNetwork={current}
+        hotspotAddress={hotspotAddress}
+      />
+      <DeviceCertificate certificate={certificate} hostName={hostName} />
       <Dialog
         open={Boolean(joining)}
         onOpenChange={(o) => !o && setJoining(null)}
@@ -254,6 +277,6 @@ export function NetworkSettings({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }

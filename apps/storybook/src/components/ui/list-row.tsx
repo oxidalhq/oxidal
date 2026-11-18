@@ -17,6 +17,7 @@ export function ListRow({
   trailing,
   selected = false,
   onClick,
+  expanded,
   children,
   ...props
 }: Omit<React.ComponentProps<'div'>, 'title' | 'onClick'> & {
@@ -26,6 +27,8 @@ export function ListRow({
   trailing?: React.ReactNode;
   selected?: boolean;
   onClick?: () => void;
+  /** The row opens something in place, and it is open now. */
+  expanded?: boolean;
 }) {
   const text = (
     <>
@@ -61,6 +64,7 @@ export function ListRow({
         <button
           type="button"
           onClick={onClick}
+          aria-expanded={expanded}
           className="col-start-2 grid min-w-0 cursor-pointer gap-0.5 rounded-md text-left outline-none after:absolute after:inset-0 after:content-[''] focus-visible:after:outline-2 focus-visible:after:outline-offset-[-2px] focus-visible:after:outline-ring"
         >
           {text}

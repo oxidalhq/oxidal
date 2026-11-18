@@ -1,5 +1,8 @@
 import * as React from 'react';
 import {
+  CaretDown,
+  CaretUp,
+  ArrowCounterClockwise,
   ArrowDown,
   ArrowUp,
   ClockCounterClockwise,
@@ -40,14 +43,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '../components/ui/popover';
-import { Segment, SegmentedControl } from '../components/ui/segmented';
-import {
-  Sheet,
-  SheetBody,
-  SheetContent,
-  SheetFooter,
-  SheetHeader,
-} from '../components/ui/sheet';
 import { Caption, Eyebrow, Label, Title } from '../components/ui/text';
 import { Toggle } from '../components/ui/toggle';
 import {
@@ -73,7 +68,7 @@ import {
   VersionPicker,
   type PresetVersion,
 } from '../widgets/versions';
-import { CabMics } from '../widgets/cab-mics';
+import { IrFacts } from '../widgets/ir-facts';
 import { BlockChooser, type EffectChoice } from './block-chooser';
 import { BlockActions } from './block-actions';
 import { useConfirm } from '../components/ui/confirm';
@@ -83,10 +78,16 @@ import {
   type ModelChoice,
   type Trial,
 } from './swap-sheet';
+import type { ToneCatalogue } from './model-browser';
+import { useRemembered } from '../lib/use-remembered';
+import { ChangeScope } from '../widgets/change-scope';
 import { VisualControl } from '../widgets/visual-control';
 import { MidiTarget } from '../widgets/midi';
 import { scaleFromMidi } from '../lib/midi';
-import { SourceCard, SourceLine } from '../widgets/block-source';
+import { SourceCard, SourceLine, SourcePicture } from '../widgets/block-source';
+import { glyphForBlock } from '../lib/block-glyphs';
+import { originOf } from '../lib/model-origin';
+import { DockableSheet } from './tool-dock';
 
 export type RigRoute = Step<BlockModel>[];
 
@@ -133,7 +134,7 @@ function withPreview(route: RigRoute): RigRoute {
  *   it, save them as a new version, or discard them. **Edited / Saved**
  *   switches what you hear for an instant A/B, and the change count opens
  *   the list of what changed, each with its own undo.
- * - **This scene / Whole preset** says where a change goes; blocks the
+ * - **Changes:** beside the name says where a change goes; blocks the
  *   playing scene changes carry a small mark.
  * - The **route** draws the real signal: splits, branches (an empty one is
  *   dry), joins, splits again. A meter on each wire shows the level after
@@ -171,6 +172,7 @@ export function RigSurface({
   blockTools,
   downloads,
   onGetModel,
+  catalogue,
   className,
 }: {
   presetName: string;
@@ -208,6 +210,8 @@ export function RigSurface({
   downloads?: Record<string, number>;
   /** Download a TONE3000 model from the Change sheet. */
   onGetModel?: (choice: ModelChoice) => void;
+  /** Search TONE3000 from the Change sheet. */
+  catalogue?: ToneCatalogue;
   className?: string;
 }) {
   const phone = usePhone();
@@ -219,6 +223,10 @@ export function RigSurface({
   const before = React.useRef<BlockModel | null>(null);
   const [compare, setCompare] = React.useState<'edited' | 'saved'>('edited');
   const [scope, setScope] = React.useState<'scene' | 'preset'>('preset');
+  const [minimised, setMinimised] = useRemembered(
+    'oxidal.rig.controls-minimised',
+    false,
+  );
   const [editing, setEditing] = React.useState(false);
   const [showScenes, setShowScenes] = React.useState(false);
   const [sceneEditor, setSceneEditor] = React.useState(false);
@@ -320,7 +328,7 @@ export function RigSurface({
   const changes = React.useMemo(() => diffRoutes(saved, route), [saved, route]);
   const reading = compare === 'saved';
 
-  // Several changes can arrive in one gesture (a mic's position and angle);
+  // Several changes can arrive in one gesture (two points of a drawing);
   // each builds on the last, not on the route as it was when drawn.
   const latest = React.useRef(route);
   React.useEffect(() => {
@@ -363,6 +371,47 @@ export function RigSurface({
   };
 
   const canSwap = Boolean(models?.length || blockTypes?.length);
+  // Stepping through models in the block panel: the next or previous model
+  // of the same kind that is on the device, at matched loudness, with one
+  // tap back to where the block started.
+  const [stepOrigin, setStepOrigin] = React.useState<BlockModel | null>(null);
+  const kindOf = (b: BlockModel) =>
+    b.kind === 'amp' || b.kind === 'cab' || b.kind === 'pedal' ? b.kind : null;
+  const ready = block
+    ? (models ?? []).filter(
+        (m) => m.kind === kindOf(block) && (m.from === 'mine' || m.downloaded),
+      )
+    : [];
+  const modelAt = block
+    ? ready.findIndex((m) => m.id === block.source?.value)
+    : -1;
+  const stepped =
+    block && stepOrigin?.id === block.id && stepOrigin.label !== block.label;
+  const stepModel = (delta: -1 | 1) => {
+    if (!block || !ready.length) return;
+    const was = stepOrigin?.id === block.id ? stepOrigin : block;
+    setStepOrigin(was);
+    before.current = was;
+    const next =
+      ready[
+        modelAt < 0
+          ? delta > 0
+            ? 0
+            : ready.length - 1
+          : (modelAt + delta + ready.length) % ready.length
+      ]!;
+    const loud = (models ?? []).find(
+      (m) => m.id === was.source?.value,
+    )?.loudness;
+    trySwap({
+      kind: 'model',
+      choice: next,
+      trim:
+        loud !== undefined && next.loudness !== undefined
+          ? Math.round((loud - next.loudness) * 10) / 10
+          : 0,
+    });
+  };
   const openSwap = (id: string) => {
     before.current = blocksOf(route).find((b) => b.id === id) ?? null;
     setSelected(id);
@@ -391,6 +440,7 @@ export function RigSurface({
           controls,
           label: choice.label,
           caption: choice.caption,
+          origin: originOf(choice),
           unsaved: true,
           source: b.source && {
             ...b.source,
@@ -427,6 +477,47 @@ export function RigSurface({
   };
 
   const main = block ? block.controls.filter((c) => c.main).slice(0, 4) : [];
+  const blockSwitch = block && (
+    <MidiTarget
+      id={`${block.id}:on`}
+      label={`${block.label} · on/off`}
+      kind="switch"
+      group="Blocks"
+      onMidi={(m) =>
+        (m.kind === 'pc' || m.value > 0) && toggle(block.id, !block.on)
+      }
+    >
+      <Switch
+        id={`on-${block.id}`}
+        aria-label={minimised ? `${block.label} on` : undefined}
+        checked={block.on}
+        onCheckedChange={(on) => toggle(block.id, on)}
+        disabled={reading}
+      />
+    </MidiTarget>
+  );
+  const stepButtons = block && (
+    <>
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        aria-label="Previous block"
+        disabled={blocks.indexOf(block) <= 0}
+        onClick={() => stepTo(-1)}
+      >
+        <CaretLeft />
+      </Button>
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        aria-label="Next block"
+        disabled={blocks.indexOf(block) >= blocks.length - 1}
+        onClick={() => stepTo(1)}
+      >
+        <CaretRight />
+      </Button>
+    </>
+  );
 
   return (
     <section
@@ -453,6 +544,20 @@ export function RigSurface({
                 onMakeDefault={onMakeDefault}
                 onDiscard={() => onRoute(saved)}
               />
+              <ChangeScope
+                scope={scope}
+                sceneName={scenes[activeIndex]?.name ?? 'This scene'}
+                sceneColour={
+                  activeIndex >= 0
+                    ? (scenes[activeIndex]?.colour ?? sceneColour(activeIndex))
+                    : undefined
+                }
+                onScope={setScope}
+                onEditScenes={() => setSceneEditor(true)}
+              />
+              {reading && (
+                <Badge tone="selected">Hearing the saved version</Badge>
+              )}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -497,36 +602,6 @@ export function RigSurface({
               <PencilSimple /> Edit
             </Toggle>
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <Caption as="span" className="small-caps text-xs">
-            Changes apply to
-          </Caption>
-          <SegmentedControl
-            size="sm"
-            value={scope}
-            onValueChange={(v) => setScope(v as 'scene' | 'preset')}
-            aria-label="Changes apply to"
-          >
-            <Segment value="scene">This scene</Segment>
-            <Segment value="preset">Whole preset</Segment>
-          </SegmentedControl>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setSceneEditor(true)}
-          >
-            <SquaresFour /> Edit scenes…
-          </Button>
-          {reading && <Badge tone="selected">Hearing the saved version</Badge>}
-          {sceneModel && (
-            <Caption as="p" role="status" className="basis-full text-xs">
-              Editing {sceneModel.name}: on or off (an off block keeps running),
-              branch levels and every value you change belong to this scene
-              only, and a block you add plays in this scene only. Moving or
-              removing blocks changes the whole preset.
-            </Caption>
-          )}
         </div>
       </header>
 
@@ -604,7 +679,54 @@ export function RigSurface({
         </div>
       )}
 
-      {block && !editing && (
+      {block && !editing && minimised && (
+        <div
+          data-slot="block-dock"
+          data-minimised
+          className="sticky bottom-0 z-strip hidden px-page pt-1 pb-3 md:block"
+        >
+          <section
+            aria-label={`${block.label} controls`}
+            className={cn(
+              'flex items-center gap-3 rounded-xl border border-foreground/70 bg-raised px-3 py-2 shadow-raised',
+              !block.on && 'border-dashed',
+            )}
+          >
+            <SourcePicture
+              source={block.origin}
+              glyph={glyphForBlock(block)}
+              className="size-10"
+            />
+            <div className="grid min-w-0 shrink-0 gap-0.5">
+              <Title as="h2" size="sm" className="truncate">
+                {block.label}
+              </Title>
+              <Caption as="span" className="truncate small-caps text-xs">
+                {block.caption ?? block.kind}
+              </Caption>
+            </div>
+            <span className="min-w-0 flex-1 truncate font-mono text-sm tabular-nums max-lg:hidden">
+              {main
+                .map((c) => `${c.label} ${c.value}${c.unit ?? ''}`)
+                .join(' · ')}
+            </span>
+            <span className="ml-auto flex shrink-0 items-center gap-1">
+              {stepButtons}
+              {blockSwitch}
+              <Button
+                size="sm"
+                variant="outline"
+                className="ml-2"
+                onClick={() => setMinimised(false)}
+              >
+                <CaretUp /> Show controls
+              </Button>
+            </span>
+          </section>
+        </div>
+      )}
+
+      {block && !editing && !minimised && (
         <div
           data-slot="block-dock"
           className="sticky bottom-0 z-strip hidden px-page pt-1 pb-3 md:block"
@@ -612,42 +734,43 @@ export function RigSurface({
           <section
             aria-label={`${block.label} controls`}
             className={cn(
-              'grid gap-x-5 gap-y-3 rounded-xl border border-foreground/70 bg-raised p-3 shadow-raised lg:grid-cols-[15rem_minmax(12rem,1fr)_17rem]',
+              'grid gap-x-5 gap-y-3 rounded-xl border border-foreground/70 bg-raised p-3 shadow-raised lg:grid-cols-[20rem_minmax(12rem,1fr)_17rem]',
               !block.on && 'border-dashed',
             )}
           >
             <div className="grid content-start gap-2.5">
-              <div className="flex items-center gap-1.5">
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  aria-label="Previous block"
-                  disabled={blocks.indexOf(block) <= 0}
-                  onClick={() => stepTo(-1)}
-                >
-                  <CaretLeft />
-                </Button>
-                <div className="grid min-w-0 flex-1 gap-0.5">
-                  <Eyebrow className="truncate">
+              <div className="grid gap-1.5">
+                <div className="flex items-center gap-1">
+                  <Eyebrow className="min-w-0 flex-1 truncate">
                     {whereOf(shown, block.id)}
                   </Eyebrow>
-                  <Title as="h2" size="sm" className="truncate">
-                    {block.label}
-                  </Title>
-                  <Caption as="span" className="truncate small-caps text-xs">
-                    {block.caption ?? block.kind}
-                  </Caption>
-                  {block.origin && <SourceLine source={block.origin} />}
+                  {stepButtons}
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Minimise controls"
+                    title="Minimise, to see more of the rig"
+                    onClick={() => setMinimised(true)}
+                  >
+                    <CaretDown />
+                  </Button>
                 </div>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  aria-label="Next block"
-                  disabled={blocks.indexOf(block) >= blocks.length - 1}
-                  onClick={() => stepTo(1)}
-                >
-                  <CaretRight />
-                </Button>
+                <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+                  <SourcePicture
+                    source={block.origin}
+                    glyph={glyphForBlock(block)}
+                    className="size-16"
+                  />
+                  <div className="grid min-w-0 gap-0.5">
+                    <Title as="h2" size="sm" className="truncate">
+                      {block.label}
+                    </Title>
+                    <Caption as="span" className="truncate small-caps text-xs">
+                      {block.caption ?? block.kind}
+                    </Caption>
+                    {block.origin && <SourceLine source={block.origin} />}
+                  </div>
+                </div>
               </div>
               {sceneModel && sceneValueCount(sceneModel, block.id) > 0 && (
                 <div
@@ -683,24 +806,64 @@ export function RigSurface({
                 >
                   {block.on ? 'Block on' : 'Bypassed'}
                 </label>
-                <MidiTarget
-                  id={`${block.id}:on`}
-                  label={`${block.label} · on/off`}
-                  kind="switch"
-                  group="Blocks"
-                  onMidi={(m) =>
-                    (m.kind === 'pc' || m.value > 0) &&
-                    toggle(block.id, !block.on)
-                  }
-                >
-                  <Switch
-                    id={`on-${block.id}`}
-                    checked={block.on}
-                    onCheckedChange={(on) => toggle(block.id, on)}
-                    disabled={reading}
-                  />
-                </MidiTarget>
+                {blockSwitch}
               </div>
+              {ready.length > 1 && (
+                <div
+                  role="group"
+                  aria-label={`Try another ${kindOf(block) === 'cab' ? 'cab' : kindOf(block) === 'pedal' ? 'pedal' : 'amp'} model`}
+                  title="Each model plays as loud as the one you started with"
+                  data-slot="model-stepper"
+                  className="flex items-center gap-0.5 rounded-lg border border-border bg-background px-1"
+                >
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Previous model"
+                    disabled={reading}
+                    onClick={() => stepModel(-1)}
+                  >
+                    <CaretLeft />
+                  </Button>
+                  <span className="grid min-w-0 flex-1 text-center">
+                    <span className="truncate text-sm font-medium">
+                      {block.label}
+                    </span>
+                    <span className="font-mono text-2xs text-muted-foreground tabular-nums">
+                      {modelAt >= 0
+                        ? `${modelAt + 1} of ${ready.length} ${block.kind === 'cab' ? 'IRs' : 'models'}`
+                        : `${ready.length} ${block.kind === 'cab' ? 'IRs' : 'models'} to try`}
+                    </span>
+                  </span>
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Next model"
+                    disabled={reading}
+                    onClick={() => stepModel(1)}
+                  >
+                    <CaretRight />
+                  </Button>
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label={
+                      stepped
+                        ? `Back to ${stepOrigin!.label}`
+                        : 'Back to the model it started with'
+                    }
+                    disabled={!stepped || reading}
+                    onClick={() => {
+                      if (stepOrigin)
+                        onRoute(
+                          updateBlock(route, stepOrigin.id, () => stepOrigin),
+                        );
+                    }}
+                  >
+                    <ArrowCounterClockwise />
+                  </Button>
+                </div>
+              )}
               <div className="flex flex-wrap gap-2">
                 {canSwap && (
                   <Button
@@ -731,25 +894,19 @@ export function RigSurface({
               </div>
             </div>
             <div className="min-w-0">
-              {block.mics ? (
-                <CabMics
-                  block={block}
-                  onControl={(c, v) => control(block.id, c, v)}
-                  compact
-                  disabled={reading}
-                />
-              ) : (
-                <VisualControl
-                  kind={block.kind}
-                  role={block.role}
-                  controls={block.controls}
-                  onControl={(c, v) => control(block.id, c, v)}
-                  disabled={reading}
-                  className={cn(
-                    'h-32 rounded-lg border border-border bg-background px-2 py-1 text-foreground',
-                    !block.on && 'text-muted-foreground',
-                  )}
-                />
+              <VisualControl
+                kind={block.kind}
+                role={block.role}
+                controls={block.controls}
+                onControl={(c, v) => control(block.id, c, v)}
+                disabled={reading}
+                className={cn(
+                  'h-32 rounded-lg border border-border bg-background px-2 py-1 text-foreground',
+                  !block.on && 'text-muted-foreground',
+                )}
+              />
+              {block.kind === 'cab' && (
+                <IrFacts source={block.origin} hint className="pt-2" />
               )}
             </div>
             <div className="grid grid-cols-2 content-start gap-x-3 gap-y-2">
@@ -823,28 +980,25 @@ export function RigSurface({
       )}
 
       {confirmDialog}
-      <Sheet open={sceneEditor} onOpenChange={setSceneEditor}>
-        <SheetContent
-          onOpenChange={setSceneEditor}
-          className="md:w-[min(56rem,100vw)]"
-        >
-          <SheetHeader
-            title="Edit scenes"
-            description={`What each scene of ${presetName} plays. Tap a scene name to hear it.`}
-          />
-          <SheetBody className="grid content-start gap-3">
-            <SceneChange value={sceneChange} onChange={setSceneChange} />
-            <SceneEditor
-              route={route}
-              onRoute={onRoute}
-              scenes={sceneModels}
-              onScenes={setSceneModels}
-              active={activeScene}
-              onSelect={onScene}
-            />
-          </SheetBody>
-        </SheetContent>
-      </Sheet>
+      <DockableSheet
+        id="scenes"
+        title="Edit scenes"
+        description={`What each scene of ${presetName} plays. Tap a scene name to hear it.`}
+        icon={<SquaresFour />}
+        open={sceneEditor}
+        onOpenChange={setSceneEditor}
+        className="md:w-[min(56rem,100vw)]"
+      >
+        <SceneChange value={sceneChange} onChange={setSceneChange} />
+        <SceneEditor
+          route={route}
+          onRoute={onRoute}
+          scenes={sceneModels}
+          onScenes={setSceneModels}
+          active={activeScene}
+          onSelect={onScene}
+        />
+      </DockableSheet>
 
       {canSwap && (
         <SwapSheet
@@ -856,6 +1010,7 @@ export function RigSurface({
           onTry={trySwap}
           downloads={downloads}
           onGet={onGetModel}
+          catalogue={catalogue}
           onBack={() => {
             const was = before.current;
             if (was) onRoute(updateBlock(route, was.id, () => was));
@@ -864,29 +1019,26 @@ export function RigSurface({
       )}
 
       {block && (
-        <Sheet open={full} onOpenChange={setFull}>
-          <SheetContent onOpenChange={setFull}>
-            <SheetHeader
-              title={block.label}
-              description={block.caption ?? block.kind}
-            />
-            <SheetBody>
-              {block.origin && (
-                <SourceCard source={block.origin} className="mb-4" />
-              )}
-              <BlockFullEditor
-                block={block}
-                onControl={(c, v) => control(block.id, c, v)}
-              />
-              {blockTools?.(block)}
-            </SheetBody>
-            <SheetFooter>
-              <Button variant="outline" onClick={() => setFull(false)}>
-                Done
-              </Button>
-            </SheetFooter>
-          </SheetContent>
-        </Sheet>
+        <DockableSheet
+          id="block-controls"
+          title={block.label}
+          description={block.caption ?? block.kind}
+          icon={<Faders />}
+          open={full}
+          onOpenChange={setFull}
+          footer={
+            <Button variant="outline" onClick={() => setFull(false)}>
+              Done
+            </Button>
+          }
+        >
+          {block.origin && <SourceCard source={block.origin} />}
+          <BlockFullEditor
+            block={block}
+            onControl={(c, v) => control(block.id, c, v)}
+          />
+          {blockTools?.(block)}
+        </DockableSheet>
       )}
     </section>
   );

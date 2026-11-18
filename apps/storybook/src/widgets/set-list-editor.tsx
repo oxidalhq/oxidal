@@ -1,17 +1,19 @@
 import * as React from 'react';
-import { DotsSixVertical, DotsThree, Play, Plus } from '@phosphor-icons/react';
+import {
+  ArrowDown,
+  ArrowUp,
+  Copy,
+  DotsSixVertical,
+  PencilSimple,
+  Play,
+  Plus,
+  Trash,
+} from '@phosphor-icons/react';
 import { cn } from '../lib/cn';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Checkbox } from '../components/ui/checkbox';
 import { CollapsibleSection } from '../components/ui/collapsible';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '../components/ui/dropdown-menu';
 import { Segment, SegmentedControl } from '../components/ui/segmented';
 import {
   Select,
@@ -29,6 +31,7 @@ import {
 } from '../components/ui/sheet';
 import { EmptyState } from '../components/ui/states';
 import { Caption, Label, Title } from '../components/ui/text';
+import { useFlip } from '../lib/use-flip';
 
 export type PresetChoice = {
   id: string;
@@ -66,6 +69,7 @@ export function SetListEditor({
   tracks,
   sheets,
   onPlay,
+  onPlayFrom,
   className,
 }: {
   name: string;
@@ -75,16 +79,21 @@ export function SetListEditor({
   tracks: Choice[];
   sheets: Choice[];
   onPlay?: () => void;
+  /** Start the set from this song. */
+  onPlayFrom?: (key: string) => void;
   className?: string;
 }) {
   const [adding, setAdding] = React.useState(false);
   const [editing, setEditing] = React.useState<string | null>(null);
   const [picked, setPicked] = React.useState<string[]>([]);
   const [query, setQuery] = React.useState('');
+  const list = React.useRef<HTMLOListElement>(null);
+  const startY = React.useRef(0);
   const [drag, setDrag] = React.useState<{ key: string; over: number } | null>(
     null,
   );
   const rows = React.useRef<Map<string, HTMLLIElement>>(new Map());
+  const flip = useFlip(list, entries.map((e) => e.key).join('|'));
   const presetOf = (id: string) => presets.find((p) => p.id === id);
   const entry = entries.find((e) => e.key === editing);
 
@@ -101,7 +110,10 @@ export function SetListEditor({
       const row = rows.current.get(entries[i]!.key);
       if (!row) continue;
       const box = row.getBoundingClientRect();
-      if (clientY < box.top + box.height / 2) {
+      // The dragged row follows the finger; judge by where it rests.
+      const shift =
+        drag && entries[i]!.key === drag.key ? clientY - startY.current : 0;
+      if (clientY < box.top - shift + box.height / 2) {
         index = i;
         break;
       }
@@ -186,16 +198,27 @@ export function SetListEditor({
       ) : (
         <ol
           aria-label="Songs in order"
-          className="m-0 grid list-none p-0"
-          onPointerMove={(event) =>
-            drag && setDrag({ ...drag, over: overIndex(event.clientY) })
-          }
+          className="m-0 grid list-none gap-2 p-0"
+          ref={list}
+          onPointerMove={(event) => {
+            if (!drag) return;
+            // The row follows the finger; the others make room on drop.
+            const row = rows.current.get(drag.key);
+            if (row)
+              row.style.translate = `0 ${event.clientY - startY.current}px`;
+            setDrag({ ...drag, over: overIndex(event.clientY) });
+          }}
           onPointerUp={() => {
-            if (drag)
+            if (drag) {
+              flip.snapshot();
+              const row = rows.current.get(drag.key);
+              if (row) row.style.translate = '';
               move(
                 entries.findIndex((e) => e.key === drag.key),
                 drag.over,
               );
+              setTimeout(flip.play, 0);
+            }
             setDrag(null);
           }}
         >
@@ -210,9 +233,10 @@ export function SetListEditor({
                   if (el) rows.current.set(e.key, el);
                   else rows.current.delete(e.key);
                 }}
+                data-flip={e.key}
                 data-dragging={dragging || undefined}
                 className={cn(
-                  'relative grid min-h-touch grid-cols-[auto_2rem_minmax(0,1fr)_auto] items-center gap-x-2 border-b border-border py-1.5 last:border-b-0',
+                  'relative grid min-h-touch grid-cols-[auto_2rem_minmax(0,1fr)_auto] items-center gap-x-2 rounded-lg border border-border bg-card py-1.5 pr-3',
                   dragging && 'z-10 rounded-lg bg-raised shadow-raised',
                   dropHere &&
                     'before:absolute before:inset-x-0 before:-top-px before:h-0.5 before:bg-foreground',
@@ -224,6 +248,7 @@ export function SetListEditor({
                   aria-describedby="set-list-move-hint"
                   onPointerDown={(event) => {
                     event.currentTarget.setPointerCapture(event.pointerId);
+                    startY.current = event.clientY;
                     setDrag({ key: e.key, over: index });
                   }}
                   onKeyDown={(event) => {
@@ -255,55 +280,35 @@ export function SetListEditor({
                   </span>
                 </button>
                 <span className="flex items-center gap-1">
-                  {!e.track && !e.sheet && <Badge size="sm">Preset only</Badge>}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label={`More for ${preset?.name ?? 'song'}`}
-                      >
-                        <DotsThree weight="bold" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                      <DropdownMenuItem onSelect={() => setEditing(e.key)}>
-                        Choose version, scene, track…
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={index === 0}
-                        onSelect={() => move(index, index - 1)}
-                      >
-                        Move up
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={index === entries.length - 1}
-                        onSelect={() => move(index, index + 1)}
-                      >
-                        Move down
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onSelect={() =>
-                          onChange([
-                            ...entries.slice(0, index + 1),
-                            { ...e, key: `${e.key}-copy-${Date.now()}` },
-                            ...entries.slice(index + 1),
-                          ])
-                        }
-                      >
-                        Play it twice (duplicate)
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        destructive
-                        onSelect={() =>
-                          onChange(entries.filter((x) => x.key !== e.key))
-                        }
-                      >
-                        Remove from set
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <Badge size="sm" className="max-sm:hidden">
+                    {e.track && e.sheet
+                      ? 'Track and sheet'
+                      : e.track
+                        ? 'Track'
+                        : e.sheet
+                          ? 'Sheet'
+                          : 'Preset only'}
+                  </Badge>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    aria-label={`Edit ${preset?.name ?? 'song'}`}
+                    onClick={() => setEditing(e.key)}
+                  >
+                    <PencilSimple />
+                    <span className="max-sm:sr-only">Edit</span>
+                  </Button>
+                  {onPlayFrom && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      aria-label={`Play from ${preset?.name ?? 'song'}`}
+                      onClick={() => onPlayFrom(e.key)}
+                    >
+                      <Play />
+                      <span className="max-sm:sr-only">Play</span>
+                    </Button>
+                  )}
                 </span>
               </li>
             );
@@ -487,7 +492,55 @@ export function SetListEditor({
               })()}
             </SheetBody>
             <SheetFooter>
-              <Button onClick={() => setEditing(null)}>Done</Button>
+              <div className="grid w-full gap-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={entries.indexOf(entry) === 0}
+                    onClick={() =>
+                      move(entries.indexOf(entry), entries.indexOf(entry) - 1)
+                    }
+                  >
+                    <ArrowUp /> Earlier
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={entries.indexOf(entry) === entries.length - 1}
+                    onClick={() =>
+                      move(entries.indexOf(entry), entries.indexOf(entry) + 1)
+                    }
+                  >
+                    <ArrowDown /> Later
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const at = entries.indexOf(entry);
+                      onChange([
+                        ...entries.slice(0, at + 1),
+                        { ...entry, key: `${entry.key}-copy-${Date.now()}` },
+                        ...entries.slice(at + 1),
+                      ]);
+                    }}
+                  >
+                    <Copy /> Play it twice
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => {
+                      onChange(entries.filter((x) => x.key !== entry.key));
+                      setEditing(null);
+                    }}
+                  >
+                    <Trash /> Remove from set
+                  </Button>
+                </div>
+                <Button onClick={() => setEditing(null)}>Done</Button>
+              </div>
             </SheetFooter>
           </SheetContent>
         )}

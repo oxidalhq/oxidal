@@ -24,7 +24,9 @@ import {
 import { Slider } from '../components/ui/slider';
 import { Caption, Label, Title } from '../components/ui/text';
 import { Toggle } from '../components/ui/toggle';
-import { CabMics } from './cab-mics';
+import { CollapsibleSection } from '../components/ui/collapsible';
+import { IrFacts } from './ir-facts';
+import { Switch } from '../components/ui/switch';
 import { VisualControl } from './visual-control';
 import type { ChainBlockModel } from './chain';
 import type { BlockSource } from './block-source';
@@ -43,8 +45,10 @@ export type BlockControl = {
   main?: boolean;
   /** Group heading in the full editor (Tone, Time, Mix…). */
   group?: string;
-  /** Set by a drawing (mic angle…), not listed as a slider. */
+  /** Set by a drawing, not listed as a slider. */
   hidden?: boolean;
+  /** On or off, such as Normalize. */
+  toggle?: boolean;
 };
 
 export type BlockModel = ChainBlockModel & {
@@ -53,8 +57,6 @@ export type BlockModel = ChainBlockModel & {
   controls: BlockControl[];
   /** For amps and cabs: the model or impulse response, chosen from a list. */
   source?: { label: string; value: string; options: ComboboxOption[] };
-  /** For cabs: the microphones, A then B (drawn by CabMics). */
-  mics?: string[];
   /** Where the block comes from: its maker, provider and links. */
   origin?: BlockSource;
 };
@@ -114,20 +116,17 @@ export function BlockQuickEditor({
           />
         </Toggle>
       </div>
-      {block.mics ? (
-        <CabMics block={block} onControl={onControl} compact />
-      ) : (
-        <VisualControl
-          kind={block.kind}
-          role={block.role}
-          controls={block.controls}
-          onControl={onControl}
-          className={cn(
-            'h-20 rounded-lg border border-border bg-background px-2 py-1 text-foreground',
-            !block.on && 'text-muted-foreground',
-          )}
-        />
-      )}
+      <VisualControl
+        kind={block.kind}
+        role={block.role}
+        controls={block.controls}
+        onControl={onControl}
+        className={cn(
+          'h-20 rounded-lg border border-border bg-background px-2 py-1 text-foreground',
+          !block.on && 'text-muted-foreground',
+        )}
+      />
+      {block.kind === 'cab' && <IrFacts source={block.origin} />}
       {block.source && onSource && (
         <div className="grid gap-1">
           <Label as="span" className="small-caps text-xs text-muted-foreground">
@@ -208,6 +207,22 @@ export function BlockQuickEditor({
   );
 }
 
+/** One group of controls; a named group folds away to save scrolling. */
+function ControlGroup({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  if (!title) return <section className="grid gap-3">{children}</section>;
+  return (
+    <CollapsibleSection title={title} defaultOpen>
+      {children}
+    </CollapsibleSection>
+  );
+}
+
 /** Every control of the block, grouped, as sliders with readouts. */
 export function BlockFullEditor({
   block,
@@ -225,7 +240,7 @@ export function BlockFullEditor({
   }
   return (
     <div data-slot="block-full-editor" className="grid gap-5">
-      {block.mics && <CabMics block={block} onControl={onControl} />}
+      {block.kind === 'cab' && <IrFacts source={block.origin} hint />}
       <VisualControl
         kind={block.kind}
         role={block.role}
@@ -234,27 +249,38 @@ export function BlockFullEditor({
         className="h-28 rounded-lg border border-border bg-background px-2 py-1"
       />
       {[...groups.entries()].map(([group, controls]) => (
-        <section key={group} className="grid gap-3">
-          {group && (
-            <h3 className="m-0 small-caps text-sm font-medium text-muted-foreground">
-              {group}
-            </h3>
+        <ControlGroup key={group} title={group}>
+          {controls.map((control) =>
+            control.toggle ? (
+              <label
+                key={control.id}
+                className="flex min-h-touch items-center justify-between gap-3 text-sm font-medium"
+              >
+                {control.label}
+                <Switch
+                  aria-label={control.label}
+                  checked={control.value >= 0.5}
+                  onCheckedChange={(on) =>
+                    onControl(control.id, on ? control.max : control.min)
+                  }
+                />
+              </label>
+            ) : (
+              <Slider
+                key={control.id}
+                label={control.label}
+                min={control.min}
+                max={control.max}
+                step={control.step ?? 0.5}
+                value={[control.value]}
+                onValueChange={([value]) =>
+                  value !== undefined && onControl(control.id, value)
+                }
+                readout={`${control.value.toFixed(control.step && control.step >= 1 ? 0 : 1)}${control.unit ? ` ${control.unit}` : ''}`}
+              />
+            ),
           )}
-          {controls.map((control) => (
-            <Slider
-              key={control.id}
-              label={control.label}
-              min={control.min}
-              max={control.max}
-              step={control.step ?? 0.5}
-              value={[control.value]}
-              onValueChange={([value]) =>
-                value !== undefined && onControl(control.id, value)
-              }
-              readout={`${control.value.toFixed(control.step && control.step >= 1 ? 0 : 1)}${control.unit ? ` ${control.unit}` : ''}`}
-            />
-          ))}
-        </section>
+        </ControlGroup>
       ))}
       {onReset && (
         <Button variant="outline" size="sm" className="w-fit" onClick={onReset}>

@@ -7,7 +7,7 @@ import {
 } from '@phosphor-icons/react';
 import { cn } from '../lib/cn';
 import { safeLink } from '../lib/links';
-import { glyphForSource } from '../lib/block-glyphs';
+import { glyphForSource, type GlyphKey } from '../lib/block-glyphs';
 import { BlockGlyph } from './block-glyph';
 
 /**
@@ -24,6 +24,10 @@ export type BlockSource =
       page: string;
       /** The tone's picture, served by the device. */
       image?: string;
+      /** More pictures of the tone, when it has several. */
+      images?: string[];
+      /** How many models the tone holds, by type. */
+      counts?: { standard?: number; a2?: number; custom?: number };
       /** Such as "Amp", "Pedal", "Full rig". */
       gear?: string;
       /** Such as "NAM A2". */
@@ -41,6 +45,15 @@ export type BlockSource =
       gear?: string;
       /** Where the file says it came from. */
       link?: string;
+      /** For an IR: what the audio file is. */
+      audio?: {
+        sampleRate: number;
+        bits: number;
+        channels: number;
+        durationMs: number;
+      };
+      /** The start of the file's SHA-256, to tell two copies apart. */
+      fingerprint?: string;
     }
   | {
       kind: 'lv2';
@@ -166,7 +179,12 @@ function Out({
   children: React.ReactNode;
   className?: string;
 }) {
-  if (!href) return <span className={className}>{children}</span>;
+  if (!href)
+    return (
+      <span className={cn('inline-flex items-center gap-1', className)}>
+        {children}
+      </span>
+    );
   return (
     <a
       href={href}
@@ -203,7 +221,7 @@ export function SourceLine({
     <span
       data-slot="source-line"
       className={cn(
-        'inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground',
+        'inline-flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground',
         className,
       )}
     >
@@ -214,11 +232,9 @@ export function SourceLine({
           {!plain &&
           source.kind === 'tone3000' &&
           safeLink(source.creator.profile) ? (
-            <Out href={safeLink(source.creator.profile)} className="truncate">
-              {who}
-            </Out>
+            <Out href={safeLink(source.creator.profile)}>{who}</Out>
           ) : (
-            <span className="truncate">{who}</span>
+            <span>{who}</span>
           )}
         </>
       )}
@@ -232,6 +248,53 @@ export function SourceLine({
         >
           <ArrowSquareOut aria-hidden="true" className="size-3.5" />
         </a>
+      )}
+    </span>
+  );
+}
+
+/**
+ * The picture of what a block is: a TONE3000 tone's own picture (the device
+ * fetches it once and keeps it, so it shows offline), Oxidal's mark for our
+ * own effects, or the block's glyph. A picture that fails falls back to the
+ * glyph.
+ */
+export function SourcePicture({
+  source,
+  glyph,
+  className,
+}: {
+  source?: BlockSource;
+  /** The glyph to fall back on; from the source when not given. */
+  glyph?: GlyphKey;
+  className?: string;
+}) {
+  const image = source?.kind === 'tone3000' ? source.image : undefined;
+  const [broken, setBroken] = React.useState<string | null>(null);
+  return (
+    <span
+      data-slot="source-picture"
+      aria-hidden="true"
+      className={cn(
+        'grid size-16 shrink-0 place-items-center overflow-hidden rounded-md border border-border bg-background',
+        className,
+      )}
+    >
+      {image && broken !== image ? (
+        <img
+          src={image}
+          alt=""
+          loading="lazy"
+          onError={() => setBroken(image)}
+          className="size-full object-cover"
+        />
+      ) : source?.kind === 'oxidal' ? (
+        <img src="/brand/mark.svg" alt="" className="size-1/2" />
+      ) : (
+        <BlockGlyph
+          glyph={glyph ?? (source ? glyphForSource(source) : 'plugin')}
+          className="size-1/2 text-muted-foreground"
+        />
       )}
     </span>
   );
@@ -265,8 +328,6 @@ export function SourceCard({
   source: BlockSource;
   className?: string;
 }) {
-  const [broken, setBroken] = React.useState(false);
-  const image = source.kind === 'tone3000' ? source.image : undefined;
   return (
     <section
       data-slot="source-card"
@@ -277,30 +338,13 @@ export function SourceCard({
       )}
     >
       <div className="grid grid-cols-[4rem_minmax(0,1fr)] items-center gap-3">
-        <div className="grid size-16 place-items-center overflow-hidden rounded-md border border-border bg-background">
-          {image && !broken ? (
-            <img
-              src={image}
-              alt=""
-              loading="lazy"
-              onError={() => setBroken(true)}
-              className="size-full object-cover"
-            />
-          ) : source.kind === 'oxidal' ? (
-            <img src="/brand/mark.svg" alt="" className="size-8" />
-          ) : (
-            <BlockGlyph
-              glyph={glyphForSource(source)}
-              className="size-8 text-muted-foreground"
-            />
-          )}
-        </div>
+        <SourcePicture source={source} />
         <div className="grid min-w-0 gap-0.5">
           <span className="truncate text-md font-semibold">{source.title}</span>
           <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm">
             {source.kind === 'tone3000' ? (
               <>
-                by{' '}
+                <span>by</span>
                 <Out href={safeLink(source.creator.profile)}>
                   <User aria-hidden="true" className="size-3.5" />
                   {source.creator.name}
@@ -327,6 +371,23 @@ export function SourceCard({
         </div>
       </div>
 
+      {source.kind === 'tone3000' && (source.images?.length ?? 0) > 1 && (
+        <ul
+          aria-label="Pictures"
+          className="m-0 flex list-none gap-2 overflow-x-auto p-0"
+        >
+          {source.images!.map((src) => (
+            <li key={src} className="shrink-0">
+              <img
+                src={src}
+                alt=""
+                loading="lazy"
+                className="h-20 w-auto rounded-md border border-border object-cover"
+              />
+            </li>
+          ))}
+        </ul>
+      )}
       <dl className="m-0 grid divide-y divide-border border-y border-border">
         {source.kind === 'tone3000' && (
           <>
@@ -336,6 +397,18 @@ export function SourceCard({
                 {source.models
                   ? ` · ${source.models} ${source.models === 1 ? 'model' : 'models'}`
                   : ''}
+              </Fact>
+            )}
+            {source.counts && (
+              <Fact label="Models">
+                {[
+                  source.counts.a2 && `${source.counts.a2} A2`,
+                  source.counts.standard &&
+                    `${source.counts.standard} standard`,
+                  source.counts.custom && `${source.counts.custom} custom`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
               </Fact>
             )}
             <Fact label="Licence">{source.licence}</Fact>
@@ -348,6 +421,18 @@ export function SourceCard({
               added by you
             </Fact>
             {source.gear && <Fact label="Gear">{source.gear}</Fact>}
+            {source.audio && (
+              <Fact label="Audio">
+                {source.audio.sampleRate / 1000} kHz · {source.audio.bits}-bit ·{' '}
+                {source.audio.channels === 1 ? 'mono' : 'stereo'} ·{' '}
+                {source.audio.durationMs} ms
+              </Fact>
+            )}
+            {source.fingerprint && (
+              <Fact label="Fingerprint">
+                <code className="text-xs">{source.fingerprint}</code>
+              </Fact>
+            )}
             {source.trainer && (
               <Fact label="Trained with">{source.trainer}</Fact>
             )}

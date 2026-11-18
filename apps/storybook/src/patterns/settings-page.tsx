@@ -1,6 +1,12 @@
 import * as React from 'react';
 import { CaretRight } from '@phosphor-icons/react';
 import { cn } from '../lib/cn';
+import { useRemembered } from '../lib/use-remembered';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '../components/ui/collapsible';
 import {
   Select,
   SelectContent,
@@ -10,6 +16,7 @@ import {
 } from '../components/ui/select';
 import { Caption, Label } from '../components/ui/text';
 import type { Section } from './workspace';
+import { Description } from '../components/ui/text';
 
 /**
  * Settings: a list of sections on the left and the chosen section's form on
@@ -84,12 +91,7 @@ export function SettingsPage({
           {title ?? section?.label}
         </h2>
         {section?.description && (
-          <p
-            data-slot="settings-description"
-            className="m-0 max-w-prose rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground"
-          >
-            {section.description}
-          </p>
+          <Description>{section.description}</Description>
         )}
         {children}
       </section>
@@ -97,7 +99,10 @@ export function SettingsPage({
   );
 }
 
-/** A group of settings with a small-caps heading. */
+/**
+ * A group of settings with a small-caps heading. A named group folds away to
+ * save scrolling, and stays the way it was left.
+ */
 export function SettingGroup({
   title,
   children,
@@ -107,15 +112,33 @@ export function SettingGroup({
   children: React.ReactNode;
   className?: string;
 }) {
+  const named = typeof title === 'string';
+  const [open, setOpen] = useRemembered(
+    `oxidal.settings.open.${named ? title : 'group'}`,
+    true,
+  );
+  if (!named)
+    return (
+      <section data-slot="setting-group" className={cn('grid', className)}>
+        {title && (
+          <h3 className="m-0 mb-1 small-caps text-sm font-medium text-muted-foreground">
+            {title}
+          </h3>
+        )}
+        {children}
+      </section>
+    );
   return (
-    <section data-slot="setting-group" className={cn('grid', className)}>
-      {title && (
-        <h3 className="m-0 mb-1 small-caps text-sm font-medium text-muted-foreground">
-          {title}
+    <Collapsible asChild open={open} onOpenChange={setOpen}>
+      <section data-slot="setting-group" className={cn('grid', className)}>
+        <h3 className="m-0">
+          <CollapsibleTrigger className="min-h-9 px-0 small-caps text-sm font-medium text-muted-foreground hover:bg-transparent hover:text-foreground">
+            {title}
+          </CollapsibleTrigger>
         </h3>
-      )}
-      {children}
-    </section>
+        <CollapsibleContent className="grid">{children}</CollapsibleContent>
+      </section>
+    </Collapsible>
   );
 }
 

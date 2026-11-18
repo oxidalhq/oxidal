@@ -41,7 +41,7 @@ export function CollapsibleSection({
   children,
   className,
   ...props
-}: React.ComponentProps<typeof CollapsiblePrimitive.Root> & {
+}: Omit<React.ComponentProps<typeof CollapsiblePrimitive.Root>, 'title'> & {
   title: React.ReactNode;
 }) {
   return (

@@ -1,5 +1,6 @@
 import {
   Broadcast,
+  CheckCircle,
   Gear,
   Info,
   Monitor,
@@ -14,6 +15,13 @@ import {
 import type { Section } from '../patterns/workspace';
 
 export const SETTINGS_SECTIONS: Section[] = [
+  {
+    id: 'essentials',
+    label: 'Before you play',
+    icon: <CheckCircle />,
+    description:
+      'The few things that decide whether a gig goes well, in one place: what you will hear, what your feet control, and what to fix first. Everything else is in the pages below.',
+  },
   {
     id: 'audio',
     label: 'Audio',

@@ -19,6 +19,7 @@ export function SetListSection() {
       tracks={SET_TRACKS}
       sheets={SET_SHEETS}
       onPlay={() => {}}
+      onPlayFrom={() => {}}
     />
   );
 }

@@ -36,6 +36,14 @@ export function NetworkSettingsDemo() {
         name: 'Oxidal-7F2A · changed on 2 Nov',
         radio: 'United Kingdom · channel 6',
       }}
+      hostName="oxidal.local"
+      hotspotAddress="10.42.0.1"
+      certificate={{
+        href: '/examples/oxidal-ca.crt',
+        fileName: 'oxidal-ca.crt',
+        fingerprint:
+          '7F:2A:91:0C:5E:D4:18:B3:6A:27:C9:40:EE:13:8D:72:AF:05:6B:C1:39:D8:64:1E:92:FB:07:5C:A3:48:E6:2D',
+      }}
       onJoin={(ssid) => {
         let n = 60;
         setPending({ ssid, secondsLeft: n });

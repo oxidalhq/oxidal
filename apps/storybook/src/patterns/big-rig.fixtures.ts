@@ -89,7 +89,7 @@ const BRANCHES: Branch[] = [
       {
         split: true,
         id: 'b7-di',
-        branches: [[cab('b7-cab', '1×12 Tweed', 'tweed112', ['MD421'])], []],
+        branches: [[cab('b7-cab', '1×12 Tweed', 'tweed112')], []],
         levels: [0, -6],
       },
     ],
@@ -108,7 +108,7 @@ const BRANCHES: Branch[] = [
     size: 'Nano',
     steps: [
       named(amp('b9-amp', '', 'twin'), 'Jazz combo', 'NAM · Nano'),
-      cab('b9-cab', '1×12 Tweed', 'tweed112', ['R121']),
+      cab('b9-cab', '1×12 Tweed', 'tweed112'),
     ],
   },
   {
