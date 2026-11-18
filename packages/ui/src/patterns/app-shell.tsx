@@ -81,6 +81,18 @@ export function AppShell({
         <a
           href="#rig"
           aria-label="Oxidal home"
+          onClick={(event) => {
+            if (
+              event.button ||
+              event.metaKey ||
+              event.ctrlKey ||
+              event.shiftKey ||
+              event.altKey
+            )
+              return;
+            event.preventDefault();
+            onNavigate('rig');
+          }}
           className="flex h-12 shrink-0 items-center"
         >
           <img src="/brand/wordmark-white.svg" alt="" className="h-5 w-auto" />

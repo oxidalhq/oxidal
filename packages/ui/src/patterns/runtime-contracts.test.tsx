@@ -7,6 +7,7 @@ import { diffRoutes } from '../lib/route-diff';
 import { PracticePanel, type PracticeState } from '../widgets/practice';
 import { VenueEq } from '../widgets/venue-eq';
 import { VENUE_PROFILES } from '../widgets/venue-eq.data';
+import { AppShell } from './app-shell';
 import { SERIAL_ROUTE } from './rig.fixtures';
 import { RigSurface } from './rig-surface';
 import { StemWorkspace } from './stem-workspace';
@@ -24,6 +25,21 @@ beforeEach(() =>
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+});
+
+it('sends home navigation through the owner instead of bypassing its leave guard', () => {
+  const navigate = vi.fn();
+  render(
+    <AppShell destination="library" onNavigate={navigate} readings={{}}>
+      <p>Library draft</p>
+    </AppShell>,
+  );
+  const home = screen.getByRole('link', { name: 'Oxidal home' });
+  expect(fireEvent.click(home)).toBe(false);
+  expect(navigate).toHaveBeenCalledExactlyOnceWith('rig');
+  navigate.mockClear();
+  expect(fireEvent.click(home, { ctrlKey: true })).toBe(true);
+  expect(navigate).not.toHaveBeenCalled();
 });
 
 it('opening, remounting and receiving practice readback never reset playback', async () => {
