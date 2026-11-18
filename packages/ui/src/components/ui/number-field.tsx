@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { cn } from '../../lib/cn';
+export { RelativeAdjustment } from './relative-adjustment';
 
 /**
  * A value you set by dragging its readout: gain, level, time, tempo. Drag
@@ -8,6 +9,7 @@ import { cn } from '../../lib/cn';
  * arrow keys step, Page keys step ten, Home and End go to the ends. A
  * second tap (or Enter) opens the number for typing. Merges the product's
  * DragFader and TouchAdjust. Always labelled; always shows the unit.
+ * @see docs/development.md#shared-ui-runtime-contracts
  */
 export function NumberField({
   value,
@@ -41,27 +43,48 @@ export function NumberField({
 }) {
   const [editing, setEditing] = React.useState(false);
   const [draft, setDraft] = React.useState('');
-  const drag = React.useRef<{ x: number; y: number; start: number } | null>(
-    null,
-  );
+  const [invalid, setInvalid] = React.useState(false);
+  const drag = React.useRef<{
+    id: number;
+    x: number;
+    y: number;
+    start: number;
+  } | null>(null);
   const moved = React.useRef(false);
 
+  const quantum =
+    fine > 0 && Number.isFinite(fine) ? fine : step > 0 ? step : 1;
   const clamp = (next: number) =>
-    Math.min(max, Math.max(min, Math.round(next / fine) * fine));
+    Math.min(
+      max,
+      Math.max(
+        min,
+        Number(
+          (min + Math.round((next - min) / quantum) * quantum).toFixed(12),
+        ),
+      ),
+    );
   const set = (next: number) => {
+    if (disabled || !Number.isFinite(next)) return;
     const clamped = clamp(next);
     if (clamped !== value) onChange(clamped);
   };
 
   const pointer = {
     onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => {
-      if (disabled || editing) return;
-      drag.current = { x: event.clientX, y: event.clientY, start: value };
+      if (disabled || editing || event.button !== 0 || drag.current) return;
+      drag.current = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        start: value,
+      };
       moved.current = false;
       event.currentTarget.setPointerCapture(event.pointerId);
     },
     onPointerMove: (event: React.PointerEvent<HTMLButtonElement>) => {
-      if (!drag.current) return;
+      if (disabled || !drag.current || drag.current.id !== event.pointerId)
+        return;
       const dx = event.clientX - drag.current.x;
       const dy = drag.current.y - event.clientY;
       const distance = Math.abs(dx) > Math.abs(dy) ? dx : dy;
@@ -70,10 +93,26 @@ export function NumberField({
       set(drag.current.start + (distance / sensitivity) * unitStep);
     },
     onPointerUp: (event: React.PointerEvent<HTMLButtonElement>) => {
-      event.currentTarget.releasePointerCapture(event.pointerId);
+      if (drag.current?.id !== event.pointerId) return;
       drag.current = null;
+      if (event.currentTarget.hasPointerCapture(event.pointerId))
+        event.currentTarget.releasePointerCapture(event.pointerId);
     },
+    onPointerCancel: (event: React.PointerEvent<HTMLButtonElement>) =>
+      cancelDrag(event.pointerId),
+    onLostPointerCapture: (event: React.PointerEvent<HTMLButtonElement>) =>
+      cancelDrag(event.pointerId),
   };
+  function cancelDrag(pointerId: number) {
+    const gesture = drag.current;
+    if (!gesture || gesture.id !== pointerId) return;
+    drag.current = null;
+    // Confirmed props may still show the starting value while the last
+    // preview is in flight. Cancellation must explicitly restore that start.
+    if (moved.current && !disabled && Number.isFinite(gesture.start))
+      onChange(clamp(gesture.start));
+    moved.current = true;
+  }
 
   const keys = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     const unitStep = event.shiftKey ? fine : step;
@@ -100,11 +139,17 @@ export function NumberField({
   const beginEdit = () => {
     if (disabled) return;
     setDraft(value.toFixed(digits));
+    setInvalid(false);
     setEditing(true);
   };
   const commit = () => {
-    const parsed = Number.parseFloat(draft.replace(',', '.'));
-    if (!Number.isNaN(parsed)) set(parsed);
+    const text = draft.trim().replace(',', '.');
+    const parsed = Number(text);
+    if (!text || !Number.isFinite(parsed)) {
+      setInvalid(true);
+      return;
+    }
+    set(parsed);
     setEditing(false);
   };
 
@@ -120,6 +165,7 @@ export function NumberField({
         type="text"
         inputMode="decimal"
         aria-label={label}
+        aria-invalid={invalid || undefined}
         autoFocus
         value={draft}
         onChange={(event) => setDraft(event.target.value)}

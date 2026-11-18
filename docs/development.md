@@ -49,6 +49,28 @@ The API proxy and browser requests use that pair together. Defaults remain 3210
 and 5173; occupied test ports fail rather than reusing a potentially unrelated
 server or its preset library. Native-worker qualification flags remain unchanged.
 
+### Shared UI runtime contracts
+
+The product imports runtime UI through `@oxidal/design-system` exports. Reference
+screens and `*.demo.tsx`, `*.fixtures.ts` and `*.data.ts` are Storybook inputs;
+they must not supply product state. The existing product stores, edit queues and
+shared feeds retain ownership of audio, media, jobs and saved data.
+
+`RigSurface` accepts confirmed comparison, scenes and transition settings, with
+explicit request callbacks. A comparison request does not change its hearing
+indicator until readback. Supply the complete product change list and Discard
+command when state extends beyond the visual route. Route projections are not
+lossless audio transactions. Shared numeric fields report values; the product
+queue owns preview, commit, cancel, session identity and stale-response guards.
+Relative touch adjustment keeps Fine, restore and pointer-cancellation behaviour.
+
+`PracticePanel` reads a complete confirmed value and emits only explicit edits;
+mounting another view never sends defaults. `StemWorkspace` reads the confirmed
+mix and delegates runtime Undo/Redo to its shared owner. Its bounded local history
+is for isolated editors/stories. `VenueEq` reads confirmed output/profile state
+and emits no audio commands on mount or remote readback. Profile writes are
+requests to the product store; they must be confirmed before selection changes.
+
 ## Import order
 
 ESLint enforces import order using `eslint-plugin-simple-import-sort`, with one

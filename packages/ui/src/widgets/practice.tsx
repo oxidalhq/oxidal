@@ -11,12 +11,11 @@ import { formatTime } from '../lib/time';
 
 const SPEEDS = [50, 75, 100, 125, 150];
 
-/** A steady, made-up waveform: louder in the choruses. */
-
 /**
  * Practice tools in the backing player: the waveform (tap to move the
  * playhead, drag to choose a loop), A–B loop, speed that keeps the pitch,
  * and a click that follows the song's own beats or a steady tempo.
+ * @see docs/development.md#shared-ui-runtime-contracts
  */
 export type PracticeState = {
   /** Seconds. */
@@ -37,9 +36,12 @@ export type PracticeState = {
 export function PracticePanel({
   duration,
   waveform,
-  position: initial = 0,
+  position: externalPosition,
   bpm,
+  value,
   onChange,
+  onTempo,
+  onFirstBeat,
   className,
 }: {
   /** Seconds. */
@@ -49,36 +51,37 @@ export function PracticePanel({
   position?: number;
   /** Tempo found in the song, or undefined when uncertain. */
   bpm?: number;
-  /** Everything the player engine needs to follow, on every change. */
+  /** Confirmed player state. Opening another view never sends defaults. */
+  value?: PracticeState;
+  /** Explicit edits only; never called on mount or confirmed readback. */
   onChange?: (state: PracticeState) => void;
+  onTempo?: (bpm: number) => void;
+  onFirstBeat?: () => void;
   className?: string;
 }) {
   const bars = waveform;
-  const [position, setPosition] = React.useState(initial);
-  const [loop, setLoop] = React.useState<{ a: number; b: number } | null>(null);
-  const [looping, setLooping] = React.useState(false);
-  const [speed, setSpeed] = React.useState('100');
-  const [tempo, setTempo] = React.useState(bpm);
-  const [click, setClick] = React.useState(false);
-  const [timing, setTiming] = React.useState('beats');
-  const [steady, setSteady] = React.useState(bpm ?? 120);
-  const [level, setLevel] = React.useState(-12);
-  const report = React.useRef(onChange);
-  React.useEffect(() => {
-    report.current = onChange;
-  }, [onChange]);
-  React.useEffect(() => {
-    report.current?.({
-      position,
-      loop,
-      looping,
-      speed: Number(speed),
-      click,
-      timing: timing === 'steady' ? 'steady' : 'beats',
-      steady,
-      level,
-    });
-  }, [position, loop, looping, speed, click, timing, steady, level]);
+  const [local, setLocal] = React.useState<PracticeState>({
+    position: externalPosition ?? 0,
+    loop: null,
+    looping: false,
+    speed: 100,
+    click: false,
+    timing: 'beats',
+    steady: bpm ?? 120,
+    level: -12,
+  });
+  const state = value ?? {
+    ...local,
+    position: externalPosition ?? local.position,
+  };
+  const { position, loop, looping, speed, click, timing, steady, level } =
+    state;
+  const tempo = bpm;
+  const edit = (patch: Partial<PracticeState>) => {
+    const next = { ...state, ...patch };
+    if (value === undefined) setLocal(next);
+    onChange?.(next);
+  };
   const wave = React.useRef<HTMLDivElement>(null);
   const drag = React.useRef<number | null>(null);
 
@@ -89,7 +92,7 @@ export function PracticePanel({
       Math.min(duration, ((event.clientX - box.left) / box.width) * duration),
     );
   };
-  const pct = (t: number) => `${(t / duration) * 100}%`;
+  const pct = (t: number) => `${duration > 0 ? (t / duration) * 100 : 0}%`;
 
   return (
     <section
@@ -109,7 +112,8 @@ export function PracticePanel({
                 size="sm"
                 variant="ghost"
                 aria-label={`½× · use half: ${Math.round(tempo / 2)} BPM`}
-                onClick={() => setTempo(tempo / 2)}
+                disabled={!onTempo}
+                onClick={() => onTempo?.(tempo / 2)}
               >
                 ½×
               </Button>
@@ -117,7 +121,8 @@ export function PracticePanel({
                 size="sm"
                 variant="ghost"
                 aria-label={`2× · use double: ${Math.round(tempo * 2)} BPM`}
-                onClick={() => setTempo(tempo * 2)}
+                disabled={!onTempo}
+                onClick={() => onTempo?.(tempo * 2)}
               >
                 2×
               </Button>
@@ -137,26 +142,33 @@ export function PracticePanel({
         aria-valuetext={formatTime(position)}
         onKeyDown={(e) => {
           if (e.key === 'ArrowRight')
-            setPosition((p) => Math.min(duration, p + 5));
-          if (e.key === 'ArrowLeft') setPosition((p) => Math.max(0, p - 5));
+            edit({ position: Math.min(duration, position + 5) });
+          if (e.key === 'ArrowLeft')
+            edit({ position: Math.max(0, position - 5) });
+          if (e.key === 'ArrowRight' || e.key === 'ArrowLeft')
+            e.preventDefault();
         }}
         onPointerDown={(e) => {
           e.currentTarget.setPointerCapture(e.pointerId);
           drag.current = at(e);
-          setPosition(drag.current);
+          edit({ position: drag.current });
         }}
         onPointerMove={(e) => {
           if (drag.current === null) return;
           const t = at(e);
           if (Math.abs(t - drag.current) > duration / 100) {
-            setLoop({
-              a: Math.min(drag.current, t),
-              b: Math.max(drag.current, t),
+            edit({
+              loop: {
+                a: Math.min(drag.current, t),
+                b: Math.max(drag.current, t),
+              },
+              looping: true,
             });
-            setLooping(true);
           }
         }}
         onPointerUp={() => (drag.current = null)}
+        onPointerCancel={() => (drag.current = null)}
+        onLostPointerCapture={() => (drag.current = null)}
         className="relative flex h-20 touch-none items-center gap-px rounded-lg border border-border bg-background px-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
         {loop && (
@@ -202,10 +214,15 @@ export function PracticePanel({
           size="sm"
           variant="outline"
           onClick={() =>
-            setLoop((l) => ({
-              a: position,
-              b: Math.max(position + 4, l?.b ?? position + 16),
-            }))
+            edit({
+              loop: {
+                a: position,
+                b: Math.min(
+                  duration,
+                  Math.max(position, loop?.b ?? position + 16),
+                ),
+              },
+            })
           }
         >
           Set A
@@ -215,7 +232,13 @@ export function PracticePanel({
           variant="outline"
           disabled={!loop}
           onClick={() =>
-            setLoop((l) => (l ? { a: l.a, b: Math.max(l.a + 1, position) } : l))
+            loop &&
+            edit({
+              loop: {
+                a: loop.a,
+                b: Math.min(duration, Math.max(loop.a, position)),
+              },
+            })
           }
         >
           Set B
@@ -224,7 +247,7 @@ export function PracticePanel({
           size="sm"
           pressed={looping}
           disabled={!loop}
-          onPressedChange={setLooping}
+          onPressedChange={(looping) => edit({ looping })}
         >
           Loop
         </Toggle>
@@ -236,7 +259,7 @@ export function PracticePanel({
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => (setLoop(null), setLooping(false))}
+              onClick={() => edit({ loop: null, looping: false })}
             >
               Clear
             </Button>
@@ -250,8 +273,8 @@ export function PracticePanel({
         </span>
         <SegmentedControl
           size="sm"
-          value={speed}
-          onValueChange={setSpeed}
+          value={String(speed)}
+          onValueChange={(speed) => edit({ speed: Number(speed) })}
           aria-label="Playback speed"
         >
           {SPEEDS.map((p) => (
@@ -272,13 +295,19 @@ export function PracticePanel({
         className="grid gap-2 border-t border-border pt-3"
       >
         <div className="flex flex-wrap items-center gap-2">
-          <Toggle size="sm" pressed={click} onPressedChange={setClick}>
+          <Toggle
+            size="sm"
+            pressed={click}
+            onPressedChange={(click) => edit({ click })}
+          >
             Click
           </Toggle>
           <SegmentedControl
             size="sm"
             value={timing}
-            onValueChange={setTiming}
+            onValueChange={(timing) =>
+              edit({ timing: timing === 'steady' ? 'steady' : 'beats' })
+            }
             aria-label="Click timing"
             disabled={!click}
           >
@@ -295,12 +324,17 @@ export function PracticePanel({
                 step={1}
                 digits={0}
                 unit="BPM"
-                onChange={setSteady}
+                onChange={(steady) => edit({ steady })}
               />
             </div>
           )}
           {click && (
-            <Button size="sm" variant="ghost" onClick={() => {}}>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={!onFirstBeat}
+              onClick={onFirstBeat}
+            >
               First beat here
             </Button>
           )}
@@ -312,7 +346,7 @@ export function PracticePanel({
             max={0}
             step={1}
             value={[level]}
-            onValueChange={([v]) => v !== undefined && setLevel(v)}
+            onValueChange={([v]) => v !== undefined && edit({ level: v })}
             readout={`${level} dB`}
           />
         )}

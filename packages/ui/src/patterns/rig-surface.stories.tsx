@@ -369,7 +369,7 @@ function ScenesRig() {
       onSaveVersionAs={rig.onSaveVersionAs}
       onMakeDefault={rig.onMakeDefault}
       scenes={FOUR_SCENES.map((s, i) => ({ ...s, number: i + 1 }))}
-      sceneSettings={FOUR_SCENES}
+      defaultSceneSettings={FOUR_SCENES}
       activeScene={scene}
       onScene={setScene}
       levels={rig.levels}

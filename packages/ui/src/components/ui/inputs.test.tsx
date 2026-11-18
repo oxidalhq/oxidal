@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 
@@ -6,7 +6,82 @@ import { Combobox } from './combobox';
 import { NumberField } from './number-field';
 import { EmptyState, StepProgress } from './states';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+it('restores a cancelled numeric gesture and ignores a different pointer', () => {
+  vi.stubGlobal(
+    'PointerEvent',
+    class extends MouseEvent {
+      pointerId: number;
+      constructor(
+        type: string,
+        event: MouseEventInit & { pointerId?: number },
+      ) {
+        super(type, event);
+        this.pointerId = event.pointerId ?? 1;
+      }
+    },
+  );
+  const change = vi.fn();
+  render(
+    <NumberField
+      label="Gain"
+      value={0.5}
+      min={0}
+      max={1}
+      step={0.1}
+      fine={0.01}
+      onChange={change}
+    />,
+  );
+  const field = screen.getByRole('slider', { name: 'Gain' });
+  Object.assign(field, {
+    setPointerCapture: vi.fn(),
+    hasPointerCapture: () => true,
+    releasePointerCapture: vi.fn(),
+  });
+  fireEvent.pointerDown(field, {
+    button: 0,
+    pointerId: 1,
+    clientX: 100,
+    clientY: 100,
+  });
+  fireEvent.pointerMove(field, { pointerId: 1, clientX: 104, clientY: 100 });
+  expect(change).toHaveBeenLastCalledWith(0.6);
+  fireEvent.pointerCancel(field, { pointerId: 2 });
+  expect(change).toHaveBeenCalledTimes(1);
+  fireEvent.pointerCancel(field, { pointerId: 1 });
+  expect(change).toHaveBeenLastCalledWith(0.5);
+  fireEvent.lostPointerCapture(field, { pointerId: 1 });
+  expect(change).toHaveBeenCalledTimes(2);
+});
+
+it('rejects partially numeric exact entry and accepts a decimal comma', async () => {
+  const change = vi.fn();
+  const user = userEvent.setup();
+  render(
+    <NumberField
+      label="Gain"
+      value={5}
+      min={0}
+      max={10}
+      step={0.1}
+      onChange={change}
+    />,
+  );
+  await user.click(screen.getByRole('slider', { name: 'Gain' }));
+  const input = screen.getByRole('textbox', { name: 'Gain' });
+  await user.clear(input);
+  await user.type(input, '2junk{Enter}');
+  expect(change).not.toHaveBeenCalled();
+  expect(input).toHaveAttribute('aria-invalid', 'true');
+  await user.clear(input);
+  await user.type(input, '7,2{Enter}');
+  expect(change).toHaveBeenCalledExactlyOnceWith(7.2);
+});
 
 it('a number field steps with the keyboard, fine with Shift, and clamps', async () => {
   const user = userEvent.setup();

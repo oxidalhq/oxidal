@@ -72,13 +72,14 @@ export function VersionPicker({
   const [open, setOpen] = React.useState(false);
   const [naming, setNaming] = React.useState(false);
   const [name, setName] = React.useState('');
-  const version = versions.find((v) => v.id === current) ?? versions[0]!;
+  const version = versions.find((v) => v.id === current) ?? versions[0];
   const suggestions = [
     'Friday gig',
     'Rehearsal room',
     'Small venue',
     'Outdoor',
   ];
+  if (!version) return <Caption>No saved version available.</Caption>;
   return (
     <>
       <Popover open={open} onOpenChange={setOpen}>
@@ -267,9 +268,12 @@ export function CompareToggle({
 export function ChangeList({
   changes,
   onRevert,
+  canRevert = (change) => change.kind === 'value',
 }: {
   changes: Change[];
   onRevert?: (change: Change) => void;
+  /** Only offer undo paths the product owner can actually execute. */
+  canRevert?: (change: Change) => boolean;
 }) {
   if (!changes.length) return <Caption>No changes since it was saved.</Caption>;
   return (
@@ -289,7 +293,7 @@ export function ChangeList({
           <span className="truncate font-mono text-xs tabular-nums">
             {describeChange(change)}
           </span>
-          {onRevert && change.kind === 'value' && (
+          {onRevert && canRevert(change) && (
             <Button
               size="sm"
               variant="ghost"

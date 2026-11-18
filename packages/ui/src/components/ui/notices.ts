@@ -66,21 +66,20 @@ function withdraw(id: string, now = false) {
   const entry = posted.get(id);
   if (!entry) return;
   const remaining = now ? 0 : HOLD_MS - (Date.now() - entry.since);
-  if (remaining <= 0) {
+  const remove = () => {
+    clearTimeout(leaving.get(id));
     posted.delete(id);
     leaving.delete(id);
+    for (const closed of dismissed)
+      if (closed.startsWith(`${id}\u0000`)) dismissed.delete(closed);
     publish();
+  };
+  if (remaining <= 0) {
+    remove();
     return;
   }
   if (leaving.has(id)) return;
-  leaving.set(
-    id,
-    setTimeout(() => {
-      posted.delete(id);
-      leaving.delete(id);
-      publish();
-    }, remaining),
-  );
+  leaving.set(id, setTimeout(remove, remaining));
 }
 
 /** Post a notice while `notice` is set; withdraw it when null or unmounted. */

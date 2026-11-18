@@ -74,18 +74,21 @@ export function DeviceDashboard({ readings }: { readings: DeviceReadings }) {
     dropouts,
     audit,
   } = readings;
-  const last = (d: { v: number }[]) => d[d.length - 1]!.v;
+  const last = (d: { v: number }[], unit: string) =>
+    d.length ? `${d[d.length - 1]!.v}${unit}` : 'Unavailable';
   return (
     <div className="grid gap-4 px-page">
       <dl className="m-0 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
         {[
-          ['Processing', `${last(processing)}%`],
+          ['Processing', last(processing, '%')],
           [
             'CPU',
-            `${Math.round(cores.reduce((s, c) => s + c.load, 0) / cores.length)}%`,
+            cores.length
+              ? `${Math.round(cores.reduce((s, c) => s + c.load, 0) / cores.length)}%`
+              : 'Unavailable',
           ],
-          ['Memory', `${last(memory)} GB`],
-          ['Temperature', `${last(temperature)} °C`],
+          ['Memory', last(memory, ' GB')],
+          ['Temperature', last(temperature, ' °C')],
           ['Storage', `${disk.used} / ${disk.total} GB`],
           ['Uptime', readings.uptime],
         ].map(([k, v]) => (
@@ -119,7 +122,7 @@ export function DeviceDashboard({ readings }: { readings: DeviceReadings }) {
             unit=" °C"
             domain={[40, 90]}
             limit={80}
-            limitLabel="Protect at 80 °C"
+            limitLabel="Temperature warning at 80 °C"
           />
         </Card>
         <Card>
@@ -132,7 +135,7 @@ export function DeviceDashboard({ readings }: { readings: DeviceReadings }) {
               <Trend
                 key={i}
                 compact
-                label={`Core ${i + 1}${cores[i]!.audio ? ' · audio' : ''}`}
+                label={`Core ${i + 1}${cores[i]?.audio ? ' · audio' : ''}`}
                 data={data}
                 unit="%"
                 domain={[0, 100]}
@@ -296,10 +299,17 @@ function Trend({
   limitLabel?: string;
   compact?: boolean;
 }) {
-  const now = data[data.length - 1]!.v;
-  const hot = limit !== undefined && now >= limit;
+  const now = data[data.length - 1]?.v;
+  const hot = limit !== undefined && now !== undefined && now >= limit;
   const motion = useMotion();
   const gradient = useId();
+  if (now === undefined)
+    return (
+      <div className="grid gap-1">
+        <span className="small-caps text-sm">{label}</span>
+        <Caption>No readings available.</Caption>
+      </div>
+    );
   return (
     <ChartContainer
       label={label}

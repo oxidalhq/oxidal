@@ -49,7 +49,7 @@ import {
   type Step,
   updateBlock,
 } from '../lib/route';
-import { diffRoutes } from '../lib/route-diff';
+import { type Change, diffRoutes } from '../lib/route-diff';
 import {
   applyScene,
   sceneDifferences,
@@ -145,6 +145,7 @@ function withPreview(route: RigRoute): RigRoute {
  *   sliders. "All controls" is always one tap further.
  * - **Edit** adds + targets, long-press drag (drop on "Parallel" to run two
  *   blocks side by side) and a toolbar: earlier, later, parallel, remove.
+ * @see docs/development.md#shared-ui-runtime-contracts
  */
 export function RigSurface({
   presetName,
@@ -163,6 +164,16 @@ export function RigSurface({
   onScene,
   sceneChanged,
   sceneSettings,
+  defaultSceneSettings,
+  savedSceneSettings,
+  onSceneSettings,
+  transition,
+  onTransition,
+  comparison,
+  onCompare,
+  onDiscard,
+  onTuner,
+  changeList,
   levels,
   inputLevel,
   onAudition,
@@ -195,6 +206,20 @@ export function RigSurface({
   sceneChanged?: string[];
   /** What each scene plays, for the scene editor; scenes without settings start from the preset. */
   sceneSettings?: SceneModel[];
+  /** Story/local-editor initial settings; runtime consumers use sceneSettings. */
+  defaultSceneSettings?: SceneModel[];
+  savedSceneSettings?: SceneModel[];
+  onSceneSettings?: (scenes: SceneModel[]) => void;
+  transition?: SceneChangeSettings;
+  onTransition?: (settings: SceneChangeSettings) => void;
+  /** Confirmed audible comparison, never an optimistic hearing indicator. */
+  comparison?: 'edited' | 'saved';
+  onCompare?: (comparison: 'edited' | 'saved') => void;
+  /** Complete product discard, including non-route settings and scene edits. */
+  onDiscard?: () => void;
+  onTuner?: () => void;
+  /** Complete product changes, including data absent from the visual route. */
+  changeList?: Change[];
   levels?: Record<string, number>;
   inputLevel?: number;
   onAudition?: (id: string | null) => void;
@@ -222,7 +247,14 @@ export function RigSurface({
     index: number;
   } | null>(null);
   const before = React.useRef<BlockModel | null>(null);
-  const [compare, setCompare] = React.useState<'edited' | 'saved'>('edited');
+  const [localCompare, setLocalCompare] = React.useState<'edited' | 'saved'>(
+    'edited',
+  );
+  const compare = comparison ?? localCompare;
+  const setCompare = (next: 'edited' | 'saved') => {
+    if (comparison === undefined) setLocalCompare(next);
+    onCompare?.(next);
+  };
   const [scope, setScope] = React.useState<'scene' | 'preset'>('preset');
   const [minimised, setMinimised] = useRemembered(
     'oxidal.rig.controls-minimised',
@@ -231,15 +263,21 @@ export function RigSurface({
   const [editing, setEditing] = React.useState(false);
   const [showScenes, setShowScenes] = React.useState(false);
   const [sceneEditor, setSceneEditor] = React.useState(false);
-  const [sceneChange, setSceneChange] = React.useState<SceneChangeSettings>({
-    mode: 'trails',
-    fadeMs: 30,
-    presetTrails: true,
-  });
-  const [sceneModels, setSceneModels] = React.useState<SceneModel[]>(() =>
+  const [localTransition, setLocalTransition] =
+    React.useState<SceneChangeSettings>({
+      mode: 'trails',
+      fadeMs: 30,
+      presetTrails: true,
+    });
+  const sceneChange = transition ?? localTransition;
+  const setSceneChange = (next: SceneChangeSettings) => {
+    if (transition === undefined) setLocalTransition(next);
+    onTransition?.(next);
+  };
+  const [localScenes, setLocalScenes] = React.useState<SceneModel[]>(() =>
     scenes.map(
       (s) =>
-        sceneSettings?.find((m) => m.id === s.id) ?? {
+        defaultSceneSettings?.find((m) => m.id === s.id) ?? {
           id: s.id,
           name: s.name,
           on: {},
@@ -247,6 +285,14 @@ export function RigSurface({
         },
     ),
   );
+  const sceneModels = sceneSettings ?? localScenes;
+  const setSceneModels = (
+    update: SceneModel[] | ((all: SceneModel[]) => SceneModel[]),
+  ) => {
+    const next = typeof update === 'function' ? update(sceneModels) : update;
+    if (sceneSettings === undefined) setLocalScenes(next);
+    onSceneSettings?.(next);
+  };
   const [sheet, setSheet] = React.useState(false);
   const [full, setFull] = React.useState(false);
   const activeIndex = scenes.findIndex((sc) => sc.id === activeScene);
@@ -326,7 +372,13 @@ export function RigSurface({
     blocks[2]?.id ?? blocks[0]?.id ?? null,
   );
   const block = blocks.find((b) => b.id === selected) ?? null;
-  const changes = React.useMemo(() => diffRoutes(saved, route), [saved, route]);
+  const changes = changeList ?? [
+    ...diffRoutes(saved, route),
+    ...(savedSceneSettings &&
+    JSON.stringify(savedSceneSettings) !== JSON.stringify(sceneModels)
+      ? [{ kind: 'settings' as const, text: 'Scene settings changed' }]
+      : []),
+  ];
   const reading = compare === 'saved';
 
   // Several changes can arrive in one gesture (two points of a drawing);
@@ -543,7 +595,13 @@ export function RigSurface({
                 onSave={onSaveVersion}
                 onSaveAs={onSaveVersionAs}
                 onMakeDefault={onMakeDefault}
-                onDiscard={() => onRoute(saved)}
+                onDiscard={
+                  onDiscard ??
+                  (() => {
+                    onRoute(saved);
+                    if (savedSceneSettings) setSceneModels(savedSceneSettings);
+                  })
+                }
               />
               <ChangeScope
                 scope={scope}
@@ -591,7 +649,12 @@ export function RigSurface({
             >
               <SquaresFour /> Scenes
             </Toggle>
-            <Button size="sm" variant="outline">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!onTuner}
+              onClick={onTuner}
+            >
               <MusicNote /> Tuner
             </Button>
             <Toggle

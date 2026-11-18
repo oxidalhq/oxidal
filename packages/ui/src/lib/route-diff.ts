@@ -7,7 +7,15 @@ type Control = {
   unit?: string;
   step?: number;
 };
-type Diffable = { id: string; label: string; on: boolean; controls: Control[] };
+type Diffable = {
+  id: string;
+  label: string;
+  on: boolean;
+  controls: Control[];
+  kind?: string;
+  role?: string;
+  source?: { value: string };
+};
 
 export type Change =
   | {
@@ -30,6 +38,15 @@ export type Change =
     }
   | { kind: 'added'; block: string; blockLabel: string }
   | { kind: 'removed'; block: string; blockLabel: string }
+  | {
+      kind: 'model';
+      block: string;
+      blockLabel: string;
+      from: string;
+      to: string;
+    }
+  | { kind: 'branches'; split: string; from: number[]; to: number[] }
+  | { kind: 'settings'; text: string }
   | { kind: 'route'; text: string };
 
 function shape<B extends { id: string }>(route: Step<B>[]): string {
@@ -54,6 +71,26 @@ export function diffRoutes<B extends Diffable>(
       changes.push({ kind: 'added', block: block.id, blockLabel: block.label });
       continue;
     }
+    if (
+      old.kind !== block.kind ||
+      old.role !== block.role ||
+      old.source?.value !== block.source?.value
+    )
+      changes.push({
+        kind: 'model',
+        block: block.id,
+        blockLabel: block.label,
+        from: old.source?.value ?? old.kind ?? old.label,
+        to: block.source?.value ?? block.kind ?? block.label,
+      });
+    if (
+      old.controls.length !== block.controls.length ||
+      old.controls.some((c) => !block.controls.some((next) => next.id === c.id))
+    )
+      changes.push({
+        kind: 'settings',
+        text: `${block.label} · control set changed`,
+      });
     if (old.on !== block.on)
       changes.push({
         kind: 'bypass',
@@ -89,6 +126,23 @@ export function diffRoutes<B extends Diffable>(
       kind: 'route',
       text: 'Blocks moved or the signal split differently',
     });
+  const joins = (steps: Step<B>[], into = new Map<string, number[]>()) => {
+    for (const step of steps)
+      if (isSplit(step)) {
+        into.set(
+          step.id,
+          step.branches.map((_, i) => step.levels?.[i] ?? 0),
+        );
+        for (const branch of step.branches) joins(branch, into);
+      }
+    return into;
+  };
+  const oldJoins = joins(saved);
+  for (const [id, levels] of joins(edited)) {
+    const old = oldJoins.get(id);
+    if (old && JSON.stringify(old) !== JSON.stringify(levels))
+      changes.push({ kind: 'branches', split: id, from: old, to: levels });
+  }
   return changes;
 }
 
@@ -104,6 +158,11 @@ export function describeChange(change: Change) {
       return `${change.blockLabel} · added`;
     case 'removed':
       return `${change.blockLabel} · removed`;
+    case 'model':
+      return `${change.blockLabel} · model ${change.from} → ${change.to}`;
+    case 'branches':
+      return `${change.split} · branch mix changed`;
+    case 'settings':
     case 'route':
       return change.text;
   }

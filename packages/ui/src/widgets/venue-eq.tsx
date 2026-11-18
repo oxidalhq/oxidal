@@ -3,6 +3,13 @@ import * as React from 'react';
 
 import { Button } from '../components/ui/button';
 import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+} from '../components/ui/dialog';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -17,6 +24,7 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { StableLabel } from '../components/ui/stable-label';
+import { EmptyState } from '../components/ui/states';
 import { Switch } from '../components/ui/switch';
 import { Caption } from '../components/ui/text';
 import { Toggle } from '../components/ui/toggle';
@@ -44,6 +52,12 @@ export type VenueProfile = {
   builtIn?: boolean;
   eq: VenueSettings;
 };
+export type VenueEqState = {
+  profile: string;
+  eq: VenueSettings;
+  bypass: boolean;
+  compare: boolean;
+};
 
 const W = 820;
 const H = 230;
@@ -63,51 +77,87 @@ const dbAt = (py: number) =>
  * in the fields, trim the output, and check the peak boost before it clips.
  * Bypass and Compare to saved are for listening; nothing here changes
  * presets, recordings or reamps.
+ * @see docs/development.md#shared-ui-runtime-contracts
  */
 export function VenueEq({
   profiles: initial,
+  value,
+  onChange,
   onHear,
   onProfiles,
   className,
 }: {
   profiles: VenueProfile[];
+  /** Confirmed output state; profiles and selection can change remotely. */
+  value?: VenueEqState;
+  /** Explicit edit requests only. Mount and remote readback never emit audio commands. */
+  onChange?: (state: VenueEqState) => void;
   /** What the output should play now: the EQ, or null when bypassed. */
   onHear?: (eq: VenueSettings | null) => void;
   /** The saved profiles after Save, Save as, rename or delete. */
   onProfiles?: (profiles: VenueProfile[]) => void;
   className?: string;
 }) {
-  const [profiles, setProfiles] = React.useState(initial);
-  const [id, setId] = React.useState(initial[0]!.id);
-  const saved = profiles.find((p) => p.id === id)!;
-  const [eq, setEq] = React.useState<VenueSettings>(saved.eq);
+  const [localProfiles, setLocalProfiles] = React.useState(initial);
+  const profiles = value === undefined ? localProfiles : initial;
+  const [local, setLocal] = React.useState<VenueEqState | undefined>(() =>
+    initial[0]
+      ? {
+          profile: initial[0].id,
+          eq: initial[0].eq,
+          bypass: false,
+          compare: false,
+        }
+      : undefined,
+  );
+  const state = value ?? local;
+  const id = state?.profile;
+  const selectedProfile = profiles.find((p) => p.id === id);
+  const saved: VenueProfile | undefined =
+    selectedProfile ??
+    (state
+      ? { id: state.profile, name: 'Unsaved output', eq: state.eq }
+      : undefined);
   const [band, setBand] = React.useState(2);
-  const [bypass, setBypass] = React.useState(false);
-  const [compare, setCompare] = React.useState(false);
+  const [action, setAction] = React.useState<
+    'copy' | 'rename' | 'delete' | null
+  >(null);
+  const [name, setName] = React.useState('');
   const svg = React.useRef<SVGSVGElement>(null);
   const dragging = React.useRef<number | null>(null);
-  const hear = React.useRef(onHear);
-  const keep = React.useRef(onProfiles);
-  React.useEffect(() => {
-    hear.current = onHear;
-    keep.current = onProfiles;
-  }, [onHear, onProfiles]);
-  const first = React.useRef(true);
-  React.useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
-    }
-    keep.current?.(profiles);
-  }, [profiles]);
+  const setProfiles = (
+    update: (profiles: VenueProfile[]) => VenueProfile[],
+  ) => {
+    const next = update(profiles);
+    if (value === undefined) setLocalProfiles(next);
+    onProfiles?.(next);
+  };
+  const edit = (patch: Partial<VenueEqState>) => {
+    if (!state) return;
+    const next = { ...state, ...patch };
+    if (value === undefined) setLocal(next);
+    onChange?.(next);
+    const selected = profiles.find((p) => p.id === next.profile);
+    onHear?.(
+      next.bypass ? null : next.compare ? (selected?.eq ?? next.eq) : next.eq,
+    );
+  };
+  const setEq = (
+    update: VenueSettings | ((eq: VenueSettings) => VenueSettings),
+  ) => {
+    if (state)
+      edit({ eq: typeof update === 'function' ? update(state.eq) : update });
+  };
+  if (!state || !saved)
+    return (
+      <EmptyState title="No venue profile">
+        Choose or create a profile on the device before editing its output EQ.
+      </EmptyState>
+    );
+  const { eq, bypass, compare } = state;
 
   const changed = JSON.stringify(eq) !== JSON.stringify(saved.eq);
   const heard = compare ? saved.eq : eq;
-  const live = bypass ? null : heard;
-  const liveKey = JSON.stringify(live);
-  React.useEffect(() => {
-    hear.current?.(JSON.parse(liveKey) as VenueSettings | null);
-  }, [liveKey]);
   const room = headroom(heard);
   const curve = responseCurve(heard, 160);
   const path = curve
@@ -120,10 +170,8 @@ export function VenueEq({
   const info = BANDS[band]!;
 
   const pick = (next: string) => {
-    const profile = profiles.find((p) => p.id === next)!;
-    setId(next);
-    setEq(profile.eq);
-    setCompare(false);
+    const profile = profiles.find((p) => p.id === next);
+    if (profile) edit({ profile: next, eq: profile.eq, compare: false });
   };
   const change = (
     index: number,
@@ -157,9 +205,9 @@ export function VenueEq({
     >
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-48 flex-1">
-          <Select value={id} onValueChange={pick}>
+          <Select value={selectedProfile?.id ?? ''} onValueChange={pick}>
             <SelectTrigger aria-label="Venue profile">
-              <SelectValue />
+              <SelectValue placeholder="Unsaved output" />
             </SelectTrigger>
             <SelectContent>
               {profiles.map((p) => (
@@ -173,7 +221,7 @@ export function VenueEq({
         <Button
           size="sm"
           variant="outline"
-          disabled={!changed || saved.builtIn}
+          disabled={!selectedProfile || !changed || saved.builtIn}
           onClick={() =>
             setProfiles((all) =>
               all.map((p) => (p.id === id ? { ...p, eq } : p)),
@@ -186,13 +234,8 @@ export function VenueEq({
           size="sm"
           variant="outline"
           onClick={() => {
-            const copy = {
-              id: `p-${Date.now()}`,
-              name: `${saved.name} copy`,
-              eq,
-            };
-            setProfiles((all) => [...all, copy]);
-            setId(copy.id);
+            setName(`${saved.name} copy`);
+            setAction('copy');
           }}
         >
           Save as…
@@ -200,7 +243,7 @@ export function VenueEq({
         <Button
           size="sm"
           variant="outline"
-          disabled={!changed}
+          disabled={!selectedProfile || !changed}
           onClick={() => setEq(saved.eq)}
         >
           Revert
@@ -216,20 +259,102 @@ export function VenueEq({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem disabled={saved.builtIn}>
+            <DropdownMenuItem
+              disabled={!selectedProfile || saved.builtIn}
+              onSelect={() => {
+                setName(saved.name);
+                setAction('rename');
+              }}
+            >
               Rename…
             </DropdownMenuItem>
-            <DropdownMenuItem>Duplicate</DropdownMenuItem>
-            <DropdownMenuItem disabled={saved.builtIn}>
+            <DropdownMenuItem
+              onSelect={() => {
+                setName(`${saved.name} copy`);
+                setAction('copy');
+              }}
+            >
+              Duplicate
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!selectedProfile || saved.builtIn}
+              onSelect={() => setAction('delete')}
+            >
               Delete…
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      <Dialog
+        open={action !== null}
+        onOpenChange={(open) => !open && setAction(null)}
+      >
+        <DialogContent size="sm">
+          <DialogHeader
+            title={
+              action === 'delete'
+                ? `Delete ${saved.name}?`
+                : action === 'rename'
+                  ? 'Rename profile'
+                  : 'Save profile as'
+            }
+            description={
+              action === 'delete'
+                ? 'The saved profile is removed. The current output settings are kept until you choose another profile.'
+                : 'Give these output settings a name.'
+            }
+          />
+          <DialogBody>
+            {action !== 'delete' && (
+              <label className="grid gap-1">
+                Profile name
+                <input
+                  className="min-h-touch rounded-md border border-input bg-background px-3"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </label>
+            )}
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAction(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant={action === 'delete' ? 'destructive' : 'default'}
+              disabled={action !== 'delete' && !name.trim()}
+              onClick={() => {
+                if (action === 'delete')
+                  setProfiles((all) => all.filter((p) => p.id !== id));
+                else if (action === 'rename')
+                  setProfiles((all) =>
+                    all.map((p) =>
+                      p.id === id ? { ...p, name: name.trim() } : p,
+                    ),
+                  );
+                else {
+                  const copy = {
+                    id: crypto.randomUUID(),
+                    name: name.trim(),
+                    eq,
+                  };
+                  setProfiles((all) => [...all, copy]);
+                  // Selection is a separate explicit command after durable creation.
+                }
+                setAction(null);
+              }}
+            >
+              {action === 'delete' ? 'Delete profile' : 'Save profile'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Caption className="text-xs">
-        {saved.builtIn
-          ? `“${saved.name}” is a starting point to tune by ear, not a measured correction. Saving makes your own copy.`
-          : 'Applies to the main outputs, and the headphones on this interface.'}
+        {!selectedProfile
+          ? 'Current output settings are kept. Choose a saved profile or save these settings as a new one.'
+          : saved.builtIn
+            ? `“${saved.name}” is a starting point to tune by ear, not a measured correction. Saving makes your own copy.`
+            : 'Applies to the main outputs, and the headphones on this interface.'}
       </Caption>
 
       <svg
@@ -455,7 +580,11 @@ export function VenueEq({
             onChange={(v) => setEq((now) => ({ ...now, trimDb: v }))}
           />
         </div>
-        <Toggle size="sm" pressed={bypass} onPressedChange={setBypass}>
+        <Toggle
+          size="sm"
+          pressed={bypass}
+          onPressedChange={(bypass) => edit({ bypass })}
+        >
           <StableLabel
             value={bypass ? 'Bypassed' : 'Bypass'}
             options={['Bypass', 'Bypassed']}
@@ -464,8 +593,8 @@ export function VenueEq({
         <Toggle
           size="sm"
           pressed={compare}
-          disabled={!changed}
-          onPressedChange={setCompare}
+          disabled={!selectedProfile || !changed}
+          onPressedChange={(compare) => edit({ compare })}
         >
           <StableLabel
             value={compare ? 'Hearing saved' : 'Compare to saved'}

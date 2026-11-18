@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { expect, userEvent, within } from 'storybook/test';
 
 import { Combobox, type ComboboxOption } from './combobox';
-import { NumberField } from './number-field';
+import { NumberField, RelativeAdjustment } from './number-field';
 import { Slider } from './slider';
 import { Caption, Label } from './text';
 
@@ -180,4 +180,42 @@ NumberFields_.play = async ({ canvasElement }) => {
   gain.focus();
   await userEvent.keyboard('{ArrowUp}{ArrowUp}');
   await expect(gain).toHaveAttribute('aria-valuenow', '7.5');
+};
+
+function RelativeField() {
+  const [value, setValue] = useState(0.5);
+  return (
+    <RelativeAdjustment
+      label="Gain"
+      value={value}
+      baseline={0.5}
+      min={0}
+      max={1}
+      step={0.01}
+      disabled={false}
+      onChange={setValue}
+      format={(value) => `${Math.round(value * 100)}%`}
+      commitHint="Done keeps the owned preview. Cancel restores the sound."
+    />
+  );
+}
+
+export const RelativeTouch: StoryObj = {
+  name: 'Relative touch adjustment with Fine and restore',
+  render: () => <RelativeField />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Increase Gain' }),
+    );
+    await expect(
+      canvas.getByRole('slider', { name: 'Adjust Gain' }),
+    ).toHaveAttribute('aria-valuenow', '0.51');
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Restore starting value' }),
+    );
+    await expect(
+      canvas.getByRole('slider', { name: 'Adjust Gain' }),
+    ).toHaveAttribute('aria-valuenow', '0.5');
+  },
 };

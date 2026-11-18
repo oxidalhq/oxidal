@@ -30,7 +30,8 @@ export type StemMix = Partial<Record<StemRole, StemControls>>;
 export type StemSplit =
   | { state: 'none' }
   | { state: 'splitting'; progress: number }
-  | { state: 'ready'; count: number };
+  | { state: 'ready'; count: number }
+  | { state: 'failed' | 'cancelled' | 'interrupted'; message: string };
 export type StemImport = {
   song: string;
   files: { name: string; caption: string }[];
@@ -42,14 +43,18 @@ export type StemImport = {
  * start from a saved mix, undo and redo, then save the mix as a backing
  * track and link it to a rig or a set list entry. Stems from elsewhere come
  * in through Import.
+ * @see docs/development.md#shared-ui-runtime-contracts
  */
 export function StemWorkspace({
   song,
   split,
   starts,
   saved,
+  value,
+  undoRedo,
   pendingImport,
   onSplit,
+  onCancelSplit,
   onMix,
   onSave,
   onLink,
@@ -63,9 +68,19 @@ export function StemWorkspace({
   starts: { id: string; name: string; mix: StemMix }[];
   /** Backing tracks saved from this song. */
   saved: string[];
+  /** Confirmed audible mix, shared with other player views. */
+  value?: StemMix;
+  /** Runtime history belongs to the shared audible-mix owner. */
+  undoRedo?: {
+    canUndo: boolean;
+    canRedo: boolean;
+    undo: () => void;
+    redo: () => void;
+  };
   /** Files chosen for import, before they are imported. */
   pendingImport?: StemImport;
   onSplit: () => void;
+  onCancelSplit?: () => void;
   /** The mix you hear, as you change it. */
   onMix?: (mix: StemMix) => void;
   onSave: (name: string, mix: StemMix) => void;
@@ -83,12 +98,19 @@ export function StemWorkspace({
   const [name, setName] = React.useState(
     starts[0] ? `${starts[0].name}, for the gig` : '',
   );
-  const mix = history[at]!;
+  const mix = value ?? history[at]!;
   const progress = split.state === 'splitting' ? split.progress : null;
   const ready = split.state === 'ready';
   const push = (next: StemMix) => {
-    setHistory((h) => [...h.slice(0, at + 1), next]);
-    setAt((n) => n + 1);
+    const nextHistory = [...history.slice(0, at + 1), next].slice(-100);
+    setHistory(nextHistory);
+    setAt(nextHistory.length - 1);
+    onMix?.(next);
+  };
+  const recall = (index: number) => {
+    const next = history[index];
+    if (!next) return;
+    setAt(index);
     onMix?.(next);
   };
 
@@ -107,8 +129,7 @@ export function StemWorkspace({
           <div className="grid gap-2">
             <Caption>
               Split this song into vocals, drums, bass, guitar, piano and the
-              rest, on the device. It takes a few minutes and pauses if the Pi
-              gets hot. You can keep playing while it works.
+              rest, on the device. The device reports progress and any failure.
             </Caption>
             <Button className="justify-self-start" onClick={onSplit}>
               Split into stems
@@ -121,6 +142,21 @@ export function StemWorkspace({
               Splitting {song.name}… {progress}%
             </span>
             <Progress value={progress} label="Split progress" />
+            {onCancelSplit && (
+              <Button variant="outline" onClick={onCancelSplit}>
+                Cancel split
+              </Button>
+            )}
+          </div>
+        )}
+        {(split.state === 'failed' ||
+          split.state === 'cancelled' ||
+          split.state === 'interrupted') && (
+          <div className="grid gap-2">
+            <Caption>{split.message}</Caption>
+            <Button variant="outline" onClick={onSplit}>
+              Try splitting again
+            </Button>
           </div>
         )}
         {ready && (
@@ -151,8 +187,12 @@ export function StemWorkspace({
                   size="icon"
                   variant="ghost"
                   aria-label="Undo"
-                  disabled={at === 0}
-                  onClick={() => setAt(at - 1)}
+                  disabled={
+                    undoRedo
+                      ? !undoRedo.canUndo
+                      : value !== undefined || at === 0
+                  }
+                  onClick={() => (undoRedo ? undoRedo.undo() : recall(at - 1))}
                 >
                   <ArrowCounterClockwise />
                 </Button>
@@ -160,8 +200,12 @@ export function StemWorkspace({
                   size="icon"
                   variant="ghost"
                   aria-label="Redo"
-                  disabled={at >= history.length - 1}
-                  onClick={() => setAt(at + 1)}
+                  disabled={
+                    undoRedo
+                      ? !undoRedo.canRedo
+                      : value !== undefined || at >= history.length - 1
+                  }
+                  onClick={() => (undoRedo ? undoRedo.redo() : recall(at + 1))}
                 >
                   <ArrowClockwise />
                 </Button>
