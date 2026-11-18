@@ -29,13 +29,13 @@ backing tracks with live stems, and practice tools, all played from a browser.
 
 ## Tone and effects
 
-| Area               | What it does                                                                                                                                             | Docs                                      |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| NAM                | Loads licensed NAM captures (amp, cabinet, full chain); IRs for cabinet and room.                                                                        | [audio](docs/audio.md)                    |
-| TONE3000 presets   | Imports compatible `.t3kpreset` files with their native rig structure. Presets and captures are not bundled.                                             | [native adapter](docs/native-tone3000.md) |
-| Oxidal effects     | Bloom (reverb), Echo (delay), Motion (modulation), Sustain (infinite sustain), Hold and Swell: Oxidal's own code. Pitch ports the TONE3000 pitch engine. | [Oxidal effects](docs/native-effects.md)  |
-| Third-party LV2    | Curated drive, fuzz, compression, filter, modulation, pitch, delay and reverb from Guitarix, Invada, MDA, SWH, x42, FOMP, Dragonfly, ZAM and DPF.        | [LV2 compatibility](docs/lv2.md)          |
-| Factory collection | Oxidal-authored effects-only presets, sets and rigs (worship, genre and hybrid showcases).                                                               | [factory](docs/factory-collection.md)     |
+| Area               | What it does                                                                                                                                                                                | Docs                                      |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| NAM                | Loads licensed NAM captures (amp, cabinet, full chain); IRs for cabinet and room.                                                                                                           | [audio](docs/audio.md)                    |
+| TONE3000 presets   | Imports compatible `.t3kpreset` files with their native rig structure. Presets and captures are not bundled.                                                                                | [native adapter](docs/native-tone3000.md) |
+| Oxidal effects     | Bloom (reverb), Echo (delay), Motion (modulation), Moment (micro-looper and texture), Sustain (infinite sustain), Hold and Swell: Oxidal's own code. Pitch ports the TONE3000 pitch engine. | [Oxidal effects](docs/native-effects.md)  |
+| Third-party LV2    | Curated drive, fuzz, compression, filter, modulation, pitch, delay and reverb from Guitarix, Invada, MDA, SWH, x42, FOMP, Dragonfly, ZAM and DPF.                                           | [LV2 compatibility](docs/lv2.md)          |
+| Factory collection | Oxidal-authored effects-only presets, sets and rigs (worship, genre and hybrid showcases).                                                                                                  | [factory](docs/factory-collection.md)     |
 
 - LV2 support is a qualified compatibility profile, not a claim that every LV2 plugin works.
 - Not distributed: TONE3000 presets, NAM captures, IRs, provider downloads. Players supply assets they are licensed to use; test `.t3kpreset` files are parser fixtures with no model weights.
@@ -48,6 +48,7 @@ backing tracks with live stems, and practice tools, all played from a browser.
 | [Bloom](docs/native-bloom.md)     | Room, Hall, Plate, Spring, Cloud, Bloom, Shimmer, Nonlinear                     |
 | [Echo](docs/native-echo.md)       | Digital, Tape, Heads, Bucket, Reverse, Duck, Filter, Ping                       |
 | [Motion](docs/native-motion.md)   | Chorus, Flanger, Phaser, Vibe, Rotary, Tremolo, Harmonic tremolo, Vibrato, Ring |
+| [Moment](docs/native-moment.md)   | Loop: Tape, Stretch, Touch. Wet: Smear, Delay, Slip. One Clock sets the rate    |
 | [Sustain](docs/native-sustain.md) | Normal, Harmonic, Mix (note blooms into a harmonic); follows bends and vibrato  |
 | [Hold](docs/native-hold.md)       | Spectral freeze: held notes ring as a drone                                     |
 | [Swell](docs/native-swell.md)     | Auto-swell: each note fades in                                                  |
@@ -142,6 +143,7 @@ and the code links back to those documents with `@see` references.
 | [`oxidal-bloom`](crates/oxidal-bloom)           | Bloom reverb plugin.                                                    |
 | [`oxidal-echo`](crates/oxidal-echo)             | Echo delay plugin.                                                      |
 | [`oxidal-motion`](crates/oxidal-motion)         | Motion modulation plugin.                                               |
+| [`oxidal-moment`](crates/oxidal-moment)         | Moment micro-looper and texture plugin.                                 |
 | [`oxidal-sustain`](crates/oxidal-sustain)       | Sustain plugin.                                                         |
 
 ## Development

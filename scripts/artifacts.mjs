@@ -160,7 +160,7 @@ if (appliance) {
   );
   // Oxidal's own Rust effects: one shared object per crate, with its TTL
   // files and NOTICE, as an LV2 bundle. @see docs/native-effects.md
-  const effects = ['bloom', 'sustain', 'echo', 'motion'];
+  const effects = ['bloom', 'sustain', 'echo', 'motion', 'moment'];
   run(
     'cargo',
     [

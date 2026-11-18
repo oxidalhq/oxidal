@@ -11,6 +11,7 @@ Oxidal ships LV2 effects of its own, installed with the appliance; no effect pac
 | Oxidal Sustain | `crates/oxidal-sustain` | [native-sustain.md](native-sustain.md) |
 | Oxidal Echo    | `crates/oxidal-echo`    | [native-echo.md](native-echo.md)       |
 | Oxidal Motion  | `crates/oxidal-motion`  | [native-motion.md](native-motion.md)   |
+| Oxidal Moment  | `crates/oxidal-moment`  | [native-moment.md](native-moment.md)   |
 
 ## Shared crates
 

@@ -165,6 +165,7 @@ class InstalledTests(unittest.TestCase):
                         'urn:oxidal:plugin:sustain#stereo',
                         'urn:oxidal:plugin:echo#stereo',
                         'urn:oxidal:plugin:motion#stereo',
+                        'urn:oxidal:plugin:moment#stereo',
                     }.issubset(admitted), 'Oxidal effects missing from the installed image')
                     # Third-party effect packs are the player's to install.
                     self.assertFalse([uri for uri in admitted if not uri.startswith('urn:oxidal:')],

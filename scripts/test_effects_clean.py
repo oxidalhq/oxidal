@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 # Oxidal's own effects in Rust, and the crates they share.
-CRATES = ['oxidal-dsp', 'oxidal-lv2-plugin', 'oxidal-bloom', 'oxidal-sustain', 'oxidal-echo', 'oxidal-motion']
+CRATES = ['oxidal-dsp', 'oxidal-lv2-plugin', 'oxidal-bloom', 'oxidal-sustain', 'oxidal-echo', 'oxidal-motion', 'oxidal-moment']
 # Earlier original effects in C++ (no references file was kept for them).
 NATIVE = ['hold', 'swell']
 NAMES = re.compile(

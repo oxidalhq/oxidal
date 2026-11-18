@@ -36,7 +36,7 @@ Latency semantics follow the official [latency designation](https://lv2plug.in/n
 
 ## Oxidal plugins
 
-Oxidal builds its own LV2 effects in `native/`. [Oxidal Pitch](native-pitch.md) is the TONE3000 pitch engine as a standalone mono or stereo effect; [Oxidal Hold](native-hold.md) is an original spectral sustain; [Oxidal Swell](native-swell.md) is an original attack-triggered volume swell with no latency.
+Oxidal builds its own LV2 effects in `native/`. [Oxidal Pitch](native-pitch.md) is the TONE3000 pitch engine as a standalone mono or stereo effect; [Oxidal Hold](native-hold.md) is an original spectral sustain; [Oxidal Swell](native-swell.md) is an original attack-triggered volume swell with no latency. The newer effects are Rust crates listed in [Oxidal's own effects](native-effects.md), among them [Oxidal Moment](native-moment.md), a micro-looper and texture effect.
 
 ## Atom Sequence transport
 

@@ -1037,6 +1037,14 @@ name = "oxidal-lv2-plugin"
 version = "0.1.0"
 
 [[package]]
+name = "oxidal-moment"
+version = "0.1.0"
+dependencies = [
+ "oxidal-dsp",
+ "oxidal-lv2-plugin",
+]
+
+[[package]]
 name = "oxidal-motion"
 version = "0.1.0"
 dependencies = [
