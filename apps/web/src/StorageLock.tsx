@@ -25,7 +25,7 @@ export function StorageLock({
 }) {
   const { failure: recoverFailure, fail: recoverFail } = useFailure();
   const [busy, setBusy] = useState(false);
-  const [confirmReboot, setConfirmReboot] = useState(false);
+  const [reviewMode, setReviewMode] = useState<StorageState['next_boot']>(null);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
 
@@ -44,7 +44,13 @@ export function StorageLock({
   }
 
   async function reboot() {
-    if (busy || !state?.reboot_required || !state.next_boot) return;
+    if (busy || !state?.reboot_required || !reviewMode) return;
+    if (state.next_boot !== reviewMode) {
+      setError(
+        'Storage mode changed. Close this review and read current settings.',
+      );
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -53,9 +59,16 @@ export function StorageLock({
         throw new Error(
           'Finish the pending network change before restarting the device.',
         );
-      await deviceNetwork({ type: 'power', action: 'reboot' });
+      if (!network.capabilities?.guarded_power)
+        throw new Error(
+          'Read device status or update the device service for guarded power controls.',
+        );
+      await deviceNetwork({
+        type: 'restart_storage',
+        expected_mode: reviewMode,
+      });
       setSent(true);
-      setConfirmReboot(false);
+      setReviewMode(null);
     } catch (cause) {
       setError(friendlyError(cause, 'change storage protection'));
     } finally {
@@ -65,6 +78,7 @@ export function StorageLock({
 
   const current = state?.current;
   const next = state?.next_boot;
+  const reviewChanged = reviewMode !== null && reviewMode !== next;
   return (
     <section aria-label="Storage lock">
       <StorageLockView
@@ -97,7 +111,7 @@ export function StorageLock({
                 <Button
                   variant="outline"
                   disabled={!connected || busy}
-                  onClick={() => setConfirmReboot(true)}
+                  onClick={() => setReviewMode(next)}
                 >
                   <ArrowClockwise aria-hidden="true" /> Reboot now
                 </Button>
@@ -111,28 +125,43 @@ export function StorageLock({
           Restart requested. Oxidal will reconnect in the selected storage mode.
         </p>
       )}
-      {error && !confirmReboot && <p role="alert">{error}</p>}
+      {error && !reviewMode && <p role="alert">{error}</p>}
       {error && <RecoveryAction failure={recoverFailure} />}
 
-      {confirmReboot && next && (
+      {reviewMode && (
         <AdjustmentDialog
-          title={`Restart into ${next === 'locked' ? 'Locked' : 'Unlocked'} mode?`}
+          title={`Restart into ${reviewMode === 'locked' ? 'Locked' : 'Unlocked'} mode?`}
           onCancel={() => {
-            if (!busy) setConfirmReboot(false);
+            if (!busy) setReviewMode(null);
           }}
         >
           <p>
             Audio will stop. Save any edits you want to keep before restarting.
           </p>
-          {error && <p role="alert">{error}</p>}
+          {reviewChanged ? (
+            <p role="alert">
+              Storage mode changed. Close this review and read current settings.
+            </p>
+          ) : (
+            error && <p role="alert">{error}</p>
+          )}
           <div className="action-row">
-            <Button disabled={busy} onClick={() => void reboot()}>
+            <Button
+              disabled={
+                busy ||
+                reviewChanged ||
+                !state?.available ||
+                !state.reboot_required ||
+                !connected
+              }
+              onClick={() => void reboot()}
+            >
               Confirm restart
             </Button>
             <Button
               variant="ghost"
               disabled={busy}
-              onClick={() => setConfirmReboot(false)}
+              onClick={() => setReviewMode(null)}
             >
               Cancel
             </Button>

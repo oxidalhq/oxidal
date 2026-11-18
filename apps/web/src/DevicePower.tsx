@@ -45,6 +45,10 @@ export function DevicePower({ connected }: { connected: boolean }) {
         throw new Error(
           'Finish the pending network change before changing device power.',
         );
+      if (!current.capabilities?.guarded_power)
+        throw new Error(
+          'Read device status or update the device service for guarded power controls.',
+        );
       await deviceNetwork({ type: 'power', action });
       setSent(true);
       setAction(null);

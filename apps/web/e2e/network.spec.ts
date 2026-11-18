@@ -241,6 +241,11 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
   const state: NetworkState = {
     available: true,
     wireless_enabled: true,
+    capabilities: {
+      schema_version: 1,
+      saved_connect: true,
+      guarded_power: true,
+    },
     policy: { mode: 'no_ethernet', interface: 'wlan0', home_ssid: '' },
     radio: { country: 'NZ', channels: [1, 6, 11] },
     interfaces: [

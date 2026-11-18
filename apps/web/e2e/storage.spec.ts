@@ -37,6 +37,11 @@ test('storage protection queues the next boot and rechecks network safety before
     await route.fulfill({
       json: {
         available: true,
+        capabilities: {
+          schema_version: 1,
+          saved_connect: true,
+          guarded_power: true,
+        },
         wireless_enabled: true,
         message: '',
         interfaces: [],
@@ -95,7 +100,7 @@ test('storage protection queues the next boot and rechecks network safety before
   await expect(
     storage.getByRole('status').filter({ hasText: 'Restart requested' }),
   ).toContainText('Restart requested');
-  expect(power).toEqual([{ type: 'power', action: 'reboot' }]);
+  expect(power).toEqual([{ type: 'restart_storage', expected_mode: 'locked' }]);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,

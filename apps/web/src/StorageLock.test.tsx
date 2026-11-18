@@ -7,7 +7,12 @@ import {
 } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 
-import { changeStorage, deviceNetwork, type StorageState } from './api';
+import {
+  changeStorage,
+  deviceNetwork,
+  type NetworkState,
+  type StorageState,
+} from './api';
 import { StorageLock } from './StorageLock';
 
 vi.mock('./api', () => ({
@@ -60,9 +65,21 @@ it('requires confirmation before rebooting into the scheduled mode', async () =>
     reboot_required: true,
     message: 'Storage mode changes at the next restart',
   };
-  vi.mocked(deviceNetwork)
-    .mockResolvedValueOnce({ available: true, pending: null } as never)
-    .mockResolvedValueOnce({ available: true, pending: null } as never);
+  const network: NetworkState = {
+    available: true,
+    wireless_enabled: true,
+    interfaces: [],
+    networks: [],
+    saved: [],
+    pending: null,
+    message: '',
+    capabilities: {
+      schema_version: 1,
+      saved_connect: true,
+      guarded_power: true,
+    },
+  };
+  vi.mocked(deviceNetwork).mockResolvedValue(network);
   render(<StorageLock connected state={scheduled} onState={() => {}} />);
   fireEvent.click(screen.getByRole('button', { name: 'Reboot now' }));
   expect(
@@ -71,8 +88,8 @@ it('requires confirmation before rebooting into the scheduled mode', async () =>
   fireEvent.click(screen.getByRole('button', { name: 'Confirm restart' }));
   await waitFor(() =>
     expect(deviceNetwork).toHaveBeenLastCalledWith({
-      type: 'power',
-      action: 'reboot',
+      type: 'restart_storage',
+      expected_mode: 'locked',
     }),
   );
   expect(screen.getByText(/Restart requested/)).toBeInTheDocument();
@@ -117,5 +134,32 @@ it('keeps unknown storage explicit and never offers a restart without a known ne
     screen.queryByRole('button', { name: 'Reboot now' }),
   ).not.toBeInTheDocument();
   expect(changeStorage).not.toHaveBeenCalled();
+  expect(deviceNetwork).not.toHaveBeenCalled();
+});
+
+it('keeps the reviewed mode fixed and refuses a locally changed queue before any power request', () => {
+  const scheduled: StorageState = {
+    ...unlocked,
+    next_boot: 'locked',
+    reboot_required: true,
+  };
+  const view = render(
+    <StorageLock connected state={scheduled} onState={() => {}} />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Reboot now' }));
+  view.rerender(
+    <StorageLock
+      connected
+      state={{ ...scheduled, next_boot: 'unlocked', reboot_required: false }}
+      onState={() => {}}
+    />,
+  );
+  expect(
+    screen.getByRole('dialog', { name: 'Restart into Locked mode?' }),
+  ).toBeInTheDocument();
+  expect(screen.getByRole('alert')).toHaveTextContent('Storage mode changed');
+  expect(
+    screen.getByRole('button', { name: 'Confirm restart' }),
+  ).toBeDisabled();
   expect(deviceNetwork).not.toHaveBeenCalled();
 });

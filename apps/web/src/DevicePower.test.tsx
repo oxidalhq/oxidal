@@ -18,6 +18,7 @@ const ready: NetworkState = {
   saved: [],
   pending: null,
   message: '',
+  capabilities: { schema_version: 1, saved_connect: true, guarded_power: true },
 };
 afterEach(() => {
   cleanup();
@@ -79,4 +80,23 @@ it('does not power off if a network change became pending after opening the sect
   ).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+it('refuses a helper without guarded-power support before sending a power command', async () => {
+  vi.mocked(deviceNetwork).mockResolvedValue({
+    ...ready,
+    capabilities: undefined,
+  });
+  render(<DevicePower connected />);
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Restart device' }),
+    ).toBeEnabled(),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Restart device' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm restart' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'guarded power controls',
+  );
+  expect(vi.mocked(deviceNetwork).mock.calls).toEqual([[], []]);
 });
