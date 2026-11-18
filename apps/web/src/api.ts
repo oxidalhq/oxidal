@@ -270,7 +270,11 @@ export async function deviceNetwork(
         : { cache: 'no-store' },
     ),
   );
-  if (!networkValidator(body)) throw new Error('Incompatible network response');
+  if (
+    !networkValidator(body) ||
+    (body.capabilities && body.capabilities.schema_version !== 1)
+  )
+    throw new Error('Incompatible network response');
   return body;
 }
 

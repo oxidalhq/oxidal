@@ -11,6 +11,7 @@ mod capture;
 mod debug;
 mod device;
 mod device_addresses;
+mod device_capabilities;
 mod device_hotspot;
 mod device_saved_names;
 mod device_wait;
@@ -288,6 +289,7 @@ struct Shared {
     library_access: Arc<tokio::sync::RwLock<()>>,
     debug: debug::DebugBridge,
     network_addresses: device_addresses::NetworkAddresses,
+    device_capabilities: device_capabilities::DeviceCapabilities,
     hotspot_readback: device_hotspot::HotspotReadback,
     saved_network_names: device_saved_names::SavedNetworkNames,
     monitor: watch::Receiver<monitor::Monitoring>,
@@ -429,6 +431,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         catalog_work: Arc::new(tokio::sync::Semaphore::new(1)),
         debug: debug::DebugBridge::new(config.debug_socket.clone()),
         network_addresses: device_addresses::NetworkAddresses::default(),
+        device_capabilities: device_capabilities::DeviceCapabilities::default(),
         hotspot_readback: device_hotspot::HotspotReadback::default(),
         saved_network_names: device_saved_names::SavedNetworkNames::default(),
         history: Arc::new(monitor_history::Journal::new(

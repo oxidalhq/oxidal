@@ -80,6 +80,28 @@ request secrets and do not parse root keyfiles or activate a connection. Older
 helper replies remain compatible. More than 128 managed profiles leaves names
 unavailable with a message; existing connection identities and removal remain.
 
+## Reconnecting a saved profile
+
+Updated device services accept the typed `connect` command with only an interface
+and an inactive managed connection UUID. This backend path reuses stored
+credentials rather than submitting a new password. It admits no unmanaged/active
+profile, path or arbitrary command. The existing 90-second checkpoint and durable
+recovery journal protect the old connection. Activation temporarily disables
+autoconnect and binds the requested interface; confirmation checks both active
+state and that interface before enabling persistence. Failure, cancellation,
+timeout or restart restores the original profile bytes and recovery path.
+
+The new read-only `network_capabilities` helper command reports schema version 1
+and `saved_connect`. Ordinary helper status replies omit this field so older strict
+daemons can still read them. The HTTP bridge adds optional `capabilities` and
+`capabilities_message` to network state after a read. Old, missing or future
+helpers do not claim support. Probes have a one-second deadline, shared 30-second
+success/two-second failure caches and no credentials. A write reads only an
+immediately available cache entry; it starts no probe and waits for no in-flight
+probe behind activation. Unsupported saved Connect requests receive a clear
+service-update error. This API support is separate from completion of the
+Network screen and physical radio qualification.
+
 ## Storage mode
 
 Storage mode uses the same typed boundary but a separate fixed target. The browser sends only `locked` or `unlocked`; the helper validates and atomically replaces `/boot/firmware/cmdline.txt`. It never remounts the running root. The control is unavailable until the appliance writable-data layout marker exists, and effect-pack work independently refuses an actively read-only root. See [storage lock](storage-lock.md).

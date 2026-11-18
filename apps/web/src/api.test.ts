@@ -48,6 +48,7 @@ describe('runtime contract validation', () => {
     const current = {
       ...old,
       hotspot: { ssid: 'Actual device name', channel: 0 },
+      capabilities: { schema_version: 1, saved_connect: true },
       saved: [
         {
           uuid: '11111111-1111-1111-1111-111111111111',
@@ -68,6 +69,40 @@ describe('runtime contract validation', () => {
     await expect(deviceNetwork()).resolves.toEqual(old);
     await expect(deviceNetwork()).resolves.toEqual(current);
   });
+
+  it.each([
+    { schema_version: 2, saved_connect: true },
+    { schema_version: 1, saved_connect: 'true' },
+    {
+      schema_version: 1,
+      saved_connect: true,
+      password: 'must never be present',
+    },
+  ])(
+    'rejects incompatible device-service capabilities: %j',
+    async (capabilities) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          Response.json({
+            available: true,
+            wireless_enabled: true,
+            radio: null,
+            policy: null,
+            interfaces: [],
+            networks: [],
+            saved: [],
+            pending: null,
+            message: '',
+            capabilities,
+          }),
+        ),
+      );
+      await expect(deviceNetwork()).rejects.toThrow(
+        'Incompatible network response',
+      );
+    },
+  );
 
   it.each([
     { ssid: 123 },

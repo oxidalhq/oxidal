@@ -3351,6 +3351,40 @@
         {
           "type": "object",
           "properties": {
+            "type": {
+              "type": "string",
+              "const": "network_capabilities"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "interface": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "connect"
+            },
+            "uuid": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "interface",
+            "uuid"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "interface": {
               "type": "string"
             },
@@ -8252,6 +8286,26 @@
         "detail"
       ]
     },
+    "NetworkCapabilities": {
+      "description": "Versioned privileged features; ordinary helper status replies omit this record.\n@see docs/device-service.md",
+      "type": "object",
+      "properties": {
+        "saved_connect": {
+          "type": "boolean"
+        },
+        "schema_version": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "saved_connect"
+      ]
+    },
     "NetworkState": {
       "type": "object",
       "properties": {
@@ -8263,6 +8317,22 @@
         },
         "available": {
           "type": "boolean"
+        },
+        "capabilities": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NetworkCapabilities"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "capabilities_message": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "hotspot": {
           "anyOf": [

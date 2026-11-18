@@ -26,6 +26,8 @@ async fn dispatch(shared: Arc<Shared>, command: Command) -> Response {
             )
         };
     };
+    let refresh_capabilities = matches!(&command, Command::Status {} | Command::Scan {});
+    let saved_connect = matches!(&command, Command::Connect { .. });
     #[cfg(unix)]
     let result = oxidal_device::ipc::request(path, &command).await;
     #[cfg(not(unix))]
@@ -40,11 +42,29 @@ async fn dispatch(shared: Arc<Shared>, command: Command) -> Response {
                         .filter(|profile| profile.managed)
                         .map(|profile| profile.uuid.clone())
                         .collect::<Vec<_>>();
-                    let ((), hotspot, names) = tokio::join!(
+                    let capabilities = async {
+                        if refresh_capabilities {
+                            shared.device_capabilities.current(path).await
+                        } else {
+                            shared.device_capabilities.known()
+                        }
+                    };
+                    let ((), hotspot, names, capabilities) = tokio::join!(
                         shared.network_addresses.enrich(&mut state),
                         shared.hotspot_readback.current(),
                         shared.saved_network_names.current(&identifiers),
+                        capabilities,
                     );
+                    match capabilities {
+                        Ok(value) => {
+                            state.capabilities = Some(value);
+                            state.capabilities_message = None;
+                        }
+                        Err(error) => {
+                            state.capabilities = None;
+                            state.capabilities_message = Some(error.into());
+                        }
+                    }
                     for profile in &mut state.saved {
                         profile.ssid = if profile.managed {
                             names
@@ -70,6 +90,10 @@ async fn dispatch(shared: Arc<Shared>, command: Command) -> Response {
                 }
                 ([(header::CACHE_CONTROL, "no-store")], Json(state)).into_response()
             }
+            (_, Some(error)) if saved_connect && error == "Invalid device request" => failure(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Update the device service to join saved Wi-Fi networks",
+            ),
             (_, Some(error)) => failure(StatusCode::CONFLICT, &error),
             _ => failure(StatusCode::BAD_GATEWAY, "Invalid device response"),
         },

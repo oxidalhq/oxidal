@@ -684,6 +684,14 @@ export type Command3 =
       type: "scan";
     }
   | {
+      type: "network_capabilities";
+    }
+  | {
+      interface: string;
+      type: "connect";
+      uuid: string;
+    }
+  | {
       interface: string;
       password: string;
       ssid: string;
@@ -2886,6 +2894,8 @@ export interface Settings {
 export interface NetworkState {
   address_message?: string | null;
   available: boolean;
+  capabilities?: NetworkCapabilities | null;
+  capabilities_message?: string | null;
   hotspot?: Hotspot | null;
   hotspot_message?: string | null;
   interfaces: Interface[];
@@ -2897,6 +2907,14 @@ export interface NetworkState {
   saved: SavedNetwork[];
   saved_message?: string | null;
   wireless_enabled: boolean;
+}
+/**
+ * Versioned privileged features; ordinary helper status replies omit this record.
+ * @see docs/device-service.md
+ */
+export interface NetworkCapabilities {
+  saved_connect: boolean;
+  schema_version: number;
 }
 /**
  * Public managed-profile settings, not a measurement of the current RF channel.

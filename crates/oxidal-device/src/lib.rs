@@ -24,6 +24,11 @@ pub enum Command {
     },
     Status {},
     Scan {},
+    NetworkCapabilities {},
+    Connect {
+        interface: String,
+        uuid: String,
+    },
     Join {
         interface: String,
         ssid: String,
@@ -66,6 +71,8 @@ impl std::fmt::Debug for Command {
             Self::Power { .. } => "Power",
             Self::Status {} => "Status",
             Self::Scan {} => "Scan",
+            Self::NetworkCapabilities {} => "NetworkCapabilities",
+            Self::Connect { .. } => "Connect",
             Self::Join { .. } => "Join [redacted]",
             Self::Hotspot { .. } => "Hotspot [redacted]",
             Self::Policy { .. } => "Policy",
@@ -108,14 +115,7 @@ impl Command {
                 password,
                 ..
             } => {
-                if interface.is_empty()
-                    || interface.len() > 15
-                    || !interface
-                        .bytes()
-                        .all(|b| b.is_ascii_alphanumeric() || b"_-".contains(&b))
-                {
-                    return Err("Invalid wireless interface");
-                }
+                validate_interface(interface)?;
                 if ssid.is_empty() || ssid.len() > 32 || ssid.chars().any(char::is_control) {
                     return Err("SSID must contain 1–32 bytes without control characters");
                 }
@@ -132,17 +132,10 @@ impl Command {
             {
                 return Err("Invalid network transaction");
             }
-            Self::Forget { uuid }
-                if (uuid.len() != 36
-                    || !uuid.bytes().enumerate().all(|(i, b)| {
-                        if [8, 13, 18, 23].contains(&i) {
-                            b == b'-'
-                        } else {
-                            b.is_ascii_hexdigit()
-                        }
-                    })) =>
-            {
-                return Err("Invalid connection identifier");
+            Self::Forget { uuid } => validate_uuid(uuid)?,
+            Self::Connect { interface, uuid } => {
+                validate_interface(interface)?;
+                validate_uuid(uuid)?;
             }
             Self::Pack { id, .. } if !packs::known(id) => {
                 return Err("Unknown effect pack");
@@ -151,6 +144,42 @@ impl Command {
         }
         Ok(())
     }
+}
+fn validate_interface(interface: &str) -> Result<(), &'static str> {
+    if interface.is_empty()
+        || interface.len() > 15
+        || !interface
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"_-".contains(&b))
+    {
+        Err("Invalid wireless interface")
+    } else {
+        Ok(())
+    }
+}
+fn validate_uuid(uuid: &str) -> Result<(), &'static str> {
+    if uuid.len() != 36
+        || !uuid.bytes().enumerate().all(|(i, b)| {
+            if [8, 13, 18, 23].contains(&i) {
+                b == b'-'
+            } else {
+                b.is_ascii_hexdigit()
+            }
+        })
+    {
+        Err("Invalid connection identifier")
+    } else {
+        Ok(())
+    }
+}
+
+/// Versioned privileged features; ordinary helper status replies omit this record.
+/// @see docs/device-service.md
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NetworkCapabilities {
+    pub schema_version: u8,
+    pub saved_connect: bool,
 }
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -232,6 +261,10 @@ pub struct NetworkState {
     pub hotspot_message: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub saved_message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capabilities: Option<NetworkCapabilities>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capabilities_message: Option<String>,
     pub networks: Vec<AccessPoint>,
     pub saved: Vec<SavedNetwork>,
     pub pending: Option<Pending>,
@@ -273,6 +306,8 @@ mod tests {
         assert!(old.get("hotspot").is_none());
         assert!(old.get("hotspot_message").is_none());
         assert!(old.get("saved_message").is_none());
+        assert!(old.get("capabilities").is_none());
+        assert!(old.get("capabilities_message").is_none());
         let decoded: NetworkState = serde_json::from_value(old.clone()).unwrap();
         assert!(decoded.hotspot.is_none());
         assert!(decoded.hotspot_message.is_none());
@@ -291,6 +326,46 @@ mod tests {
                 .is_none()
         );
     }
+    #[test]
+    fn saved_connect_is_narrow_and_never_accepts_new_credentials() {
+        let command = Command::Connect {
+            interface: "wlan0".into(),
+            uuid: "11111111-1111-1111-1111-111111111111".into(),
+        };
+        assert!(command.validate().is_ok());
+        for interface in [
+            "",
+            "../wlan0",
+            "wlan0;reboot",
+            "wlan0\n",
+            "a-very-long-interface",
+        ] {
+            assert!(
+                Command::Connect {
+                    interface: interface.into(),
+                    uuid: "11111111-1111-1111-1111-111111111111".into()
+                }
+                .validate()
+                .is_err()
+            );
+        }
+        assert!(
+            Command::Connect {
+                interface: "wlan0".into(),
+                uuid: "--show-secrets".into()
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(serde_json::from_value::<Command>(serde_json::json!({"type":"connect","interface":"wlan0","uuid":"11111111-1111-1111-1111-111111111111","password":"never accepted"})).is_err());
+        assert!(
+            serde_json::from_value::<Command>(
+                serde_json::json!({"type":"network_capabilities","shell":"reboot"})
+            )
+            .is_err()
+        );
+    }
+
     #[test]
     fn validate_and_redact_credentials() {
         let command = Command::Join {

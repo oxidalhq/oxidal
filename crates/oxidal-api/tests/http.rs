@@ -1652,6 +1652,18 @@ async fn network_boundary_is_optional_strict_and_redacts_invalid_credentials() {
             json!({"type":"join","interface":"wlan0","ssid":"Test","password":"do-not-echo-this"}),
             503,
         ),
+        (
+            json!({"type":"connect","interface":"wlan0","uuid":"11111111-1111-1111-1111-111111111111"}),
+            503,
+        ),
+        (
+            json!({"type":"connect","interface":"wlan0","uuid":"--show-secrets"}),
+            422,
+        ),
+        (
+            json!({"type":"connect","interface":"wlan0","uuid":"11111111-1111-1111-1111-111111111111","password":"do-not-echo-this"}),
+            400,
+        ),
     ] {
         let response = client
             .post(format!("{url}/device/network"))
