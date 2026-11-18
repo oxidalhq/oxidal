@@ -671,9 +671,20 @@ test('device portrait and landscape: hotspot welcome uses Oxidal branding and fi
   }
   await page.getByText('Page not opening?', { exact: true }).click();
   await expect(
-    page.getByText('This prototype uses a self-signed certificate', {
+    page.getByText('Oxidal uses a personal device certificate.', {
       exact: false,
     }),
+  ).toBeVisible();
+  const certificate = page.getByRole('link', {
+    name: 'download its public CA certificate',
+  });
+  await expect(certificate).toHaveAttribute('href', '/certificate.crt');
+  await expect(certificate).toHaveAttribute('download', 'oxidal-ca.crt');
+  await expect(
+    page.getByText(
+      "A download over this HTTP page alone does not verify the device's identity.",
+      { exact: false },
+    ),
   ).toBeVisible();
   const accessibility = await new AxeBuilder({ page }).analyze();
   expect(accessibility.violations).toEqual([]);
