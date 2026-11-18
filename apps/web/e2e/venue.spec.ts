@@ -175,6 +175,52 @@ test('venue EQ asks before leaving an unsaved edit', async ({
   await expect.poll(async () => (await venue(request)).preview).toBeNull();
 });
 
+test('venue EQ guards browser Back and manual section hashes without losing the preview', async ({
+  page,
+  request,
+}) => {
+  await page.goto('/#library/mine');
+  await page
+    .getByRole('navigation', { name: 'Instrument navigation' })
+    .getByRole('button', { name: 'Settings', exact: true })
+    .click();
+  await page
+    .getByRole('tablist', { name: 'Audio sections' })
+    .getByRole('tab', { name: 'Output', exact: true })
+    .click();
+  const panel = page.getByRole('region', { name: 'Venue EQ' });
+  await panel.getByRole('button', { name: 'Raise Gain' }).click();
+  await expect(edited(panel)).toBeVisible();
+  await expect.poll(async () => (await venue(request)).preview).not.toBeNull();
+  const preview = (await venue(request)).preview;
+  const settingsUrl = page.url();
+  expect(preview).not.toBeNull();
+  await page.evaluate(() => window.history.back());
+  const decision = page.getByRole('dialog', { name: 'Unsaved venue edit' });
+  await expect(decision).toBeVisible();
+  await expect(page).toHaveURL(settingsUrl);
+  await decision.getByRole('button', { name: 'Keep editing' }).click();
+  await expect(edited(panel)).toBeVisible();
+  expect((await venue(request)).preview).toEqual(preview);
+  await page.evaluate(() => {
+    window.location.hash = 'settings/device';
+  });
+  await expect(decision).toBeVisible();
+  await expect(page).toHaveURL(settingsUrl);
+  await decision.getByRole('button', { name: 'Keep editing' }).click();
+  await expect(edited(panel)).toBeVisible();
+  expect((await venue(request)).preview).toEqual(preview);
+  // The canceled manual fragment remains a Forward entry; Back still returns
+  // to Library rather than silently skipping the guarded entry.
+  await page.evaluate(() => window.history.back());
+  await expect(decision).toBeVisible();
+  await decision.getByRole('button', { name: 'Revert and leave' }).click();
+  await expect(page).toHaveURL(/#library\/mine$/);
+  await expect.poll(async () => (await venue(request)).preview).toBeNull();
+  await page.evaluate(() => window.history.forward());
+  await expect(page).toHaveURL(settingsUrl);
+});
+
 test('venue EQ shows another client’s change after a revision conflict', async ({
   page,
   browser,

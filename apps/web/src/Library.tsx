@@ -67,7 +67,12 @@ import { playTone3000 } from './presetChoices';
 import { PresetDetailsDialog } from './PresetDetails';
 import { detailsKey, detailsMatch } from './presetMetadata';
 import { SavedRigs, type SetListControls } from './SavedRigs';
-import { useSectionLocation, useWorkspaceState } from './workspaceMemory';
+import {
+  replaceWorkspaceLocation,
+  useSectionLocation,
+  useWorkspaceState,
+  WORKSPACE_LOCATION_EVENT,
+} from './workspaceMemory';
 
 const soundSections = [
   'mine',
@@ -115,7 +120,7 @@ function migrateLegacyHash() {
   if (!next) return;
   const url = new URL(window.location.href);
   url.hash = `library/${next}`;
-  window.history.replaceState(null, '', url);
+  replaceWorkspaceLocation(url);
 }
 
 /**
@@ -144,11 +149,9 @@ export function Library({
       const next = legacySection();
       if (next) setSection(next);
     };
-    window.addEventListener('hashchange', redirect);
-    window.addEventListener('popstate', redirect);
+    window.addEventListener(WORKSPACE_LOCATION_EVENT, redirect);
     return () => {
-      window.removeEventListener('hashchange', redirect);
-      window.removeEventListener('popstate', redirect);
+      window.removeEventListener(WORKSPACE_LOCATION_EVENT, redirect);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
