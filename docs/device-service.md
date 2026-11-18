@@ -102,6 +102,28 @@ probe behind activation. Unsupported saved Connect requests receive a clear
 service-update error. This API support is separate from completion of the
 Network screen and physical radio qualification.
 
+## Administrator service updates
+
+The existing [local deployment workflow](../os/README.md#local-deployment)
+provides an explicit `pnpm deploy:local device-service` update for development
+images. Use `--build-only` to prepare and review the ARM64 archive first. This
+part requires the administrator password and briefly interrupts audio; it is not
+in the ordinary passwordless rule or default deployment set. Regular application
+archives continue to reject root-service executables. Transfers use a private
+SSH-user staging directory; the installer reads the service archive only from a
+fixed root-only directory under `/run`.
+
+The installer admits only one bounded ARM64 ELF at the fixed service path. It
+refuses a pending network transaction, an active/unknown pack job, an unsafe target
+or unreadable service state. It stops the daemon before its final guards, checks
+pending recovery again after the fixed helper probe, then preserves the prior
+service activity while replacing the executable. The bounded fixed-socket probes
+verify a root peer and typed capability version. Failed installation, restart or
+capability health restores the previous executable and activity; credentials,
+network profiles, unit permissions and worker binaries are preserved. The prior
+executable is retained in a root-only rollback directory. Inactive services remain
+inactive. This does not qualify physical wireless transitions.
+
 ## Storage mode
 
 Storage mode uses the same typed boundary but a separate fixed target. The browser sends only `locked` or `unlocked`; the helper validates and atomically replaces `/boot/firmware/cmdline.txt`. It never remounts the running root. The control is unavailable until the appliance writable-data layout marker exists, and effect-pack work independently refuses an actively read-only root. See [storage lock](storage-lock.md).

@@ -201,11 +201,30 @@ of the default set. `OXIDAL_PI` sets the SSH target (default `oxidal-admin@oxida
 `thirdparty/oxidal-splitter/SHA256SUMS.models` (default
 `thirdparty/oxidal-splitter/models/`, which Git ignores). An image built
 before the splitter or `lv2` mode existed needs `pnpm deploy:local helper` once; it asks
-for the admin password. Binary updates are limited to the unprivileged daemon, its audio workers
-and the worker-loaded TONE3000 library; the root device/debug/terminal services are
-not replaceable. A failed service restart restores the preceding binaries, and only
+for the admin password. Ordinary binary updates are limited to the unprivileged daemon,
+its audio workers and the worker-loaded TONE3000 library. The root device service has
+an explicit administrator update described below; ordinary archives still reject
+root services, and debug/terminal services are not replaceable. A failed service restart restores the preceding binaries, and only
 one previous UI/binary set is retained. Normal `appliance` images contain neither
 the helper nor its sudo rule.
+
+To update the privileged device service on an existing development image:
+
+```sh
+pnpm deploy:local device-service --build-only
+pnpm deploy:local device-service
+```
+
+The first command builds and validates the Linux ARM64 executable and prepares a
+checksum-bound archive locally. It makes no SSH/SCP connection. Review the result
+before the second command, which asks for the administrator password and briefly
+pauses audio. Transfers use private staging and a root-only `/run` archive. This mode is never
+added to the passwordless sudo rule. It refuses
+pending network recovery or effect-pack work, replaces only the fixed device-service
+executable, checks its typed capabilities after restart and restores the old binary
+on failure. It preserves credentials, network profiles, units and prior service
+activity. Update it before deploying daemon/UI changes that require new privileged
+features. `helper --build-only` likewise prepares local helper/sudoers files only.
 
 To add public certificate downloads to an existing development image, update its
 helper once, then use the original setup folder:

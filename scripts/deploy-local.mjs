@@ -8,6 +8,7 @@
  *   pnpm deploy:local lv2             # Oxidal's own Rust effect bundles
  *   pnpm deploy:local certificate     # original public CA, never private keys
  *   pnpm deploy:local helper          # once per image: install the newer helper
+ *   pnpm deploy:local device-service  # explicit admin update; pauses audio
  *   pnpm deploy:local --build-only    # build and pack without touching the Pi
  *
  * Binaries and the splitter runner are built for Linux ARM64 in Docker
@@ -42,10 +43,18 @@ const parts = process.argv.slice(2).filter((arg) => !arg.startsWith('-'));
 const wanted = new Set(parts.length ? parts : ['splitter', 'bins', 'ui']);
 for (const part of wanted)
   if (
-    !['splitter', 'bins', 'ui', 'lv2', 'certificate', 'helper'].includes(part)
+    ![
+      'splitter',
+      'bins',
+      'ui',
+      'lv2',
+      'certificate',
+      'helper',
+      'device-service',
+    ].includes(part)
   )
     throw new Error(
-      `Unknown part "${part}". Use ui, bins, splitter, lv2, certificate or helper.`,
+      `Unknown part "${part}". Use ui, bins, splitter, lv2, certificate, helper or device-service.`,
     );
 
 const work = join(root, '.local/deploy-local');
@@ -153,7 +162,47 @@ function docker(args, env = {}) {
   ]);
 }
 
-if (wanted.has('helper')) {
+let deviceServiceArchive;
+let deviceServiceDigest;
+if (wanted.has('device-service')) {
+  dockerImage();
+  step('Building the Linux ARM64 device service');
+  docker([
+    'cargo',
+    'build',
+    '--release',
+    '--locked',
+    '-p',
+    'oxidal-device',
+    '--bin',
+    'oxidal-device-service',
+    '--target-dir',
+    '/target/bins',
+  ]);
+  const stage = join(work, 'device-service');
+  const executable = readFileSync(
+    join(work, 'target/bins/release/oxidal-device-service'),
+  );
+  if (
+    executable.length < 64 ||
+    executable.length > 16 * 1024 * 1024 ||
+    !executable
+      .subarray(0, 7)
+      .equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1])) ||
+    ![2, 3].includes(executable.readUInt16LE(16)) ||
+    executable.readUInt16LE(18) !== 183
+  )
+    throw new Error('Expected a bounded Linux ARM64 device-service executable');
+  rmSync(stage, { recursive: true, force: true });
+  mkdirSync(stage);
+  writeFileSync(join(stage, 'oxidal-device-service'), executable, {
+    mode: 0o755,
+  });
+  deviceServiceArchive = join(work, 'oxidal-device-service.tgz');
+  deviceServiceDigest = pack(stage, deviceServiceArchive);
+}
+
+if (wanted.has('helper') || wanted.has('device-service')) {
   step('Preparing the deploy helper');
   const helperScript = join(work, 'development_deploy.py');
   copyFileSync(join(root, 'os/scripts/development_deploy.py'), helperScript);
@@ -165,17 +214,47 @@ if (wanted.has('helper')) {
   );
   if (buildOnly) {
     console.log(`Prepared ${helperScript} and ${sudoers}`);
+    if (deviceServiceArchive)
+      console.log(`Built ${deviceServiceArchive} (${deviceServiceDigest})`);
   } else {
-    step('Installing the deploy helper (asks for the Pi admin password once)');
-    run('scp', ['-q', helperScript, sudoers, `${host}:/tmp/`]);
+    step(
+      deviceServiceArchive
+        ? 'Updating the device service (admin password required; audio pauses)'
+        : 'Installing the deploy helper (asks for the Pi admin password once)',
+    );
+    const remoteStage = capture('ssh', [
+      host,
+      'umask 077 && mktemp -d /tmp/oxidal-deploy.XXXXXXXXXX',
+    ]);
+    const stagePrefix = '/tmp/oxidal-deploy.';
+    if (
+      !remoteStage?.startsWith(stagePrefix) ||
+      !/^[A-Za-z0-9]{6,32}$/.test(remoteStage.slice(stagePrefix.length))
+    )
+      throw new Error(
+        'Could not prepare a private administrative staging directory',
+      );
+    run('scp', [
+      '-q',
+      helperScript,
+      sudoers,
+      ...(deviceServiceArchive ? [deviceServiceArchive] : []),
+      `${host}:${remoteStage}/`,
+    ]);
     run('ssh', [
       '-t',
       host,
-      'sudo visudo -cf /tmp/oxidal-development-deploy.sudoers' +
-        ` && sudo install -m 0755 -o root -g root /tmp/development_deploy.py ${helper}` +
-        ' && sudo install -m 0440 -o root -g root /tmp/oxidal-development-deploy.sudoers /etc/sudoers.d/oxidal-development-deploy' +
-        ' && rm -f /tmp/development_deploy.py /tmp/oxidal-development-deploy.sudoers' +
-        ' && echo "Deploy helper updated."',
+      `sudo visudo -cf ${remoteStage}/oxidal-development-deploy.sudoers` +
+        ` && sudo install -m 0755 -o root -g root ${remoteStage}/development_deploy.py ${helper}` +
+        ` && sudo install -m 0440 -o root -g root ${remoteStage}/oxidal-development-deploy.sudoers /etc/sudoers.d/oxidal-development-deploy` +
+        (deviceServiceArchive
+          ? ' && sudo install -d -m 0700 -o root -g root /run/oxidal-deploy' +
+            ` && sudo install -m 0600 -o root -g root ${remoteStage}/oxidal-device-service.tgz /run/oxidal-deploy/oxidal-device-service.tgz` +
+            ` && sudo ${helper} device-service ${deviceServiceDigest}` +
+            ' && sudo rm -f /run/oxidal-deploy/oxidal-device-service.tgz'
+          : '') +
+        ` && rm -rf -- ${remoteStage}` +
+        ' && echo "Administrative helper update complete."',
     ]);
   }
 }

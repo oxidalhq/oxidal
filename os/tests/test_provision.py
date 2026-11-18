@@ -67,7 +67,8 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn(b'oxidal-development-deploy bins *', files['etc/sudoers.d/oxidal-development-deploy'])
         self.assertIn(b'oxidal-development-deploy lv2 *', files['etc/sudoers.d/oxidal-development-deploy'])
         self.assertIn(b'oxidal-development-deploy certificate *', files['etc/sudoers.d/oxidal-development-deploy'])
-        self.assertNotIn(b'oxidal-device-service', files['usr/local/sbin/oxidal-development-deploy'])
+        self.assertIn(b'Administrator approval is required', files['usr/local/sbin/oxidal-development-deploy'])
+        self.assertNotIn(b'device-service *', files['etc/sudoers.d/oxidal-development-deploy'])
         with self.assertRaises(ValueError):
             provision.development_deploy_files('unknown')
 
