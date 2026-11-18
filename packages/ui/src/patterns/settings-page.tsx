@@ -45,11 +45,11 @@ export function SettingsPage({
     <div
       data-slot="settings-page"
       className={cn(
-        'grid gap-4 px-page md:grid-cols-[13rem_minmax(0,1fr)] md:gap-8',
+        'grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 px-page md:grid-cols-[13rem_minmax(0,1fr)] md:gap-8',
         className,
       )}
     >
-      <div className="md:hidden">
+      <div className="min-w-0 md:hidden">
         <Select value={current} onValueChange={onSelect}>
           <SelectTrigger aria-label="Settings section">
             <SelectValue />
@@ -83,7 +83,7 @@ export function SettingsPage({
       </nav>
       <section
         aria-labelledby="settings-section-title"
-        className="grid content-start gap-5"
+        className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-5"
       >
         <h2
           id="settings-section-title"
