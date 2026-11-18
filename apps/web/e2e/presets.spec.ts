@@ -16,7 +16,13 @@ import { chainRoute } from '../src/rigChain';
 import { lv2Effect, type NativeDraft, sceneRig } from '../src/rigDraft';
 import { buildRoute, type Route } from '../src/rigRoute';
 import { addSceneEffect } from '../src/sceneEdit';
-import { openComposer, openSounds, setDisplayMode } from './display';
+import {
+  expectSettingsSection,
+  openComposer,
+  openSounds,
+  selectSettingsSection,
+  setDisplayMode,
+} from './display';
 const fixtures = new URL(
   '../../../crates/oxidal-presets/tests/fixtures/',
   import.meta.url,
@@ -269,13 +275,11 @@ test('rig controls follow the actual session without example effects', async ({
   });
   await expect(selectedControl).toBeInViewport();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('tab', { name: 'Display', exact: true }).click();
+  await selectSettingsSection(page, 'Display');
   await page.getByRole('button', { name: 'Rig', exact: true }).click();
   await expect(selectedControl).toBeVisible();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(
-    page.getByRole('tab', { name: 'Display', exact: true }),
-  ).toHaveAttribute('aria-selected', 'true');
+  await expectSettingsSection(page, 'Display');
   await page.getByRole('button', { name: 'Rig', exact: true }).click();
   await page.screenshot({
     path: info.outputPath('rig-selected-block.png'),
@@ -1174,7 +1178,7 @@ test('playback lifecycle clears a corrupt boot preference without a worker', asy
   await page.goto('/');
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('tab', { name: 'Audio', exact: true }).click();
+  await selectSettingsSection(page, 'Audio');
   const panel = page.getByRole('region', { name: 'Playback controls' });
   const clear = panel.getByRole('button', {
     name: 'Clear invalid startup setup',
@@ -2273,7 +2277,7 @@ test('graph authoring creates an installed effect rig and saves live controls', 
     .toBe(-35);
   // Audio settings must operate on the sounding effects owner, not native playback.
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('tab', { name: 'Audio', exact: true }).click();
+  await selectSettingsSection(page, 'Audio');
   const playback = page.getByRole('region', { name: 'Playback controls' });
   await expect(
     playback.getByRole('heading', { name: 'Effects audio' }),
@@ -3051,10 +3055,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     });
   }
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page
-    .getByRole('tablist', { name: 'Settings sections' })
-    .getByRole('tab', { name: 'Audio', exact: true })
-    .click();
+  await selectSettingsSection(page, 'Audio');
   await expect(
     page
       .getByRole('region', { name: 'Playback controls' })
@@ -4148,10 +4149,7 @@ test('playback lifecycle applies live chain edits and prepared DSP settings befo
       .getByRole('navigation', { name: 'Instrument navigation' })
       .getByRole('button', { name: 'Settings', exact: true })
       .click();
-    await page
-      .getByRole('tablist', { name: 'Settings sections' })
-      .getByRole('tab', { name: 'Audio', exact: true })
-      .click();
+    await selectSettingsSection(page, 'Audio');
     const settings = page.getByRole('group', {
       name: 'Prepared DSP settings',
     });
@@ -4444,7 +4442,7 @@ test('mixed rig authoring: local NAM and IR collections audition without provide
   );
   expect((await get()).control.eq).toEqual(edited.eq);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('tab', { name: 'Audio', exact: true }).click();
+  await selectSettingsSection(page, 'Audio');
   const utilities = page.getByRole('region', {
     name: 'Audio monitoring and output test',
     exact: true,
@@ -4463,7 +4461,7 @@ test('mixed rig authoring: local NAM and IR collections audition without provide
   await command({ kind: 'restart' });
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('tab', { name: 'Audio', exact: true }).click();
+  await selectSettingsSection(page, 'Audio');
   await expect(
     utilities.getByRole('button', {
       name: 'Input monitoring off',

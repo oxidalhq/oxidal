@@ -1,7 +1,13 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Locator, test } from '@playwright/test';
 
 import type { DebugCommand, DebugState } from '../src/api';
-import { setDisplayMode } from './display';
+import { selectSettingsSection, setDisplayMode } from './display';
+
+async function expand(panel: Locator, summary: string) {
+  if ((await panel.locator('details').getAttribute('open')) === null)
+    await panel.getByText(summary, { exact: true }).click();
+}
+
 test('debug requires enablement, executes once, cancels and keeps commands out of storage', async ({
   page,
 }) => {
@@ -42,12 +48,9 @@ test('debug requires enablement, executes once, cancels and keeps commands out o
   });
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page
-    .getByRole('tablist', { name: 'Settings sections' })
-    .getByRole('tab', { name: 'Maintenance', exact: true })
-    .click();
+  await selectSettingsSection(page, 'Maintenance');
   const panel = page.getByRole('region', { name: 'Debug console' });
-  await panel.getByText('Debug console', { exact: true }).click();
+  await expand(panel, 'Debug console');
   await expect(panel.getByLabel('Command', { exact: true })).toBeDisabled();
   await panel
     .getByRole('button', { name: 'Enable debug mode for 5 minutes' })
@@ -62,11 +65,8 @@ test('debug requires enablement, executes once, cancels and keeps commands out o
   );
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page
-    .getByRole('tablist', { name: 'Settings sections' })
-    .getByRole('tab', { name: 'Maintenance', exact: true })
-    .click();
-  await panel.getByText('Debug console', { exact: true }).click();
+  await selectSettingsSection(page, 'Maintenance');
+  await expand(panel, 'Debug console');
   await panel
     .getByRole('button', { name: 'Cancel command', exact: true })
     .click();
@@ -139,11 +139,11 @@ test('interactive terminal reconnects without replaying input and stays usable a
   });
   async function open() {
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page
-      .getByRole('tablist', { name: 'Settings sections' })
-      .getByRole('tab', { name: 'Maintenance', exact: true })
-      .click();
-    await page.getByText('Interactive terminal', { exact: true }).click();
+    await selectSettingsSection(page, 'Maintenance');
+    await expand(
+      page.getByRole('region', { name: 'Web terminal' }),
+      'Interactive terminal',
+    );
   }
   await page.goto('/');
   if (testInfo.project.name === 'boox-air3c')
@@ -246,12 +246,9 @@ test('administrator terminal is explicit and mode changes never start a shell', 
   });
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page
-    .getByRole('tablist', { name: 'Settings sections' })
-    .getByRole('tab', { name: 'Maintenance', exact: true })
-    .click();
-  await page.getByText('Interactive terminal', { exact: true }).click();
+  await selectSettingsSection(page, 'Maintenance');
   const panel = page.getByRole('region', { name: 'Web terminal' });
+  await expand(panel, 'Interactive terminal');
   await panel.getByLabel('Terminal access').click();
   await page
     .getByRole('option', { name: 'Administrator · password sudo' })

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import type { NetworkCommand, NetworkState } from '../src/api';
+import { selectSettingsSection } from './display';
 
 // Browser recovery workflow with a controlled transport. The Rust suite exercises
 // durable rollback; physical Wi-Fi switching is an additional hardware gate.
@@ -52,10 +53,7 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
     page.getByRole('complementary', { name: 'DSP and system resources' }),
   ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page
-    .getByRole('tablist', { name: 'Settings sections' })
-    .getByRole('tab', { name: 'Network', exact: true })
-    .click();
+  await selectSettingsSection(page, 'Network');
   const panel = page.getByRole('region', { name: 'Wi-Fi and hotspot' });
   await expect(
     panel.getByRole('button', { name: /Guest open/ }),
@@ -94,10 +92,7 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
   await expect(panel.getByText(/Network change pending/)).toBeVisible();
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page
-    .getByRole('tablist', { name: 'Settings sections' })
-    .getByRole('tab', { name: 'Network', exact: true })
-    .click();
+  await selectSettingsSection(page, 'Network');
   await panel.getByRole('button', { name: 'Keep this connection' }).click();
   await expect(panel.getByRole('status')).toHaveText('Network settings saved');
   await expect(panel.getByLabel('Wi-Fi password', { exact: true })).toHaveValue(
@@ -132,7 +127,7 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
   expect(commands.find((c) => c.type === 'policy')).toMatchObject({
     settings: { mode: 'not_at_home', home_ssid: 'Studio: Wi-Fi' },
   });
-  await page.getByRole('tab', { name: 'Device', exact: true }).click();
+  await selectSettingsSection(page, 'Device');
   const power = page.getByRole('region', { name: 'Device power' });
   await power
     .getByRole('button', { name: 'Restart device', exact: true })

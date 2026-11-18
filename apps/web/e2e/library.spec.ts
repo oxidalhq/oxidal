@@ -1,7 +1,11 @@
 import { type APIRequestContext, expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
-import { openSounds } from './display';
+import {
+  expectSettingsSection,
+  openSounds,
+  selectSettingsSection,
+} from './display';
 
 /**
  * Library journeys against the real daemon: two groups of sections with their
@@ -79,19 +83,15 @@ test('Settings sections have links and Effects shows which presets need a pack',
   page,
 }) => {
   await page.goto('/#settings/effects');
-  await expect(
-    page.getByRole('tab', { name: 'Effects', selected: true }),
-  ).toBeVisible();
+  await expectSettingsSection(page, 'Effects');
   const effects = page.getByRole('region', { name: 'Effects' });
   await expect(
     effects.getByRole('list', { name: 'Curated packs' }),
   ).toBeVisible();
-  await page.getByRole('tab', { name: 'About', exact: true }).click();
+  await selectSettingsSection(page, 'About');
   await expect(page).toHaveURL(/#settings\/about$/);
   await page.reload();
-  await expect(
-    page.getByRole('tab', { name: 'About', selected: true }),
-  ).toBeVisible();
+  await expectSettingsSection(page, 'About');
 });
 
 type RigEntry = {

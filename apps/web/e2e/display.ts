@@ -1,4 +1,37 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
+
+/** Settings uses a section picker on phones and a directory on wide screens. */
+export async function selectSettingsSection(page: Page, label: string) {
+  const picker = page.getByRole('combobox', {
+    name: 'Settings section',
+    exact: true,
+  });
+  if (await picker.isVisible()) {
+    await picker.click();
+    await page.getByRole('option', { name: label, exact: true }).click();
+  } else {
+    await page
+      .getByRole('navigation', { name: 'Settings sections', exact: true })
+      .getByRole('button', { name: label, exact: true })
+      .click();
+  }
+}
+
+export async function expectSettingsSection(page: Page, label: string) {
+  await expect(page.locator('#settings-section-title')).toHaveText(label);
+  await expect(page.locator('#settings-section-title')).toBeVisible();
+  const picker = page.getByRole('combobox', {
+    name: 'Settings section',
+    exact: true,
+  });
+  if (await picker.isVisible()) await expect(picker).toContainText(label);
+  else
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Settings sections', exact: true })
+        .getByRole('button', { name: label, exact: true }),
+    ).toHaveAttribute('aria-current', 'page');
+}
 
 export async function setDisplayMode(
   page: Page,
@@ -10,15 +43,14 @@ export async function setDisplayMode(
   const previous = await navigation
     .locator('[aria-current="page"]')
     .innerText();
-  const section = page.getByRole('tablist', { name: 'Settings sections' });
   const previousSection =
     previous === 'Settings'
-      ? await section.locator('[aria-selected="true"]').innerText()
+      ? await page.locator('#settings-section-title').innerText()
       : null;
   await navigation
     .getByRole('button', { name: 'Settings', exact: true })
     .click();
-  await section.getByRole('tab', { name: 'Display', exact: true }).click();
+  await selectSettingsSection(page, 'Display');
   const labels = {
     default: 'Default',
     stage: 'Night',
@@ -27,10 +59,7 @@ export async function setDisplayMode(
   } as const;
   await page.getByLabel('Display mode').click();
   await page.getByRole('option', { name: labels[mode], exact: true }).click();
-  if (previousSection)
-    await section
-      .getByRole('tab', { name: previousSection, exact: true })
-      .click();
+  if (previousSection) await selectSettingsSection(page, previousSection);
   else
     await navigation
       .getByRole('button', { name: previous, exact: true })

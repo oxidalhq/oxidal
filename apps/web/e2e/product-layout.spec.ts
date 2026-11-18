@@ -63,6 +63,10 @@ for (const mode of ['default', 'stage', 'sunlight', 'epaper'] as const)
               await expect(
                 main.getByRole('tab', { name: surface.tab, exact: true }),
               ).toHaveAttribute('aria-selected', 'true');
+            else if (surface.route.startsWith('settings/'))
+              await expect(main.locator('#settings-section-title')).toHaveText(
+                surface.heading,
+              );
             else
               await expect(
                 main.getByRole('heading', {

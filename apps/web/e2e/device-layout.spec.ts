@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 
-import { setDisplayMode } from './display';
+import { selectSettingsSection, setDisplayMode } from './display';
 
 // CSS viewports are representative: Android density, browser chrome and zoom vary.
 // Hardware resolution is not the browser viewport. See README.md for the matrix.
@@ -248,10 +248,7 @@ test('device portrait and landscape keep controls accessible and preserve a rota
         'Display',
         'Maintenance',
       ]) {
-        await page
-          .getByRole('tablist', { name: 'Settings sections' })
-          .getByRole('tab', { name: section, exact: true })
-          .click();
+        await selectSettingsSection(page, section);
         await fits(page);
         await accessible(page);
         await page.screenshot({
@@ -292,10 +289,7 @@ test('device portrait and landscape keep controls accessible and preserve a rota
     await page.setViewportSize({ width: 768, height: 1024 });
     await fits(page);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page
-      .getByRole('tablist', { name: 'Settings sections' })
-      .getByRole('tab', { name: 'Display', exact: true })
-      .click();
+    await selectSettingsSection(page, 'Display');
     await expect(page.getByLabel('Display mode')).toHaveText('E-paper');
     await setDisplayMode(page, 'default');
     await page.reload();
@@ -369,10 +363,7 @@ test('stage display modes persist and stay accessible in both orientations', asy
         'Display',
         'Maintenance',
       ]) {
-        await page
-          .getByRole('tablist', { name: 'Settings sections' })
-          .getByRole('tab', { name: section, exact: true })
-          .click();
+        await selectSettingsSection(page, section);
         await fits(page);
         await accessible(page);
         if (section === 'Maintenance') {
@@ -526,10 +517,7 @@ test('stage display keeps screen awake across views and exposes fullscreen avail
     await navigation
       .getByRole('button', { name: 'Settings', exact: true })
       .click();
-    await page
-      .getByRole('tablist', { name: 'Settings sections' })
-      .getByRole('tab', { name: 'Display', exact: true })
-      .click();
+    await selectSettingsSection(page, 'Display');
   };
   await showDisplay();
   if (testInfo.project.name === 'boox-air3c') {

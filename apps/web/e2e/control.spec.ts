@@ -2,7 +2,11 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 
-import { setDisplayMode } from './display';
+import {
+  expectSettingsSection,
+  selectSettingsSection,
+  setDisplayMode,
+} from './display';
 
 test.beforeEach(async ({ request }) => {
   let state = (await (await request.get('/api/v1/state')).json()) as {
@@ -71,10 +75,7 @@ test('parallel rig validation and MIDI/web state converge across browsers', asyn
     page.getByRole('heading', { name: 'Custom routing' }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page
-    .getByRole('tablist', { name: 'Settings sections' })
-    .getByRole('tab', { name: 'Maintenance', exact: true })
-    .click();
+  await selectSettingsSection(page, 'Maintenance');
   await page.getByText('Rig validation inspector').click();
   await page.getByRole('button', { name: 'Validate rig', exact: true }).click();
   await expect(page.getByText('Rig is valid', { exact: true })).toBeVisible();
@@ -91,10 +92,7 @@ test('parallel rig validation and MIDI/web state converge across browsers', asyn
     second.getByRole('complementary', { name: 'DSP and system resources' }),
   ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page
-    .getByRole('tablist', { name: 'Settings sections' })
-    .getByRole('tab', { name: 'MIDI', exact: true })
-    .click();
+  await selectSettingsSection(page, 'MIDI');
   await page.getByLabel('MIDI value', { exact: true }).fill('127');
   await page.getByRole('button', { name: 'Send MIDI CC' }).click();
   await expect(second.getByTestId('value-nam-a.level')).toHaveText('100%');
@@ -362,20 +360,17 @@ test('about opens from settings and returns to the sections', async ({
 }) => {
   await page.goto('/?development=simulator');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const tabs = page.getByRole('tablist', { name: 'Settings sections' });
   // About is a normal Settings destination, not a header toggle (7.18).
   await expect(
-    page.getByRole('button', { name: 'About', exact: true }),
+    page
+      .getByRole('navigation', { name: 'Instrument navigation' })
+      .getByRole('button', { name: 'About', exact: true }),
   ).toHaveCount(0);
-  await tabs.getByRole('tab', { name: 'About', exact: true }).click();
-  await expect(
-    page.getByRole('heading', { name: 'About', level: 1, exact: true }),
-  ).toBeVisible();
+  await selectSettingsSection(page, 'About');
+  await expectSettingsSection(page, 'About');
   await expect(page.getByText('This device')).toBeVisible();
-  await tabs.getByRole('tab', { name: 'Audio', exact: true }).click();
-  await expect(
-    page.getByRole('heading', { name: 'Audio', level: 1, exact: true }),
-  ).toBeVisible();
+  await selectSettingsSection(page, 'Audio');
+  await expectSettingsSection(page, 'Audio');
 });
 
 test('settings navigation stays coherent across narrow and rotated layouts', async ({
@@ -383,7 +378,6 @@ test('settings navigation stays coherent across narrow and rotated layouts', asy
 }, testInfo) => {
   await page.goto('/?development=simulator');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const tabs = page.getByRole('tablist', { name: 'Settings sections' });
   const sections = [
     ['Audio', 'Audio'],
     ['Network', 'Network'],
@@ -402,28 +396,33 @@ test('settings navigation stays coherent across narrow and rotated layouts', asy
     { width: 844, height: 390 },
   ]) {
     await page.setViewportSize(size);
-    expect(
-      await tabs.getByRole('tab').evaluateAll((items) => {
-        const rows = new Map<number, number>();
-        for (const item of items) {
-          const top = Math.round(item.getBoundingClientRect().top);
-          rows.set(top, (rows.get(top) ?? 0) + 1);
-        }
-        return [...rows.values()];
-      }),
-      `balanced settings rows at ${size.width}px`,
-    ).toEqual(size.width <= 900 ? [3, 3, 3] : [9]);
-    for (const [tab, heading] of sections) {
-      await tabs.getByRole('tab', { name: tab, exact: true }).click();
+    const picker = page.getByRole('combobox', {
+      name: 'Settings section',
+      exact: true,
+    });
+    if (size.width < 768) await expect(picker).toBeVisible();
+    else
       await expect(
-        tabs.getByRole('tab', { name: tab, exact: true }),
-      ).toHaveAttribute('data-state', 'active');
-      await expect(
-        page.getByRole('heading', { name: heading, level: 1, exact: true }),
+        page.getByRole('navigation', {
+          name: 'Settings sections',
+          exact: true,
+        }),
       ).toBeVisible();
+    for (const [tab, heading] of sections) {
+      await selectSettingsSection(page, tab);
+      await expectSettingsSection(page, heading);
       const overflow = await page.evaluate(() =>
         [...document.body.querySelectorAll<HTMLElement>('*')]
           .filter((element) => {
+            // xterm keeps IME input, screen-reader announcements and font
+            // measurement offscreen. Its visible terminal remains checked.
+            if (
+              element.closest(
+                '.xterm .live-region, .xterm .xterm-helper-textarea, .xterm .xterm-char-measure-element',
+              )
+            )
+              return false;
+            if (!element.checkVisibility()) return false;
             const box = element.getBoundingClientRect();
             return box.right > innerWidth + 1 || box.left < -1;
           })
@@ -436,6 +435,13 @@ test('settings navigation stays coherent across narrow and rotated layouts', asy
           })),
       );
       expect(overflow, `${tab} at ${size.width}×${size.height}`).toEqual([]);
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        )
+        .toBe(true);
     }
     await page.screenshot({
       path: testInfo.outputPath(`settings-navigation-${size.width}.png`),
@@ -535,10 +541,7 @@ test('MIDI learn persists a bypass mapping and preset controls reflect both ways
     page.getByRole('complementary', { name: 'DSP and system resources' }),
   ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page
-    .getByRole('tablist', { name: 'Settings sections' })
-    .getByRole('tab', { name: 'MIDI', exact: true })
-    .click();
+  await selectSettingsSection(page, 'MIDI');
   await page.setViewportSize({ width: 1280, height: 720 });
   const midiPanel = await page
     .getByRole('heading', { name: 'MIDI mapping', exact: true })
@@ -602,10 +605,7 @@ test('MIDI learn persists a bypass mapping and preset controls reflect both ways
     page.getByRole('complementary', { name: 'DSP and system resources' }),
   ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page
-    .getByRole('tablist', { name: 'Settings sections' })
-    .getByRole('tab', { name: 'MIDI', exact: true })
-    .click();
+  await selectSettingsSection(page, 'MIDI');
   await expect(page.getByLabel('CC number', { exact: true })).toHaveValue('99');
   await expect(page.getByLabel('Target', { exact: true })).toHaveText(
     'Rig bypass',
@@ -822,9 +822,7 @@ test('effect focus keeps quick controls reachable without changing the rig', asy
     });
   }
   await page.getByRole('button', { name: 'Audio setup', exact: true }).click();
-  await expect(
-    page.getByRole('heading', { name: 'Audio', level: 1, exact: true }),
-  ).toBeVisible();
+  await expectSettingsSection(page, 'Audio');
 });
 
 async function enterValue(page: Page, label: string, value: string) {

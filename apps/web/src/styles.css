@@ -4023,7 +4023,7 @@
     aspect-ratio: 108 / 31;
   }
   .about-oxidal .about-kind {
-    color: var(--brand);
+    color: var(--enclosure-foreground);
     font: 650 var(--text-xs) var(--font-mono);
     letter-spacing: 0.08em;
     text-transform: uppercase;
