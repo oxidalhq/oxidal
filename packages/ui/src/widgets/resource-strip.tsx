@@ -90,7 +90,7 @@ export function ResourceStrip({
     },
     {
       label: 'RAM',
-      value: ram ? `${(ram.used / 1024).toFixed(1)} GB` : dash,
+      value: ram ? `${(ram.used / 1024).toFixed(1)} GiB` : dash,
       extra: ram ? `of ${(ram.total / 1024).toFixed(0)}` : undefined,
       share: ram ? ram.used / ram.total : 0,
       warn: !!ram && ram.used / ram.total >= 0.9,

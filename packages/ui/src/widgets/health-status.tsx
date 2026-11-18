@@ -222,9 +222,9 @@ export function HealthStatus({
             {readings.ram && (
               <Reading
                 label="Memory"
-                value={`${(readings.ram.used / 1024).toFixed(1)} GB`}
+                value={`${(readings.ram.used / 1024).toFixed(1)} GiB`}
                 share={readings.ram.used / readings.ram.total}
-                note={`of ${Math.round(readings.ram.total / 1024)} GB`}
+                note={`of ${Math.round(readings.ram.total / 1024)} GiB`}
               />
             )}
             {readings.temperature !== undefined &&

@@ -192,6 +192,7 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
       <div className="monitor-bar">
         <p
           role="status"
+          aria-label="Monitoring state"
           className="monitor-state"
           data-live={
             (!frozen && !error && !!state?.source && !stale) || undefined

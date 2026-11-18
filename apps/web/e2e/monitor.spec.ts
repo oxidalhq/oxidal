@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { mkdir, readFile } from 'node:fs/promises';
 
 import type { Monitoring } from '../src/api';
-import { setDisplayMode } from './display';
+import { selectSettingsSection, setDisplayMode } from './display';
 test('monitor shows measured stereo data, freezes, resets and marks stale readings', async ({
   page,
 }, info) => {
@@ -101,16 +101,26 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   const strip = page.getByRole('complementary', {
     name: 'DSP and system resources',
   });
-  await expect(strip.getByTestId('resource-state')).toHaveText('Audio running');
-  await expect(strip).toContainText('17%');
-  await expect(strip).toContainText('23%');
-  await expect(strip).toContainText('0.5/4.0 GiB');
   await expect(
-    strip
-      .locator('dl > div')
-      .filter({ has: page.getByText('Xruns', { exact: true }) })
-      .getByRole('definition'),
-  ).toHaveText('—');
+    strip.getByRole('button', { name: /device health/ }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await selectSettingsSection(page, 'Display');
+  await page
+    .getByRole('combobox', { name: 'Device status', exact: true })
+    .click();
+  await page.getByRole('option', { name: 'Detailed', exact: true }).click();
+  await expect(strip.getByTestId('resource-state')).toHaveText('Audio running');
+  await expect(strip.getByRole('group', { name: /^DSP: 17%/ })).toBeVisible();
+  await expect(
+    strip.getByRole('group', { name: 'CPU: 23%', exact: true }),
+  ).toBeVisible();
+  await expect(
+    strip.getByRole('group', { name: 'RAM: 0.5 GiB, of 4', exact: true }),
+  ).toBeVisible();
+  await expect(
+    strip.getByRole('group', { name: 'Dropouts: —', exact: true }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   await expect(strip).toBeVisible();
   await page.getByRole('button', { name: 'Levels', exact: true }).click();
@@ -119,11 +129,13 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   const panel = page.getByRole('region', {
     name: 'Audio and system monitoring',
   });
-  await expect(panel.getByRole('status')).toHaveText('TONE3000 preset · live');
+  await expect(
+    panel.getByRole('status', { name: 'Monitoring state' }),
+  ).toHaveText('TONE3000 preset · live');
   mixed = true;
-  await expect(panel.getByRole('status')).toHaveText(
-    'Preset with scenes · live',
-  );
+  await expect(
+    panel.getByRole('status', { name: 'Monitoring state' }),
+  ).toHaveText('Preset with scenes · live');
   const wrapped = await panel
     .locator('.meter-heading > *')
     .evaluateAll((items) =>
@@ -152,7 +164,9 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
     panel.getByRole('meter', { name: 'Output L peak' }),
   ).toHaveAttribute('aria-valuenow', '-3');
   stale = false;
-  await expect(panel.getByRole('status')).toHaveText('Frozen readings');
+  await expect(
+    panel.getByRole('status', { name: 'Monitoring state' }),
+  ).toHaveText('Frozen readings');
   await panel.getByRole('button', { name: 'Reset view' }).click();
   await expect(panel.getByText('CLIP · 2')).toHaveCount(0);
   await panel.getByRole('button', { name: 'Resume readings' }).click();
@@ -219,9 +233,9 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
     fullPage: true,
   });
   stale = true;
-  await expect(panel.getByRole('status')).toHaveText(
-    'Preset with scenes · waiting for live readings',
-  );
+  await expect(
+    panel.getByRole('status', { name: 'Monitoring state' }),
+  ).toHaveText('Preset with scenes · waiting for live readings');
   await expect(
     panel.getByRole('img', { name: 'Output L peak: No live reading' }),
   ).toBeVisible();
@@ -230,7 +244,7 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   disconnected = true;
   await expect(strip.getByTestId('resource-state')).toHaveText('Disconnected');
   await expect(strip).not.toContainText('23%');
-  await expect(strip).not.toContainText('0.5/4.0 GiB');
+  await expect(strip).not.toContainText('0.5 GiB');
 });
 
 test('monitor shows device history after browser reload and exports retained samples', async ({
