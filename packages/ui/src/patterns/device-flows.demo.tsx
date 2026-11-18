@@ -1,5 +1,13 @@
 import * as React from 'react';
 
+import { Button } from '../components/ui/button';
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+} from '../components/ui/dialog';
 import {
   BlockEq,
   type BootMode,
@@ -8,6 +16,7 @@ import {
   DiReamps,
   type EqPosition,
   StorageLock,
+  type StorageMode,
 } from './device-flows';
 
 const BANDS = [
@@ -78,8 +87,52 @@ export function DiReampsDemo() {
 }
 
 export function StorageLockDemo() {
-  const [unlocked, setUnlocked] = React.useState(false);
-  return <StorageLock unlocked={unlocked} onChange={setUnlocked} />;
+  const [current, setCurrent] = React.useState<StorageMode>('locked');
+  const [next, setNext] = React.useState<StorageMode>('locked');
+  const [review, setReview] = React.useState(false);
+  return (
+    <>
+      <StorageLock
+        current={current}
+        nextBoot={next}
+        onChange={setNext}
+        restart={
+          next !== current && (
+            <Button
+              variant="outline"
+              className="justify-self-start"
+              onClick={() => setReview(true)}
+            >
+              Restart into {next === 'locked' ? 'Locked' : 'Unlocked'} mode…
+            </Button>
+          )
+        }
+      />
+      <Dialog open={review} onOpenChange={setReview}>
+        <DialogContent size="sm">
+          <DialogHeader
+            title={`Restart into ${next === 'locked' ? 'Locked' : 'Unlocked'} mode?`}
+          />
+          <DialogBody>
+            Audio will stop. Save your edits before restarting.
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReview(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setCurrent(next);
+                setReview(false);
+              }}
+            >
+              Confirm restart
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
 
 export function BootPlaybackDemo() {

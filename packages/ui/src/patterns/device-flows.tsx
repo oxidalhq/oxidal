@@ -4,6 +4,7 @@ import {
   Microphone,
   Play,
 } from '@phosphor-icons/react';
+import type { ReactNode } from 'react';
 
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -218,37 +219,88 @@ export function DiReamps({
   );
 }
 
-/**
- * System storage: read-only while you play; unlock it to install updates or
- * LV2 packs, then lock it again. Changes take a restart.
+export type StorageMode = 'locked' | 'unlocked';
+
+/** Current storage and the selected next boot are independent device readback.
+ * Choices only request a mode; a separately confirmed restart applies it.
  */
 export function StorageLock({
-  unlocked,
+  current,
+  nextBoot,
+  disabled = false,
+  notice,
+  restart,
   onChange,
 }: {
-  unlocked: boolean;
-  /** Asks to unlock (true) or lock (false); the device restarts. */
-  onChange: (unlocked: boolean) => void;
+  current: StorageMode | null;
+  nextBoot: StorageMode | null;
+  disabled?: boolean;
+  notice?: ReactNode;
+  restart?: ReactNode;
+  onChange: (mode: StorageMode) => void;
 }) {
   return (
     <Card>
       <CardHeader>
         <CardTitle>System storage</CardTitle>
-        <Badge size="sm">{unlocked ? 'Unlocked' : 'Locked'}</Badge>
+        <Badge size="sm">
+          {current === 'locked'
+            ? 'Locked now'
+            : current === 'unlocked'
+              ? 'Unlocked now'
+              : 'Current state unknown'}
+        </Badge>
       </CardHeader>
       <Caption>
-        {unlocked
-          ? 'Updates and installs work. Lock it again when you are done; a power cut while unlocked is less safe.'
-          : 'System files are read-only, so a power cut on stage cannot damage them. Unlock to install updates or LV2 packs.'}
+        Locking protects system files at the next boot. Presets and unit data
+        stay on the writable data partition. Unsaved changes can still be lost
+        if power is cut. This never remounts a playing system.
       </Caption>
-      <Button
-        className="justify-self-start"
-        variant="outline"
-        onClick={() => onChange(!unlocked)}
+      <div
+        role="group"
+        aria-label="Mode at next boot"
+        className="grid gap-2 sm:grid-cols-2"
       >
-        {unlocked ? <LockSimple /> : <LockSimpleOpen />}{' '}
-        {unlocked ? 'Lock and restart' : 'Unlock and restart'}
-      </Button>
+        <Button
+          variant="outline"
+          className="h-auto justify-start py-3 text-left aria-pressed:border-foreground aria-pressed:bg-accent"
+          aria-pressed={nextBoot === 'unlocked'}
+          disabled={disabled}
+          onClick={() => onChange('unlocked')}
+        >
+          <LockSimpleOpen aria-hidden="true" />
+          <span className="grid">
+            <strong>Unlocked</strong>
+            <span className="text-xs font-normal">
+              Updates and installs work
+            </span>
+          </span>
+        </Button>
+        <Button
+          variant="outline"
+          className="h-auto justify-start py-3 text-left aria-pressed:border-foreground aria-pressed:bg-accent"
+          aria-pressed={nextBoot === 'locked'}
+          disabled={disabled}
+          onClick={() => onChange('locked')}
+        >
+          <LockSimple aria-hidden="true" />
+          <span className="grid">
+            <strong>Locked</strong>
+            <span className="text-xs font-normal">System files read-only</span>
+          </span>
+        </Button>
+      </div>
+      <Caption>
+        Next boot:{' '}
+        {nextBoot === 'locked'
+          ? 'Locked'
+          : nextBoot === 'unlocked'
+            ? 'Unlocked'
+            : 'Unknown'}
+        .
+      </Caption>
+      {notice}
+      {restart}
     </Card>
   );
 }

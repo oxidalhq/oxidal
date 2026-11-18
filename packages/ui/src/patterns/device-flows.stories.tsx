@@ -52,6 +52,32 @@ export const Startup: StoryObj = {
 export const Storage: StoryObj = {
   name: 'System storage lock',
   render: () => <StorageLockDemo />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(canvas.getByText('Locked now')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: /^Unlocked/ }));
+    await expect(canvas.getByText('Locked now')).toBeVisible();
+    await expect(canvas.getByText('Next boot: Unlocked.')).toBeVisible();
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Restart into Unlocked mode…' }),
+    );
+    let review = within(
+      await page.findByRole('dialog', { name: 'Restart into Unlocked mode?' }),
+    );
+    await userEvent.click(review.getByRole('button', { name: 'Cancel' }));
+    await expect(canvas.getByText('Locked now')).toBeVisible();
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Restart into Unlocked mode…' }),
+    );
+    review = within(
+      await page.findByRole('dialog', { name: 'Restart into Unlocked mode?' }),
+    );
+    await userEvent.click(
+      review.getByRole('button', { name: 'Confirm restart' }),
+    );
+    await expect(canvas.getByText('Unlocked now')).toBeVisible();
+  },
 };
 export const Debug: StoryObj = {
   name: 'Debug console',
