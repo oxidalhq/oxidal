@@ -1,12 +1,6 @@
-import { ArrowClockwise, Eye, EyeSlash, WifiHigh } from '@phosphor-icons/react';
-import { useEffect, useState } from 'react';
+import { type ComponentProps, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
-import { DialogFooter } from '@oxidal/design-system/components/dialog';
-import {
-  Segment,
-  SegmentedControl,
-} from '@oxidal/design-system/components/segmented';
 import {
   Select,
   SelectContent,
@@ -14,614 +8,284 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { StateNotice } from '@oxidal/design-system/components/states';
+import { Description } from '@oxidal/design-system/components/text';
+import {
+  NetworkChangeDialog,
+  type NetworkDraft,
+} from '@oxidal/design-system/patterns/network-change-dialog';
+import { NetworkSettings as NetworkSettingsView } from '@oxidal/design-system/patterns/network-settings';
 
-import { AdjustmentDialog } from './AdjustmentDialog';
-import { deviceNetwork, type NetworkCommand, type NetworkState } from './api';
 import { DeviceAccess } from './DeviceAccess';
+import { useDeviceNetwork } from './useDeviceNetwork';
 
 /** Phone-first setup with explicit link-loss warning and server-owned recovery.
  * @see docs/device-service.md
  */
 export function NetworkSettings({ connected }: { connected: boolean }) {
-  const [state, setState] = useState<NetworkState | null>(null);
-  const [error, setError] = useState('');
-  const [readError, setReadError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const { state, error, readError, busy, refresh, run } =
+    useDeviceNetwork(connected);
   const [iface, setIface] = useState('');
-  const [ssid, setSsid] = useState('');
-  const [password, setPassword] = useState('');
-  const [mode, setMode] = useState<'join' | 'hotspot'>('join');
-  const [review, setReview] = useState(false);
-  const [policyDraft, setPolicyMode] = useState<
-    NonNullable<NetworkState['policy']>['mode'] | null
-  >(null);
-  const [homeDraft, setHome] = useState<string | null>(null);
-  const policyMode = policyDraft ?? state?.policy?.mode ?? 'always';
-  const home = homeDraft ?? state?.policy?.home_ssid ?? '';
-  const [policyReview, setPolicyReview] = useState(false);
-  const [country, setCountry] = useState('');
-  const [channel, setChannel] = useState(0);
-  useEffect(() => {
-    let active = true;
-    let pending = false;
-    async function refresh() {
-      if (pending) return;
-      pending = true;
-      try {
-        const next = await deviceNetwork();
-        if (active) {
-          setState(next);
-          setReadError('');
-        }
-      } catch {
-        if (active)
-          setReadError(
-            'Cannot reach device settings. If the network changed, reconnect to the device and refresh.',
-          );
-      } finally {
-        pending = false;
-      }
-    }
-    void refresh();
-    const timer = setInterval(() => void refresh(), 5000);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, []);
-  const wireless = state?.interfaces.filter((d) => d.kind === 'wifi') ?? [];
-  const interfaceName = wireless.some((d) => d.name === iface)
+  const [edit, setEdit] = useState<Omit<
+    ComponentProps<typeof NetworkChangeDialog>,
+    'onApply' | 'onCancel' | 'disabled'
+  > | null>(null);
+  const wireless =
+    state?.interfaces.filter((device) => device.kind === 'wifi') ?? [];
+  const interfaceName = wireless.some((device) => device.name === iface)
     ? iface
     : (wireless[0]?.name ?? '');
-  const activeWifi = wireless.find((device) => device.state === 'connected');
-  const activeNetwork = state?.networks.find((network) => network.active);
-  async function run(command: NetworkCommand) {
-    setBusy(true);
-    setError('');
-    try {
-      setState(await deviceNetwork(command));
-      setReadError('');
-      if (command.type === 'policy') {
-        setPolicyMode(null);
-        setHome(null);
-      }
-      setReview(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Network operation failed');
-    } finally {
-      setBusy(false);
-    }
+  const disabled =
+    !connected || Boolean(readError) || !state?.available || !interfaceName;
+  const capabilities = state?.capabilities;
+  const active = wireless.find((device) => device.state === 'connected');
+  const current =
+    state?.networks.find((network) => network.active)?.ssid ||
+    state?.saved.find((profile) => profile.active)?.ssid ||
+    (active?.connection === 'oxidal-hotspot' ? state?.hotspot?.ssid : '') ||
+    '';
+  const address =
+    active?.addresses?.find((value) => value !== '10.42.0.1') ?? '';
+  const savedName = (uuid: string) => {
+    const profile = state?.saved.find((value) => value.uuid === uuid);
+    return (
+      profile?.ssid ?? `${profile?.name ?? 'Saved network'} · SSID unavailable`
+    );
+  };
+  function open(draft: NetworkDraft) {
+    if (disabled || busy || state?.pending) return;
+    setEdit({
+      draft,
+      interfaces: wireless.map((device) => device.name),
+      defaultInterface: interfaceName,
+      hotspotName: state?.hotspot?.ssid,
+      hotspotChannel: state?.hotspot?.channel,
+      radio: state?.radio ?? undefined,
+      homeSsid: state?.policy?.home_ssid,
+    });
   }
-  function applyNetworkChange() {
-    if (!state) return;
-    const command: NetworkCommand = {
-      type: mode,
-      interface: interfaceName,
-      ssid,
-      password,
-      ...(mode === 'hotspot' && state.radio
-        ? { country: country || state.radio.country, channel }
-        : {}),
-    };
-    setPassword('');
-    setShowPassword(false);
-    void run(command);
-  }
+  const refreshButton = (
+    <Button
+      variant="outline"
+      disabled={busy || !connected}
+      onClick={() => void refresh()}
+    >
+      Refresh network
+    </Button>
+  );
   return (
-    <section className="panel network-settings" aria-label="Wi-Fi and hotspot">
-      <div className="section-heading network-heading">
-        <div>
-          <h2>Wi-Fi &amp; hotspot</h2>
-          <p className="caption">
-            Internet access and the direct setup hotspot.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          disabled={!connected || busy}
-          onClick={() => void run({ type: 'status' })}
-        >
-          <ArrowClockwise aria-hidden="true" />
-          Refresh network
-        </Button>
-      </div>
-      {(error || readError) && (
-        <p role="alert" className="error">
-          {error || readError}
-        </p>
-      )}
-      {(!state || state.message) && (
-        <p role="status" className="network-message">
-          {state ? state.message : 'Reading device network…'}
-        </p>
-      )}
-      {state?.available && (
-        <>
-          <div className="network-summary" aria-label="Current connection">
-            <div className="network-summary-primary">
-              <span
-                className="network-state-dot"
-                data-active={Boolean(activeWifi)}
-                aria-hidden="true"
+    <section aria-label="Wi-Fi and hotspot">
+      <NetworkSettingsView
+        networks={(state?.networks ?? []).map((network) => {
+          const secured = Boolean(
+            network.security && network.security !== '--',
+          );
+          const saved =
+            state?.saved.filter(
+              (profile) =>
+                profile.managed &&
+                !profile.active &&
+                profile.ssid === network.ssid,
+            ) ?? [];
+          const savedId = saved.length === 1 ? saved[0]!.uuid : undefined;
+          const supportedSecurity =
+            !secured ||
+            (/WPA2/.test(network.security) &&
+              !/802\.1X|EAP/.test(network.security));
+          const ambiguous =
+            !secured &&
+            state?.networks.some(
+              (other) =>
+                other.ssid === network.ssid &&
+                other.security &&
+                other.security !== '--',
+            );
+          const joinDisabled =
+            saved.length > 1
+              ? true
+              : savedId
+                ? !capabilities?.saved_connect
+                : !supportedSecurity ||
+                  (!secured && (!capabilities?.open_join || ambiguous));
+          return {
+            ssid: network.ssid,
+            strength: network.signal >= 66 ? 3 : network.signal >= 33 ? 2 : 1,
+            secured,
+            savedId,
+            connected: network.active,
+            joinDisabled: Boolean(joinDisabled),
+            reason: !supportedSecurity
+              ? 'Requires WPA2 Personal'
+              : ambiguous
+                ? 'Also advertised as secured · choose a different network'
+                : saved.length > 1
+                  ? 'Choose a saved profile below'
+                  : joinDisabled
+                    ? 'Update device service to join this network'
+                    : undefined,
+          };
+        })}
+        current={current}
+        address={address}
+        saved={(state?.saved ?? []).map((profile) => ({
+          ...profile,
+          name: savedName(profile.uuid),
+          canConnect: Boolean(capabilities?.saved_connect),
+        }))}
+        disabled={disabled}
+        busy={busy}
+        pending={
+          state?.pending
+            ? {
+                secondsLeft: state.pending.seconds_remaining,
+                applying:
+                  state.pending.phase !== 'awaiting_confirmation'
+                    ? 'Connecting… Reconnect your browser to the device.'
+                    : undefined,
+                recovery: (
+                  <>
+                    {readError && (
+                      <Description role="alert">{readError}</Description>
+                    )}
+                    {error && <Description role="alert">{error}</Description>}
+                    {refreshButton}
+                  </>
+                ),
+              }
+            : undefined
+        }
+        hotspot={{
+          policy: state?.policy?.mode,
+          name:
+            state?.hotspot?.ssid ??
+            state?.hotspot_message ??
+            'Hotspot name unavailable',
+          radio:
+            state?.radio && state.hotspot
+              ? `${state.radio.country} · ${state.hotspot.channel === 0 ? 'automatic channel' : `channel ${state.hotspot.channel}`}`
+              : 'Country and channel unavailable',
+          canEditRadio: Boolean(
+            capabilities?.hotspot_radio && state?.radio && state.hotspot,
+          ),
+        }}
+        notice={
+          <>
+            {(!state || !state.available) && (
+              <StateNotice
+                kind={state ? 'error' : 'loading'}
+                title={state?.message || 'Reading device network…'}
+                action={refreshButton}
               />
-              <span>
-                <strong>
-                  {activeNetwork?.ssid ||
-                    activeWifi?.connection ||
-                    'Not connected'}
-                </strong>
-                <small>
-                  {activeWifi
-                    ? `Connected via ${activeWifi.name}`
-                    : state.wireless_enabled
-                      ? 'Wi-Fi is on'
-                      : 'Wi-Fi is off'}
-                </small>
-              </span>
-            </div>
-            <span className="network-address">oxidal.local</span>
-          </div>
-          <details className="network-disclosure network-interface-details">
-            <summary>Connection details</summary>
-            <ul aria-label="Network interfaces">
-              {state.interfaces.map((device) => (
-                <li key={device.name}>
-                  <strong>{device.name}</strong>
-                  <span>
-                    {device.state}
+            )}
+            {readError && <Description role="alert">{readError}</Description>}
+            {error && <Description role="alert">{error}</Description>}
+            {state?.available && state.message && (
+              <Description role="status">{state.message}</Description>
+            )}
+            {state?.available && (
+              <Description>
+                Wi-Fi is {state.wireless_enabled ? 'on' : 'off'}
+                {current ? ` · ${current}` : ''}.
+              </Description>
+            )}
+            {state?.saved_message && (
+              <Description>{state.saved_message}</Description>
+            )}
+            {state?.available &&
+              (!capabilities?.saved_connect ||
+                !capabilities.open_join ||
+                !capabilities.hotspot_radio) && (
+                <Description>
+                  Update the device service to enable saved-network
+                  reconnection, open-network join and separate radio changes.
+                  WPA2 setup remains available.
+                </Description>
+              )}
+            {!connected && (
+              <Description role="status">
+                Reconnect to Oxidal before changing the network.
+              </Description>
+            )}
+          </>
+        }
+        interfaceControl={
+          <div className="grid gap-3">
+            <label className="grid gap-1 text-sm">
+              Wireless interface
+              <Select
+                value={interfaceName}
+                disabled={busy || Boolean(state?.pending)}
+                onValueChange={setIface}
+              >
+                <SelectTrigger aria-label="Wireless interface">
+                  <SelectValue placeholder="No wireless interface" />
+                </SelectTrigger>
+                <SelectContent>
+                  {wireless.map((device) => (
+                    <SelectItem key={device.name} value={device.name}>
+                      {device.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+            <details>
+              <summary className="min-h-touch cursor-pointer py-3 text-sm">
+                Connection details
+              </summary>
+              <ul aria-label="Network interfaces">
+                {state?.interfaces.map((device) => (
+                  <li key={device.name} className="py-1 text-sm">
+                    {device.name} · {device.state}
                     {device.connection && device.connection !== '--'
                       ? ` · ${device.connection}`
                       : ''}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <p className="caption">
-              Direct hotspot address: <strong>10.42.0.1</strong>
-            </p>
-          </details>
-          {state.pending ? (
-            <div
-              className="network-pending"
-              aria-label="Pending network change"
-            >
-              <strong>
-                Network change pending · {state.pending.seconds_remaining}s
-              </strong>
-              <p>
-                Reconnect your phone to the new Wi-Fi or hotspot, then confirm
-                here. Without confirmation the previous network returns
-                automatically.
-              </p>
-              <div className="action-row">
-                <Button
-                  disabled={
-                    busy ||
-                    !connected ||
-                    state.pending.phase !== 'awaiting_confirmation'
-                  }
-                  onClick={() =>
-                    void run({
-                      type: 'confirm',
-                      transaction: state.pending!.transaction,
-                    })
-                  }
-                >
-                  Keep this connection
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={busy || !connected}
-                  onClick={() =>
-                    void run({
-                      type: 'cancel',
-                      transaction: state.pending!.transaction,
-                    })
-                  }
-                >
-                  Restore previous network
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="network-toolbar">
-                <SegmentedControl
-                  value={mode}
-                  disabled={busy}
-                  aria-label="Network setup mode"
-                  onValueChange={(value) => {
-                    if (
-                      (value === 'join' || value === 'hotspot') &&
-                      value !== mode
-                    ) {
-                      setMode(value);
-                      setSsid('');
-                      setPassword('');
-                      setShowPassword(false);
-                      setReview(false);
-                    }
-                  }}
-                >
-                  <Segment value="join">Join Wi-Fi</Segment>
-                  <Segment value="hotspot">Edit hotspot</Segment>
-                </SegmentedControl>
-                {mode === 'join' && (
-                  <Button
-                    variant="outline"
-                    disabled={busy || !connected}
-                    onClick={() => void run({ type: 'scan' })}
-                  >
-                    <ArrowClockwise aria-hidden="true" /> Scan
-                  </Button>
-                )}
-              </div>
-              {mode === 'join' && state.networks.length > 0 && (
-                <div className="network-list" aria-label="Nearby networks">
-                  {state.networks.map((n) => (
-                    <Button
-                      key={`${n.ssid}-${n.security}`}
-                      variant="ghost"
-                      aria-pressed={ssid === n.ssid}
-                      disabled={
-                        busy || !connected || !n.security || n.security === '--'
-                      }
-                      className="network-row"
-                      onClick={() => {
-                        setSsid(n.ssid);
-                        setReview(false);
-                      }}
-                    >
-                      <span className="flex min-w-0 items-center gap-2">
-                        <WifiHigh aria-hidden="true" className="shrink-0" />
-                        <span className="min-w-0 break-words">
-                          <strong>{n.ssid}</strong>
-                          {n.active && (
-                            <span className="network-connected">Connected</span>
-                          )}
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-xs">
-                        {n.signal}% ·{' '}
-                        {n.security && n.security !== '--'
-                          ? n.security
-                          : 'Open · unsupported'}
-                      </span>
-                    </Button>
-                  ))}
-                </div>
-              )}
-              <form
-                className="network-form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  setReview(true);
-                }}
-              >
-                {wireless.length > 1 && (
-                  <label className="field network-interface-select">
-                    Wireless interface
-                    <Select
-                      value={interfaceName}
-                      onValueChange={(value) => {
-                        setIface(value);
-                        setReview(false);
-                      }}
-                      disabled={busy}
-                    >
-                      <SelectTrigger aria-label="Wireless interface">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {wireless.map((device) => (
-                          <SelectItem key={device.name} value={device.name}>
-                            {device.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                )}
-                <label className="field">
-                  {mode === 'hotspot' ? 'Hotspot name' : 'Wi-Fi name'}
-                  <input
-                    required
-                    value={ssid}
-                    autoComplete="off"
-                    onChange={(e) => {
-                      setSsid(e.target.value);
-                      setReview(false);
-                    }}
-                    disabled={busy}
-                  />
-                </label>
-                <div className="field">
-                  <label htmlFor="network-password">
-                    {mode === 'hotspot'
-                      ? 'New hotspot password'
-                      : 'Wi-Fi password'}
-                  </label>
-                  <div className="flex min-w-0 gap-2">
-                    <input
-                      id="network-password"
-                      className="min-w-0 flex-1"
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      minLength={8}
-                      maxLength={63}
-                      autoComplete="new-password"
-                      value={password}
-                      onChange={(e) => {
-                        setPassword(e.target.value);
-                        setReview(false);
-                      }}
-                      disabled={busy}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      aria-label={
-                        showPassword ? 'Hide password' : 'Show password'
-                      }
-                      aria-pressed={showPassword}
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? (
-                        <EyeSlash aria-hidden="true" />
-                      ) : (
-                        <Eye aria-hidden="true" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-                {mode === 'hotspot' && state.radio && (
-                  <>
-                    <label className="field">
-                      Wireless country
-                      <input
-                        value={country || state.radio.country}
-                        onChange={(e) => {
-                          setCountry(e.target.value.toUpperCase());
-                          setReview(false);
-                        }}
-                        required
-                        pattern="[A-Z]{2}"
-                        maxLength={2}
-                        aria-describedby="wireless-country-note"
-                      />
-                    </label>
-                    <label className="field">
-                      Hotspot channel
-                      <Select
-                        value={String(channel)}
-                        onValueChange={(value) => {
-                          setChannel(Number(value));
-                          setReview(false);
-                        }}
-                      >
-                        <SelectTrigger aria-label="Hotspot channel">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="0">Automatic</SelectItem>
-                          {state.radio.channels.map((c) => (
-                            <SelectItem key={c} value={String(c)}>
-                              {c} · 2.4 GHz
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </label>
-                    <p
-                      id="wireless-country-note"
-                      className="caption network-form-wide"
-                    >
-                      Use the country where the device is operating, such as NZ.
-                      The kernel and radio validate the channel again when
-                      applying. Country changes affect wireless operation and
-                      roll back if not confirmed.
-                    </p>
-                  </>
-                )}
-                <p className="caption network-form-wide">
-                  WPA2 Personal, 8–63 printable characters. Open and enterprise
-                  Wi-Fi are not supported yet. This changes the wireless link;
-                  it does not change your web login.
-                </p>
-                <Button
-                  type="submit"
-                  className="network-submit"
-                  disabled={busy || !connected || !interfaceName}
-                >
-                  Review network change
-                </Button>
-              </form>
-              <div className="network-secondary">
-                <details className="network-disclosure">
-                  <summary>Automatic hotspot</summary>
-                  <p className="caption">
-                    Saved policy:{' '}
-                    {state.policy?.mode.replaceAll('_', ' ') ??
-                      'Appliance default'}
-                    . Changes are tested for 90 seconds before you keep them.
-                  </p>
-                  <form
-                    className="network-policy-form"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      setPolicyReview(true);
-                    }}
-                  >
-                    <label className="field">
-                      Start hotspot
-                      <Select
-                        value={policyMode}
-                        onValueChange={(value) => {
-                          setPolicyMode(value as typeof policyMode);
-                          setPolicyReview(false);
-                        }}
-                      >
-                        <SelectTrigger aria-label="Start hotspot">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="always">Always</SelectItem>
-                          <SelectItem value="never">Never</SelectItem>
-                          <SelectItem value="no_ethernet">
-                            When Ethernet is disconnected
-                          </SelectItem>
-                          <SelectItem value="not_at_home">
-                            When home Wi-Fi is out of range
-                          </SelectItem>
-                          <SelectItem value="no_remembered">
-                            When no saved Wi-Fi is in range
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </label>
-                    {policyMode === 'not_at_home' && (
-                      <label className="field">
-                        Home Wi-Fi name
-                        <input
-                          required
-                          value={home}
-                          onChange={(e) => {
-                            setHome(e.target.value);
-                            setPolicyReview(false);
-                          }}
-                        />
-                      </label>
-                    )}
-                    <p className="caption network-form-wide">
-                      Automatic changes wait for stable network observations. If
-                      a remembered router fails to connect, the recovery hotspot
-                      stays available. Never may require Ethernet for access.
-                    </p>
-                    <Button
-                      type="submit"
-                      disabled={busy || !connected || !interfaceName}
-                    >
-                      Review hotspot policy
-                    </Button>
-                  </form>
-                </details>
-                <details className="network-disclosure">
-                  <summary>Saved networks</summary>
-                  <ul className="network-saved-list">
-                    {state.saved.map((n) => (
-                      <li
-                        key={n.uuid}
-                        className="flex flex-wrap items-center justify-between gap-2"
-                      >
-                        <span>
-                          {n.name}
-                          {n.active ? ' · connected' : ''}
-                        </span>
-                        {n.managed && !n.active && (
-                          <Button
-                            variant="outline"
-                            disabled={busy || !connected}
-                            aria-label={`Forget ${n.name}`}
-                            onClick={() =>
-                              void run({ type: 'forget', uuid: n.uuid })
-                            }
-                          >
-                            Forget
-                          </Button>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              </div>
-            </>
-          )}
-        </>
-      )}
-      <DeviceAccess network={readError ? null : state} />
-      {review && (
-        <AdjustmentDialog
-          title={mode === 'join' ? `Join ${ssid}?` : `Update ${ssid}?`}
-          onCancel={() => {
-            if (!busy) setReview(false);
-          }}
-        >
-          <p className="caption">
-            This device may briefly disappear from the browser while its
-            wireless connection changes.
-          </p>
-          <dl className="network-review">
-            <div>
-              <dt>{mode === 'join' ? 'Wi-Fi' : 'Hotspot'}</dt>
-              <dd>{ssid}</dd>
-            </div>
-            <div>
-              <dt>Interface</dt>
-              <dd>{interfaceName}</dd>
-            </div>
-          </dl>
-          <p className="notice">
-            The phone may disconnect. Reconnect to {ssid}, then open
-            oxidal.local and confirm within 90 seconds. Otherwise Oxidal
-            restores the previous connection.
-          </p>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => setReview(false)}
-            >
-              Cancel
-            </Button>
-            <Button disabled={busy} onClick={applyNetworkChange}>
-              Apply network change
-            </Button>
-          </DialogFooter>
-        </AdjustmentDialog>
-      )}
-      {policyReview && (
-        <AdjustmentDialog
-          title="Change automatic hotspot?"
-          onCancel={() => {
-            if (!busy) setPolicyReview(false);
-          }}
-        >
-          <p className="caption">
-            The new rule is tested for 90 seconds before it becomes permanent.
-          </p>
-          <p className="notice">
-            Your phone may disconnect. Reconnect through the router, hotspot or
-            Ethernet and keep the connection before the timer expires.
-          </p>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => setPolicyReview(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              disabled={busy || !interfaceName}
-              onClick={() => {
-                setPolicyReview(false);
-                void run({
-                  type: 'policy',
-                  settings: {
-                    interface: interfaceName,
-                    mode: policyMode,
-                    home_ssid: home,
-                  },
-                });
+                  </li>
+                ))}
+              </ul>
+            </details>
+            {refreshButton}
+          </div>
+        }
+        onJoin={(ssid, secured) => open({ kind: 'join', ssid, secured })}
+        onManualJoin={() => open({ kind: 'join', ssid: '', secured: true })}
+        onConnect={(uuid) => {
+          if (capabilities?.saved_connect)
+            open({ kind: 'saved', uuid, ssid: savedName(uuid) });
+        }}
+        onForget={(uuid) =>
+          open({ kind: 'forget', uuid, ssid: savedName(uuid) })
+        }
+        onScan={() => {
+          if (!busy && connected) void run({ type: 'scan' });
+        }}
+        onConfirm={(keep) => {
+          if (state?.pending && !disabled)
+            void run({
+              type: keep ? 'confirm' : 'cancel',
+              transaction: state.pending.transaction,
+            });
+        }}
+        onPolicy={(policy) => open({ kind: 'policy', policy })}
+        onChangeName={() => open({ kind: 'hotspot' })}
+        onChangeRadio={() => {
+          if (capabilities?.hotspot_radio) open({ kind: 'radio' });
+        }}
+        access={<DeviceAccess network={readError ? null : state} />}
+        dialogs={
+          edit && (
+            <NetworkChangeDialog
+              {...edit}
+              disabled={disabled || busy || Boolean(state?.pending)}
+              onCancel={() => setEdit(null)}
+              onApply={(change) => {
+                setEdit(null);
+                void run(change);
               }}
-            >
-              Apply hotspot policy
-            </Button>
-          </DialogFooter>
-        </AdjustmentDialog>
-      )}
+            />
+          )
+        }
+      />
     </section>
   );
 }

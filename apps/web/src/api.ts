@@ -257,6 +257,7 @@ const networkValidator = ajv.compile<NetworkState>({
 });
 export async function deviceNetwork(
   command?: NetworkCommand,
+  signal?: AbortSignal,
 ): Promise<NetworkState> {
   const body = await presetResponse(
     await fetch(
@@ -266,8 +267,9 @@ export async function deviceNetwork(
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(command),
+            signal,
           }
-        : { cache: 'no-store' },
+        : { cache: 'no-store', signal },
     ),
   );
   if (

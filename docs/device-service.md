@@ -153,12 +153,22 @@ Storage mode uses the same typed boundary but a separate fixed target. The brows
 
 ## Current workflow
 
-- Settings → Connections shows network interfaces, Wi-Fi radio state and nearby SSIDs; Scan refreshes NetworkManager's cache. The form accepts an SSID manually, including hidden networks. This first slice supports WPA2 Personal with 8–63 printable ASCII password characters, not open, enterprise or WPA3-only networks.
+- Settings → Network uses the shared Storybook list, review forms and confirmation dialog. Nearby networks come first; interface details, manual Wi-Fi entry and UUID-scoped saved profiles remain available. Scan refreshes NetworkManager's cache. Manual setup supports WPA2 Personal with 8–63 printable ASCII password characters. Updated helpers also support explicit advertised open-network join and saved-profile reconnection. Enterprise, WPA3-only and physical hidden-network behavior remain unqualified.
 - Join Wi-Fi saves an Oxidal-owned client profile. Edit hotspot changes the appliance recovery AP name/password while retaining its existing UUID, 2.4 GHz band and shared IPv4 address. Country/channel selection and five automatic hotspot policies use the same confirmation and recovery flow; see Automatic hotspot and power below.
 - Review explains the expected phone disconnection. Apply first creates a NetworkManager checkpoint and a durable backup of the affected profile, with trial autoconnect disabled. The helper returns a transaction token before activating the new connection.
 - Reconnect the phone and browse to `https://oxidal.local` (or `https://10.42.0.1` on the hotspot), then Keep this connection within 90 seconds. Confirmation requires active connection readback and only then enables persistence/autoconnect. A single radio normally cannot keep the old hotspot while joining the router.
 - No confirmation, a failed activation, explicit Cancel or helper restart restores the previous profile. NetworkManager's checkpoint timeout is independent of the browser/helper; the helper also restores persistent keyfiles and attempts the recovery hotspot if no Wi-Fi link returns. A durable journal blocks overlapping changes and permits retry after a failed recovery. Do not interpret this as physical-radio qualification.
 - Forget applies only to inactive, Oxidal-managed client profiles; it cannot delete the recovery hotspot or another application's connections. Saved reconnection uses its UUID and stored credentials when the helper advertises support. Web credentials remain separate from Wi-Fi credentials.
+
+The browser has one polling/command owner. Five-second reads do not overlap;
+starting a command aborts and invalidates an older read. Every HTTP operation is
+bounded to 25 seconds. An uncertain result triggers readback without replaying the
+write; stale state disables mutations. Open form drafts survive background reads,
+and passwords clear before Apply/Cancel and disappear on unmount. Confirm reads the
+server's transaction phase/time; rollback remains available while activation is in
+progress. Unreachable readback disables both mutations and provides a refresh action
+inside the confirmation dialog. Two saved profiles with the same SSID retain
+separate UUID-specific actions.
 
 ## Verification and remaining work
 

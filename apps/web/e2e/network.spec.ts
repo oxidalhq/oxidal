@@ -72,6 +72,167 @@ test('network setup exposes current addresses and the public certificate', async
   ).toBeVisible();
 });
 
+test('network setup uses explicit open, saved and radio operations with interface-scoped review', async ({
+  page,
+}) => {
+  const first = '11111111-1111-4111-8111-111111111111';
+  const second = '22222222-2222-4222-8222-222222222222';
+  const state: NetworkState = {
+    available: true,
+    wireless_enabled: true,
+    message: '',
+    pending: null,
+    policy: { mode: 'no_remembered', interface: 'wlan0', home_ssid: '' },
+    radio: { country: 'NZ', channels: [1, 6, 11] },
+    hotspot: { ssid: 'Actual recovery AP', channel: 6 },
+    capabilities: {
+      schema_version: 1,
+      saved_connect: true,
+      open_join: true,
+      hotspot_radio: true,
+    },
+    interfaces: ['wlan0', 'wlan1'].map((name) => ({
+      name,
+      kind: 'wifi',
+      state: 'disconnected',
+      connection: '--',
+    })),
+    networks: [
+      { ssid: 'Venue Guest', security: '--', signal: 50, active: false },
+    ],
+    saved: [first, second].map((uuid) => ({
+      uuid,
+      ssid: 'Same name',
+      name: 'oxidal-wifi',
+      managed: true,
+      active: false,
+    })),
+  };
+  const commands: NetworkCommand[] = [];
+  await page.route('**/api/v1/device/network', async (route) => {
+    if (route.request().method() === 'POST') {
+      const command = route.request().postDataJSON() as NetworkCommand;
+      commands.push(command);
+      if (
+        command.type === 'join_open' ||
+        command.type === 'connect' ||
+        command.type === 'hotspot_radio'
+      )
+        state.pending = {
+          transaction: 'b'.repeat(32),
+          seconds_remaining: 87,
+          phase:
+            command.type === 'join_open'
+              ? 'connecting'
+              : 'awaiting_confirmation',
+        };
+      if (command.type === 'confirm' || command.type === 'cancel')
+        state.pending = null;
+      if (command.type === 'forget')
+        state.saved = state.saved.filter(
+          (profile) => profile.uuid !== command.uuid,
+        );
+    }
+    await route.fulfill({ json: state });
+  });
+  await page.goto('/#settings/connections');
+  const panel = page.getByRole('region', { name: 'Wi-Fi and hotspot' });
+  await expect(
+    panel.getByRole('button', { name: 'Join Venue Guest' }),
+  ).toBeEnabled();
+  await panel.getByRole('combobox', { name: 'Wireless interface' }).click();
+  await page.getByRole('option', { name: 'wlan1', exact: true }).click();
+  await panel.getByRole('button', { name: 'Join Venue Guest' }).click();
+  let review = page.getByRole('dialog');
+  await expect(
+    review.getByLabel('Wi-Fi password', { exact: true }),
+  ).toHaveCount(0);
+  await review.getByRole('button', { name: 'Apply network change' }).click();
+  await expect(
+    page
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Keep this connection' }),
+  ).toBeDisabled();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Go back now' })
+    .click();
+  expect(commands.find((command) => command.type === 'join_open')).toEqual({
+    type: 'join_open',
+    interface: 'wlan1',
+    ssid: 'Venue Guest',
+  });
+  await panel.getByText('Saved networks', { exact: true }).click();
+  await panel
+    .getByRole('button', {
+      name: `Connect saved Same name (${second})`,
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Apply network change' })
+    .click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Keep this connection' })
+    .click();
+  expect(commands.find((command) => command.type === 'connect')).toEqual({
+    type: 'connect',
+    interface: 'wlan1',
+    uuid: second,
+  });
+  await panel
+    .getByRole('button', { name: 'Change…', exact: true })
+    .nth(1)
+    .click();
+  review = page.getByRole('dialog', { name: 'Change country and channel?' });
+  await expect(
+    review.getByLabel('Wi-Fi password', { exact: true }),
+  ).toHaveCount(0);
+  await review.getByLabel('Wireless country').fill('AU');
+  await review.getByRole('button', { name: 'Apply network change' }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Keep this connection' })
+    .click();
+  expect(commands.find((command) => command.type === 'hotspot_radio')).toEqual({
+    type: 'hotspot_radio',
+    interface: 'wlan1',
+    country: 'AU',
+    channel: 6,
+  });
+  await expect(
+    panel.getByText('Actual recovery AP', { exact: true }),
+  ).toBeVisible();
+  await panel
+    .getByRole('button', {
+      name: `Forget saved Same name (${first})`,
+      exact: true,
+    })
+    .click();
+  expect(commands.some((command) => command.type === 'forget')).toBe(false);
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Forget network' })
+    .click();
+  await expect(
+    panel.getByRole('button', {
+      name: `Forget saved Same name (${first})`,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  expect(commands.find((command) => command.type === 'forget')).toEqual({
+    type: 'forget',
+    uuid: first,
+  });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
+
 // Browser recovery workflow with a controlled transport. The Rust suite exercises
 // durable rollback; physical Wi-Fi switching is an additional hardware gate.
 test('network setup reviews link loss, clears credentials and confirms recovery', async ({
@@ -128,74 +289,90 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
     panel.getByRole('button', { name: /Guest open/ }),
   ).toBeDisabled();
   await expect(panel.getByText('Reading device network…')).toHaveCount(0);
-  await panel.getByText('Automatic hotspot', { exact: true }).click();
   await expect(
-    panel.getByRole('combobox', { name: 'Start hotspot', exact: true }),
+    panel.getByRole('combobox', { name: 'Turn the hotspot on', exact: true }),
   ).toHaveText('When Ethernet is disconnected');
-  await panel.getByText('Automatic hotspot', { exact: true }).click();
-  await panel.getByRole('button', { name: /Studio: Wi-Fi/ }).click();
-  await panel
+  await panel.getByRole('button', { name: 'Join Studio: Wi-Fi' }).click();
+  const review = page.getByRole('dialog', { name: 'Join Studio: Wi-Fi?' });
+  await review
     .getByLabel('Wi-Fi password', { exact: true })
     .fill('test-only-password');
-  await panel
+  await review
     .getByRole('button', { name: 'Show password', exact: true })
     .click();
   await expect(
-    panel.getByLabel('Wi-Fi password', { exact: true }),
+    review.getByLabel('Wi-Fi password', { exact: true }),
   ).toHaveAttribute('type', 'text');
-  await panel
+  await review
     .getByRole('button', { name: 'Hide password', exact: true })
     .click();
   await expect(
-    panel.getByLabel('Wi-Fi password', { exact: true }),
+    review.getByLabel('Wi-Fi password', { exact: true }),
   ).toHaveAttribute('type', 'password');
-  await panel.getByRole('button', { name: 'Review network change' }).click();
   expect(commands.filter((c) => c.type === 'join')).toHaveLength(0);
-  const review = page.getByRole('dialog');
-  await expect(review.getByText(/The phone may disconnect/)).toBeVisible();
+  await expect(review.getByText(/Your phone may disconnect/)).toBeVisible();
   await review.getByRole('button', { name: 'Apply network change' }).click();
   expect(commands.find((c) => c.type === 'join')).toMatchObject({
     ssid: 'Studio: Wi-Fi',
     interface: 'wlan0',
   });
-  await expect(panel.getByText(/Network change pending/)).toBeVisible();
+  await expect(
+    page.getByRole('dialog', { name: 'Keep this connection?' }),
+  ).toBeVisible();
   await page.reload();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await selectSettingsSection(page, 'Network');
-  await panel.getByRole('button', { name: 'Keep this connection' }).click();
-  await expect(panel.getByRole('status')).toHaveText('Network settings saved');
-  await expect(panel.getByLabel('Wi-Fi password', { exact: true })).toHaveValue(
-    '',
+  await expect(
+    page.getByRole('dialog', { name: 'Keep this connection?' }),
+  ).toBeVisible();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Keep this connection' })
+    .click();
+  await expect(
+    panel.getByText('Network settings saved', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel('Wi-Fi password', { exact: true })).toHaveCount(
+    0,
   );
   expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain(
     'test-only-password',
   );
-  await panel.getByRole('radio', { name: 'Edit hotspot', exact: true }).click();
-  await expect(panel.getByLabel('New hotspot password')).toBeVisible();
-  await expect(panel.getByLabel('Hotspot name', { exact: true })).toHaveValue(
+  await panel
+    .getByRole('button', { name: 'Change…', exact: true })
+    .first()
+    .click();
+  const hotspot = page.getByRole('dialog', {
+    name: 'Change hotspot name and password?',
+  });
+  await expect(
+    hotspot.getByLabel('Wi-Fi password', { exact: true }),
+  ).toHaveValue('');
+  await expect(hotspot.getByLabel('Hotspot name', { exact: true })).toHaveValue(
     '',
   );
-  await expect(panel.getByLabel('Wireless country')).toHaveValue('NZ');
-  await panel.getByRole('combobox', { name: 'Hotspot channel' }).click();
+  await expect(hotspot.getByLabel('Wireless country')).toHaveValue('NZ');
+  await hotspot.getByRole('combobox', { name: 'Hotspot channel' }).click();
   await page.getByRole('option', { name: '6 · 2.4 GHz' }).click();
-  await panel.getByText('Automatic hotspot', { exact: true }).click();
+  await hotspot.getByRole('button', { name: 'Cancel', exact: true }).click();
   await panel
-    .getByRole('combobox', { name: 'Start hotspot', exact: true })
+    .getByRole('combobox', { name: 'Turn the hotspot on', exact: true })
     .click();
   await page
     .getByRole('option', { name: 'When home Wi-Fi is out of range' })
     .click();
-  await panel.getByLabel('Home Wi-Fi name').fill('Studio: Wi-Fi');
-  await panel.getByRole('button', { name: 'Review hotspot policy' }).click();
+  const policy = page.getByRole('dialog', {
+    name: 'Change automatic hotspot?',
+  });
+  await policy.getByLabel('Home Wi-Fi name').fill('Studio: Wi-Fi');
   expect(commands.filter((c) => c.type === 'policy')).toHaveLength(0);
+  await policy.getByRole('button', { name: 'Apply network change' }).click();
   await page
     .getByRole('dialog')
-    .getByRole('button', { name: 'Apply hotspot policy' })
+    .getByRole('button', { name: 'Keep this connection' })
     .click();
-  await panel.getByRole('button', { name: 'Keep this connection' }).click();
   expect(commands.find((c) => c.type === 'policy')).toMatchObject({
     settings: { mode: 'not_at_home', home_ssid: 'Studio: Wi-Fi' },
   });
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await selectSettingsSection(page, 'Device');
   const power = page.getByRole('region', { name: 'Device power' });
   await power
