@@ -154,28 +154,30 @@ function docker(args, env = {}) {
 }
 
 if (wanted.has('helper')) {
-  step('Installing the deploy helper (asks for the Pi admin password once)');
+  step('Preparing the deploy helper');
+  const helperScript = join(work, 'development_deploy.py');
+  copyFileSync(join(root, 'os/scripts/development_deploy.py'), helperScript);
   const sudoers = join(work, 'oxidal-development-deploy.sudoers');
   writeFileSync(
     sudoers,
     '# Private development image: scoped Oxidal application deploy only.\n' +
       `oxidal-admin ALL=(root) NOPASSWD: ${helper} bins *, ${helper} ui *, ${helper} splitter *, ${helper} lv2 *, ${helper} certificate *\n`,
   );
-  run('scp', [
-    '-q',
-    join(root, 'os/scripts/development_deploy.py'),
-    sudoers,
-    `${host}:/tmp/`,
-  ]);
-  run('ssh', [
-    '-t',
-    host,
-    'sudo visudo -cf /tmp/oxidal-development-deploy.sudoers' +
-      ` && sudo install -m 0755 -o root -g root /tmp/development_deploy.py ${helper}` +
-      ' && sudo install -m 0440 -o root -g root /tmp/oxidal-development-deploy.sudoers /etc/sudoers.d/oxidal-development-deploy' +
-      ' && rm -f /tmp/development_deploy.py /tmp/oxidal-development-deploy.sudoers' +
-      ' && echo "Deploy helper updated."',
-  ]);
+  if (buildOnly) {
+    console.log(`Prepared ${helperScript} and ${sudoers}`);
+  } else {
+    step('Installing the deploy helper (asks for the Pi admin password once)');
+    run('scp', ['-q', helperScript, sudoers, `${host}:/tmp/`]);
+    run('ssh', [
+      '-t',
+      host,
+      'sudo visudo -cf /tmp/oxidal-development-deploy.sudoers' +
+        ` && sudo install -m 0755 -o root -g root /tmp/development_deploy.py ${helper}` +
+        ' && sudo install -m 0440 -o root -g root /tmp/oxidal-development-deploy.sudoers /etc/sudoers.d/oxidal-development-deploy' +
+        ' && rm -f /tmp/development_deploy.py /tmp/oxidal-development-deploy.sudoers' +
+        ' && echo "Deploy helper updated."',
+    ]);
+  }
 }
 
 if (!buildOnly) {
