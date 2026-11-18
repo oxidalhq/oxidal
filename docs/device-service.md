@@ -47,6 +47,22 @@ Package installation necessarily gives this narrowly allowlisted root service sy
 
 This is a scoped defence-in-depth exception, not a general command facility. Home protection, private temporary storage, peer-UID checks, the typed protocol and the fixed package allowlist remain; the unit admits only Unix/netlink/IPv4/IPv6 address families. The unprivileged daemon cannot choose an executable, package name, path or option. Any broader package or command surface requires a new security review.
 
+## Public hotspot settings
+
+The network response may include `hotspot` with the managed recovery profile's
+public `ssid` and configured `channel` (zero means automatic). This is a saved
+setting, not a measurement of the active RF channel. Wireless country still comes
+from `radio`. When these values cannot be read, `hotspot_message` explains their
+absence; no previous name/channel is retained as current data.
+
+The unprivileged daemon queries only `802-11-wireless.ssid` and
+`802-11-wireless.channel` on the fixed `oxidal-hotspot` profile. It never requests
+secrets, changes a connection or invokes a shell. Output is limited to 4 KiB with
+a two-second deadline; one query is shared across viewers through a two-second
+success/failure cache. This read runs alongside address readback. Optional omitted
+fields retain compatibility with older helper replies; no privileged helper
+upgrade is needed for this readback.
+
 ## Storage mode
 
 Storage mode uses the same typed boundary but a separate fixed target. The browser sends only `locked` or `unlocked`; the helper validates and atomically replaces `/boot/firmware/cmdline.txt`. It never remounts the running root. The control is unavailable until the appliance writable-data layout marker exists, and effect-pack work independently refuses an actively read-only root. See [storage lock](storage-lock.md).

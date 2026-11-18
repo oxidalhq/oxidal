@@ -33,7 +33,22 @@ async fn dispatch(shared: Arc<Shared>, command: Command) -> Response {
     match result {
         Ok(reply) => match (reply.state, reply.error) {
             (Some(mut state), None) => {
-                shared.network_addresses.enrich(&mut state).await;
+                if state.available {
+                    let ((), hotspot) = tokio::join!(
+                        shared.network_addresses.enrich(&mut state),
+                        shared.hotspot_readback.current(),
+                    );
+                    match hotspot {
+                        Ok(value) => {
+                            state.hotspot = Some(value);
+                            state.hotspot_message = None;
+                        }
+                        Err(error) => {
+                            state.hotspot = None;
+                            state.hotspot_message = Some(error.into());
+                        }
+                    }
+                }
                 ([(header::CACHE_CONTROL, "no-store")], Json(state)).into_response()
             }
             (_, Some(error)) => failure(StatusCode::CONFLICT, &error),

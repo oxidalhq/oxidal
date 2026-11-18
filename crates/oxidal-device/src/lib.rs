@@ -205,6 +205,15 @@ pub struct Pending {
     pub seconds_remaining: u64,
     pub phase: String,
 }
+/// Public managed-profile settings, not a measurement of the current RF channel.
+/// @see docs/device-service.md
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Hotspot {
+    pub ssid: String,
+    /// Zero means automatic channel selection.
+    pub channel: u32,
+}
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct NetworkState {
@@ -215,6 +224,10 @@ pub struct NetworkState {
     pub interfaces: Vec<Interface>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub address_message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hotspot: Option<Hotspot>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hotspot_message: Option<String>,
     pub networks: Vec<AccessPoint>,
     pub saved: Vec<SavedNetwork>,
     pub pending: Option<Pending>,
@@ -253,6 +266,11 @@ mod tests {
         };
         let old = serde_json::to_value(state).unwrap();
         assert!(old.get("address_message").is_none());
+        assert!(old.get("hotspot").is_none());
+        assert!(old.get("hotspot_message").is_none());
+        let decoded: NetworkState = serde_json::from_value(old.clone()).unwrap();
+        assert!(decoded.hotspot.is_none());
+        assert!(decoded.hotspot_message.is_none());
         assert!(
             serde_json::from_value::<NetworkState>(old)
                 .unwrap()

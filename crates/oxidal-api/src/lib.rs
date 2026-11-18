@@ -11,6 +11,7 @@ mod capture;
 mod debug;
 mod device;
 mod device_addresses;
+mod device_hotspot;
 mod device_wait;
 mod graph_playback;
 mod guitars;
@@ -286,6 +287,7 @@ struct Shared {
     library_access: Arc<tokio::sync::RwLock<()>>,
     debug: debug::DebugBridge,
     network_addresses: device_addresses::NetworkAddresses,
+    hotspot_readback: device_hotspot::HotspotReadback,
     monitor: watch::Receiver<monitor::Monitoring>,
     history: Arc<monitor_history::Journal>,
     audit: audit::Audit,
@@ -425,6 +427,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         catalog_work: Arc::new(tokio::sync::Semaphore::new(1)),
         debug: debug::DebugBridge::new(config.debug_socket.clone()),
         network_addresses: device_addresses::NetworkAddresses::default(),
+        hotspot_readback: device_hotspot::HotspotReadback::default(),
         history: Arc::new(monitor_history::Journal::new(
             config.preset_dir.join("monitor-history"),
         )),

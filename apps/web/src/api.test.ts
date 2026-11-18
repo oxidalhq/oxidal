@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { deviceCertificate, parseSnapshot } from './api';
+import { deviceCertificate, deviceNetwork, parseSnapshot } from './api';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -31,6 +31,60 @@ describe('runtime contract validation', () => {
       cache: 'no-store',
       signal: expect.any(AbortSignal),
     });
+  });
+
+  it('accepts public hotspot readback and older helpers without a summary', async () => {
+    const old = {
+      available: true,
+      wireless_enabled: true,
+      radio: null,
+      policy: null,
+      interfaces: [],
+      networks: [],
+      saved: [],
+      pending: null,
+      message: '',
+    };
+    const current = {
+      ...old,
+      hotspot: { ssid: 'Actual device name', channel: 0 },
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(Response.json(old))
+        .mockResolvedValueOnce(Response.json(current)),
+    );
+    await expect(deviceNetwork()).resolves.toEqual(old);
+    await expect(deviceNetwork()).resolves.toEqual(current);
+  });
+
+  it.each([
+    { ssid: 'Device', channel: -1 },
+    { ssid: 'Device', channel: 'Automatic' },
+    { ssid: 'Device', channel: 6, password: 'must never be present' },
+  ])('rejects incompatible hotspot readback: %j', async (hotspot) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        Response.json({
+          available: true,
+          wireless_enabled: true,
+          radio: null,
+          policy: null,
+          interfaces: [],
+          networks: [],
+          saved: [],
+          pending: null,
+          message: '',
+          hotspot,
+        }),
+      ),
+    );
+    await expect(deviceNetwork()).rejects.toThrow(
+      'Incompatible network response',
+    );
   });
 
   it.each([

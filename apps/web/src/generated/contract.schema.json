@@ -5708,6 +5708,26 @@
         }
       ]
     },
+    "Hotspot": {
+      "description": "Public managed-profile settings, not a measurement of the current RF channel.\n@see docs/device-service.md",
+      "type": "object",
+      "properties": {
+        "channel": {
+          "description": "Zero means automatic channel selection.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "ssid": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "ssid",
+        "channel"
+      ]
+    },
     "ImportPhase": {
       "description": "Where a received file is in the import pipeline.",
       "oneOf": [
@@ -8243,6 +8263,22 @@
         },
         "available": {
           "type": "boolean"
+        },
+        "hotspot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Hotspot"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hotspot_message": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "interfaces": {
           "type": "array",

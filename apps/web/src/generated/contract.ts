@@ -2886,6 +2886,8 @@ export interface Settings {
 export interface NetworkState {
   address_message?: string | null;
   available: boolean;
+  hotspot?: Hotspot | null;
+  hotspot_message?: string | null;
   interfaces: Interface[];
   message: string;
   networks: AccessPoint[];
@@ -2894,6 +2896,17 @@ export interface NetworkState {
   radio?: Radio | null;
   saved: SavedNetwork[];
   wireless_enabled: boolean;
+}
+/**
+ * Public managed-profile settings, not a measurement of the current RF channel.
+ * @see docs/device-service.md
+ */
+export interface Hotspot {
+  /**
+   * Zero means automatic channel selection.
+   */
+  channel: number;
+  ssid: string;
 }
 export interface Interface {
   /**

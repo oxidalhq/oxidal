@@ -557,6 +557,8 @@ impl Network {
             policy: self.policy()?,
             interfaces,
             address_message: None,
+            hotspot: None,
+            hotspot_message: None,
             networks,
             saved,
             pending: self.pending.as_ref().map(|p| Pending {
