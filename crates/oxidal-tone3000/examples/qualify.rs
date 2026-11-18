@@ -3090,6 +3090,7 @@ fn qualify_live_gestures() -> Result<(), Box<dyn Error>> {
             ControlMode, ControlTarget, Decoder, Message, ParameterBinding, Settings,
         };
         let mut settings = Settings {
+            extra_inputs: Vec::new(),
             input: "hw:Controller,0,0".into(),
             channel: 2,
             bindings: vec![],

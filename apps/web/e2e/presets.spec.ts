@@ -586,7 +586,7 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
     editor.getByLabel('Preset to load'),
     `original:${preset.sha256}`,
   );
-  await editor.getByRole('button', { name: 'Play draft' }).click();
+  await editor.getByRole('button', { name: 'Load draft' }).click();
   await expect(editor.getByRole('status')).toHaveText('Native preset ready');
   await expect(editor.getByLabel('Preset to load')).not.toBeVisible();
   // Direct tone targets use the same owned adjustment transaction as the full browser.
@@ -893,7 +893,7 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
     editor.getByLabel('Preset to load'),
     `original:${preset.sha256}`,
   );
-  await editor.getByRole('button', { name: 'Play draft' }).click();
+  await editor.getByRole('button', { name: 'Load draft' }).click();
   await expect(editor.getByRole('status')).toHaveText('Native preset ready');
   await chooseSelectValue(
     page,
@@ -910,7 +910,7 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
     editor.getByLabel('Preset to load'),
     `owned:${owned.id}`,
   );
-  await editor.getByRole('button', { name: 'Play draft' }).click();
+  await editor.getByRole('button', { name: 'Load draft' }).click();
   await expect(editor.getByRole('status')).toHaveText('Native preset ready');
   await expect(page.getByTestId('native-readback')).toHaveText(edited!);
   const restored = await (await request.get('/api/v1/native')).json();
@@ -1752,7 +1752,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
       editor.getByLabel('Preset to load'),
       `original:${preset.sha256}`,
     );
-    await editor.getByRole('button', { name: 'Play draft' }).click();
+    await editor.getByRole('button', { name: 'Load draft' }).click();
     await expect(editor.getByRole('status')).toHaveText('Native preset ready');
     await editor
       .getByLabel('Owned preset name')
@@ -3946,7 +3946,7 @@ test('native editor loads draft structure commands and preserves history', async
     editor.getByLabel('Preset to load'),
     `original:${preset.sha256}`,
   );
-  await editor.getByRole('button', { name: 'Play draft' }).click();
+  await editor.getByRole('button', { name: 'Load draft' }).click();
   await expect(editor.getByRole('status')).toHaveText('Native preset ready');
   const initial = await (await request.get('/api/v1/native')).json();
   const block = initial.block_controls.find(

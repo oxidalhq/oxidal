@@ -80,7 +80,18 @@ export async function openSounds(page: Page, format: 'nam' | 'ir') {
 
 /** Library → New preset → one of the advanced composers kept for parity. */
 export async function openComposer(page: Page, kind: 'effects' | 'tone3000') {
-  await page.getByRole('button', { name: 'New preset', exact: true }).click();
+  await expect(
+    page.getByRole('region', { name: 'Library', exact: true }),
+  ).toBeVisible();
+  // Library can restore the open composer before its device readback arrives.
+  const existing = page.getByRole('region', {
+    name: kind === 'effects' ? 'Effects authoring' : 'Native preset editor',
+    exact: true,
+  });
+  const create = page.getByRole('button', { name: 'New preset', exact: true });
+  await expect(existing.or(create)).toBeVisible();
+  if (await existing.isVisible()) return;
+  await create.click();
   await page
     .getByRole('dialog', { name: 'New preset' })
     .getByRole('button', {
