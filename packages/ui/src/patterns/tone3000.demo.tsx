@@ -24,6 +24,11 @@ export function Tone3000AccountDemo({
       state={state}
       code="WXKD-4821"
       user="jane.capture"
+      verificationUrl="https://www.tone3000.com/activate"
+      onCancel={() => {
+        if (timer.current) clearTimeout(timer.current);
+        setState('none');
+      }}
       onSignIn={() => {
         setState('requesting');
         timer.current = setTimeout(() => {

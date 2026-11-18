@@ -1,4 +1,5 @@
 import { CheckCircle, Warning } from '@phosphor-icons/react';
+import type { ReactNode } from 'react';
 
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -17,7 +18,13 @@ import { Caption } from '../components/ui/text';
 import { PoweredByTone3000 } from './credits';
 
 export type Tone3000AccountState =
-  'none' | 'requesting' | 'waiting' | 'connected';
+  | 'none'
+  | 'requesting'
+  | 'waiting'
+  | 'connected'
+  | 'loading'
+  | 'reconnecting'
+  | 'error';
 
 /**
  * The TONE3000 account, signed in on the device: Oxidal asks TONE3000 for a
@@ -30,6 +37,18 @@ export function Tone3000Account({
   user,
   onSignIn,
   onSignOut,
+  onCancel,
+  onReset,
+  status,
+  error,
+  setup,
+  returnAction,
+  footer,
+  verificationUrl,
+  expiresAt,
+  disabled = false,
+  signInDisabled = false,
+  headingId,
 }: {
   state: Tone3000AccountState;
   /** The sign-in code TONE3000 issued, while waiting. */
@@ -38,52 +57,135 @@ export function Tone3000Account({
   user?: string;
   onSignIn: () => void;
   onSignOut: () => void;
+  onCancel?: () => void;
+  onReset?: () => void;
+  status?: string;
+  error?: string;
+  setup?: ReactNode;
+  returnAction?: ReactNode;
+  footer?: ReactNode;
+  verificationUrl?: string;
+  expiresAt?: number;
+  disabled?: boolean;
+  signInDisabled?: boolean;
+  headingId?: string;
 }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>TONE3000 account</CardTitle>
-        <Badge size="sm">
-          {state === 'connected' ? 'Connected' : 'Not connected'}
+        <CardTitle id={headingId}>TONE3000 account</CardTitle>
+        <Badge size="sm" role="status">
+          {status ??
+            {
+              none: 'Not connected',
+              loading: 'Reading account settings…',
+              requesting: 'Requesting a sign-in code…',
+              waiting: 'Waiting for sign-in',
+              connected: 'Connected',
+              reconnecting: 'Reconnecting account…',
+              error: 'Connection needs attention',
+            }[state]}
         </Badge>
       </CardHeader>
-      {state === 'none' && (
+      {error && (
+        <p role="alert" className="text-sm">
+          {error}
+        </p>
+      )}
+      {(state === 'none' || state === 'error') && (
         <div className="grid gap-2">
           <Caption>
             Sign in to get tones from TONE3000 straight onto this device.
           </Caption>
-          <Button className="justify-self-start" onClick={onSignIn}>
+          {setup}
+          <Button
+            className="justify-self-start"
+            disabled={disabled || signInDisabled}
+            onClick={onSignIn}
+          >
             Sign in to TONE3000
           </Button>
+          {state === 'error' && onReset && (
+            <Button
+              variant="outline"
+              className="justify-self-start"
+              disabled={disabled}
+              onClick={onReset}
+            >
+              Reset connection
+            </Button>
+          )}
         </div>
       )}
-      {state === 'requesting' && (
-        <Caption role="status">Requesting a sign-in code…</Caption>
-      )}
+      {state === 'loading' && <Caption>Reading account settings…</Caption>}
+      {state === 'requesting' && <Caption>Requesting a sign-in code…</Caption>}
       {state === 'waiting' && (
-        <div role="status" className="grid gap-2">
+        <div className="grid gap-2">
           <span className="text-sm">
             Open TONE3000 on any phone or laptop and enter this code:
           </span>
-          <span className="justify-self-start rounded-lg border border-foreground px-4 py-2 font-mono text-2xl font-semibold tracking-widest">
+          <span
+            aria-label="Sign-in code"
+            className="justify-self-start rounded-lg border border-foreground px-4 py-2 font-mono text-2xl font-semibold tracking-widest"
+          >
             {code}
           </span>
+          {verificationUrl && (
+            <Button asChild className="justify-self-start">
+              <a
+                href={verificationUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Open TONE3000 sign-in
+              </a>
+            </Button>
+          )}
+          {expiresAt && (
+            <Caption>
+              Code expires at {new Date(expiresAt * 1000).toLocaleTimeString()}.
+            </Caption>
+          )}
           <Caption className="text-xs">
             Waiting for sign-in. This screen updates on its own.
           </Caption>
         </div>
       )}
-      {state === 'connected' && (
+      {(state === 'requesting' || state === 'waiting') && onCancel && (
+        <Button
+          variant="outline"
+          className="justify-self-start"
+          disabled={disabled}
+          onClick={onCancel}
+        >
+          Cancel sign-in
+        </Button>
+      )}
+      {(state === 'connected' || state === 'reconnecting') && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="inline-flex items-center gap-2 text-sm">
-            <CheckCircle aria-hidden="true" /> Signed in as {user}
+            {state === 'connected' && <CheckCircle aria-hidden="true" />}{' '}
+            {state === 'reconnecting'
+              ? "Restoring the device's sign-in…"
+              : user
+                ? `Signed in as ${user}`
+                : 'Signed in on this device'}
           </span>
-          <Button size="sm" variant="outline" onClick={onSignOut}>
-            Sign out
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {returnAction}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={disabled}
+              onClick={onSignOut}
+            >
+              Sign out
+            </Button>
+          </div>
         </div>
       )}
-      <PoweredByTone3000 />
+      {footer}
+      <PoweredByTone3000 className="[&_a]:min-h-touch" />
     </Card>
   );
 }
