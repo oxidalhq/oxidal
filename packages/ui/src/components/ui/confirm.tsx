@@ -31,14 +31,19 @@ export interface ConfirmOptions {
  * Cancel is always the safe answer and is where focus starts.
  */
 export function useConfirm() {
-  const [request, setRequest] = useState<ConfirmOptions | null>(null);
-  const pending = useRef<((ok: boolean) => void) | null>(null);
+  const [request, setRequest] = useState<
+    (ConfirmOptions & { token: symbol }) | null
+  >(null);
+  const pending = useRef<{
+    token: symbol;
+    resolve: (ok: boolean) => void;
+  } | null>(null);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
-      pending.current?.(false);
+      pending.current?.resolve(false);
       pending.current = null;
     };
   }, []);
@@ -49,14 +54,17 @@ export function useConfirm() {
           resolve(false);
           return;
         }
-        pending.current?.(false);
-        pending.current = resolve;
-        setRequest(options);
+        pending.current?.resolve(false);
+        const token = Symbol('confirmation');
+        pending.current = { token, resolve };
+        setRequest({ ...options, token });
       }),
     [],
   );
   const close = (ok: boolean) => {
-    pending.current?.(ok);
+    // A prior render may still receive input while its replacement commits.
+    if (!request || pending.current?.token !== request.token) return;
+    pending.current.resolve(ok);
     pending.current = null;
     setRequest(null);
   };

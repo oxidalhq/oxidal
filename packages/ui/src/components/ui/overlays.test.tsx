@@ -46,6 +46,35 @@ it('cancels replaced and unmounted confirmations without leaving pending actions
   await expect(ask({ title: 'Late', confirm: 'Apply' })).resolves.toBe(false);
 });
 
+it('an old question cannot approve the operation that replaced it', async () => {
+  const user = userEvent.setup();
+  const { result } = renderHook(() => useConfirm());
+  let first!: Promise<boolean>;
+  let second!: Promise<boolean>;
+  act(() => {
+    first = result.current.ask({
+      title: 'First file',
+      confirm: 'Delete first',
+    });
+  });
+  const view = render(result.current.dialog);
+  act(() => {
+    second = result.current.ask({
+      title: 'Second file',
+      confirm: 'Delete second',
+    });
+  });
+  await expect(first).resolves.toBe(false);
+  const answer = vi.fn();
+  void second.then(answer);
+  // Keep the old render visible, as during an interrupted React commit.
+  await user.click(screen.getByRole('button', { name: 'Delete first' }));
+  expect(answer).not.toHaveBeenCalled();
+  view.rerender(result.current.dialog);
+  await user.click(screen.getByRole('button', { name: 'Delete second' }));
+  await expect(second).resolves.toBe(true);
+});
+
 function Asker({ onAnswer }: { onAnswer: (ok: boolean) => void }) {
   const { ask, dialog } = useConfirm();
   return (
