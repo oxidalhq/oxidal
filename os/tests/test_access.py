@@ -50,6 +50,11 @@ class AccessTests(unittest.TestCase):
             conf = conf.replace('listen 443 ssl', f'listen {proxy_port} ssl').replace('listen [::]:443 ssl default_server;', '')
             conf = conf.replace('/etc/oxidal/tls/', str(access) + '/').replace('/etc/oxidal/access.htpasswd', str(access / 'access.htpasswd'))
             conf = conf.replace('127.0.0.1:3210', f'127.0.0.1:{backend.server_port}')
+            public = root / 'public'
+            public.mkdir()
+            for name, data in provision.public_certificate_files(access, True).items():
+                (public / Path(name).name).write_bytes(data)
+            conf = conf.replace('/usr/share/oxidal/public/', str(public) + '/')
             # The local fixture uses port 443's exact allowlist with a TLS connection to loopback.
             config = root / 'nginx.conf'
             import os
@@ -67,7 +72,7 @@ class AccessTests(unittest.TestCase):
                         time.sleep(.05)
                 # CA verification remains enabled. Resolve the SAN name to localhost for this fixture only.
                 context = ssl.create_default_context(cafile=str(access / 'ca.crt'))
-                def request(host='oxidal.local', origin=None, auth=True, password_value=password):
+                def request(host='oxidal.local', origin=None, auth=True, password_value=password, path='/api/v1/commands', method='POST'):
                     import http.client
                     conn = http.client.HTTPSConnection('127.0.0.1', proxy_port, context=context)
                     raw = socket.create_connection(('127.0.0.1', proxy_port), timeout=5)
@@ -77,7 +82,7 @@ class AccessTests(unittest.TestCase):
                         headers['Origin'] = origin
                     if auth:
                         headers['Authorization'] = 'Basic ' + base64.b64encode(('oxidal:' + password_value).encode()).decode()
-                    conn.request('POST', '/api/v1/commands', '{}', headers)
+                    conn.request(method, path, '{}' if method == 'POST' else None, headers)
                     reply = conn.getresponse()
                     result = reply.status, reply.read()
                     conn.close()
@@ -95,6 +100,12 @@ class AccessTests(unittest.TestCase):
                 self.assertNotIn('Authorization', headers)
                 self.assertNotIn('Cookie', headers)
                 self.assertEqual(request(host='10.42.0.1', origin='https://10.42.0.1')[0], 200)
+                for path, expected in [('/api/v1/device/certificate', (access / 'ca.crt').read_bytes()), ('/api/v1/device/certificate.json', (public / 'certificate.json').read_bytes())]:
+                    self.assertEqual(request(path=path, method='GET', auth=False)[0], 401)
+                    self.assertEqual(request(path=path, method='GET', origin='https://evil.example')[0], 403)
+                    self.assertEqual(request(path=path, method='GET'), (200, expected))
+                    self.assertEqual(request(path=path, method='HEAD'), (200, b''))
+                    self.assertEqual(request(path=path)[0], 405)
             finally:
                 process.terminate()
                 process.communicate(timeout=10)
@@ -108,6 +119,12 @@ class AccessTests(unittest.TestCase):
             root = Path(temporary)
             html = provision.HERE / 'config/oxidal-welcome.html'
             logo = provision.HERE.parent / 'apps/web/public/brand/wordmark.svg'
+            access = root / 'access'
+            provision.create_access(access)
+            public = root / 'public'
+            public.mkdir()
+            for name, data in provision.public_certificate_files(access, True).items():
+                (public / Path(name).name).write_bytes(data)
             with socket.socket() as port:
                 port.bind(('127.0.0.1', 0))
                 proxy_port = port.getsockname()[1]
@@ -119,6 +136,7 @@ class AccessTests(unittest.TestCase):
             conf = conf.replace('10.42.0.1 1;', '127.0.0.1 1;')
             conf = conf.replace('/usr/share/oxidal/portal/index.html', str(html))
             conf = conf.replace('/opt/oxidal/ui/brand/wordmark.svg', str(logo))
+            conf = conf.replace('/usr/share/oxidal/public/', str(public) + '/')
             config = root / 'nginx.conf'
             user = 'user root;\n' if os.geteuid() == 0 else ''
             config.write_text(user + f'pid {root}/nginx.pid;\nerror_log {root}/error.log;\nevents {{}}\nhttp {{\n' + conf + '\n}\n')
@@ -154,6 +172,18 @@ class AccessTests(unittest.TestCase):
                 self.assertIn("form-action 'none'", headers['Content-Security-Policy'])
                 self.assertEqual(request('/wordmark.svg')[2], logo.read_bytes())
                 self.assertEqual(request('/welcome', method='HEAD')[2], b'')
+                for path, name, mime in [('/certificate.crt', 'ca.crt', 'application/x-x509-ca-cert'), ('/certificate.json', 'certificate.json', 'application/json')]:
+                    status, headers, body = request(path)
+                    self.assertEqual(status, 200)
+                    self.assertEqual(body, (public / name).read_bytes())
+                    self.assertEqual(headers['Content-Type'], mime)
+                    self.assertEqual(headers['Cache-Control'], 'no-store')
+                    self.assertIn("form-action 'none'", headers['Content-Security-Policy'])
+                    self.assertEqual(request(path, method='HEAD')[2], b'')
+                    self.assertEqual(request(path, method='POST')[0], 405)
+                    self.assertEqual(request(path, source=('127.0.0.2', 0))[0], 404)
+                for path in ['/ca.key', '/server.key', '/access.htpasswd', '/certificate.crt/../ca.key']:
+                    self.assertEqual(request(path)[0], 302)
                 self.assertEqual(request('/api/v1/commands', method='POST')[0], 405)
                 self.assertEqual(request('/api/v1/state')[1]['Location'], 'http://10.42.0.1/welcome')
                 self.assertEqual(request('/welcome', source=('127.0.0.2', 0))[0], 404, 'Non-hotspot clients cannot use forwarded headers to enter')

@@ -4,6 +4,7 @@
 """
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -201,12 +202,25 @@ def development_deploy_files(profile):
         b'oxidal-admin ALL=(root) NOPASSWD: /usr/local/sbin/oxidal-development-deploy bins *, '
         b'/usr/local/sbin/oxidal-development-deploy ui *, '
         b'/usr/local/sbin/oxidal-development-deploy splitter *, '
-        b'/usr/local/sbin/oxidal-development-deploy lv2 *\n'
+        b'/usr/local/sbin/oxidal-development-deploy lv2 *, '
+        b'/usr/local/sbin/oxidal-development-deploy certificate *\n'
     )
     return {
         'usr/local/sbin/oxidal-development-deploy': helper,
         'etc/sudoers.d/oxidal-development-deploy': sudoers,
     }
+
+
+def public_certificate_files(access, hotspot):
+    """Use the standalone helper's verifier for image and development installs."""
+    spec = importlib.util.spec_from_file_location('oxidal_development_deploy', HERE / 'scripts/development_deploy.py')
+    helper = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+    ca = inside(access, 'ca.crt')
+    if ca.stat().st_size > helper.CERTIFICATE_MAX_BYTES:
+        raise ValueError('Public CA certificate exceeds its size limit')
+    files = helper.certificate_files(ca.read_bytes(), inside(access, 'server.crt'), hotspot)
+    return {'usr/share/oxidal/public/' + name: data for name, data in files.items()}
 
 
 def create_access(path):
@@ -267,6 +281,7 @@ def appliance_files(bundle, access, hotspot):
         access = Path(access).resolve(strict=True)
         for name in ('server.crt', 'server.key'):
             files['etc/oxidal/tls/' + name] = inside(access, name).read_bytes()
+        files.update(public_certificate_files(access, hotspot))
         files['etc/oxidal/access.htpasswd'] = inside(access, 'access.htpasswd').read_bytes()
         files['etc/nginx/conf.d/oxidal.conf'] = (HERE / 'config/oxidal-nginx.conf').read_bytes()
     if hotspot:

@@ -194,9 +194,13 @@
           <summary>Page not opening?</summary>
           <p>
             Open Safari or Chrome and enter
-            <a href="https://10.42.0.1/">https://10.42.0.1</a>. This prototype
-            uses a self-signed certificate; your browser may ask you to confirm
-            it on your first visit.
+            <a href="https://10.42.0.1/">https://10.42.0.1</a>. Oxidal uses a
+            personal device certificate. You can
+            <a href="/certificate.crt" download="oxidal-ca.crt"
+              >download its public CA certificate</a
+            >. Compare its SHA-256 fingerprint with the certificate in your
+            original device setup folder before trusting it. A download over
+            this HTTP page alone does not verify the device's identity.
           </p>
           <p>
             On iPhone, choose <strong>Without Internet</strong> if asked to keep

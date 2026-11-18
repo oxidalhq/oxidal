@@ -6,6 +6,7 @@
  *   pnpm deploy:local ui              # only the web UI
  *   pnpm deploy:local bins splitter   # any combination of parts
  *   pnpm deploy:local lv2             # Oxidal's own Rust effect bundles
+ *   pnpm deploy:local certificate     # original public CA, never private keys
  *   pnpm deploy:local helper          # once per image: install the newer helper
  *   pnpm deploy:local --build-only    # build and pack without touching the Pi
  *
@@ -13,9 +14,10 @@
  * (rust:1.95-bookworm runs natively on Apple Silicon). Each part is copied to
  * the Pi's fixed /tmp path and installed by the image's checksum-bound
  * `oxidal-development-deploy` helper, which needs no password for these
- * four modes. Set OXIDAL_PI to choose the SSH target and
+ * listed modes. Set OXIDAL_PI to choose the SSH target and
  * OXIDAL_SPLITTER_MODELS for the four model files listed in
- * thirdparty/oxidal-splitter/SHA256SUMS.models.
+ * thirdparty/oxidal-splitter/SHA256SUMS.models. Certificate installation requires
+ * OXIDAL_ACCESS_DIR pointing to the original device setup folder.
  *
  * @see os/README.md
  * @see docs/media.md
@@ -39,9 +41,11 @@ const buildOnly = process.argv.includes('--build-only');
 const parts = process.argv.slice(2).filter((arg) => !arg.startsWith('-'));
 const wanted = new Set(parts.length ? parts : ['splitter', 'bins', 'ui']);
 for (const part of wanted)
-  if (!['splitter', 'bins', 'ui', 'lv2', 'helper'].includes(part))
+  if (
+    !['splitter', 'bins', 'ui', 'lv2', 'certificate', 'helper'].includes(part)
+  )
     throw new Error(
-      `Unknown part "${part}". Use ui, bins, splitter, lv2 or helper.`,
+      `Unknown part "${part}". Use ui, bins, splitter, lv2, certificate or helper.`,
     );
 
 const work = join(root, '.local/deploy-local');
@@ -155,7 +159,7 @@ if (wanted.has('helper')) {
   writeFileSync(
     sudoers,
     '# Private development image: scoped Oxidal application deploy only.\n' +
-      `oxidal-admin ALL=(root) NOPASSWD: ${helper} bins *, ${helper} ui *, ${helper} splitter *, ${helper} lv2 *\n`,
+      `oxidal-admin ALL=(root) NOPASSWD: ${helper} bins *, ${helper} ui *, ${helper} splitter *, ${helper} lv2 *, ${helper} certificate *\n`,
   );
   run('scp', [
     '-q',
@@ -201,6 +205,46 @@ if (
   throw new Error(
     'The Pi helper cannot install effects yet. Run `pnpm deploy:local helper` once, then deploy again.',
   );
+
+if (wanted.has('certificate')) {
+  const access = process.env.OXIDAL_ACCESS_DIR;
+  if (!access)
+    throw new Error(
+      'Set OXIDAL_ACCESS_DIR to the original device setup folder.',
+    );
+  step('Verifying the original public CA against its server certificate');
+  run('python3', [
+    '-c',
+    [
+      'import importlib.util, pathlib, sys',
+      'spec = importlib.util.spec_from_file_location("deploy", sys.argv[1])',
+      'module = importlib.util.module_from_spec(spec)',
+      'spec.loader.exec_module(module)',
+      'access = pathlib.Path(sys.argv[2])',
+      'ca = access / "ca.crt"',
+      'if ca.stat().st_size > module.CERTIFICATE_MAX_BYTES: raise ValueError("Public CA is too large")',
+      'module.certificate_files(ca.read_bytes(), access / "server.crt")',
+    ].join('\n'),
+    join(root, 'os/scripts/development_deploy.py'),
+    access,
+  ]);
+  if (
+    !buildOnly &&
+    spawnSync('ssh', [
+      host,
+      `grep -q "'certificate'" ${helper} && sudo -n -l | grep -q "${helper} certificate"`,
+    ]).status !== 0
+  )
+    throw new Error(
+      'The Pi helper cannot install the public CA yet. Run `pnpm deploy:local helper` once, then deploy again.',
+    );
+  const stage = join(work, 'certificate');
+  rmSync(stage, { recursive: true, force: true });
+  mkdirSync(stage, { recursive: true });
+  copyFileSync(join(access, 'ca.crt'), join(stage, 'ca.crt'));
+  pack(stage, join(work, 'oxidal-certificate.tgz'));
+  install('certificate', join(work, 'oxidal-certificate.tgz'));
+}
 
 if (wanted.has('splitter')) {
   const models =

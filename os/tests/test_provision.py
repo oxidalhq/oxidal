@@ -66,6 +66,7 @@ class ProvisionTests(unittest.TestCase):
         )
         self.assertIn(b'oxidal-development-deploy bins *', files['etc/sudoers.d/oxidal-development-deploy'])
         self.assertIn(b'oxidal-development-deploy lv2 *', files['etc/sudoers.d/oxidal-development-deploy'])
+        self.assertIn(b'oxidal-development-deploy certificate *', files['etc/sudoers.d/oxidal-development-deploy'])
         self.assertNotIn(b'oxidal-device-service', files['usr/local/sbin/oxidal-development-deploy'])
         with self.assertRaises(ValueError):
             provision.development_deploy_files('unknown')
@@ -240,12 +241,14 @@ class ApplianceTests(ProvisionTests):
     def test_hotspot_image_clears_vendor_radio_disabled_state(self):
         import json
         access = self.root / 'access'
-        access.mkdir()
-        for name in ('server.crt', 'server.key', 'access.htpasswd'):
-            (access / name).write_text('fixture')
+        provision.create_access(access)
         (access / 'hotspot.json').write_text(json.dumps({'ssid': 'Oxidal-abcdef', 'password': 'test-only-password-123', 'country': 'NZ'}))
         # The discovery files are never staged for a normal Linux bundle.
         regular = provision.appliance_files(self.bundle, access, False)[0]
+        self.assertEqual(regular['usr/share/oxidal/public/ca.crt'], (access / 'ca.crt').read_bytes())
+        metadata = json.loads(regular['usr/share/oxidal/public/certificate.json'])
+        self.assertIsNone(metadata['hotspot_download'])
+        self.assertFalse(any(path.endswith('/ca.key') for path in regular))
         self.assertNotIn('etc/nginx/conf.d/oxidal-portal.conf', regular)
         self.assertNotIn('etc/NetworkManager/dnsmasq-shared.d/oxidal-portal.conf', regular)
         state = self.root / 'var/lib/NetworkManager/NetworkManager.state'

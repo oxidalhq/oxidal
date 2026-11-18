@@ -96,7 +96,7 @@ The image is 8 GiB and expects a fresh card of at least 16 GB. It retains the ve
 ### Phone access and first sound
 
 - Keep `.local/device-access/` private. `access.txt` contains independently generated web, Wi-Fi and recovery credentials. Credentials are not printed into build logs or web assets. Do not reuse one image/credential set across multiple devices.
-- Copy `ca.crt` to your own phone/tablet and install/trust that personal CA. The CA private key stays outside the image. The device certificate covers `oxidal.local` and `10.42.0.1`; do not bypass certificate validation.
+- Copy `ca.crt` to your own phone/tablet and install/trust that personal CA. The CA private key stays outside the image. New images also serve the public CA through the hotspot welcome page at `http://10.42.0.1/certificate.crt`. Compare its SHA-256 fingerprint with your original setup certificate before trusting it; an HTTP download alone does not verify identity. The device certificate covers `oxidal.local` and `10.42.0.1`; a router-assigned Wi-Fi IP still has a name mismatch. Do not bypass certificate validation.
 - Join the generated hotspot. Where the phone supports discovery, the Oxidal welcome page offers **Open Oxidal** and the friendly address. Otherwise open `https://oxidal.local` or `https://10.42.0.1` directly. Sign in as `oxidal` with the generated web password. All UI, API and event-stream requests require authentication.
 - The API itself stays on `127.0.0.1:3210`. Nginx checks external Host and Origin before forwarding requests. HTTP is not an alternative authenticated control endpoint. Provider accounts and internet access are not required for local playback.
 - Initially audio is stopped. The image carries no third-party effect packs: the player installs them from Library or Settings. First boot saves only the Oxidal sounds that need nothing else; the other sounds are listed in Library → Oxidal sounds with what each needs. Choose an example or import a preset, select/probe the interface in Settings, then start the saved session. Both directions initially require the same hardware clock/endpoint. Keep output levels low for the first physical test.
@@ -188,6 +188,8 @@ own Rust effects in `/usr/local/lib/lv2` while the daemon is stopped, keeps the
 previous bundles in `/opt/oxidal/deploy-rollback/lv2`, outside `LV2_PATH`, and
 restores them if the daemon fails to start.
 
+### Local deployment
+
 From a Mac or Linux checkout with Docker and SSH access, `pnpm deploy:local`
 builds the Linux ARM64 binaries (all workers, appliance features) and the
 splitter runner in `rust:1.95-bookworm`, builds the UI, and installs the
@@ -204,6 +206,23 @@ and the worker-loaded TONE3000 library; the root device/debug/terminal services 
 not replaceable. A failed service restart restores the preceding binaries, and only
 one previous UI/binary set is retained. Normal `appliance` images contain neither
 the helper nor its sudo rule.
+
+To add public certificate downloads to an existing development image, update its
+helper once, then use the original setup folder:
+
+```sh
+pnpm deploy:local helper
+OXIDAL_ACCESS_DIR=/path/to/original-device-access pnpm deploy:local certificate
+```
+
+Add `--build-only` to verify and package without installing. The certificate part
+is explicit and is not in the default deployment set. It packages only `ca.crt`,
+verifies it against the installed server certificate, computes the fingerprint,
+and adds fixed download locations while preserving authentication, network
+guards, TLS keys and credentials. It validates/reloads nginx and restores the
+previous public files/configuration on failure. It does not restart audio. An
+unknown nginx layout requires review rather than replacing its configuration.
+See [public certificate access](../docs/device-service.md#public-certificate-access).
 
 For an already assembled disposable image, `os/scripts/development_library.py
 --backup BACKUP --output NEW_OVERLAY.tar` produces the same validated root overlay

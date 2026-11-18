@@ -2,7 +2,8 @@
 """Scoped local deployment for private development images only.
 
 Accepts one fixed /tmp archive, verifies its caller-supplied SHA-256 and a
-strict file allowlist, then atomically replaces only Oxidal application files.
+strict file allowlist, then atomically replaces Oxidal application files or
+installs the matching public CA and fixed nginx download locations.
 It never installs the root device helper or accepts a caller-selected path.
 
 The splitter runtime (runner, ONNX Runtime and model files) is too large to
@@ -11,7 +12,9 @@ and made current by switching one symlink; the daemon finds it on the next
 split without a restart.
 """
 
+import base64
 import hashlib
+import json
 import os
 from pathlib import Path, PurePosixPath
 import re
@@ -35,7 +38,34 @@ ARCHIVES = {
     'ui': Path('/tmp/oxidal-ui.tgz'),
     'splitter': Path('/tmp/oxidal-splitter.tgz'),
     'lv2': Path('/tmp/oxidal-lv2.tgz'),
+    'certificate': Path('/tmp/oxidal-certificate.tgz'),
 }
+CERTIFICATE_MAX_BYTES = 16384
+CERTIFICATE_MARKER = '# Oxidal public certificate'
+HTTPS_CERTIFICATE_ROUTES = '''    # Oxidal public certificate: exact public files, still authenticated.
+    location = /api/v1/device/certificate {
+        if ($request_method !~ ^(GET|HEAD)$) { return 405; }
+        default_type application/x-x509-ca-cert;
+        add_header Cache-Control "no-store" always;
+        alias /usr/share/oxidal/public/ca.crt;
+    }
+    location = /api/v1/device/certificate.json {
+        if ($request_method !~ ^(GET|HEAD)$) { return 405; }
+        default_type application/json;
+        add_header Cache-Control "no-store" always;
+        alias /usr/share/oxidal/public/certificate.json;
+    }
+'''
+HTTP_CERTIFICATE_ROUTES = '''    # Oxidal public certificate: hotspot bootstrap only, never an API proxy.
+    location = /certificate.crt {
+        default_type application/x-x509-ca-cert;
+        alias /usr/share/oxidal/public/ca.crt;
+    }
+    location = /certificate.json {
+        default_type application/json;
+        alias /usr/share/oxidal/public/certificate.json;
+    }
+'''
 # Oxidal's own Rust effects. Bundles are replaced whole, in the directory the
 # daemon's LV2_PATH reads. Nothing temporary may sit in that directory: the
 # LV2 host loads every bundle it finds there, hidden ones included.
@@ -128,6 +158,8 @@ def read_archive(path, expected, mode):
                 raise ValueError('Binary archive contains an unapproved file')
             if mode == 'lv2' and not lv2_file_allowed(str(name)):
                 raise ValueError('LV2 archive contains an unapproved file')
+            if mode == 'certificate' and (str(name) != 'ca.crt' or member.size > CERTIFICATE_MAX_BYTES):
+                raise ValueError('Certificate archive contains an unapproved file or size')
             if mode == 'ui' and name.parts[0].startswith('.'):
                 raise ValueError('UI archive contains a hidden root entry')
             source = archive.extractfile(member)
@@ -146,6 +178,94 @@ def read_archive(path, expected, mode):
             if any(f'{bundle}/{name}' not in files for name in lv2_bundle_files(effect)):
                 raise ValueError('LV2 archive has an incomplete bundle')
     return files
+
+
+def certificate_files(ca, server, hotspot=False):
+    """Validate a public CA against existing TLS; no private keys are read.
+
+    @see docs/device-service.md
+    """
+    if len(ca) > CERTIFICATE_MAX_BYTES:
+        raise ValueError('Expected one bounded public CA certificate')
+    match = re.fullmatch(rb'\s*-----BEGIN CERTIFICATE-----\s*([A-Za-z0-9+/=\r\n]+)-----END CERTIFICATE-----\s*', ca)
+    if not match:
+        raise ValueError('Expected one bounded public CA certificate')
+    try:
+        der = base64.b64decode(b''.join(match[1].split()), validate=True)
+    except ValueError as error:
+        raise ValueError('Invalid public CA encoding') from error
+    with tempfile.TemporaryDirectory(prefix='oxidal-public-ca-') as directory:
+        path = Path(directory) / 'ca.crt'
+        path.write_bytes(ca)
+        try:
+            details = subprocess.run(['openssl', 'x509', '-in', str(path), '-noout', '-text'], check=True, capture_output=True, text=True, timeout=10).stdout
+            if not re.search(r'X509v3 Basic Constraints:[^\n]*\n\s*CA:TRUE(?:\s*,|\s*$)', details, re.MULTILINE):
+                raise ValueError('The public certificate is not a CA')
+            subprocess.run(['openssl', 'verify', '-CAfile', str(path), str(server)], check=True, capture_output=True, timeout=10)
+            server_details = subprocess.run(['openssl', 'x509', '-in', str(server), '-noout', '-text'], check=True, capture_output=True, text=True, timeout=10).stdout
+        except (subprocess.SubprocessError, OSError) as error:
+            raise ValueError('Public CA does not verify the existing server certificate') from error
+    names = sorted(set(re.findall(r'DNS:([A-Za-z0-9.-]+)|IP Address:([0-9A-Fa-f:.]+)', server_details)))
+    names = sorted({dns or ip for dns, ip in names})
+    if not {'oxidal.local', '10.42.0.1'}.issubset(names):
+        raise ValueError('Server certificate lacks the Oxidal network names')
+    digest = hashlib.sha256(der).hexdigest().upper()
+    metadata = {
+        'schema_version': 1,
+        'fingerprint_sha256': ':'.join(digest[i:i + 2] for i in range(0, len(digest), 2)),
+        'file_name': 'oxidal-ca.crt',
+        'https_download': '/api/v1/device/certificate',
+        'hotspot_download': '/certificate.crt' if hotspot else None,
+        'server_names': names,
+    }
+    return {'ca.crt': ca, 'certificate.json': (json.dumps(metadata, sort_keys=True) + '\n').encode()}
+
+
+def certificate_locations(config, portal=False):
+    """Add fixed routes without replacing authentication, host or origin policy."""
+    block = HTTP_CERTIFICATE_ROUTES if portal else HTTPS_CERTIFICATE_ROUTES
+    if config.count(block) == 1 and config.count(CERTIFICATE_MARKER) == 1:
+        return config
+    anchor = '    location = /welcome {' if portal else '    location / {'
+    if CERTIFICATE_MARKER in config or config.count(anchor) != 1:
+        raise ValueError('Unrecognized certificate route configuration; review it before updating')
+    return config.replace(anchor, block + anchor, 1)
+
+
+def deploy_certificate(files, filesystem=Path('/'), run=subprocess.run):
+    """Install only the matching public CA and exact routes, with rollback."""
+    if set(files) != {'ca.crt'}:
+        raise ValueError('Certificate archive is incomplete')
+    config = filesystem / 'etc/nginx/conf.d/oxidal.conf'
+    portal = filesystem / 'etc/nginx/conf.d/oxidal-portal.conf'
+    public = filesystem / 'usr/share/oxidal/public'
+    validated = certificate_files(files['ca.crt'], filesystem / 'etc/oxidal/tls/server.crt', portal.exists())
+    updates = {public / name: data for name, data in validated.items()}
+    updates[config] = certificate_locations(config.read_text()).encode()
+    if portal.exists():
+        updates[portal] = certificate_locations(portal.read_text(), True).encode()
+    previous = {path: path.read_bytes() if path.exists() else None for path in updates}
+    if all(previous[path] == data for path, data in updates.items()):
+        return
+    try:
+        for path, data in updates.items():
+            atomic_file(path, data, 0o644)
+        run(['nginx', '-t'], check=True)
+        run(['systemctl', 'reload', 'nginx.service'], check=True)
+    except BaseException:
+        for path, data in previous.items():
+            if data is None:
+                path.unlink(missing_ok=True)
+            else:
+                atomic_file(path, data, 0o644)
+        # The old worker continues serving if a reload is rejected. Try the
+        # restored configuration without masking the original failure.
+        try:
+            run(['nginx', '-t'], check=True)
+            run(['systemctl', 'reload', 'nginx.service'], check=True)
+        except Exception:
+            pass
+        raise
 
 
 def atomic_file(path, data, mode):
@@ -346,7 +466,7 @@ def deploy_ui(files, root=Path('/opt/oxidal')):
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     if len(argv) != 2 or argv[0] not in ARCHIVES:
-        raise SystemExit('usage: oxidal-development-deploy bins|ui|splitter|lv2 SHA256')
+        raise SystemExit('usage: oxidal-development-deploy bins|ui|splitter|lv2|certificate SHA256')
     mode, expected = argv
     if mode == 'splitter':
         print(install_splitter(ARCHIVES[mode], expected))
@@ -356,6 +476,8 @@ def main(argv=None):
         deploy_bins(files)
     elif mode == 'lv2':
         deploy_lv2(files)
+    elif mode == 'certificate':
+        deploy_certificate(files)
     else:
         deploy_ui(files)
 

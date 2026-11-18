@@ -1,7 +1,9 @@
 import hashlib
 import importlib.util
 import io
+import json
 from pathlib import Path
+import subprocess
 import tarfile
 import tempfile
 import unittest
@@ -11,6 +13,9 @@ spec = importlib.util.spec_from_file_location(
 )
 deploy = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(deploy)
+spec = importlib.util.spec_from_file_location('provision', Path(__file__).parents[1] / 'scripts/provision.py')
+provision = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(provision)
 
 
 class DevelopmentDeployTests(unittest.TestCase):
@@ -201,6 +206,122 @@ class DevelopmentDeployTests(unittest.TestCase):
             deploy.install_splitter(path, digest, releases, current)
         self.assertFalse(current.exists())
         self.assertEqual([e.name for e in releases.iterdir()], [])
+
+
+class PublicCertificateTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.certificates = tempfile.TemporaryDirectory(prefix='oxidal-test-ca-')
+        cls.addClassCleanup(cls.certificates.cleanup)
+        cls.access = Path(cls.certificates.name) / 'access'
+        provision.create_access(cls.access)
+        cls.other = Path(cls.certificates.name) / 'other'
+        provision.create_access(cls.other)
+
+    setUp = DevelopmentDeployTests.setUp
+    archive = DevelopmentDeployTests.archive
+
+    def files(self):
+        return {'ca.crt': (self.access / 'ca.crt').read_bytes()}
+
+    def install_fixture(self, hotspot=True):
+        tls = self.root / 'etc/oxidal/tls'
+        tls.mkdir(parents=True)
+        (tls / 'server.crt').write_bytes((self.access / 'server.crt').read_bytes())
+        # A sentinel proves the public deployment never opens or replaces keys.
+        (tls / 'server.key').write_bytes(b'unchanged key sentinel')
+        configs = self.root / 'etc/nginx/conf.d'
+        configs.mkdir(parents=True)
+        for name, block in [('oxidal.conf', deploy.HTTPS_CERTIFICATE_ROUTES), ('oxidal-portal.conf', deploy.HTTP_CERTIFICATE_ROUTES)]:
+            if name == 'oxidal-portal.conf' and not hotspot:
+                continue
+            source = 'oxidal-nginx.conf' if name == 'oxidal.conf' else name
+            (configs / name).write_text((provision.HERE / 'config' / source).read_text().replace(block, ''))
+        return configs
+
+    def test_metadata_fingerprint_matches_openssl_and_installed_chain(self):
+        result = deploy.certificate_files(self.files()['ca.crt'], self.access / 'server.crt', True)
+        metadata = json.loads(result['certificate.json'])
+        actual = subprocess.check_output(['openssl', 'x509', '-in', str(self.access / 'ca.crt'), '-noout', '-fingerprint', '-sha256'], text=True).strip().split('=', 1)[1]
+        self.assertEqual(metadata['fingerprint_sha256'], actual)
+        self.assertEqual(metadata['server_names'], ['10.42.0.1', 'oxidal.local'])
+        self.assertEqual(metadata['https_download'], '/api/v1/device/certificate')
+        self.assertEqual(metadata['hotspot_download'], '/certificate.crt')
+        self.assertIsNone(json.loads(deploy.certificate_files(self.files()['ca.crt'], self.access / 'server.crt')['certificate.json'])['hotspot_download'])
+        self.assertEqual(set(result), {'ca.crt', 'certificate.json'})
+
+    def test_only_one_bounded_public_ca_matching_the_server_is_accepted(self):
+        ca = self.files()['ca.crt']
+        for invalid in [b'x' * (deploy.CERTIFICATE_MAX_BYTES + 1), ca + ca, b'-----BEGIN ' + b'PRIVATE KEY-----\nnot a certificate', (self.access / 'server.crt').read_bytes(), (self.other / 'ca.crt').read_bytes()]:
+            with self.subTest(size=len(invalid)):
+                with self.assertRaises(ValueError):
+                    deploy.certificate_files(invalid, self.access / 'server.crt')
+
+    def test_archive_excludes_private_keys_and_other_files(self):
+        path, digest = self.archive([('ca.crt', self.files()['ca.crt'], tarfile.REGTYPE)])
+        self.assertEqual(deploy.read_archive(path, digest, 'certificate'), self.files())
+        for name, body in [('ca.key', b'not included'), ('server.crt', b'not included'), ('ca.crt', b'x' * (deploy.CERTIFICATE_MAX_BYTES + 1))]:
+            path, digest = self.archive([(name, body, tarfile.REGTYPE)])
+            with self.assertRaisesRegex(ValueError, 'unapproved'):
+                deploy.read_archive(path, digest, 'certificate')
+
+    def test_routes_match_provisioning_and_preserve_authentication_and_guards(self):
+        for source, block, portal in [('oxidal-nginx.conf', deploy.HTTPS_CERTIFICATE_ROUTES, False), ('oxidal-portal.conf', deploy.HTTP_CERTIFICATE_ROUTES, True)]:
+            current = (provision.HERE / 'config' / source).read_text()
+            self.assertEqual(current.count(block), 1)
+            self.assertEqual(deploy.certificate_locations(current.replace(block, ''), portal), current)
+            self.assertEqual(deploy.certificate_locations(current, portal), current)
+            for invalid in [current + block, current.replace(block, deploy.CERTIFICATE_MARKER + '\n'), 'unknown configuration']:
+                with self.assertRaisesRegex(ValueError, 'Unrecognized'):
+                    deploy.certificate_locations(invalid, portal)
+
+    def test_install_is_idempotent_and_never_restarts_audio_or_replaces_keys(self):
+        configs = self.install_fixture()
+        calls = []
+        run = lambda command, check: calls.append(command)
+        deploy.deploy_certificate(self.files(), self.root, run)
+        self.assertEqual(calls, [['nginx', '-t'], ['systemctl', 'reload', 'nginx.service']])
+        self.assertEqual((configs / 'oxidal.conf').read_text(), (provision.HERE / 'config/oxidal-nginx.conf').read_text())
+        self.assertEqual((self.root / 'etc/oxidal/tls/server.key').read_bytes(), b'unchanged key sentinel')
+        public = self.root / 'usr/share/oxidal/public'
+        self.assertEqual(sorted(path.name for path in public.iterdir()), ['ca.crt', 'certificate.json'])
+        self.assertEqual((public / 'ca.crt').stat().st_mode & 0o777, 0o644)
+        deploy.deploy_certificate(self.files(), self.root, run)
+        self.assertEqual(len(calls), 2)
+
+    def test_failed_validation_or_reload_restores_every_previous_file(self):
+        for fail_at in [1, 2]:
+            with self.subTest(fail_at=fail_at):
+                directory = self.root / str(fail_at)
+                directory.mkdir()
+                original_root = self.root
+                self.root = directory
+                configs = self.install_fixture()
+                before = {path: path.read_bytes() for path in configs.iterdir()}
+                public = self.root / 'usr/share/oxidal/public'
+                public.mkdir(parents=True)
+                (public / 'ca.crt').write_bytes(b'old public file')
+                calls = []
+                def run(command, check):
+                    calls.append(command)
+                    if len(calls) == fail_at:
+                        raise RuntimeError('nginx rejected the update')
+                with self.assertRaisesRegex(RuntimeError, 'nginx rejected'):
+                    deploy.deploy_certificate(self.files(), self.root, run)
+                self.assertEqual({path: path.read_bytes() for path in configs.iterdir()}, before)
+                self.assertEqual((public / 'ca.crt').read_bytes(), b'old public file')
+                self.assertFalse((public / 'certificate.json').exists())
+                self.assertEqual(calls[-1], ['systemctl', 'reload', 'nginx.service'])
+                self.root = original_root
+
+    def test_wrong_ca_fails_before_writes_or_reload(self):
+        self.install_fixture(False)
+        before = {str(path.relative_to(self.root)): path.read_bytes() for path in self.root.rglob('*') if path.is_file()}
+        calls = []
+        with self.assertRaisesRegex(ValueError, 'does not verify'):
+            deploy.deploy_certificate({'ca.crt': (self.other / 'ca.crt').read_bytes()}, self.root, lambda command, check: calls.append(command))
+        self.assertEqual(calls, [])
+        self.assertEqual({str(path.relative_to(self.root)): path.read_bytes() for path in self.root.rglob('*') if path.is_file()}, before)
 
 
 if __name__ == '__main__':
