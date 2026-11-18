@@ -133,7 +133,7 @@ export function SettingGroup({
     <Collapsible asChild open={open} onOpenChange={setOpen}>
       <section data-slot="setting-group" className={cn('grid', className)}>
         <h3 className="m-0">
-          <CollapsibleTrigger className="min-h-9 px-0 small-caps text-sm font-medium text-muted-foreground hover:bg-transparent hover:text-foreground">
+          <CollapsibleTrigger className="min-h-9 px-0 small-caps text-sm font-medium text-muted-foreground hover:bg-transparent hover:text-foreground [@media(pointer:coarse)]:min-h-touch">
             {title}
           </CollapsibleTrigger>
         </h3>

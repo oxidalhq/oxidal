@@ -12,7 +12,7 @@ import { cn } from '../../lib/cn';
  * Delete never looks like a Save.
  */
 const buttonVariants = cva(
-  'inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border font-semibold whitespace-nowrap transition-[transform,background-color] duration-[var(--duration-fast)] ease-[var(--ease-out)] select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-[1.125em] [&_svg]:shrink-0 [@media(pointer:coarse)]:min-h-touch [@media(pointer:coarse)]:min-w-touch',
+  'inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border font-semibold whitespace-nowrap transition-[transform,background-color] duration-[var(--duration-fast)] ease-[var(--ease-out)] select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-[1.125em] [&_svg]:shrink-0 [@media(pointer:coarse)]:min-w-touch',
   {
     variants: {
       variant: {
@@ -29,11 +29,11 @@ const buttonVariants = cva(
         link: 'h-auto min-h-0 border-transparent bg-transparent p-0 text-foreground underline decoration-wire underline-offset-[0.2em] hover:decoration-foreground',
       },
       size: {
-        sm: 'h-9 px-3 text-sm',
+        sm: 'h-9 px-3 text-sm [@media(pointer:coarse)]:min-h-touch',
         md: 'min-h-touch px-4 text-sm',
         lg: 'min-h-13 px-5 text-md',
         icon: 'size-touch p-0',
-        'icon-sm': 'size-9 p-0',
+        'icon-sm': 'size-9 p-0 [@media(pointer:coarse)]:min-h-touch',
         'icon-lg': 'size-13 p-0',
       },
     },
