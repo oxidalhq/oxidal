@@ -21,15 +21,21 @@ const NETWORK_TRIAL: Duration = Duration::from_secs(90);
 // stderr may contain an SSID or a secret; never forward it into a response/log.
 async fn run(program: &str, args: &[&str]) -> Result<String> {
     #[cfg(test)]
-    if let Ok(result) = tests::COMMANDS.try_with(|commands| {
+    if let Ok((stall, result)) = tests::COMMANDS.try_with(|commands| {
         let mut commands = commands.borrow_mut();
         let (expected, result) = commands.pop_front().expect("Unexpected device command");
+        let (stall, expected) = expected
+            .strip_prefix("stall ")
+            .map_or((false, expected.as_str()), |expected| (true, expected));
         assert!(
-            format!("{program} {}", args.join(" ")).contains(&expected),
+            format!("{program} {}", args.join(" ")).contains(expected),
             "Expected {expected}, got {program} {args:?}"
         );
-        result.map(str::to_owned)
+        (stall, result.map(str::to_owned))
     }) {
+        if stall {
+            std::future::pending::<()>().await;
+        }
         return result;
     }
     let mut child = Process::new(program)
@@ -961,59 +967,73 @@ impl Network {
                     if pending.phase != "awaiting_confirmation" {
                         return Err("Network connection is not ready");
                     }
-                    if pending.journal.policy_change {
-                        let state = self.status(false).await?;
-                        if !state.interfaces.iter().any(|d| {
-                            (d.kind == "wifi" || d.kind == "ethernet") && d.state == "connected"
-                        }) {
-                            return Err("No active network connection");
-                        }
-                    } else {
-                        let state = nm(&[
-                            "--get-values",
-                            "GENERAL.STATE",
-                            "connection",
-                            "show",
-                            "uuid",
-                            &pending.journal.uuid,
-                        ])
-                        .await?;
-                        if state.trim() != "activated" {
-                            return Err("Network connection is no longer active");
-                        }
-                        if let Some(interface) = &pending.journal.activation_interface {
-                            let devices = nm(&[
+                    let remaining = NETWORK_TRIAL.saturating_sub(pending.started.elapsed());
+                    let confirmed = tokio::time::timeout(remaining, async {
+                        if pending.journal.policy_change {
+                            let state = self.status(false).await?;
+                            if !state.interfaces.iter().any(|d| {
+                                (d.kind == "wifi" || d.kind == "ethernet") && d.state == "connected"
+                            }) {
+                                return Err("No active network connection");
+                            }
+                        } else {
+                            let state = nm(&[
                                 "--get-values",
-                                "GENERAL.DEVICES",
+                                "GENERAL.STATE",
                                 "connection",
                                 "show",
                                 "uuid",
                                 &pending.journal.uuid,
                             ])
                             .await?;
-                            if devices.trim() != interface {
-                                return Err(
-                                    "Saved network is not active on the selected interface",
-                                );
+                            if state.trim() != "activated" {
+                                return Err("Network connection is no longer active");
                             }
+                            if let Some(interface) = &pending.journal.activation_interface {
+                                let devices = nm(&[
+                                    "--get-values",
+                                    "GENERAL.DEVICES",
+                                    "connection",
+                                    "show",
+                                    "uuid",
+                                    &pending.journal.uuid,
+                                ])
+                                .await?;
+                                if devices.trim() != interface {
+                                    return Err(
+                                        "Saved network is not active on the selected interface",
+                                    );
+                                }
+                            }
+                            nm(&[
+                                "connection",
+                                "modify",
+                                "uuid",
+                                &pending.journal.uuid,
+                                "connection.autoconnect",
+                                if pending.journal.file == "oxidal.nmconnection"
+                                    && self.policy()?.is_some()
+                                {
+                                    "no"
+                                } else {
+                                    "yes"
+                                },
+                            ])
+                            .await?;
                         }
-                        nm(&[
-                            "connection",
-                            "modify",
-                            "uuid",
-                            &pending.journal.uuid,
-                            "connection.autoconnect",
-                            if pending.journal.file == "oxidal.nmconnection"
-                                && self.policy()?.is_some()
-                            {
-                                "no"
-                            } else {
-                                "yes"
-                            },
-                        ])
-                        .await?;
+                        checkpoint("CheckpointDestroy", "o", &[&pending.journal.checkpoint])
+                            .await?;
+                        Ok(())
+                    })
+                    .await;
+                    match confirmed {
+                        Ok(result) => result?,
+                        Err(_) => {
+                            let old = self.pending.take().unwrap();
+                            self.rollback(old.journal).await?;
+                            return Err("Network transaction expired");
+                        }
                     }
-                    checkpoint("CheckpointDestroy", "o", &[&pending.journal.checkpoint]).await?;
                     fs::remove_file(self.state_dir.as_path().join("pending.json"))
                         .map_err(|_| "Cannot finalize network settings")?;
                     self.pending = None;
@@ -1388,6 +1408,47 @@ mod tests {
                 assert!(state.pending.unwrap().seconds_remaining <= NETWORK_TRIAL.as_secs());
                 network.pending.as_mut().unwrap().started = Instant::now() - NETWORK_TRIAL;
                 network.activate().await;
+                assert!(network.pending.is_none());
+                assert_eq!(fs::read(path).unwrap(), original);
+                assert!(!fixture.root.join("state/pending.json").exists());
+                COMMANDS.with(|q| assert!(q.borrow().is_empty()));
+            })
+            .await;
+    }
+
+    #[tokio::test]
+    async fn stalled_confirmation_rolls_back_without_persisting_after_the_trial() {
+        let fixture = Fixture::new();
+        let (path, original) = save_client(&fixture);
+        let mut network = fixture.network();
+        let mut commands = saved_begin();
+        commands.extend(responses(&[
+            ("connection.autoconnect no", Ok("")),
+            ("connection load", Ok("")),
+            ("radio wifi on", Ok("")),
+            ("up uuid", Ok("")),
+            ("stall GENERAL.STATE", Ok("activated\n")),
+        ]));
+        commands.extend(saved_rollback());
+        COMMANDS
+            .scope(RefCell::new(commands), async {
+                let transaction = network
+                    .begin(&connect())
+                    .await
+                    .unwrap()
+                    .pending
+                    .unwrap()
+                    .transaction;
+                network.activate().await;
+                network.pending.as_mut().unwrap().started =
+                    Instant::now() - Duration::from_secs(89);
+                assert_eq!(
+                    network
+                        .command(Command::Confirm { transaction })
+                        .await
+                        .unwrap_err(),
+                    "Network transaction expired"
+                );
                 assert!(network.pending.is_none());
                 assert_eq!(fs::read(path).unwrap(), original);
                 assert!(!fixture.root.join("state/pending.json").exists());

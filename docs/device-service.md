@@ -120,9 +120,10 @@ restores original profile bytes and country. Both actions require their advertis
 capability and the explicit administrative device-service update below.
 
 The shared 90-second clock starts before checkpoint creation and includes
-preparation. Activation has one deadline covering the entire sequence, bounded by
-the remaining trial time. An already expired trial rolls back before issuing
-activation commands. Readback reports time from that same clock; this software
+preparation. Activation and confirmation each use the same remaining trial
+budget for their entire sequence, including active readback, autoconnect and
+checkpoint finalisation. A stalled confirmation rolls back instead of persisting
+a late candidate. An already expired trial cannot issue activation commands. Readback reports time from that same clock; this software
 limit does not establish physical radio or reconnection timing.
 
 ## Administrator service updates
