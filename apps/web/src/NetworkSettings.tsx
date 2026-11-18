@@ -17,6 +17,7 @@ import {
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { deviceNetwork, type NetworkCommand, type NetworkState } from './api';
+import { DeviceAccess } from './DeviceAccess';
 
 /** Phone-first setup with explicit link-loss warning and server-owned recovery.
  * @see docs/device-service.md
@@ -539,6 +540,7 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
           )}
         </>
       )}
+      <DeviceAccess network={readError ? null : state} />
       {review && (
         <AdjustmentDialog
           title={mode === 'join' ? `Join ${ssid}?` : `Update ${ssid}?`}

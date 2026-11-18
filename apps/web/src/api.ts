@@ -222,6 +222,35 @@ export async function playbackCommand(
 
 export type NetworkState = Contract['network_state'];
 export type NetworkCommand = Contract['network_command'];
+export type PublicCertificate = Contract['device_certificate'];
+const certificateValidator = ajv.compile<PublicCertificate>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/PublicCertificate',
+});
+/** Public CA metadata from the authenticated appliance proxy.
+ * @see docs/device-service.md
+ */
+export async function deviceCertificate(): Promise<PublicCertificate> {
+  const body = await presetResponse(
+    await fetch('/api/v1/device/certificate.json', {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(10000),
+    }),
+  );
+  if (
+    !certificateValidator(body) ||
+    body.schema_version !== 1 ||
+    !/^(?:[A-F0-9]{2}:){31}[A-F0-9]{2}$/.test(body.fingerprint_sha256) ||
+    body.https_download !== '/api/v1/device/certificate' ||
+    body.file_name !== 'oxidal-ca.crt' ||
+    (body.hotspot_download != null &&
+      body.hotspot_download !== '/certificate.crt') ||
+    !body.server_names.includes('oxidal.local') ||
+    !body.server_names.includes('10.42.0.1')
+  )
+    throw new Error('Incompatible device certificate response');
+  return body;
+}
 const networkValidator = ajv.compile<NetworkState>({
   $defs: schema.$defs,
   $ref: '#/$defs/NetworkState',

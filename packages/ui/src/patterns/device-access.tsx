@@ -13,6 +13,8 @@ export type CertificateFile = {
   fileName: string;
   /** SHA-256 fingerprint, to compare with what the phone or laptop shows. */
   fingerprint: string;
+  /** Public certificate-only download while connected to the setup hotspot. */
+  hotspotHref?: string;
 };
 
 type CopyState = 'Copy' | 'Copied' | 'Selected';
@@ -80,12 +82,15 @@ export function DeviceAddresses({
   wifiAddress,
   wifiNetwork,
   hotspotAddress,
+  networkAddresses = [],
 }: {
   hostName: string;
   /** The address on the current Wi-Fi network, when it is on one. */
   wifiAddress?: string;
   wifiNetwork?: string;
   hotspotAddress: string;
+  /** Current device readback, including wired interfaces when present. */
+  networkAddresses?: readonly { label: string; address: string }[];
 }) {
   return (
     <SettingGroup title="Ways to reach Oxidal">
@@ -105,6 +110,14 @@ export function DeviceAddresses({
           url={`https://${wifiAddress}`}
         />
       )}
+      {networkAddresses.map(({ label, address }) => (
+        <AddressRow
+          key={address}
+          label={label}
+          caption={`If ${hostName} will not open. Your browser warns at this address even with the certificate installed, and it can change when the router restarts.`}
+          url={`https://${address}`}
+        />
+      ))}
       <AddressRow
         label="Address on the hotspot"
         caption="While connected to Oxidal's hotspot."
@@ -196,6 +209,16 @@ export function DeviceCertificate({
           </a>
         </Button>
       </SettingRow>
+      {certificate.hotspotHref && (
+        <Caption>
+          If a certificate warning blocks access, connect to Oxidal's hotspot
+          and open{' '}
+          <a className="break-all underline" href={certificate.hotspotHref}>
+            {certificate.hotspotHref}
+          </a>{' '}
+          to download the public certificate.
+        </Caption>
+      )}
       <SettingRow
         label="Fingerprint"
         caption="If your device shows one while installing, it should match this."

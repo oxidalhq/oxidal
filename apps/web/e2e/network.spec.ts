@@ -3,6 +3,75 @@ import { expect, test } from '@playwright/test';
 import type { NetworkCommand, NetworkState } from '../src/api';
 import { selectSettingsSection } from './display';
 
+test('network setup exposes current addresses and the public certificate', async ({
+  page,
+}) => {
+  const network: NetworkState = {
+    available: true,
+    wireless_enabled: true,
+    message: '',
+    networks: [],
+    saved: [],
+    interfaces: [
+      {
+        name: 'eth0',
+        kind: 'ethernet',
+        state: 'connected',
+        connection: 'Wired',
+        addresses: ['192.168.5.20'],
+      },
+    ],
+  };
+  const fingerprint = Array(32).fill('AB').join(':');
+  let installed = false;
+  await page.route('**/api/v1/device/network', (route) =>
+    route.fulfill({ json: network }),
+  );
+  await page.route('**/api/v1/device/certificate.json', (route) =>
+    route.fulfill(
+      installed
+        ? {
+            json: {
+              schema_version: 1,
+              file_name: 'oxidal-ca.crt',
+              fingerprint_sha256: fingerprint,
+              https_download: '/api/v1/device/certificate',
+              hotspot_download: '/certificate.crt',
+              server_names: ['oxidal.local', '10.42.0.1'],
+            },
+          }
+        : { status: 404, json: { message: 'Not installed' } },
+    ),
+  );
+  await page.goto('/#settings/connections');
+  await expect(
+    page.getByRole('link', { name: 'https://192.168.5.20' }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Certificate unavailable', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Download certificate' }),
+  ).toHaveCount(0);
+  installed = true;
+  await page.getByRole('button', { name: 'Retry certificate' }).click();
+  const download = page.getByRole('link', { name: 'Download certificate' });
+  await expect(download).toHaveAttribute('href', '/api/v1/device/certificate');
+  await expect(download).toHaveAttribute('download', 'oxidal-ca.crt');
+  await expect(page.getByText(fingerprint, { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'http://10.42.0.1/certificate.crt' }),
+  ).toBeVisible();
+  await page.getByRole('radio', { name: 'iPhone', exact: true }).click();
+  await expect(
+    page.getByText(/Certificate Trust Settings and turn on Oxidal/),
+  ).toBeVisible();
+  await page.getByRole('radio', { name: 'Android', exact: true }).click();
+  await expect(
+    page.getByText('On an Android phone or tablet, or a BOOX', { exact: true }),
+  ).toBeVisible();
+});
+
 // Browser recovery workflow with a controlled transport. The Rust suite exercises
 // durable rollback; physical Wi-Fi switching is an additional hardware gate.
 test('network setup reviews link loss, clears credentials and confirms recovery', async ({
