@@ -14,16 +14,16 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
-import { Caption, Readout, Title } from '../components/ui/text';
+import { Readout } from '../components/ui/text';
+import { STACK_CREDITS } from '../lib/credits';
 import { DEFAULT_MAP } from '../lib/midi';
+import { AboutPage } from '../patterns/about-page';
 import { PageHeading } from '../patterns/app-shell';
 import { AudioChangeDemo } from '../patterns/audio-change.demo';
 import {
   ControllerSetupDemo,
   ExtraControllersDemo,
 } from '../patterns/controller-setup.demo';
-import { Credits } from '../patterns/credits';
-import { STACK_CREDITS } from '../patterns/credits.data';
 import {
   BootPlaybackDemo,
   DebugConsoleDemo,
@@ -298,54 +298,19 @@ function Maintenance() {
 
 function About() {
   return (
-    <div className="grid gap-6">
-      <div className="grid justify-items-center gap-3 rounded-lg bg-enclosure px-6 py-8 text-center text-enclosure-foreground">
-        <img
-          src="/brand/wordmark-white.svg"
-          alt="Oxidal"
-          className="h-10 w-auto"
-        />
-        <span className="small-caps text-sm font-medium text-enclosure-foreground/80">
-          Multi-effects amp modeler · guitar and bass
-        </span>
-        <p className="m-0 max-w-md text-md text-enclosure-foreground/85">
-          Turn a Raspberry Pi 5 and your audio interface into a complete guitar
-          and bass rig, played from this browser.
-        </p>
-        <Credits credits={STACK_CREDITS.slice(0, 4)} dark />
-      </div>
-      <div className="grid gap-2">
-        <Title as="h3" size="sm">
-          This device
-        </Title>
-        {[
-          ['Version', '0.1.0'],
-          ['Audio', 'Available'],
-          ['MIDI', 'Bluetooth and USB'],
-          ['TONE3000 engine', 'Installed'],
-        ].map(([k, v]) => (
-          <SettingRow key={k} label={k}>
-            <Readout size="sm">{v}</Readout>
-          </SettingRow>
-        ))}
-      </div>
-      <div className="grid gap-2">
-        <Title as="h3" size="sm">
-          Made with
-        </Title>
-        <Credits credits={STACK_CREDITS.slice(4)} className="justify-start" />
-        <Caption>
-          Open source under the Apache License 2.0; some optional native
-          components use separately licensed dependencies. The Oxidal name and
-          logo are not covered by the licence. Third-party licences are listed
-          in THIRD_PARTY.md.
-        </Caption>
-      </div>
-    </div>
+    <AboutPage
+      credits={STACK_CREDITS.slice(0, 4)}
+      madeWith={STACK_CREDITS.slice(4)}
+      device={[
+        { label: 'Version', value: '0.1.0' },
+        { label: 'Audio', value: 'Available' },
+        { label: 'MIDI', value: 'Bluetooth and USB' },
+        { label: 'TONE3000 engine', value: 'Installed' },
+      ]}
+    />
   );
 }
 
-/** Before you play: the state of the things that matter at a gig, each with one action. */
 function Essentials() {
   return (
     <SoundCheck

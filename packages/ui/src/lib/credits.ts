@@ -1,4 +1,4 @@
-import type { Credit } from './credits';
+import type { Credit } from '../patterns/credits';
 
 /** The projects Oxidal is made with, for About. Logos only where we hold the file and its terms. */
 export const STACK_CREDITS: Credit[] = [

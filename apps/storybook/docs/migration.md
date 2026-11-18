@@ -84,7 +84,7 @@ at the same versions.
 | `NetworkSettings.tsx`                                                                                                          | `patterns/network-settings`, `patterns/confirm-change`                                     |
 | `Tone3000Account.tsx`                                                                                                          | `patterns/tone3000` (Tone3000Account)                                                      |
 | `MidiSettings.tsx`, `MidiMapScreen.tsx`, `ControllerSetup.tsx`, `ExtraControllers.tsx`, `SceneMidi.tsx`, `ControlAudit.tsx`    | `widgets/midi-map`, `widgets/midi`, `patterns/controller-setup`, `patterns/switch-layouts` |
-| `About.tsx`                                                                                                                    | `patterns/credits`                                                                         |
+| `About.tsx`                                                                                                                    | `patterns/about-page`, `patterns/credits`, `lib/credits`                                   |
 | (new) Before you play                                                                                                          | `patterns/guitar-tools` (SoundCheck with a title)                                          |
 
 ## Wave 3: Library

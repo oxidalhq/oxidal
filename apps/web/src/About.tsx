@@ -13,54 +13,16 @@ import {
 } from '@phosphor-icons/react';
 import { type ReactNode, useEffect, useState } from 'react';
 
+import { Caption, Title } from '@oxidal/design-system/components/text';
+import { STACK_CREDITS } from '@oxidal/design-system/lib/credits';
+import { AboutPage } from '@oxidal/design-system/patterns/about-page';
+
 import { capabilities } from './api';
 
 type Health = Awaited<ReturnType<typeof capabilities>>;
 
 const REPOSITORY = 'https://github.com/oxidalhq/oxidal';
 const AGENTICFLOWX = 'https://github.com/AgenticFlowX/afx';
-
-/**
- * Credits as clickable badges with each project's own logo, from
- * `/brand/credits/` (sources in THIRD_PARTY.md). `mono` logos are drawn in
- * the badge's ink.
- */
-const CREDITS: {
-  role: string;
-  name: string;
-  href: string;
-  logo: string;
-  mono?: boolean;
-  /** The logo already spells the name. */
-  wordmark?: boolean;
-}[] = [
-  {
-    role: 'Built with',
-    name: 'Rust',
-    href: 'https://www.rust-lang.org',
-    logo: 'rust.svg',
-    mono: true,
-  },
-  {
-    role: 'Powered by',
-    name: 'TONE3000',
-    href: 'https://www.tone3000.com',
-    logo: 'tone3000.svg',
-    wordmark: true,
-  },
-  {
-    role: 'Powered by',
-    name: 'NAM',
-    href: 'https://www.neuralampmodeler.com',
-    logo: 'nam.png',
-  },
-  {
-    role: 'Built with',
-    name: 'AgenticFlowX',
-    href: AGENTICFLOWX,
-    logo: 'agenticflowx.svg',
-  },
-];
 
 /** Oxidal's own effects: original code from published research. */
 const EFFECTS: { name: string; kind: string; detail: string }[] = [
@@ -186,146 +148,119 @@ export function About() {
     ],
   ];
   return (
-    <section className="about-oxidal" aria-labelledby="about-oxidal-title">
-      <header className="about-hero">
-        <span className="brand-wordmark about-wordmark" aria-hidden="true" />
-        <h2 id="about-oxidal-title" className="sr-only">
-          About Oxidal
-        </h2>
-        <p className="about-byline">
+    <AboutPage
+      credits={STACK_CREDITS.slice(0, 4)}
+      madeWith={STACK_CREDITS.slice(4)}
+      device={rows.map(([label, value]) => ({ label, value }))}
+      author={
+        <>
           Created and developed by <strong>Richard Sentino</strong>
-        </p>
-        <p className="about-kind">
-          Multi-effects amp modeler · guitar and bass
-        </p>
-        <p className="about-lead">
-          Turn a Raspberry Pi 5 and your audio interface into a complete guitar
-          and bass rig: amps, cabinets and effects in presets with scenes,
-          played from this browser.
-        </p>
-        {health?.version && (
-          <span className="about-version">Version {health.version}</span>
-        )}
-        <ul className="about-credits" aria-label="Credits">
-          {CREDITS.map((credit) => (
-            <li key={credit.name}>
+        </>
+      }
+      footer={
+        <div className="grid justify-items-center gap-3 border-t border-border pt-6 text-center">
+          <Caption className="max-w-xl">
+            Written in Rust, with a React interface, using{' '}
+            <a
+              href={AGENTICFLOWX}
+              target="_blank"
+              rel="noreferrer"
+              className="text-foreground underline"
+            >
+              AgenticFlowX
+            </a>{' '}
+            spec-driven development: every feature starts as a spec, design and
+            task list, and the code links back to them.
+          </Caption>
+          <nav
+            className="flex flex-wrap justify-center gap-x-5 gap-y-3"
+            aria-label="Oxidal links"
+          >
+            {[
+              { name: 'Source code', href: REPOSITORY, Icon: GithubLogo },
+              {
+                name: 'Apache License 2.0',
+                href: `${REPOSITORY}/blob/main/LICENSE`,
+                Icon: Scales,
+              },
+              {
+                name: 'Third-party licences',
+                href: `${REPOSITORY}/blob/main/THIRD_PARTY.md`,
+                Icon: Code,
+              },
+            ].map(({ name, href, Icon }) => (
               <a
-                className="about-credit"
-                href={credit.href}
+                key={name}
+                href={href}
                 target="_blank"
                 rel="noreferrer"
-                aria-label={`${credit.role} ${credit.name}`}
+                className="inline-flex min-h-touch items-center gap-1 text-sm text-foreground underline"
               >
-                <span className="about-credit-role">{credit.role}</span>
-                <span className="about-credit-brand">
-                  {credit.mono ? (
-                    <span
-                      className="about-credit-logo"
-                      data-mono=""
-                      style={{
-                        maskImage: `url(/brand/credits/${credit.logo})`,
-                      }}
-                    />
-                  ) : (
-                    <img
-                      className="about-credit-logo"
-                      data-wordmark={credit.wordmark ? '' : undefined}
-                      src={`/brand/credits/${credit.logo}`}
-                      alt=""
-                    />
-                  )}
-                  {!credit.wordmark && (
-                    <span className="about-credit-mark">{credit.name}</span>
-                  )}
-                </span>
+                <Icon aria-hidden="true" /> {name}
               </a>
-            </li>
-          ))}
-        </ul>
-      </header>
-
-      <section aria-labelledby="about-features">
-        <h3 id="about-features">What it does</h3>
-        <ul className="about-feature-grid">
+            ))}
+          </nav>
+          <Caption className="text-xs">© 2026 Richard Sentino.</Caption>
+        </div>
+      }
+    >
+      <section aria-labelledby="about-features" className="grid gap-3">
+        <Title as="h3" size="sm" id="about-features">
+          What it does
+        </Title>
+        <ul className="m-0 grid list-none gap-4 p-0 sm:grid-cols-2">
           {FEATURES.map((feature) => (
-            <li key={feature.title}>
-              <span className="about-feature-icon">{feature.icon}</span>
-              <strong>{feature.title}</strong>
-              <span>{feature.text}</span>
+            <li
+              key={feature.title}
+              className="grid grid-cols-[2rem_minmax(0,1fr)] gap-x-2.5 gap-y-0.5"
+            >
+              <span
+                className="row-span-2 grid size-8 place-items-center rounded-md bg-muted text-lg"
+                aria-hidden="true"
+              >
+                {feature.icon}
+              </span>
+              <strong className="text-sm text-foreground">
+                {feature.title}
+              </strong>
+              <Caption>{feature.text}</Caption>
             </li>
           ))}
         </ul>
       </section>
-
-      <section aria-labelledby="about-effects">
-        <h3 id="about-effects">
+      <section aria-labelledby="about-effects" className="grid gap-3">
+        <Title
+          as="h3"
+          size="sm"
+          id="about-effects"
+          className="flex items-center gap-1.5"
+        >
           <Sparkle aria-hidden="true" /> Oxidal effects
-        </h3>
-        <p className="about-effects-intro">
+        </Title>
+        <Caption>
           Bloom, Echo, Motion and Sustain are safe Rust, and Hold and Swell
           native plugins, all written for Oxidal from published research and its
           own code. Pitch is a port of a third-party engine.
-        </p>
-        <dl className="about-effects">
+        </Caption>
+        <dl className="m-0 grid">
           {EFFECTS.map((effect) => (
-            <div key={effect.name}>
-              <dt>
-                <strong>{effect.name}</strong>
-                <span className="caption">{effect.kind}</span>
+            <div
+              key={effect.name}
+              className="grid gap-1 border-b border-border py-2 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-3"
+            >
+              <dt className="grid">
+                <strong className="text-sm text-foreground">
+                  {effect.name}
+                </strong>
+                <Caption as="span" className="text-xs">
+                  {effect.kind}
+                </Caption>
               </dt>
-              <dd>{effect.detail}</dd>
+              <Caption as="dd">{effect.detail}</Caption>
             </div>
           ))}
         </dl>
       </section>
-
-      <section aria-labelledby="about-device">
-        <h3 id="about-device">This device</h3>
-        <dl className="about-facts">
-          {rows.map(([term, value]) => (
-            <div key={term}>
-              <dt>{term}</dt>
-              <dd>{value}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
-
-      <div className="about-footer">
-        <span className="about-footer-mark" aria-hidden="true" />
-        <p>
-          Written in Rust, with a React interface, using{' '}
-          <a href={AGENTICFLOWX} target="_blank" rel="noreferrer">
-            AgenticFlowX
-          </a>{' '}
-          spec-driven development: every feature starts as a spec, design and
-          task list, and the code links back to them.
-        </p>
-        <nav className="about-footer-links" aria-label="Oxidal links">
-          <a href={REPOSITORY} target="_blank" rel="noreferrer">
-            <GithubLogo aria-hidden="true" /> Source code
-          </a>
-          <a
-            href={`${REPOSITORY}/blob/main/LICENSE`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <Scales aria-hidden="true" /> Apache License 2.0
-          </a>
-          <a
-            href={`${REPOSITORY}/blob/main/THIRD_PARTY.md`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <Code aria-hidden="true" /> Third-party licences
-          </a>
-        </nav>
-        <p className="about-footer-fine">
-          © 2026 Richard Sentino. Open source under the Apache License 2.0; some
-          optional native components use separately licensed dependencies. The
-          Oxidal name and logo are not covered by the licence.
-        </p>
-      </div>
-    </section>
+    </AboutPage>
   );
 }

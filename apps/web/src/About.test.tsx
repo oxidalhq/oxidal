@@ -1,9 +1,17 @@
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { About } from './About';
+import { capabilities } from './api';
 
-afterEach(cleanup);
+vi.mock('./api', () => ({ capabilities: vi.fn() }));
+beforeEach(() => {
+  vi.mocked(capabilities).mockImplementation(() => new Promise(() => {}));
+});
+afterEach(() => {
+  cleanup();
+  vi.resetAllMocks();
+});
 
 it('presents Oxidal as a multi-effects amp modeler with its features, licence, build method and author', () => {
   render(<About />);
@@ -39,4 +47,28 @@ it('presents Oxidal as a multi-effects amp modeler with its features, licence, b
   expect(screen.getByText(/spec-driven development/)).toBeVisible();
   expect(screen.getByText('Richard Sentino')).toBeVisible();
   expect(screen.getByText(/Created and developed by/)).toBeVisible();
+});
+
+it('uses device readback rather than the approved story example values', async () => {
+  vi.mocked(capabilities).mockResolvedValue({
+    protocol: 1,
+    version: 'device-test-version',
+    audio_available: false,
+    native_editor: false,
+    midi_transport: 'USB only',
+  });
+  render(<About />);
+  expect(await screen.findByText('device-test-version')).toBeVisible();
+  expect(screen.getByText('Not available')).toBeVisible();
+  expect(screen.getByText('Not installed')).toBeVisible();
+  expect(screen.getByText('USB only')).toBeVisible();
+  expect(screen.queryByText('Bluetooth and USB')).not.toBeInTheDocument();
+});
+
+it('keeps failed device readings visibly unavailable while retaining credits', async () => {
+  vi.mocked(capabilities).mockRejectedValue(new Error('offline'));
+  render(<About />);
+  expect(await screen.findAllByText('Unavailable')).toHaveLength(4);
+  expect(screen.getByRole('link', { name: 'Powered by NAM' })).toBeVisible();
+  expect(screen.queryByText('Installed')).not.toBeInTheDocument();
 });
