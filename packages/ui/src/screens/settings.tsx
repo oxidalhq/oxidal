@@ -5,7 +5,6 @@ import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { CollapsibleSection } from '../components/ui/collapsible';
 import { NumberField } from '../components/ui/number-field';
-import { Segment, SegmentedControl } from '../components/ui/segmented';
 import {
   Select,
   SelectContent,
@@ -29,6 +28,7 @@ import {
   DebugConsoleDemo,
   StorageLockDemo,
 } from '../patterns/device-flows.demo';
+import { DisplaySettings } from '../patterns/display-settings';
 import {
   BuiltInEffectsDemo,
   NamEngineDemo,
@@ -146,64 +146,20 @@ function Midi() {
 
 function Display() {
   const [mode, setMode] = useState('default');
-  const [status, setStatus] = useState('simple');
+  const [status, setStatus] = useState<'simple' | 'detailed'>('simple');
+  const [awake, setAwake] = useState(true);
+  const [fullscreen, setFullscreen] = useState(false);
   return (
-    <>
-      <SettingGroup title="Look">
-        <SettingRow
-          label="Display mode"
-          caption="Night for the stage, Sunlight outdoors, E-paper on BOOX."
-          stacked
-        >
-          <SegmentedControl
-            value={mode}
-            onValueChange={setMode}
-            aria-label="Display mode"
-            className="w-full"
-          >
-            <Segment value="default">Default</Segment>
-            <Segment value="stage">Night</Segment>
-            <Segment value="sunlight">Sunlight</Segment>
-            <Segment value="epaper">E-paper</Segment>
-          </SegmentedControl>
-        </SettingRow>
-      </SettingGroup>
-      <SettingGroup title="Device status">
-        <SettingRow
-          label="Status at the top"
-          caption={
-            status === 'simple'
-              ? 'One word: All good, Busy, Dropouts or Running hot. Tap it for the numbers.'
-              : 'The full strip: processing, CPU, memory, temperature, dropouts and clips.'
-          }
-          stacked
-        >
-          <SegmentedControl
-            value={status}
-            onValueChange={setStatus}
-            aria-label="Status at the top"
-            className="w-full"
-          >
-            <Segment value="simple">Simple</Segment>
-            <Segment value="detailed">Detailed</Segment>
-          </SegmentedControl>
-        </SettingRow>
-      </SettingGroup>
-      <SettingGroup title="Screen">
-        <SettingRow
-          id="awake"
-          label="Keep screen awake"
-          caption="While this page is open."
-        >
-          <Switch id="awake" defaultChecked />
-        </SettingRow>
-        <SettingRow label="Fullscreen">
-          <Button size="sm" variant="outline">
-            Enter fullscreen
-          </Button>
-        </SettingRow>
-      </SettingGroup>
-    </>
+    <DisplaySettings
+      mode={mode}
+      onModeChange={setMode}
+      status={status}
+      onStatusChange={setStatus}
+      keepAwake={awake}
+      onKeepAwakeChange={setAwake}
+      fullscreen={fullscreen}
+      onToggleFullscreen={() => setFullscreen(!fullscreen)}
+    />
   );
 }
 

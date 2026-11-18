@@ -292,7 +292,11 @@ test('device portrait and landscape keep controls accessible and preserve a rota
     await fits(page);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await selectSettingsSection(page, 'Display');
-    await expect(page.getByLabel('Display mode')).toHaveText('E-paper');
+    await expect(
+      page
+        .getByRole('radiogroup', { name: 'Display mode', exact: true })
+        .getByRole('radio', { name: 'E-paper', exact: true }),
+    ).toBeChecked();
     await setDisplayMode(page, 'default');
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute(
@@ -523,10 +527,12 @@ test('stage display keeps screen awake across views and exposes fullscreen avail
   };
   await showDisplay();
   if (testInfo.project.name === 'boox-air3c') {
-    await page.getByLabel('Display mode').click();
-    await page.getByRole('option', { name: 'E-paper', exact: true }).click();
+    await page
+      .getByRole('radiogroup', { name: 'Display mode', exact: true })
+      .getByRole('radio', { name: 'E-paper', exact: true })
+      .click();
   }
-  const wake = page.getByRole('button', {
+  const wake = page.getByRole('switch', {
     name: 'Keep screen awake',
     exact: true,
   });
@@ -536,7 +542,7 @@ test('stage display keeps screen awake across views and exposes fullscreen avail
   ).toHaveText('Screen awake: active');
   await navigation.getByRole('button', { name: 'Rig', exact: true }).click();
   await showDisplay();
-  await expect(wake).toHaveAttribute('aria-pressed', 'true');
+  await expect(wake).toBeChecked();
   await expect(
     page.getByRole('status', { name: 'Screen awake status' }),
   ).toHaveText('Screen awake: active');
@@ -553,7 +559,7 @@ test('stage display keeps screen awake across views and exposes fullscreen avail
   await page.setViewportSize(original);
   await page.reload();
   await showDisplay();
-  await expect(wake).toHaveAttribute('aria-pressed', 'true');
+  await expect(wake).toBeChecked();
   await expect(
     page.getByRole('status', { name: 'Screen awake status' }),
   ).toHaveText('Screen awake: active');
@@ -613,7 +619,7 @@ test('stage display navigation retains contrast after touch and hover', async ({
             .getByRole('button', { name: label, exact: true })
             .hover();
           const result = await new AxeBuilder({ page: target })
-            .include('.masthead')
+            .include('nav[aria-label="Instrument navigation"]')
             .withRules(['color-contrast'])
             .analyze();
           await navigation.screenshot({

@@ -36,6 +36,7 @@ import {
   AppShell,
   PageHeading,
 } from '@oxidal/design-system/patterns/app-shell';
+import { DisplaySettings } from '@oxidal/design-system/patterns/display-settings';
 import { SettingsPage } from '@oxidal/design-system/patterns/settings-page';
 
 import { About } from './About';
@@ -613,7 +614,7 @@ function InstrumentApp() {
               </label>
               <TunerButton />
               <Button
-                className="bypass-switch"
+                className="bypass-switch min-h-12"
                 variant="outline"
                 disabled={!connected}
                 aria-pressed={state.bypassed}
@@ -822,92 +823,21 @@ function InstrumentApp() {
             }}
           >
             {settingsSection === 'display' && (
-              <>
-                <section
-                  className="panel control-stack"
-                  aria-label="Display preferences"
-                >
-                  <h2 className="sr-only">Display</h2>
-                  <label className="field display-mode">
-                    <span>Display mode</span>
-                    <Select value={displayMode} onValueChange={setDisplayMode}>
-                      <SelectTrigger aria-label="Display mode">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default">Default</SelectItem>
-                        <SelectItem value="stage">Night</SelectItem>
-                        <SelectItem value="sunlight">Sunlight</SelectItem>
-                        <SelectItem value="epaper">E-paper</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </label>
-
-                  <label className="field">
-                    <span>Device status</span>
-                    <Select
-                      value={statusMode}
-                      onValueChange={(value) =>
-                        changeStatus(
-                          value === 'detailed' ? 'detailed' : 'simple',
-                        )
-                      }
-                    >
-                      <SelectTrigger aria-label="Device status">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="simple">Simple</SelectItem>
-                        <SelectItem value="detailed">Detailed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </label>
-                  <div className="action-row">
-                    <Button
-                      variant="outline"
-                      disabled={!screen.fullscreenSupported}
-                      onClick={() => void screen.toggleFullscreen()}
-                    >
-                      {screen.fullscreen
-                        ? 'Exit fullscreen'
-                        : 'Enter fullscreen'}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      aria-pressed={screen.keepAwake}
-                      disabled={!screen.wakeSupported}
-                      onClick={() => screen.setKeepAwake(!screen.keepAwake)}
-                    >
-                      Keep screen awake
-                    </Button>
-                    {screen.keepAwake &&
-                      screen.wakeSupported &&
-                      ['paused', 'denied'].includes(screen.wakeStatus) && (
-                        <Button variant="outline" onClick={screen.retryWake}>
-                          Retry keep-awake
-                        </Button>
-                      )}
-                  </div>
-                  <p role="status" aria-label="Screen awake status">
-                    {!screen.wakeSupported
-                      ? 'Keep-awake unavailable: use HTTPS and a supported browser.'
-                      : {
-                          off: 'Screen awake: off',
-                          requesting: 'Screen awake: requesting',
-                          active: 'Screen awake: active',
-                          paused: 'Screen awake: paused by browser',
-                          denied:
-                            'Screen awake: not allowed by browser or power settings',
-                        }[screen.wakeStatus]}
-                  </p>
-                  {!screen.fullscreenSupported && (
-                    <p className="caption">
-                      Page fullscreen is unavailable in this browser.
-                    </p>
-                  )}
-                  {screen.fullscreenError && (
-                    <p role="alert">{screen.fullscreenError}</p>
-                  )}
+              <DisplaySettings
+                mode={displayMode}
+                onModeChange={setDisplayMode}
+                status={statusMode}
+                onStatusChange={changeStatus}
+                keepAwake={screen.keepAwake}
+                onKeepAwakeChange={screen.setKeepAwake}
+                wakeSupported={screen.wakeSupported}
+                wakeStatus={screen.wakeStatus}
+                onRetryWake={screen.retryWake}
+                fullscreen={screen.fullscreen}
+                fullscreenSupported={screen.fullscreenSupported}
+                fullscreenError={screen.fullscreenError}
+                onToggleFullscreen={() => void screen.toggleFullscreen()}
+                help={
                   <details className="control-help">
                     <summary>Display &amp; screen help</summary>
                     <p>
@@ -922,8 +852,8 @@ function InstrumentApp() {
                       Set brightness and e-paper refresh on your device.
                     </p>
                   </details>
-                </section>
-              </>
+                }
+              />
             )}
             {settingsSection === 'connections' && (
               <NetworkSettings connected={connected} />

@@ -57,8 +57,10 @@ export async function setDisplayMode(
     sunlight: 'Sunlight',
     epaper: 'E-paper',
   } as const;
-  await page.getByLabel('Display mode').click();
-  await page.getByRole('option', { name: labels[mode], exact: true }).click();
+  await page
+    .getByRole('radiogroup', { name: 'Display mode', exact: true })
+    .getByRole('radio', { name: labels[mode], exact: true })
+    .click();
   if (previousSection) await selectSettingsSection(page, previousSection);
   else
     await navigation

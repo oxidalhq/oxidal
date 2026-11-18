@@ -107,9 +107,9 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await selectSettingsSection(page, 'Display');
   await page
-    .getByRole('combobox', { name: 'Device status', exact: true })
+    .getByRole('radiogroup', { name: 'Status at the top', exact: true })
+    .getByRole('radio', { name: 'Detailed', exact: true })
     .click();
-  await page.getByRole('option', { name: 'Detailed', exact: true }).click();
   await expect(strip.getByTestId('resource-state')).toHaveText('Audio running');
   await expect(strip.getByRole('group', { name: /^DSP: 17%/ })).toBeVisible();
   await expect(
