@@ -5,6 +5,7 @@
  *   pnpm deploy:local                 # splitter runtime, binaries and UI
  *   pnpm deploy:local ui              # only the web UI
  *   pnpm deploy:local bins splitter   # any combination of parts
+ *   pnpm deploy:local lv2             # Oxidal's own Rust effect bundles
  *   pnpm deploy:local helper          # once per image: install the newer helper
  *   pnpm deploy:local --build-only    # build and pack without touching the Pi
  *
@@ -12,7 +13,7 @@
  * (rust:1.95-bookworm runs natively on Apple Silicon). Each part is copied to
  * the Pi's fixed /tmp path and installed by the image's checksum-bound
  * `oxidal-development-deploy` helper, which needs no password for these
- * three modes. Set OXIDAL_PI to choose the SSH target and
+ * four modes. Set OXIDAL_PI to choose the SSH target and
  * OXIDAL_SPLITTER_MODELS for the four model files listed in
  * thirdparty/oxidal-splitter/SHA256SUMS.models.
  *
@@ -37,9 +38,9 @@ const buildOnly = process.argv.includes('--build-only');
 const parts = process.argv.slice(2).filter((arg) => !arg.startsWith('-'));
 const wanted = new Set(parts.length ? parts : ['splitter', 'bins', 'ui']);
 for (const part of wanted)
-  if (!['splitter', 'bins', 'ui', 'helper'].includes(part))
+  if (!['splitter', 'bins', 'ui', 'lv2', 'helper'].includes(part))
     throw new Error(
-      `Unknown part "${part}". Use ui, bins, splitter or helper.`,
+      `Unknown part "${part}". Use ui, bins, splitter, lv2 or helper.`,
     );
 
 const work = join(root, '.local/deploy-local');
@@ -59,6 +60,8 @@ const binaries = [
   'oxidal-rig-worker',
   'oxidal-native-worker',
 ];
+/** Oxidal's own Rust effects, as the helper's LV2_EFFECTS lists them. */
+const effects = ['bloom', 'sustain', 'echo', 'motion', 'moment'];
 mkdirSync(join(work, 'target'), { recursive: true });
 
 const sha256 = (path) =>
@@ -151,7 +154,7 @@ if (wanted.has('helper')) {
   writeFileSync(
     sudoers,
     '# Private development image: scoped Oxidal application deploy only.\n' +
-      `oxidal-admin ALL=(root) NOPASSWD: ${helper} bins *, ${helper} ui *, ${helper} splitter *\n`,
+      `oxidal-admin ALL=(root) NOPASSWD: ${helper} bins *, ${helper} ui *, ${helper} splitter *, ${helper} lv2 *\n`,
   );
   run('scp', [
     '-q',
@@ -184,6 +187,18 @@ if (
 )
   throw new Error(
     'The Pi helper cannot install the splitter yet. Run `pnpm deploy:local helper` once, then deploy again.',
+  );
+
+if (
+  !buildOnly &&
+  wanted.has('lv2') &&
+  spawnSync('ssh', [
+    host,
+    `grep -q "'lv2'" ${helper} && sudo -n -l | grep -q "${helper} lv2"`,
+  ]).status !== 0
+)
+  throw new Error(
+    'The Pi helper cannot install effects yet. Run `pnpm deploy:local helper` once, then deploy again.',
   );
 
 if (wanted.has('splitter')) {
@@ -291,6 +306,37 @@ if (wanted.has('bins')) {
   install('bins', join(work, 'oxidal-bins.tgz'));
 }
 
+if (wanted.has('lv2')) {
+  dockerImage();
+  step('Building Linux ARM64 effect bundles');
+  docker([
+    'cargo',
+    'build',
+    '--release',
+    '--locked',
+    '--lib',
+    ...effects.flatMap((effect) => ['-p', `oxidal-${effect}`]),
+    '--target-dir',
+    '/target/lv2',
+  ]);
+  const stage = join(work, 'lv2');
+  rmSync(stage, { recursive: true, force: true });
+  for (const effect of effects) {
+    const bundle = join(stage, `oxidal-${effect}.lv2`);
+    const crate = join(root, `crates/oxidal-${effect}`);
+    mkdirSync(bundle, { recursive: true });
+    copyFileSync(
+      join(work, `target/lv2/release/liboxidal_${effect}.so`),
+      join(bundle, `oxidal_${effect}.so`),
+    );
+    for (const file of ['manifest.ttl', `${effect}.ttl`])
+      copyFileSync(join(crate, 'lv2', file), join(bundle, file));
+    copyFileSync(join(crate, 'NOTICE'), join(bundle, 'NOTICE'));
+  }
+  pack(stage, join(work, 'oxidal-lv2.tgz'));
+  install('lv2', join(work, 'oxidal-lv2.tgz'));
+}
+
 if (wanted.has('ui')) {
   step('Building the web UI');
   run('pnpm', ['--dir', 'apps/web', 'build']);
@@ -300,6 +346,11 @@ if (wanted.has('ui')) {
 
 if (buildOnly) process.exit(0);
 step('Checking the running service');
+if (wanted.has('lv2'))
+  ssh(
+    'curl -fsS --max-time 20 "http://127.0.0.1:3210/api/v1/plugins/lv2?sample_rate=48000"' +
+      ` | grep -q "urn:oxidal:plugin:${effects.at(-1)}#stereo" && echo "Effects: the newest bundle is loaded."`,
+  );
 ssh(
   'for path in audio/devices media/split-options; do' +
     ' printf "%s: " "$path"; curl -fsS --max-time 10 "http://127.0.0.1:3210/api/v1/$path" | head -c 300; echo;' +

@@ -173,28 +173,32 @@ the selected library plus headroom; only regular image files are written.
 
 The `development` image profile also installs a narrowly scoped local deploy helper
 for repeat testing. `oxidal-admin` may run only `oxidal-development-deploy bins
-SHA256`, `oxidal-development-deploy ui SHA256` or `oxidal-development-deploy
-splitter SHA256` without another sudo password. The helper reads the fixed
-`/tmp/oxidal-bins.tgz`, `/tmp/oxidal-ui.tgz` or `/tmp/oxidal-splitter.tgz`,
-verifies the supplied lowercase SHA-256, rejects links/traversal and enforces
+SHA256`, `oxidal-development-deploy ui SHA256`, `oxidal-development-deploy
+splitter SHA256` or `oxidal-development-deploy lv2 SHA256` without another sudo
+password. The helper reads the fixed `/tmp/oxidal-bins.tgz`, `/tmp/oxidal-ui.tgz`,
+`/tmp/oxidal-splitter.tgz` or `/tmp/oxidal-lv2.tgz`, verifies the supplied lowercase SHA-256, rejects links/traversal and enforces
 file/byte budgets. A splitter runtime is streamed into
 `/var/lib/oxidal-splitter/releases/<checksum>/` on the data partition, its model
 checksums are checked, and `/opt/oxidal/splitter/current` is switched to it in
 one rename; the daemon uses it from the next split without a restart. The
 current and previous release are kept. The runtime must stay outside
 `/var/lib/oxidal`, the daemon's private `DynamicUser` state directory, where
-the runner cannot be executed.
+the runner cannot be executed. The `lv2` mode replaces whole bundles of Oxidal's
+own Rust effects in `/usr/local/lib/lv2` while the daemon is stopped, keeps the
+previous bundles in `/opt/oxidal/deploy-rollback/lv2`, outside `LV2_PATH`, and
+restores them if the daemon fails to start.
 
 From a Mac or Linux checkout with Docker and SSH access, `pnpm deploy:local`
 builds the Linux ARM64 binaries (all workers, appliance features) and the
 splitter runner in `rust:1.95-bookworm`, builds the UI, and installs the
 splitter runtime, binaries and UI in that order. Name parts to deploy fewer,
 for example `pnpm deploy:local ui`, and add `--build-only` to stop before the
-Pi. `OXIDAL_PI` sets the SSH target (default `oxidal-admin@oxidal.local`) and
+Pi. `pnpm deploy:local lv2` builds and installs the effect bundles; it is not part
+of the default set. `OXIDAL_PI` sets the SSH target (default `oxidal-admin@oxidal.local`) and
 `OXIDAL_SPLITTER_MODELS` the folder holding the four model files pinned in
 `thirdparty/oxidal-splitter/SHA256SUMS.models` (default
 `thirdparty/oxidal-splitter/models/`, which Git ignores). An image built
-before the splitter mode existed needs `pnpm deploy:local helper` once; it asks
+before the splitter or `lv2` mode existed needs `pnpm deploy:local helper` once; it asks
 for the admin password. Binary updates are limited to the unprivileged daemon, its audio workers
 and the worker-loaded TONE3000 library; the root device/debug/terminal services are
 not replaceable. A failed service restart restores the preceding binaries, and only

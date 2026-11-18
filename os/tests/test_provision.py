@@ -65,6 +65,7 @@ class ProvisionTests(unittest.TestCase):
             },
         )
         self.assertIn(b'oxidal-development-deploy bins *', files['etc/sudoers.d/oxidal-development-deploy'])
+        self.assertIn(b'oxidal-development-deploy lv2 *', files['etc/sudoers.d/oxidal-development-deploy'])
         self.assertNotIn(b'oxidal-device-service', files['usr/local/sbin/oxidal-development-deploy'])
         with self.assertRaises(ValueError):
             provision.development_deploy_files('unknown')

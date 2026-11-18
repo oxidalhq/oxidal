@@ -200,7 +200,8 @@ def development_deploy_files(profile):
         b'# Private development image: scoped Oxidal application deploy only.\n'
         b'oxidal-admin ALL=(root) NOPASSWD: /usr/local/sbin/oxidal-development-deploy bins *, '
         b'/usr/local/sbin/oxidal-development-deploy ui *, '
-        b'/usr/local/sbin/oxidal-development-deploy splitter *\n'
+        b'/usr/local/sbin/oxidal-development-deploy splitter *, '
+        b'/usr/local/sbin/oxidal-development-deploy lv2 *\n'
     )
     return {
         'usr/local/sbin/oxidal-development-deploy': helper,

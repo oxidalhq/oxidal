@@ -34,7 +34,13 @@ ARCHIVES = {
     'bins': Path('/tmp/oxidal-bins.tgz'),
     'ui': Path('/tmp/oxidal-ui.tgz'),
     'splitter': Path('/tmp/oxidal-splitter.tgz'),
+    'lv2': Path('/tmp/oxidal-lv2.tgz'),
 }
+# Oxidal's own Rust effects. Bundles are replaced whole, in the directory the
+# daemon's LV2_PATH reads. Nothing temporary may sit in that directory: the
+# LV2 host loads every bundle it finds there, hidden ones included.
+LV2_EFFECTS = ('bloom', 'sustain', 'echo', 'motion', 'moment')
+LV2_DIRECTORY = Path('/usr/local/lib/lv2')
 MAX_FILES = 4096
 MAX_BYTES = 128 * 1024 * 1024
 SPLITTER_MAX_BYTES = 1024 * 1024 * 1024
@@ -60,6 +66,24 @@ def splitter_mode(name):
         if pattern.fullmatch(name) and '..' not in name.split('/'):
             return mode
     return None
+
+
+def lv2_bundle_files(effect):
+    """The exact files of one effect's bundle."""
+    return {'manifest.ttl', 'NOTICE', f'{effect}.ttl', f'oxidal_{effect}.so'}
+
+
+def lv2_file_allowed(name):
+    """Whether an archive path is a listed file of a listed effect's bundle."""
+    parts = PurePosixPath(name).parts
+    if len(parts) != 2:
+        return False
+    match = re.fullmatch(r'oxidal-([a-z]+)\.lv2', parts[0])
+    return bool(
+        match
+        and match[1] in LV2_EFFECTS
+        and parts[1] in lv2_bundle_files(match[1])
+    )
 
 
 def archive_digest(path):
@@ -102,6 +126,8 @@ def read_archive(path, expected, mode):
                 raise ValueError('Deployment archive has an unsafe entry')
             if mode == 'bins' and (len(name.parts) != 1 or name.name not in BINARIES):
                 raise ValueError('Binary archive contains an unapproved file')
+            if mode == 'lv2' and not lv2_file_allowed(str(name)):
+                raise ValueError('LV2 archive contains an unapproved file')
             if mode == 'ui' and name.parts[0].startswith('.'):
                 raise ValueError('UI archive contains a hidden root entry')
             source = archive.extractfile(member)
@@ -114,6 +140,11 @@ def read_archive(path, expected, mode):
             files[str(name)] = data
     if not files or (mode == 'ui' and 'index.html' not in files):
         raise ValueError('Deployment archive is incomplete')
+    if mode == 'lv2':
+        for bundle in {PurePosixPath(name).parts[0] for name in files}:
+            effect = bundle.removeprefix('oxidal-').removesuffix('.lv2')
+            if any(f'{bundle}/{name}' not in files for name in lv2_bundle_files(effect)):
+                raise ValueError('LV2 archive has an incomplete bundle')
     return files
 
 
@@ -156,6 +187,45 @@ def deploy_bins(files, root=Path('/opt/oxidal'), run=subprocess.run):
     for name, data in previous.items():
         if data is not None:
             atomic_file(rollback / name, data, 0o600)
+
+
+def deploy_lv2(files, directory=LV2_DIRECTORY, root=Path('/opt/oxidal'), run=subprocess.run):
+    """Replace whole effect bundles while the daemon is stopped."""
+    rollback = root / 'deploy-rollback/lv2'
+    directory.mkdir(parents=True, exist_ok=True)
+    stage = Path(tempfile.mkdtemp(prefix='.oxidal-lv2-', dir=directory.parent))
+    stage.chmod(0o755)
+    replaced = []
+    try:
+        for name, data in files.items():
+            mode = 0o755 if name.endswith('.so') else 0o644
+            atomic_file(stage / name, data, mode)
+        bundles = sorted({PurePosixPath(name).parts[0] for name in files})
+        for bundle in bundles:
+            (stage / bundle).chmod(0o755)
+        if rollback.exists():
+            shutil.rmtree(rollback)
+        rollback.mkdir(parents=True)
+        run(['systemctl', 'stop', 'oxidald.service'], check=True)
+        try:
+            for bundle in bundles:
+                current = directory / bundle
+                if current.exists():
+                    shutil.move(str(current), str(rollback / bundle))
+                replaced.append(bundle)
+                os.replace(stage / bundle, current)
+            run(['systemctl', 'start', 'oxidald.service'], check=True)
+        except BaseException:
+            for bundle in replaced:
+                current = directory / bundle
+                if current.exists():
+                    shutil.rmtree(current)
+                if (rollback / bundle).exists():
+                    shutil.move(str(rollback / bundle), str(current))
+            run(['systemctl', 'start', 'oxidald.service'], check=False)
+            raise
+    finally:
+        shutil.rmtree(stage, ignore_errors=True)
 
 
 def install_splitter(
@@ -276,7 +346,7 @@ def deploy_ui(files, root=Path('/opt/oxidal')):
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     if len(argv) != 2 or argv[0] not in ARCHIVES:
-        raise SystemExit('usage: oxidal-development-deploy bins|ui|splitter SHA256')
+        raise SystemExit('usage: oxidal-development-deploy bins|ui|splitter|lv2 SHA256')
     mode, expected = argv
     if mode == 'splitter':
         print(install_splitter(ARCHIVES[mode], expected))
@@ -284,6 +354,8 @@ def main(argv=None):
     files = read_archive(ARCHIVES[mode], expected, mode)
     if mode == 'bins':
         deploy_bins(files)
+    elif mode == 'lv2':
+        deploy_lv2(files)
     else:
         deploy_ui(files)
 

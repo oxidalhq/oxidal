@@ -67,6 +67,67 @@ class DevelopmentDeployTests(unittest.TestCase):
         self.assertEqual(binary.read_bytes(), b'old daemon')
         self.assertEqual(calls[-1], ['systemctl', 'start', 'oxidald.service'])
 
+    def lv2_entries(self, effect='moment', body=b'new'):
+        bundle = f'oxidal-{effect}.lv2'
+        names = ['manifest.ttl', f'{effect}.ttl', f'oxidal_{effect}.so', 'NOTICE']
+        return [(f'{bundle}/{name}', body, tarfile.REGTYPE) for name in names]
+
+    def test_lv2_archive_takes_only_whole_listed_bundles(self):
+        path, digest = self.archive(self.lv2_entries())
+        self.assertEqual(len(deploy.read_archive(path, digest, 'lv2')), 4)
+        for name in [
+            'oxidal-moment.lv2/extra.so',
+            'oxidal-other.lv2/manifest.ttl',
+            'oxidal-moment.lv2/nested/manifest.ttl',
+            'manifest.ttl',
+        ]:
+            path, digest = self.archive([*self.lv2_entries(), (name, b'x', tarfile.REGTYPE)])
+            with self.assertRaisesRegex(ValueError, 'unapproved'):
+                deploy.read_archive(path, digest, 'lv2')
+        path, digest = self.archive(self.lv2_entries()[:3])
+        with self.assertRaisesRegex(ValueError, 'incomplete'):
+            deploy.read_archive(path, digest, 'lv2')
+
+    def test_lv2_install_replaces_the_bundle_and_leaves_nothing_else_beside_it(self):
+        directory = self.root / 'lib/lv2'
+        old = directory / 'oxidal-moment.lv2'
+        old.mkdir(parents=True)
+        (old / 'stale.ttl').write_bytes(b'old')
+        calls = []
+        files = {name: body for name, body, _ in self.lv2_entries()}
+        deploy.deploy_lv2(files, directory, self.root / 'opt', lambda c, check: calls.append(c))
+        self.assertEqual(
+            calls,
+            [['systemctl', 'stop', 'oxidald.service'], ['systemctl', 'start', 'oxidald.service']],
+        )
+        self.assertEqual([p.name for p in directory.iterdir()], ['oxidal-moment.lv2'])
+        self.assertFalse((old / 'stale.ttl').exists())
+        self.assertEqual((old / 'moment.ttl').read_bytes(), b'new')
+        self.assertTrue((old / 'oxidal_moment.so').stat().st_mode & 0o111)
+        self.assertEqual(
+            (self.root / 'opt/deploy-rollback/lv2/oxidal-moment.lv2/stale.ttl').read_bytes(),
+            b'old',
+        )
+        self.assertEqual([p.name for p in (self.root / 'lib').iterdir()], ['lv2'])
+
+    def test_lv2_failure_restores_the_previous_bundle(self):
+        directory = self.root / 'lib/lv2'
+        old = directory / 'oxidal-moment.lv2'
+        old.mkdir(parents=True)
+        (old / 'moment.ttl').write_bytes(b'old')
+        calls = []
+
+        def run(command, check):
+            calls.append(command)
+            if command[1] == 'start' and len(calls) == 2:
+                raise RuntimeError('start failed')
+
+        files = {name: body for name, body, _ in self.lv2_entries()}
+        with self.assertRaisesRegex(RuntimeError, 'start failed'):
+            deploy.deploy_lv2(files, directory, self.root / 'opt', run)
+        self.assertEqual((old / 'moment.ttl').read_bytes(), b'old')
+        self.assertEqual(calls[-1], ['systemctl', 'start', 'oxidald.service'])
+
     def test_ui_root_is_traversable_after_atomic_install(self):
         current = self.root / 'ui'
         current.mkdir()
