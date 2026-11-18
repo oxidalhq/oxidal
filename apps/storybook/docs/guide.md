@@ -67,6 +67,9 @@ name goes to `text-3xl` or `text-display`; in dense lists captions drop to
 
 Phones get bottom sheets; laptops get side sheets. Dialogs never stack on
 dialogs. A sheet may open a popover or a confirm dialog, nothing more.
+Select menus, popovers, action menus and tooltips opened inside a dialog must
+remain above that dialog's overlay. Their layer follows the owning container;
+the notice tray remains above them.
 
 ## 4. Writing
 
@@ -125,7 +128,14 @@ data:
   device (download progress, a 15-second confirmation). Only stories and
   `packages/ui/src/screens/` use them; the package does not export them.
 - **Screens are reference compositions.** They show how the parts fit with
-  demo data; the app builds its own screens from the same parts.
+  demo data; the app builds its own screens from the same parts. The owner has
+  approved their visual direction and improved workflows for product adoption.
+  Wire those workflows to actual state and commands, including backend work
+  when required. An old API or test selector does not define the target layout.
+- **The product owns sound and saved state.** Controlled RigSurface, Practice,
+  stem and Venue EQ values come from confirmed owners. Mounting a panel must
+  not send example values, apply the first profile or reset playback. Presentation
+  changes preserve drafts, pending commands and a single shared event stream.
 - `packages/ui/src/package.test.ts` checks that every module is exported and that none
   imports example data or a demo.
 
