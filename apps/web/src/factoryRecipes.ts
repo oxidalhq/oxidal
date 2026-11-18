@@ -84,6 +84,7 @@ const pluginUris: Record<string, string> = {
   'Oxidal Sustain (Stereo)': 'urn:oxidal:plugin:sustain#stereo',
   'Oxidal Echo (Stereo)': 'urn:oxidal:plugin:echo#stereo',
   'Oxidal Motion (Stereo)': 'urn:oxidal:plugin:motion#stereo',
+  'Oxidal Moment (Stereo)': 'urn:oxidal:plugin:moment#stereo',
 };
 
 /** The original four shared roles, or one of the named factory voices. */

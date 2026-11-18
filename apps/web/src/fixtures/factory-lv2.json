@@ -12037,6 +12037,576 @@
     "unsupported": null
   },
   {
+    "name": "Oxidal Moment (Stereo)",
+    "uri": "urn:oxidal:plugin:moment#stereo",
+    "category": "Delay",
+    "ports": [
+      {
+        "index": 0,
+        "symbol": "clock",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 100.0
+      },
+      {
+        "index": 1,
+        "symbol": "steps",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": true,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 1.0
+      },
+      {
+        "index": 2,
+        "symbol": "grit",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 0.0
+      },
+      {
+        "index": 3,
+        "symbol": "route",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 2.0,
+        "default": 1.0,
+        "scale_points": [
+          {
+            "value": 0.0,
+            "label": "Input"
+          },
+          {
+            "value": 1.0,
+            "label": "Input and loop"
+          },
+          {
+            "value": 2.0,
+            "label": "Loop"
+          }
+        ]
+      },
+      {
+        "index": 4,
+        "symbol": "balance",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 50.0
+      },
+      {
+        "index": 5,
+        "symbol": "catch",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": true,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 0.0
+      },
+      {
+        "index": 6,
+        "symbol": "loopmode",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 2.0,
+        "default": 0.0,
+        "scale_points": [
+          {
+            "value": 0.0,
+            "label": "Tape"
+          },
+          {
+            "value": 1.0,
+            "label": "Stretch"
+          },
+          {
+            "value": 2.0,
+            "label": "Touch"
+          }
+        ]
+      },
+      {
+        "index": 7,
+        "symbol": "length",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 100.0
+      },
+      {
+        "index": 8,
+        "symbol": "move",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 71.0
+      },
+      {
+        "index": 9,
+        "symbol": "overdub",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": true,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 0.0
+      },
+      {
+        "index": 10,
+        "symbol": "fade",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 100.0
+      },
+      {
+        "index": 11,
+        "symbol": "direct",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 0.0
+      },
+      {
+        "index": 12,
+        "symbol": "wet",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": true,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 1.0
+      },
+      {
+        "index": 13,
+        "symbol": "wetmode",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 2.0,
+        "default": 0.0,
+        "scale_points": [
+          {
+            "value": 0.0,
+            "label": "Smear"
+          },
+          {
+            "value": 1.0,
+            "label": "Delay"
+          },
+          {
+            "value": 2.0,
+            "label": "Slip"
+          }
+        ]
+      },
+      {
+        "index": 14,
+        "symbol": "time",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 50.0
+      },
+      {
+        "index": 15,
+        "symbol": "shape",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 50.0
+      },
+      {
+        "index": 16,
+        "symbol": "tone",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 70.0
+      },
+      {
+        "index": 17,
+        "symbol": "chance",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 100.0
+      },
+      {
+        "index": 18,
+        "symbol": "freeze",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": true,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 0.0
+      },
+      {
+        "index": 19,
+        "symbol": "link",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 3.0,
+        "default": 0.0,
+        "scale_points": [
+          {
+            "value": 0.0,
+            "label": "Off"
+          },
+          {
+            "value": 1.0,
+            "label": "Loop follows Time"
+          },
+          {
+            "value": 2.0,
+            "label": "Time follows loop"
+          },
+          {
+            "value": 3.0,
+            "label": "Tempo"
+          }
+        ]
+      },
+      {
+        "index": 20,
+        "symbol": "bpm",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 40.0,
+        "maximum": 240.0,
+        "default": 120.0
+      },
+      {
+        "index": 21,
+        "symbol": "division",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 12.0,
+        "default": 2.0,
+        "scale_points": [
+          {
+            "value": 0.0,
+            "label": "4 bars"
+          },
+          {
+            "value": 1.0,
+            "label": "2 bars"
+          },
+          {
+            "value": 2.0,
+            "label": "1 bar"
+          },
+          {
+            "value": 3.0,
+            "label": "1/2 dotted"
+          },
+          {
+            "value": 4.0,
+            "label": "1/2"
+          },
+          {
+            "value": 5.0,
+            "label": "1/4 dotted"
+          },
+          {
+            "value": 6.0,
+            "label": "1/4"
+          },
+          {
+            "value": 7.0,
+            "label": "1/8 dotted"
+          },
+          {
+            "value": 8.0,
+            "label": "1/4 triplet"
+          },
+          {
+            "value": 9.0,
+            "label": "1/8"
+          },
+          {
+            "value": 10.0,
+            "label": "1/8 triplet"
+          },
+          {
+            "value": 11.0,
+            "label": "1/16"
+          },
+          {
+            "value": 12.0,
+            "label": "1/16 triplet"
+          }
+        ]
+      },
+      {
+        "index": 22,
+        "symbol": "width",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 0.0
+      },
+      {
+        "index": 23,
+        "symbol": "mix",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 50.0
+      },
+      {
+        "index": 24,
+        "symbol": "in_l",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      },
+      {
+        "index": 25,
+        "symbol": "in_r",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      },
+      {
+        "index": 26,
+        "symbol": "out_l",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": false,
+        "output": true,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      },
+      {
+        "index": 27,
+        "symbol": "out_r",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": false,
+        "output": true,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      }
+    ],
+    "unsupported": null
+  },
+  {
     "name": "Oxidal Motion (Stereo)",
     "uri": "urn:oxidal:plugin:motion#stereo",
     "category": "Modulator",

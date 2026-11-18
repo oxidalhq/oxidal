@@ -34,6 +34,7 @@ import {
   oxidalEffectsShowcaseRecipes,
   oxidalGenreSet,
   oxidalLimitRigIds,
+  oxidalMomentSounds,
   oxidalWorshipSetList,
   type OxidalFeaturedEffect,
 } from './oxidalEffectsShowcase';
@@ -56,7 +57,7 @@ const source: RigNativeSource = {
 const validate = new Ajv({ strict: false }).compile(schema);
 const limitIds: readonly string[] = oxidalLimitRigIds;
 const sounds = oxidalEffectsShowcaseRecipes.filter(
-  (r) => !limitIds.includes(r.id),
+  (r) => !limitIds.includes(r.id) && !oxidalMomentSounds.includes(r),
 );
 const limits = oxidalEffectsShowcaseRecipes.filter((r) =>
   limitIds.includes(r.id),
@@ -278,7 +279,7 @@ describe('Oxidal effects showcase', () => {
   it('changes a mode or a time in some scene of every sound', () => {
     for (const recipe of oxidalEffectsShowcaseRecipes)
       expect(
-        ['bloom', 'sustain', 'echo', 'motion'].some(
+        ['bloom', 'sustain', 'echo', 'motion', 'moment'].some(
           (key) =>
             blocks(recipe).some((b) => b.key === key) && changes(recipe, key),
         ),
@@ -354,6 +355,27 @@ describe('Oxidal effects showcase', () => {
     }
     expect(byId('OX-27').engine).not.toBe('lv2');
     expect(byId('OX-28').engine).toBe('lv2');
+  });
+
+  it('walks through Moment on one caught loop', () => {
+    const [recipe] = oxidalMomentSounds as [FactoryRecipe];
+    expect(recipe.id).toBe('OX-43');
+    expect(recipe.engine).toBe('lv2');
+    expect(factoryPluginNames(recipe)).toContain('Oxidal Moment (Stereo)');
+    expect(
+      factoryPluginNames(recipe).every((n) => n.startsWith('Oxidal ')),
+    ).toBe(true);
+    expect(recipe.scenes).toHaveLength(8);
+    // The first scene listens; every other scene keeps the loop it caught.
+    const [listen, ...caught] = recipe.scenes;
+    expect(listen!.controls?.moment?.catch ?? 0).toBe(0);
+    for (const scene of caught)
+      expect(scene.controls?.moment?.catch, scene.name).toBe(1);
+    const set = (symbol: string) =>
+      new Set(caught.map((s) => s.controls?.moment?.[symbol]));
+    // All three loop modes and all three wet modes are heard.
+    expect([...set('loopmode')].sort()).toEqual([1, 2, undefined]);
+    expect([...set('wetmode')].sort()).toEqual([1, 2, undefined]);
   });
 
   it('has one setup for every genre', () => {

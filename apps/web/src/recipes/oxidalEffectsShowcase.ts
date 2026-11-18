@@ -126,6 +126,17 @@ const swell = (time = 900) =>
     mix: 100,
   });
 
+/** Moment's choices, by the order of their scale points. */
+const MOMENT_ROUTE = { input: 0, both: 1, loop: 2 };
+const MOMENT_LOOP = { tape: 0, stretch: 1, touch: 2 };
+const MOMENT_WET = { smear: 0, delay: 1, slip: 2 };
+/** Move values that pick a Tape speed. */
+const TAPE_MOVE = { backwards: 29, forwards: 71 };
+/** Clock values that pick a working rate. */
+const MOMENT_CLOCK = { full: 100, octaveDown: 75 };
+const moment = (controls: Controls = {}) =>
+  keyed('moment', fx('Oxidal Moment (Stereo)', controls));
+
 /** A scene at unity level: name, send into each voice, effect settings. */
 const scene = (
   name: string,
@@ -2114,6 +2125,122 @@ export const oxidalEffectsFeatured: Record<OxidalFeaturedEffect, string[]> = {
   Motion: motionSounds.map((r) => r.id),
 };
 
+/**
+ * Sounds built around Oxidal Moment. Caught Moments walks through what the
+ * effect does, one scene at a time, on the same caught loop: every scene after
+ * the first has Catch on, so changing scene reshapes the loop already playing.
+ * @see docs/native-moment.md
+ */
+export const oxidalMomentSounds: FactoryRecipe[] = [
+  {
+    id: 'OX-43',
+    name: 'Caught Moments',
+    description:
+      'Play a phrase, change scene, and the last few seconds become a loop to slow down, turn round, stretch into a pad and freeze, while you keep playing over it.',
+    categories: ['Ambient', 'Experimental', 'Looper'],
+    genres: ['Ambient', 'Experimental'],
+    techniques: ['Moment', 'Micro-loop', 'Bloom', 'Scene settings'],
+    engine: 'lv2',
+    complexity: 'layered',
+    inspiration:
+      'Ambient guitar from the 1970s onward and the early digital samplers of the 1980s: a phrase caught on the fly, then slowed, reversed and worn down while the player carries on above it.',
+    performance:
+      'Play a phrase in Listen, then step to Catch: the last few seconds loop and you play over them. Lead keeps the loop back under a clean delay with the level lift. Worn Half Speed drops the loop an octave with sampler grit. Backwards turns it round across the stereo field. Stretch spreads it into a slow pad. Touch sticks on a slice whenever you play. Frozen Octave holds an octave above the loop. Return to Listen to let go of the loop and catch a new one.',
+    before: [],
+    voices: [voice('Direct')],
+    after: [
+      moment({
+        catch: 0,
+        route: MOMENT_ROUTE.input,
+        loopmode: MOMENT_LOOP.tape,
+        move: TAPE_MOVE.forwards,
+        wetmode: MOMENT_WET.smear,
+        clock: MOMENT_CLOCK.full,
+        grit: 0,
+        direct: 0,
+        length: 100,
+        time: 35,
+        shape: 60,
+        tone: 65,
+        balance: 50,
+        width: 40,
+        freeze: 0,
+        mix: 50,
+      }),
+      bloom({ mode: BLOOM.hall, decay: 2.2, mix: 16 }),
+    ],
+    scenes: [
+      scene('Listen', [1]),
+      scene('Catch', [1], { moment: { catch: 1, balance: 70 } }),
+      lead('Lead', [1], {
+        moment: {
+          catch: 1,
+          wetmode: MOMENT_WET.delay,
+          time: 52,
+          shape: 35,
+          balance: 80,
+        },
+      }),
+      scene('Worn Half Speed', [1], {
+        moment: {
+          catch: 1,
+          route: MOMENT_ROUTE.both,
+          clock: MOMENT_CLOCK.octaveDown,
+          grit: 75,
+          direct: 40,
+          tone: 45,
+          balance: 30,
+        },
+      }),
+      scene('Backwards', [1], {
+        moment: {
+          catch: 1,
+          move: TAPE_MOVE.backwards,
+          width: 100,
+          balance: 75,
+        },
+      }),
+      scene('Stretch', [1], {
+        moment: {
+          catch: 1,
+          route: MOMENT_ROUTE.both,
+          loopmode: MOMENT_LOOP.stretch,
+          move: 56,
+          length: 45,
+          time: 70,
+          shape: 90,
+          direct: 50,
+          width: 80,
+          balance: 30,
+        },
+        bloom: { mode: BLOOM.cloud, decay: 9, mix: 30 },
+      }),
+      scene('Touch', [1], {
+        moment: {
+          catch: 1,
+          loopmode: MOMENT_LOOP.touch,
+          move: 60,
+          length: 30,
+          width: 100,
+          balance: 70,
+        },
+        bloom: { mode: BLOOM.room, decay: 0.9, mix: 14 },
+      }),
+      scene('Frozen Octave', [1], {
+        moment: {
+          catch: 1,
+          wetmode: MOMENT_WET.slip,
+          time: 62,
+          shape: 100,
+          freeze: 1,
+          balance: 75,
+        },
+        bloom: { mode: BLOOM.cloud, decay: 6, mix: 26 },
+      }),
+    ],
+  },
+];
+
 export const oxidalEffectsShowcaseRecipes: FactoryRecipe[] = [
   ...bloomSounds,
   ...sustainSounds,
@@ -2122,6 +2249,7 @@ export const oxidalEffectsShowcaseRecipes: FactoryRecipe[] = [
   ...serviceSounds,
   ...rhythmLeadSounds,
   ...genreSounds,
+  ...oxidalMomentSounds,
   ...limitRigs,
 ];
 

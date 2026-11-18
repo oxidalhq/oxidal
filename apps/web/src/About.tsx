@@ -80,6 +80,12 @@ const EFFECTS: { name: string; kind: string; detail: string }[] = [
       'Chorus, Flanger, Phaser, Vibe, Rotary, Tremolo, Harmonic tremolo, Vibrato and Ring',
   },
   {
+    name: 'Moment',
+    kind: 'Micro-looper',
+    detail:
+      'Keeps what you just played as a loop to slow, reverse, stretch or smear',
+  },
+  {
     name: 'Sustain',
     kind: 'Sustainer',
     detail: 'Holds each note at a steady level; Normal, Harmonic and Mix',
