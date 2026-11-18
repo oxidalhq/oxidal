@@ -64,7 +64,7 @@ at the same versions.
 | Product file                                                                                                         | Replaced by                                                                                  |
 | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
 | `theme.css`                                                                                                          | `styles/theme.css`                                                                           |
-| `App.tsx` (frame, navigation), `ResourceStrip.tsx`, `RecoveryNotice.tsx`                                             | `patterns/app-shell`, `widgets/resource-strip`, `widgets/health-status`, `components/states` |
+| `App.tsx` (frame, navigation), `ResourceStrip.tsx`, `RecoveryNotice.tsx`, `FeatureBoundary.tsx`                      | `patterns/app-shell`, `widgets/resource-strip`, `widgets/health-status`, `components/states` |
 | `components/ui/button`, `badge`, `checkbox`, `dialog`, `select`, `slider`, `switch`, `tabs`, `toggle-group`, `chart` | Same names in `components/*` (`toggle-group` becomes `segmented` and `toggle`)               |
 | `components/ui/confirm`, `NoticeTray`, `notices.ts`                                                                  | `components/confirm`, `components/notice-tray`, `notices`                                    |
 | `components/ui/alert`, `failure`, `loading`, `state-notice`, `steps`                                                 | `components/states` (EmptyState, Progress, StepProgress, failure and loading states)         |

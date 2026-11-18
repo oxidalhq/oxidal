@@ -5,11 +5,25 @@
   the library.
 - **Perform** puts scenes and playing controls within easy reach.
 - **Library** is where you browse, import and edit presets and captures.
-- **Sound Check** and **Monitor** show levels and processing health.
+- **Levels** shows levels and processing health.
 - **Settings** covers audio, Wi-Fi, MIDI, display, accounts, effect packs and
   maintenance.
 
 See the [screenshots](screenshots.md) for examples.
+
+## Navigation and recovery
+
+An unsaved Venue EQ edit asks before leaving, including with browser Back or
+a section link. **Keep editing** retains the draft and its preview; **Revert
+and leave** restores the saved EQ before navigating.
+
+Phone navigation and the cued backing player share one bottom area. The page
+reserves room for both, and adjustment dialogs follow the available viewport
+during rotation and keyboard resizing.
+
+If a screen cannot download, its recovery message offers **Reload interface**.
+Navigation and device readback remain available. Device audio runs independently
+of the page.
 
 ## Fullscreen and screen timeout
 
