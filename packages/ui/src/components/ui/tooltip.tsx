@@ -2,6 +2,7 @@ import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import * as React from 'react';
 
 import { cn } from '../../lib/cn';
+import { useFloatingLayer } from '../../lib/overlay-layer';
 
 /**
  * The name of an icon-only control, or a one-line hint. Appears on hover
@@ -20,6 +21,7 @@ export function Tooltip({
   content: React.ReactNode;
   side?: 'top' | 'right' | 'bottom' | 'left';
 }) {
+  const layer = useFloatingLayer();
   return (
     <TooltipPrimitive.Root delayDuration={300} {...props}>
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
@@ -28,7 +30,8 @@ export function Tooltip({
           side={side}
           sideOffset={6}
           className={cn(
-            'z-popover max-w-64 rounded-md border border-border bg-raised px-2 py-1 text-xs text-foreground shadow-raised select-none',
+            'max-w-64 rounded-md border border-border bg-raised px-2 py-1 text-xs text-foreground shadow-raised select-none',
+            layer,
           )}
         >
           {content}

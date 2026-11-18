@@ -33,8 +33,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './dropdown-menu';
-import { Popover, PopoverContent, PopoverTrigger } from './popover';
+import {
+  Popover,
+  PopoverClose,
+  PopoverContent,
+  PopoverTrigger,
+} from './popover';
 import { Segment, SegmentedControl } from './segmented';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './select';
 import {
   Sheet,
   SheetBody,
@@ -175,6 +187,105 @@ export const DialogBuffer: StoryObj = {
       </DialogContent>
     </Dialog>
   ),
+};
+
+function DialogPopupsDemo() {
+  const [selected, setSelected] = useState('first');
+  const [action, setAction] = useState('None');
+  return (
+    <Dialog defaultOpen>
+      <DialogTrigger asChild>
+        <Button>Open popup controls</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader
+          title="Popup controls"
+          description="Choices stay reachable inside an adjustment."
+        />
+        <DialogBody>
+          <Select value={selected} onValueChange={setSelected}>
+            <SelectTrigger aria-label="Imported model">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="first">Same name</SelectItem>
+              <SelectItem value="second">Same name</SelectItem>
+            </SelectContent>
+          </Select>
+          <p role="status">Selected: {selected}</p>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline">Recovery options</Button>
+            </PopoverTrigger>
+            <PopoverContent>
+              <PopoverClose asChild>
+                <Button onClick={() => setAction('Retried')}>Try again</Button>
+              </PopoverClose>
+            </PopoverContent>
+          </Popover>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">Model actions</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onSelect={() => setAction('Renamed')}>
+                Rename
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <p role="status">Action: {action}</p>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export const DialogPopups: StoryObj = {
+  name: 'Dialog: reachable popup controls',
+  render: () => <DialogPopupsDemo />,
+  play: async ({ canvasElement }) => {
+    const document = canvasElement.ownerDocument;
+    const page = within(document.body);
+    const dialog = await page.findByRole('dialog', { name: 'Popup controls' });
+    const controls = within(dialog);
+    // userEvent dispatches directly. Hit testing also proves that real pointer
+    // input reaches the popup instead of the modal overlay beneath it.
+    const expectReachable = (element: HTMLElement) => {
+      const box = element.getBoundingClientRect();
+      expect(
+        element.contains(
+          document.elementFromPoint(
+            box.x + box.width / 2,
+            box.y + box.height / 2,
+          ),
+        ),
+      ).toBe(true);
+    };
+    await userEvent.click(
+      controls.getByRole('combobox', { name: 'Imported model' }),
+    );
+    const option = document.querySelector<HTMLElement>(
+      '[role=option][data-value=second]',
+    )!;
+    expectReachable(option);
+    await userEvent.click(option);
+    await expect(controls.getByText('Selected: second')).toBeVisible();
+    await userEvent.click(
+      controls.getByRole('button', { name: 'Recovery options' }),
+    );
+    const retry = await page.findByRole('button', { name: 'Try again' });
+    expectReachable(retry);
+    await userEvent.click(retry);
+    await expect(controls.getByText('Action: Retried')).toBeVisible();
+    await userEvent.click(
+      controls.getByRole('button', { name: 'Model actions' }),
+    );
+    const rename = await page.findByRole('menuitem', { name: 'Rename' });
+    expectReachable(rename);
+    await userEvent.click(rename);
+    await expect(controls.getByText('Action: Renamed')).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+  },
 };
 
 function ConfirmDemo() {

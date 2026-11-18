@@ -2,6 +2,7 @@ import * as PopoverPrimitive from '@radix-ui/react-popover';
 import * as React from 'react';
 
 import { cn } from '../../lib/cn';
+import { useFloatingLayer } from '../../lib/overlay-layer';
 
 /**
  * A short choice or small form that keeps its context visible: add a block
@@ -20,6 +21,7 @@ export function PopoverContent({
   sideOffset = 6,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
+  const layer = useFloatingLayer();
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
@@ -28,7 +30,8 @@ export function PopoverContent({
         sideOffset={sideOffset}
         collisionPadding={8}
         className={cn(
-          'z-popover w-72 max-w-[calc(100vw-1rem)] rounded-lg border border-border bg-raised p-3 text-foreground shadow-raised outline-none [&>*]:min-w-0',
+          'w-72 max-w-[calc(100vw-1rem)] rounded-lg border border-border bg-raised p-3 text-foreground shadow-raised outline-none [&>*]:min-w-0',
+          layer,
           className,
         )}
         {...props}

@@ -3,6 +3,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import * as React from 'react';
 
 import { cn } from '../../lib/cn';
+import { DialogLayer } from '../../lib/overlay-layer';
 import { Button } from './button';
 
 /**
@@ -25,23 +26,25 @@ export function DialogContent({
   size?: 'sm' | 'md' | 'lg';
 }) {
   return (
-    <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay
-        data-slot="dialog-overlay"
-        className="fixed inset-0 z-dialog bg-foreground/40"
-      />
-      <DialogPrimitive.Content
-        data-slot="dialog-content"
-        className={cn(
-          'fixed top-1/2 left-1/2 z-dialog grid max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg border border-border bg-raised text-foreground shadow-raised outline-none',
-          { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl' }[size],
-          className,
-        )}
-        {...props}
-      >
-        {children}
-      </DialogPrimitive.Content>
-    </DialogPrimitive.Portal>
+    <DialogLayer.Provider value>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay
+          data-slot="dialog-overlay"
+          className="fixed inset-0 z-dialog bg-foreground/40"
+        />
+        <DialogPrimitive.Content
+          data-slot="dialog-content"
+          className={cn(
+            'fixed top-1/2 left-1/2 z-dialog grid max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg border border-border bg-raised text-foreground shadow-raised outline-none',
+            { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl' }[size],
+            className,
+          )}
+          {...props}
+        >
+          {children}
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogLayer.Provider>
   );
 }
 

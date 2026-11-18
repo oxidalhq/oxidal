@@ -3,6 +3,7 @@ import * as MenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as React from 'react';
 
 import { cn } from '../../lib/cn';
+import { useFloatingLayer } from '../../lib/overlay-layer';
 
 /**
  * The actions on one thing: Rename, Duplicate, Add to set list, Delete…
@@ -20,6 +21,7 @@ export function DropdownMenuContent({
   sideOffset = 6,
   ...props
 }: React.ComponentProps<typeof MenuPrimitive.Content>) {
+  const layer = useFloatingLayer();
   return (
     <MenuPrimitive.Portal>
       <MenuPrimitive.Content
@@ -28,7 +30,8 @@ export function DropdownMenuContent({
         sideOffset={sideOffset}
         collisionPadding={8}
         className={cn(
-          'z-popover max-w-[calc(100vw-1rem)] min-w-48 overflow-hidden rounded-lg border border-border bg-raised p-1 text-foreground shadow-raised',
+          'max-w-[calc(100vw-1rem)] min-w-48 overflow-hidden rounded-lg border border-border bg-raised p-1 text-foreground shadow-raised',
+          layer,
           className,
         )}
         {...props}

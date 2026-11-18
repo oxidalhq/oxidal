@@ -3,6 +3,7 @@ import * as SelectPrimitive from '@radix-ui/react-select';
 import * as React from 'react';
 
 import { cn } from '../../lib/cn';
+import { useFloatingLayer } from '../../lib/overlay-layer';
 
 /**
  * One choice among many (six or more, or names that do not fit segments):
@@ -62,13 +63,15 @@ export function SelectContent({
   position = 'popper',
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
+  const layer = useFloatingLayer();
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
         data-slot="select-content"
         position={position}
         className={cn(
-          'z-popover max-h-[min(24rem,var(--radix-select-content-available-height))] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border border-border bg-raised text-foreground shadow-raised',
+          'max-h-[min(24rem,var(--radix-select-content-available-height))] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border border-border bg-raised text-foreground shadow-raised',
+          layer,
           position === 'popper' && 'translate-y-1',
           className,
         )}
@@ -96,6 +99,7 @@ export function SelectItem({
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
+      data-value={props.value}
       className={cn(
         'relative flex min-h-touch cursor-default items-center gap-2 rounded-md py-2 pr-9 pl-3 text-sm outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-40 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground',
         className,
