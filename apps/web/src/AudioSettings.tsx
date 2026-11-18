@@ -1,5 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@oxidal/design-system/components/select';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@oxidal/design-system/components/tabs';
+
 import {
   type AudioDevices,
   audioDevices,
@@ -7,15 +22,6 @@ import {
   probeAudio,
 } from './api';
 import { VenueEq } from './components/media/VenueEq';
-import { Button } from './components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from './components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { EngineSettings } from './EngineSettings';
 import { friendlyError } from './lib/friendlyError';
 import { leaveScreen } from './lib/leaveGuard';

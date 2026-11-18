@@ -1,6 +1,7 @@
+import { Button } from '@oxidal/design-system/components/button';
+
 import { type MoveKey, RouteTree } from '../../components/RouteTree';
 import { useEpaper } from '../../components/RouteTree.display';
-import { Button } from '../../components/ui/button';
 import { routeSpot } from '../../rigChain';
 import { pathMix, type RouteAt } from '../../rigRoute';
 import { laneBlockId, rigLocked } from './mixedRigViewModel';

@@ -1,5 +1,6 @@
+import { Button } from '@oxidal/design-system/components/button';
+
 import type { Failure } from '../../lib/useFailure';
-import { Button } from './button';
 
 /** The device's own words, when the message on screen rewords them. */
 function FailureDetails({ failure }: { failure: Failure }) {

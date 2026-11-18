@@ -1,5 +1,7 @@
 import { useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import {
   type AudioProbe,
   type GraphAudioAction,
@@ -14,7 +16,6 @@ import {
   resumeUnavailable,
 } from './audioResume';
 import { BufferFinder } from './BufferFinder';
-import { Button } from './components/ui/button';
 import { RecoveryAction } from './components/ui/failure';
 import { friendlyError } from './lib/friendlyError';
 import { useFailure } from './lib/useFailure';

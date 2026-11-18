@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+import { Checkbox } from '@oxidal/design-system/components/checkbox';
+
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
   type LibraryCatalog,
@@ -8,8 +11,6 @@ import {
   removalPreview,
   removePreset,
 } from './api';
-import { Button } from './components/ui/button';
-import { Checkbox } from './components/ui/checkbox';
 import { errorDetails, friendlyError } from './lib/friendlyError';
 import { PresetDetailsDialog } from './PresetDetails';
 
@@ -293,7 +294,9 @@ export function DeletePresetDialog({
                           !removable.length ||
                           !!preview.blocked
                         }
-                        onChange={(e) => setCleanup(e.target.checked)}
+                        onCheckedChange={(checked) =>
+                          setCleanup(checked === true)
+                        }
                       />
                       <span>
                         Also delete {removable.length} unused separate{' '}

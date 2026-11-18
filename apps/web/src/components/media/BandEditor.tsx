@@ -1,5 +1,7 @@
 import { Minus, Plus } from '@phosphor-icons/react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import type { VenueBand, VenueSettings } from '../../api';
 import {
   BANDS,
@@ -14,7 +16,6 @@ import {
   TRIM_MAX,
   TRIM_MIN,
 } from '../../lib/venueEq';
-import { Button } from '../ui/button';
 
 /**
  * One value with step buttons either side, the compact TouchAdjust-style field

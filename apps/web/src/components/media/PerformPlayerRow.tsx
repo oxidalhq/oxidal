@@ -1,7 +1,8 @@
 import { MusicNote } from '@phosphor-icons/react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import { formatTime } from '../../lib/playerClock';
-import { Button } from '../ui/button';
 import { usePlayerPosition, useSessionMedia } from './sessionMedia';
 import { StateChip } from './StateChip';
 import { CompactTransport } from './TransportBar';

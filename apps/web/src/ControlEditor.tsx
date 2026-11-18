@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+import { RelativeAdjustment as TouchAdjust } from '@oxidal/design-system/components/number-field';
+
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { sendCommand, type Snapshot } from './api';
-import { Button } from './components/ui/button';
 import { EditQueue } from './editQueue';
 import { friendlyError } from './lib/friendlyError';
 import type { ControlScale } from './lv2Control';
-import { TouchAdjust } from './TouchAdjust';
 
 type Parameter = Snapshot['parameters'][number];
 export function ControlEditor({

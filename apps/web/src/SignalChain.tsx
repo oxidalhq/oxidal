@@ -1,7 +1,8 @@
 import { ArrowRight } from '@phosphor-icons/react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import type { Snapshot } from './api';
-import { Button } from './components/ui/button';
 
 type Props = {
   state: Snapshot;

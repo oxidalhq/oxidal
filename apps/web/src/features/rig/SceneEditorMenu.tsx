@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
   installedLv2,
@@ -10,7 +12,6 @@ import {
   rigLibrary,
   type RigPage,
 } from '../../api';
-import { Button } from '../../components/ui/button';
 import { friendlyError } from '../../lib/friendlyError';
 import {
   copySceneTo,

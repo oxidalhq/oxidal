@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
 
-import { type NativeDefaults as Defaults, nativeDefaults } from './api';
-import { Button } from './components/ui/button';
+import { Button } from '@oxidal/design-system/components/button';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from './components/ui/select';
-import { Switch } from './components/ui/switch';
+} from '@oxidal/design-system/components/select';
+import { Switch } from '@oxidal/design-system/components/switch';
+
+import { type NativeDefaults as Defaults, nativeDefaults } from './api';
 import { friendlyError } from './lib/friendlyError';
 const QUALITY_DEFAULTS: Defaults['settings'] = {
   nam_size: 1,

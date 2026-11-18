@@ -10,10 +10,11 @@ import {
 } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import { AdjustmentDialog } from './AdjustmentDialog';
 import type { LocalModel } from './api';
 import { type LocalModelPage, localModels, uploadLocalModel } from './api';
-import { Button } from './components/ui/button';
 import { DeleteSoundDialog } from './features/library/DeleteSoundDialog';
 import { GearLabel } from './GearIcon';
 import { groupIrs } from './irPresentation';

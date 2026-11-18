@@ -1,6 +1,8 @@
 import { Faders, Pause, Play, UploadSimple } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import {
   type MediaAsset,
   originalPath,
@@ -10,7 +12,6 @@ import {
 } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
 import { formatTime } from '../../lib/playerClock';
-import { Button } from '../ui/button';
 import { MediaRow, type MenuItem } from './MediaRow';
 import {
   canSplitBackingTrack,

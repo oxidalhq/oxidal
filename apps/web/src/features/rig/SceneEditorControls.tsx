@@ -1,4 +1,5 @@
-import { Checkbox } from '../../components/ui/checkbox';
+import { Checkbox } from '@oxidal/design-system/components/checkbox';
+
 import { MAX_SCENE_CONTROLS } from '../../sceneEdit';
 import type { useSceneSettings } from './SceneEditorSettings';
 
@@ -25,7 +26,7 @@ export function SceneSettings({
               <Checkbox
                 checked={s.inScenes || settings.chosen.has(key(s))}
                 disabled={s.inScenes}
-                onChange={() => settings.toggle(s)}
+                onCheckedChange={() => settings.toggle(s)}
               />
               <span>
                 {s.label} {s.display}

@@ -5,9 +5,10 @@ import {
 } from '@phosphor-icons/react';
 import { useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { changeStorage, deviceNetwork, type StorageState } from './api';
-import { Button } from './components/ui/button';
 import { RecoveryAction } from './components/ui/failure';
 import { Loading } from './components/ui/loading';
 import { friendlyError } from './lib/friendlyError';

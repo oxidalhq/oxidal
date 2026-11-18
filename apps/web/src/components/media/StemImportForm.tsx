@@ -7,6 +7,8 @@
 import { FilePlus, Warning, X } from '@phosphor-icons/react';
 import { useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import './media.css';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
@@ -20,7 +22,6 @@ import {
 } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
 import { CHUNK_BYTES } from '../../lib/mediaUpload';
-import { Button } from '../ui/button';
 import { fileSize } from './sessionMedia';
 import { guessRole, ROLE_ORDER, roleLabel } from './stemMix';
 

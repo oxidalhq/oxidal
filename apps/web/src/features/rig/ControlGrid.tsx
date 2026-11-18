@@ -1,5 +1,6 @@
+import { Button } from '@oxidal/design-system/components/button';
+
 import { rigAudioCommand } from '../../api';
-import { Button } from '../../components/ui/button';
 import { LiveEq } from '../../LiveEq';
 import { controlDisplay, controlLabel } from '../../lv2Control';
 import { NativeAuthoring } from '../../NativeAuthoring';

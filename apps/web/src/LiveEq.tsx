@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+import { RelativeAdjustment as TouchAdjust } from '@oxidal/design-system/components/number-field';
+
 import './RigControls.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { type AudioAction, type AudioState } from './api';
-import { Button } from './components/ui/button';
 import { EditQueue } from './editQueue';
 import { friendlyError } from './lib/friendlyError';
-import { TouchAdjust } from './TouchAdjust';
 
 type Gesture = Extract<
   Extract<AudioAction, { kind: 'authoring' }>['action'],

@@ -5,9 +5,10 @@ import {
   Waveform,
 } from '@phosphor-icons/react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import { AddBlockChooser } from '../../AddBlockChooser';
 import { ArtworkDeck } from '../../AssetArtwork';
-import { Button } from '../../components/ui/button';
 import { controlGroup } from '../../rigControls';
 import { ToneDetails } from '../../ToneDetails';
 import { rigBusy } from './mixedRigViewModel';

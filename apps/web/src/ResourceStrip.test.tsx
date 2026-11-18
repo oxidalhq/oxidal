@@ -110,14 +110,18 @@ it('shows a measured zero and recovered xruns instead of treating zero as unavai
     .mockResolvedValueOnce({ ...reading, sequence: 2, xruns: 6 });
   render(<ResourceStrip displayMode="stage" connected />);
   await act(async () => {});
-  expect(screen.getByText('Xruns').parentElement).toHaveTextContent('0');
+  expect(screen.getByRole('group', { name: /^Dropouts:/ })).toHaveTextContent(
+    '0',
+  );
   await act(async () => {
     await vi.advanceTimersByTimeAsync(1000);
   });
-  expect(screen.getByText('Xruns').parentElement).toHaveTextContent('6');
+  expect(screen.getByRole('group', { name: /^Dropouts:/ })).toHaveTextContent(
+    '6',
+  );
 });
 
-it('names stopped audio for screen readers without adding a row that shifts the page', async () => {
+it('names stopped audio explicitly instead of inventing meter readings', async () => {
   vi.mocked(monitoring).mockResolvedValue({
     ...snapshot(1, 'stopped'),
     graph_phase: 'stopped',
@@ -127,7 +131,7 @@ it('names stopped audio for screen readers without adding a row that shifts the 
   expect(screen.getByTestId('resource-state')).toHaveTextContent(
     'Audio stopped',
   );
-  expect(screen.queryByRole('status')).toBeNull();
+  expect(screen.getByRole('status')).toHaveTextContent('Audio stopped');
 });
 
 it('posts a failed audio worker to the notice tray with a way to Audio setup', async () => {
@@ -170,8 +174,9 @@ it('retains a session peak after the recent callback window becomes quiet', asyn
   vi.mocked(monitoring).mockResolvedValue(reading);
   render(<ResourceStrip displayMode="stage" connected />);
   await act(async () => {});
-  expect(screen.getByText('pk 120%')).toHaveAttribute('data-warning', 'true');
-  expect(screen.getByText('DSP p95').parentElement).toHaveTextContent('3%');
+  expect(
+    screen.getByRole('group', { name: /^DSP: 3%, peak 120%, over its limit/ }),
+  ).toBeVisible();
 });
 
 it('warns before a callback reaches its deadline', async () => {
@@ -200,9 +205,7 @@ it('warns before a callback reaches its deadline', async () => {
   vi.mocked(monitoring).mockResolvedValue(reading);
   render(<ResourceStrip displayMode="stage" connected />);
   await act(async () => {});
-  expect(screen.getByText('DSP p95').parentElement).toHaveAttribute(
-    'data-warning',
-    'true',
-  );
-  expect(screen.getByText('pk 86%')).toHaveAttribute('data-warning', 'false');
+  expect(
+    screen.getByRole('group', { name: /^DSP: 76%, peak 86%, over its limit/ }),
+  ).toBeVisible();
 });

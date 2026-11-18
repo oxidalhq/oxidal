@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@oxidal/design-system/components/select';
+
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
   publishRig,
@@ -8,15 +17,7 @@ import {
   rigLibrary,
   rigNativeSources,
 } from '../../api';
-import { Button } from '../../components/ui/button';
 import { FailureNotice } from '../../components/ui/failure';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../../components/ui/select';
 import type {
   RigEntry,
   RigNativeSource,

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import {
   type AudioState,
   graphAudioState,
@@ -9,7 +11,6 @@ import {
   playbackState,
   rigAudioState,
 } from './api';
-import { Button } from './components/ui/button';
 import { formatDefault, settingHelp } from './engineHelp';
 import { friendlyError } from './lib/friendlyError';
 import { SettingDialog } from './SettingDialog';

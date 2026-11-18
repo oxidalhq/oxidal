@@ -1,16 +1,17 @@
 import { CaretLeft, CaretRight } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 
-import { AdjustmentDialog } from './AdjustmentDialog';
-import { type AudioAction, type AudioState, tone3000Tone } from './api';
-import { Button } from './components/ui/button';
+import { Button } from '@oxidal/design-system/components/button';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from './components/ui/select';
+} from '@oxidal/design-system/components/select';
+
+import { AdjustmentDialog } from './AdjustmentDialog';
+import { type AudioAction, type AudioState, tone3000Tone } from './api';
 import { formatDefault, settingHelp } from './engineHelp';
 import { friendlyError } from './lib/friendlyError';
 import { NativeTools } from './NativeTools';

@@ -9,6 +9,15 @@ import {
 } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@oxidal/design-system/components/select';
+
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
   type LocalModelPage,
@@ -23,16 +32,8 @@ import {
   type ToneQuery,
   uploadLocalModel,
 } from './api';
-import { Button } from './components/ui/button';
 import { DialogFooter } from './components/ui/dialog';
 import { Loading } from './components/ui/loading';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from './components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 import { GearIcon, GearLabel } from './GearIcon';
 import { friendlyError } from './lib/friendlyError';

@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import { unitLevels } from './api';
-import { Button } from './components/ui/button';
 import {
   averageDb,
   MATCH_TARGET_DBFS,

@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import type { StartAudio } from './api';
 import { BUFFER_SIZES, bufferMs } from './bufferTiming';
-import { Button } from './components/ui/button';
 import { useMonitorReadings } from './monitorFeed';
 
 type Stream = StartAudio['stream'];

@@ -1,5 +1,8 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+import { Checkbox } from '@oxidal/design-system/components/checkbox';
+
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
   libraryCatalog,
@@ -8,8 +11,6 @@ import {
   rigLibrary,
   type RigPage,
 } from './api';
-import { Button } from './components/ui/button';
-import { Checkbox } from './components/ui/checkbox';
 import { FailureNotice } from './components/ui/failure';
 import { PresetRow } from './features/library/PresetRow';
 import { duplicatePreset, setListMember } from './features/library/setList';
@@ -480,9 +481,9 @@ export function SavedRigs({
                         (!prepared.includes(p.revision) &&
                           prepared.length >= GAPLESS_BANK_SIZE)
                       }
-                      onChange={(event) =>
+                      onCheckedChange={(checked) =>
                         setPrepared((old) =>
-                          event.target.checked
+                          checked === true
                             ? [...new Set([...old, p.revision])]
                             : old.filter((id) => id !== p.revision),
                         )

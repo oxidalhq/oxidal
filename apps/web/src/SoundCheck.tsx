@@ -15,6 +15,15 @@ import {
   useState,
 } from 'react';
 
+import { Badge } from '@oxidal/design-system/components/badge';
+import { Button } from '@oxidal/design-system/components/button';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@oxidal/design-system/components/tabs';
+
 import './SoundCheck.css';
 import {
   boosts,
@@ -28,10 +37,7 @@ import {
   type UnitLevels,
   unitLevels,
 } from './api';
-import { Badge } from './components/ui/badge';
-import { Button } from './components/ui/button';
 import { StateNotice } from './components/ui/state-notice';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { EvenOut } from './EvenOut';
 import {
   guitarVerificationDetail,

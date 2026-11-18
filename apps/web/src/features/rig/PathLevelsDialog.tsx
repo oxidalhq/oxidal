@@ -1,7 +1,8 @@
 import { useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import { AdjustmentDialog } from '../../AdjustmentDialog';
-import { Button } from '../../components/ui/button';
 import type { IdStep } from '../../rigChain';
 import { routePath, routeSplitAddPath } from '../../rigRoute';
 import { rigBusy } from './mixedRigViewModel';

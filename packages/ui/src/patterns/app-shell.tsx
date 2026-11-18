@@ -48,6 +48,8 @@ export function AppShell({
   nowPlaying,
   readings,
   resourceState = 'live',
+  resourceConnected = resourceState !== 'disconnected',
+  resourceLabel,
   status = 'simple',
   children,
   className,
@@ -57,6 +59,8 @@ export function AppShell({
   nowPlaying?: React.ReactNode;
   readings: ResourceReadings;
   resourceState?: ResourceState;
+  resourceConnected?: boolean;
+  resourceLabel?: string;
   /** Simple shows one health word in the masthead; Detailed shows the full strip. */
   status?: 'simple' | 'detailed';
   children: React.ReactNode;
@@ -73,7 +77,7 @@ export function AppShell({
         className,
       )}
     >
-      <header className="flex items-center gap-3 bg-enclosure px-page pt-[var(--safe-top)] text-enclosure-foreground">
+      <header className="sticky top-0 z-strip flex items-center gap-3 bg-enclosure px-page pt-[var(--safe-top)] text-enclosure-foreground">
         <a
           href="#rig"
           aria-label="Oxidal home"
@@ -109,22 +113,45 @@ export function AppShell({
           className="hidden h-6 w-px shrink-0 bg-enclosure-border md:block"
         />
         {status === 'simple' && (
-          <HealthStatus
-            readings={readings}
-            state={resourceState}
-            onDetails={() => onNavigate('levels')}
-            className="shrink-0 border-enclosure-border bg-enclosure text-enclosure-foreground hover:bg-enclosure-border"
-          />
+          <aside
+            aria-label="DSP and system resources"
+            data-connected={resourceConnected}
+          >
+            {resourceLabel && (
+              <span className="sr-only" data-testid="resource-state">
+                {resourceLabel}
+              </span>
+            )}
+            <HealthStatus
+              readings={readings}
+              state={resourceState}
+              onDetails={() => onNavigate('levels')}
+              className="shrink-0 border-enclosure-border bg-enclosure text-enclosure-foreground hover:bg-enclosure-border"
+            />
+          </aside>
         )}
         <div ref={setTools} data-slot="shell-tools" className="contents" />
       </header>
-      <div className="sticky top-0 z-strip">
+      <div className="sticky top-[calc(3rem+var(--safe-top))] z-strip">
         {status === 'detailed' && (
-          <ResourceStrip readings={readings} state={resourceState} />
+          <aside
+            aria-label="DSP and system resources"
+            data-connected={resourceConnected}
+          >
+            {resourceLabel && (
+              <span className="sr-only" data-testid="resource-state">
+                {resourceLabel}
+              </span>
+            )}
+            <ResourceStrip readings={readings} state={resourceState} />
+          </aside>
         )}
         <NoticeTray />
       </div>
-      <main className="pb-[calc(var(--safe-bottom)+4.5rem)] md:pb-page">
+      <main
+        data-slot="app-content"
+        className="m-0 w-full max-w-none min-w-0 p-0 pb-[calc(var(--safe-bottom)+4.5rem)] md:pb-page"
+      >
         <LauncherSlotContext.Provider value={tools}>
           {children}
         </LauncherSlotContext.Provider>

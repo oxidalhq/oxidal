@@ -1,7 +1,7 @@
 import { CircleNotch, DotsThree, Play } from '@phosphor-icons/react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
-import { Button } from '../../components/ui/button';
+import { Button } from '@oxidal/design-system/components/button';
 
 export type RowAction =
   | { label: string; onSelect: () => void; disabled?: boolean }

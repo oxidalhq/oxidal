@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { installedLv2, type Lv2Plugin } from './api';
-import { Button } from './components/ui/button';
 import { Loading } from './components/ui/loading';
 import {
   EFFECT_TYPES,

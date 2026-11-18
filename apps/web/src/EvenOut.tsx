@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import './Library.css';
 import {
   calibration,
@@ -7,7 +9,6 @@ import {
   calibrationCoverage,
   type CalibrationState,
 } from './api';
-import { Button } from './components/ui/button';
 import { friendlyError } from './lib/friendlyError';
 
 const db = (n: number) =>

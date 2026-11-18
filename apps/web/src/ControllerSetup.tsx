@@ -1,14 +1,15 @@
 import { useState } from 'react';
 
-import type { MidiMap } from './api';
-import { Button } from './components/ui/button';
+import { Button } from '@oxidal/design-system/components/button';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from './components/ui/select';
+} from '@oxidal/design-system/components/select';
+
+import type { MidiMap } from './api';
 import {
   applyLayout,
   checkPassed,

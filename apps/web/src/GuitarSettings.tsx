@@ -1,12 +1,13 @@
 import { Guitar as GuitarIcon, Minus, Plus } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 
+import { Badge } from '@oxidal/design-system/components/badge';
+import { Button } from '@oxidal/design-system/components/button';
+
 import './MasterLevel.css';
 import './GuitarSettings.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { boosts, type GuitarProfiles } from './api';
-import { Badge } from './components/ui/badge';
-import { Button } from './components/ui/button';
 import { DialogFooter } from './components/ui/dialog';
 import { StateNotice } from './components/ui/state-notice';
 import { guitarVerificationDetail } from './guitarVerification';

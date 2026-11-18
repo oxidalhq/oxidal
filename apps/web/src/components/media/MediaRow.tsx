@@ -1,7 +1,7 @@
 import { DotsThree } from '@phosphor-icons/react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
-import { Button } from '../ui/button';
+import { Button } from '@oxidal/design-system/components/button';
 
 export type MenuItem =
   | {

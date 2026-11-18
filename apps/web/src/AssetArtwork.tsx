@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import {
   artworkPath,
   type AssetArtwork,
   presetArtwork,
   saveArtwork,
 } from './api';
-import { Button } from './components/ui/button';
 import { GearIcon, GearLabel } from './GearIcon';
 import { friendlyError } from './lib/friendlyError';
 

@@ -71,6 +71,10 @@ is for isolated editors/stories. `VenueEq` reads confirmed output/profile state
 and emits no audio commands on mount or remote readback. Profile writes are
 requests to the product store; they must be confirmed before selection changes.
 
+The AppShell reads one shared monitor feed through the product adapter. Simple
+health stays visible with the sticky masthead; Detailed shows the full strip.
+Navigation retains the product's leave guards and existing hash aliases.
+
 ## Import order
 
 ESLint enforces import order using `eslint-plugin-simple-import-sort`, with one

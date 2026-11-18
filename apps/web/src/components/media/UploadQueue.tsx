@@ -1,7 +1,8 @@
 import { UploadSimple, Warning } from '@phosphor-icons/react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import type { UploadItem } from '../../lib/mediaUpload';
-import { Button } from '../ui/button';
 import { fileSize, useSessionMedia } from './sessionMedia';
 
 function percent(value: number) {

@@ -1,8 +1,9 @@
 import { Copy } from '@phosphor-icons/react';
 import { useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import './RigHeaderDuplicate.css';
-import { Button } from '../../components/ui/button';
 import { friendlyError } from '../../lib/friendlyError';
 import { OfflineEditor } from '../library/OfflineEditor';
 import { duplicatePreset } from '../library/setList';

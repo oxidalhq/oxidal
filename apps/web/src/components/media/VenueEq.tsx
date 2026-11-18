@@ -7,6 +7,17 @@ import {
   useSyncExternalStore,
 } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@oxidal/design-system/components/select';
+
 import './media.css';
 import './venue.css';
 import {
@@ -23,16 +34,6 @@ import { setLeaveGuard } from '../../lib/leaveGuard';
 import { formatDb, headroom, withBand } from '../../lib/venueEq';
 import { onVenue } from '../../lib/venueFeed';
 import { PreviewThrottle } from '../../lib/venuePreview';
-import { Button } from '../ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from '../ui/select';
 import { BandEditor } from './BandEditor';
 import { EqGraph, type GraphChange } from './EqGraph';
 import { MoreMenu } from './MediaRow';

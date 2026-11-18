@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { Badge } from '@oxidal/design-system/components/badge';
+import { Button } from '@oxidal/design-system/components/button';
+
 import { type AccountAction, type AccountState, tone3000Account } from './api';
-import { Badge } from './components/ui/badge';
-import { Button } from './components/ui/button';
 import { clearReturnTarget, readReturnTarget } from './lib/sessionState';
 
 /** Device authorization stays on the daemon; only its public sign-in code reaches this view. */

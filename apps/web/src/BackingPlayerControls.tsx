@@ -1,5 +1,6 @@
+import { Button } from '@oxidal/design-system/components/button';
+
 import type { MidiMap } from './api';
-import { Button } from './components/ui/button';
 
 type Backing = NonNullable<NonNullable<MidiMap['navigation']>['backing']>;
 /** A backing-player action a switch triggers, or the level knob. */

@@ -3,15 +3,16 @@ import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import { useEffect, useRef, useState } from 'react';
 
-import { terminalCommand, type TerminalState } from './api';
-import { Button } from './components/ui/button';
+import { Button } from '@oxidal/design-system/components/button';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from './components/ui/select';
+} from '@oxidal/design-system/components/select';
+
+import { terminalCommand, type TerminalState } from './api';
 
 /** Input is never persisted or retried; reconnect only reads the existing PTY. */
 function TerminalPanel({ mode }: { mode: 'unprivileged' | 'admin' }) {

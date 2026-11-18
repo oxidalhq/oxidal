@@ -1,15 +1,16 @@
 import { useState } from 'react';
 
-import type { AudioProbe, StartAudio } from './api';
-import { BUFFER_SIZES, bufferMs } from './bufferTiming';
-import { Button } from './components/ui/button';
+import { Button } from '@oxidal/design-system/components/button';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from './components/ui/select';
+} from '@oxidal/design-system/components/select';
+
+import type { AudioProbe, StartAudio } from './api';
+import { BUFFER_SIZES, bufferMs } from './bufferTiming';
 
 type Stream = StartAudio['stream'];
 

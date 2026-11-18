@@ -1,7 +1,8 @@
+import { Button } from '@oxidal/design-system/components/button';
+import { RelativeAdjustment as TouchAdjust } from '@oxidal/design-system/components/number-field';
+
 import { AdjustmentDialog } from '../../AdjustmentDialog';
-import { Button } from '../../components/ui/button';
 import { confirmedControlDisplay } from '../../rigControls';
-import { TouchAdjust } from '../../TouchAdjust';
 import { key } from './mixedRigViewModel';
 import type { RigViewProps } from './useMixedRigSession';
 

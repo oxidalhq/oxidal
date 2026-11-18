@@ -5,9 +5,10 @@ import {
 } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { monitoring, protectState, setProtect } from '../../api';
-import { Button } from '../../components/ui/button';
 import { friendlyError } from '../../lib/friendlyError';
 import { setOutputMute } from './outputMute';
 

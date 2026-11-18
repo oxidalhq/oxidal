@@ -7,8 +7,8 @@ import {
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
-import { type Notice, useNotice } from './notices';
-import { NoticeTray } from './NoticeTray';
+import { NoticeTray } from '@oxidal/design-system/components/notice-tray';
+import { type Notice, useNotice } from '@oxidal/design-system/notices';
 
 function Poster({ notice }: { notice: Notice | null }) {
   useNotice('test', notice);

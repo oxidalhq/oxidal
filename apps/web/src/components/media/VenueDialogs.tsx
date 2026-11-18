@@ -1,7 +1,8 @@
 import { useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import { AdjustmentDialog } from '../../AdjustmentDialog';
-import { Button } from '../ui/button';
 import { DialogFooter } from '../ui/dialog';
 
 /** Name and notes for Save as… and Rename. Names are 1–60 characters.

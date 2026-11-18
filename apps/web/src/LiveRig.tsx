@@ -8,6 +8,9 @@ import {
 } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+import { RelativeAdjustment as TouchAdjust } from '@oxidal/design-system/components/number-field';
+
 import './RigControls.css';
 import { AddBlockChooser } from './AddBlockChooser';
 import { AdjustmentDialog } from './AdjustmentDialog';
@@ -29,7 +32,6 @@ import { ArtworkDeck } from './AssetArtwork';
 import { BoostControl } from './BoostControl';
 import { ChainView, LedToggle } from './ChainView';
 import { MaybeSheet } from './components/RigSheet';
-import { Button } from './components/ui/button';
 import { DragFader } from './DragFader';
 import { EditQueue } from './editQueue';
 import { StageControls } from './features/stage/StageControls';
@@ -65,7 +67,6 @@ import { MidiControls } from './SceneMidi';
 import { SlotChooser } from './SlotChooser';
 import { type Placement, playingTone, presetWithEffect } from './slotEffects';
 import { ToneDetails } from './ToneDetails';
-import { TouchAdjust } from './TouchAdjust';
 import { TunerButton } from './TunerButton';
 import { useWorkspaceState } from './workspaceMemory';
 

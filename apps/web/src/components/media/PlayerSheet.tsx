@@ -1,11 +1,12 @@
 import { DownloadSimple, Stop, Warning } from '@phosphor-icons/react';
 import { type CSSProperties, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { type MediaAsset, originalPath, updateAsset } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
 import { formatDb, formatTime } from '../../lib/playerClock';
-import { Button } from '../ui/button';
 import { PositionBar } from './PositionBar';
 import { PracticeControls } from './PracticeControls';
 import {

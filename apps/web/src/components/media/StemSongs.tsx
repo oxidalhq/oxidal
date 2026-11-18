@@ -7,12 +7,13 @@
 import { Faders, FilePlus, Pause, Play, Scissors } from '@phosphor-icons/react';
 import { useCallback, useEffect, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import './media.css';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { type MediaAsset, type SongList, songList } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
 import { formatTime } from '../../lib/playerClock';
-import { Button } from '../ui/button';
 import { useConfirm } from '../ui/confirm';
 import {
   canSplitBackingTrack,

@@ -1,6 +1,8 @@
 import { Eraser, FloppyDisk, Plus, Stop } from '@phosphor-icons/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { rigAudioState } from './api';
 import {
@@ -20,7 +22,6 @@ import {
   type Snapshot,
 } from './api';
 import { ChainView, LedToggle } from './ChainView';
-import { Button } from './components/ui/button';
 import { ControlEditor } from './ControlEditor';
 import { StageControls } from './features/stage/StageControls';
 import { GearIcon } from './GearIcon';

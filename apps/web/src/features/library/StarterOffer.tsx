@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import './StarterOffer.css';
 import { libraryCatalog } from '../../api';
-import { Button } from '../../components/ui/button';
 import { friendlyError } from '../../lib/friendlyError';
 import { effectsOnlyNeeds } from './oxidal/finish';
 import {

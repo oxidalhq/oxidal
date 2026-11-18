@@ -1,12 +1,13 @@
-import type { MidiDevices, MidiMap } from './api';
-import { Button } from './components/ui/button';
+import { Button } from '@oxidal/design-system/components/button';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from './components/ui/select';
+} from '@oxidal/design-system/components/select';
+
+import type { MidiDevices, MidiMap } from './api';
 
 type Extra = NonNullable<MidiMap['extra_inputs']>[number];
 /** The first controller plus at most three more, as the device allows. */

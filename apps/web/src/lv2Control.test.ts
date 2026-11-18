@@ -3,9 +3,10 @@ import { createElement } from 'react';
 import { vi } from 'vitest';
 import { expect, it } from 'vitest';
 
+import { RelativeAdjustment as TouchAdjust } from '@oxidal/design-system/components/number-field';
+
 import type { Lv2Plugin } from './api';
 import { controlDisplay, lv2Control, scalePointLabel } from './lv2Control';
-import { TouchAdjust } from './TouchAdjust';
 
 const port: Lv2Plugin['ports'][number] = {
   index: 0,

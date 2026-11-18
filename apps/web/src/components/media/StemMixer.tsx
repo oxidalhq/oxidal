@@ -8,9 +8,10 @@
 import { DownloadSimple, Faders } from '@phosphor-icons/react';
 import { useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import { type PlayerSnapshot, saveSongMix, songView } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
-import { Button } from '../ui/button';
 import { Slider } from '../ui/slider';
 import {
   mixSourceOf,

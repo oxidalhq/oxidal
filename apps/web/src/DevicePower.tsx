@@ -1,9 +1,10 @@
 import { ArrowClockwise, Power } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { deviceNetwork, type NetworkState } from './api';
-import { Button } from './components/ui/button';
 import { friendlyError } from './lib/friendlyError';
 
 /** Device power is separate from the audio transport and always confirmed. */

@@ -127,7 +127,9 @@ it('uses one signal canvas and selected-block inspector for chain and scenes', a
   expect(screen.getByRole('heading', { name: 'Clean tone' })).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Tape delay' }));
   expect(screen.getByRole('heading', { name: 'Tape delay' })).toBeVisible();
-  expect(screen.getByText('Effect', { selector: '.ui-badge' })).toBeVisible();
+  expect(
+    screen.getByText('Effect', { selector: '[data-slot="badge"]' }),
+  ).toBeVisible();
   fireEvent.click(
     screen.getByRole('button', { name: 'Move Tape delay earlier' }),
   );

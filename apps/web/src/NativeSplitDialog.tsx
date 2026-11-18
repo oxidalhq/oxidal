@@ -1,19 +1,20 @@
 import { WarningCircle } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
-import { AdjustmentDialog } from './AdjustmentDialog';
-import { type AssetArtwork, presetArtwork } from './api';
-import { Alert, AlertDescription, AlertTitle } from './components/ui/alert';
-import { Button } from './components/ui/button';
-import { Checkbox } from './components/ui/checkbox';
-import { Loading } from './components/ui/loading';
+import { Button } from '@oxidal/design-system/components/button';
+import { Checkbox } from '@oxidal/design-system/components/checkbox';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from './components/ui/select';
+} from '@oxidal/design-system/components/select';
+
+import { AdjustmentDialog } from './AdjustmentDialog';
+import { type AssetArtwork, presetArtwork } from './api';
+import { Alert, AlertDescription, AlertTitle } from './components/ui/alert';
+import { Loading } from './components/ui/loading';
 import { friendlyError } from './lib/friendlyError';
 import { type NativeDraft, splitNative } from './rigDraft';
 
@@ -120,7 +121,7 @@ export function NativeSplitDialog({
         <label className="flex min-h-11 items-center gap-2 text-sm">
           <Checkbox
             checked={confirmed}
-            onChange={(event) => setConfirmed(event.currentTarget.checked)}
+            onCheckedChange={(checked) => setConfirmed(checked === true)}
             aria-label="Confirm amp-head capture"
           />
           <span>This NAM is an amp-head capture, without a baked-in cab.</span>

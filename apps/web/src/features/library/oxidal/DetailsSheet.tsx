@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import './oxidal.css';
 import { AdjustmentDialog } from '../../../AdjustmentDialog';
 import { libraryCatalog } from '../../../api';
-import { Button } from '../../../components/ui/button';
 import { DialogFooter } from '../../../components/ui/dialog';
 import { factoryRoles, factoryTopologySummary } from '../../../factoryRecipes';
 import { isFactoryVoice, primaryCapture } from '../../../factoryVoices';

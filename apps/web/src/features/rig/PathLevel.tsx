@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
-import { Button } from '../../components/ui/button';
+import { Button } from '@oxidal/design-system/components/button';
+
 import { panLabel } from '../../lib/panLabel';
 import { mixGains, type PathMix, pathMix } from '../../rigRoute';
 

@@ -9,16 +9,17 @@ import {
   YAxis,
 } from 'recharts';
 
-import { type MonitoringHistory as History, monitoringHistory } from './api';
-import { Button } from './components/ui/button';
-import { ChartContainer } from './components/ui/chart';
+import { Button } from '@oxidal/design-system/components/button';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from './components/ui/select';
+} from '@oxidal/design-system/components/select';
+
+import { type MonitoringHistory as History, monitoringHistory } from './api';
+import { ChartContainer } from './components/ui/chart';
 import { historyCsv, historyPoints } from './historyData';
 import { friendlyError } from './lib/friendlyError';
 

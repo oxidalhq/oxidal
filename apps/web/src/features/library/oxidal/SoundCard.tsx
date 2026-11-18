@@ -1,5 +1,6 @@
+import { Button } from '@oxidal/design-system/components/button';
+
 import './oxidal.css';
-import { Button } from '../../../components/ui/button';
 import { type CardHandlers, cardLine, primaryFor } from './cardActions';
 import {
   type CardState,

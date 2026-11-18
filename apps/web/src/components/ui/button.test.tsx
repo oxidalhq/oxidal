@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, it, vi } from 'vitest';
 
-import { Button } from './button';
+import { Button } from '@oxidal/design-system/components/button';
 
 it('supports keyboard activation and native disabled behavior', async () => {
   const click = vi.fn();

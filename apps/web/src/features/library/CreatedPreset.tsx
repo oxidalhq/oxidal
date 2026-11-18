@@ -1,8 +1,9 @@
 import { useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { graphAudioState, playbackState, rigAudioState } from '../../api';
-import { Button } from '../../components/ui/button';
 import { friendlyError } from '../../lib/friendlyError';
 import { playScenes } from '../../presetChoices';
 

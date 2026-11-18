@@ -1,5 +1,14 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@oxidal/design-system/components/select';
+
 import {
   type AudioAction,
   type AudioProbe,
@@ -25,15 +34,7 @@ import {
 import { BootPlayback } from './BootPlayback';
 import { BufferFinder } from './BufferFinder';
 import { bufferMs } from './bufferTiming';
-import { Button } from './components/ui/button';
 import { RecoveryAction } from './components/ui/failure';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from './components/ui/select';
 import { EffectsPlaybackSettings } from './EffectsPlaybackSettings';
 import { HostAudioControls } from './HostAudioControls';
 import { friendlyError } from './lib/friendlyError';

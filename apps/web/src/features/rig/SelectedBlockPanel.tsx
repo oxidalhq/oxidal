@@ -1,10 +1,11 @@
 import { Trash } from '@phosphor-icons/react';
 import { useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import './SelectedBlockPanel.css';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { LedToggle } from '../../ChainView';
-import { Button } from '../../components/ui/button';
 import type { IdStep } from '../../rigChain';
 import {
   MAX_PATHS,

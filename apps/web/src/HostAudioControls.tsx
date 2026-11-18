@@ -1,5 +1,6 @@
+import { Button } from '@oxidal/design-system/components/button';
+
 import type { AudioAction } from './api';
-import { Button } from './components/ui/button';
 type Command = Extract<AudioAction, { kind: 'host_utility' }>['command'];
 /** Shared device controls; never saved as effect/preset controls. */
 export function HostAudioControls({

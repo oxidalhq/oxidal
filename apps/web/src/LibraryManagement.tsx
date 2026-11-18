@@ -10,9 +10,10 @@ import {
 } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import './LibraryManagement.css';
 import { type LibraryCatalog, libraryCatalog, type LibraryUpdate } from './api';
-import { Button } from './components/ui/button';
 import { FailureNotice } from './components/ui/failure';
 import { Loading } from './components/ui/loading';
 import {

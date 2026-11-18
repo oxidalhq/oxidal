@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import {
   type AudioState,
   graphAudioCommand,
@@ -15,7 +17,6 @@ import {
   type StartupState,
   startupState,
 } from './api';
-import { Button } from './components/ui/button';
 import { friendlyError } from './lib/friendlyError';
 
 /** A single boot choice remains reachable regardless of the current audio owner. */

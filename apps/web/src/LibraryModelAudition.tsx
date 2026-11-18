@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@oxidal/design-system/components/select';
+
 import {
   type AudioState,
   playbackCommand,
@@ -8,14 +17,6 @@ import {
   type RigAudioState,
   rigAudioState,
 } from './api';
-import { Button } from './components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from './components/ui/select';
 import { friendlyError } from './lib/friendlyError';
 import { assertAuditionOwner } from './rigControls';
 

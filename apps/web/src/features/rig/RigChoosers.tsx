@@ -1,7 +1,8 @@
+import { Button } from '@oxidal/design-system/components/button';
+
 import { AddBlockChooser } from '../../AddBlockChooser';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { rigAudioCommand, rigAudioState } from '../../api';
-import { Button } from '../../components/ui/button';
 import { ModelPicker } from '../../ModelPicker';
 import { assertAuditionOwner } from '../../rigControls';
 import { lv2Effect, terminalEffect } from '../../rigDraft';

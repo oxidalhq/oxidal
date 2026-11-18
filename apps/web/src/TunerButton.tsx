@@ -1,6 +1,7 @@
 import { MusicNotes } from '@phosphor-icons/react';
 
-import { Button } from './components/ui/button';
+import { Button } from '@oxidal/design-system/components/button';
+
 import { requestTuner } from './tunerNavigation';
 
 /** The Rig screen's way into the tuner; its label hides on phone headers. */

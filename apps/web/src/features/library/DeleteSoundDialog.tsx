@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
   type ModelRemovalPreview,
   modelRemovalPreview,
   removeModel,
 } from '../../api';
-import { Button } from '../../components/ui/button';
 import { friendlyError } from '../../lib/friendlyError';
 
 /** Whole kilobytes or megabytes; exact byte counts sit in Details. */

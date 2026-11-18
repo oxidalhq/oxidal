@@ -121,7 +121,7 @@ export function HealthStatus({
           data-slot="health-status"
           data-tone={health.tone}
           className={cn(
-            'inline-flex min-h-8 items-center gap-2 rounded-full border border-border bg-background px-3 text-sm font-semibold hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+            'inline-flex min-h-touch items-center gap-2 rounded-full border border-border bg-background px-3 text-sm font-semibold hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
             health.tone === 'hot' && 'border-brand',
             className,
           )}

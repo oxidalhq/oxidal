@@ -1,5 +1,6 @@
+import { Button } from '@oxidal/design-system/components/button';
+
 import type { AudioAction, AudioState } from './api';
-import { Button } from './components/ui/button';
 import { ToolRow, ToolSection } from './ToolRow';
 type Status = NonNullable<AudioState['authoring']>;
 

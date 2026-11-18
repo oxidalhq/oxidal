@@ -1,5 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+import { RelativeAdjustment as TouchAdjust } from '@oxidal/design-system/components/number-field';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@oxidal/design-system/components/select';
+
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
   capabilities,
@@ -10,19 +22,8 @@ import {
   type Preset,
 } from './api';
 import { ArtworkDeck } from './AssetArtwork';
-import { Button } from './components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from './components/ui/select';
 import { EditQueue } from './editQueue';
 import { friendlyError } from './lib/friendlyError';
-import { TouchAdjust } from './TouchAdjust';
 
 const blockLabels: Record<string, string> = {
   enabled: 'Enabled',

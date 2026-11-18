@@ -11,9 +11,10 @@ import {
   YAxis,
 } from 'recharts';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import './Monitoring.css';
 import type { Monitoring as Readings } from './api';
-import { Button } from './components/ui/button';
 import { ChartContainer } from './components/ui/chart';
 import { ControlAudit } from './ControlAudit';
 import {

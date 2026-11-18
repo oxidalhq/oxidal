@@ -1,15 +1,16 @@
 import { ArrowClockwise, DownloadSimple, FunnelX } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
-import { type ControlAudit as History, controlAudit } from './api';
-import { Button } from './components/ui/button';
+import { Button } from '@oxidal/design-system/components/button';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from './components/ui/select';
+} from '@oxidal/design-system/components/select';
+
+import { type ControlAudit as History, controlAudit } from './api';
 import { friendlyError } from './lib/friendlyError';
 
 const labels: Record<History['records'][number]['operation'], string> = {

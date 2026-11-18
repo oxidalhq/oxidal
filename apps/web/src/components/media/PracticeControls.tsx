@@ -7,14 +7,15 @@
 import { Metronome, Repeat, Waveform } from '@phosphor-icons/react';
 import { type PointerEvent, useEffect, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+import { Switch } from '@oxidal/design-system/components/switch';
+
 import './media.css';
 import { type PracticeTiming, practiceTiming } from '../../api';
 import type { PlayerCommand } from '../../generated/contract';
 import { deviceSentence } from '../../lib/friendlyError';
 import { clock, tapTempo } from '../../lib/playerClock';
-import { Button } from '../ui/button';
 import { Slider } from '../ui/slider';
-import { Switch } from '../ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import { usePlayerPosition, useProtect, useSessionMedia } from './sessionMedia';
 

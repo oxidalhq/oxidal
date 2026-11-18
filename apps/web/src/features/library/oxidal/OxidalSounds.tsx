@@ -2,21 +2,22 @@ import { WarningCircle } from '@phosphor-icons/react';
 import { useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 
-import './oxidal.css';
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from '../../../components/ui/alert';
-import { Button } from '../../../components/ui/button';
-import { Loading } from '../../../components/ui/loading';
+import { Button } from '@oxidal/design-system/components/button';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../../../components/ui/select';
+} from '@oxidal/design-system/components/select';
+
+import './oxidal.css';
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from '../../../components/ui/alert';
+import { Loading } from '../../../components/ui/loading';
 import { StepProgress } from '../../../components/ui/steps';
 import {
   ToggleGroup,

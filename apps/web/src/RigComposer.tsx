@@ -1,6 +1,21 @@
 import { ArrowDown, ArrowUp, Trash } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 
+import { Badge } from '@oxidal/design-system/components/badge';
+import { Button } from '@oxidal/design-system/components/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@oxidal/design-system/components/select';
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from '@oxidal/design-system/components/tabs';
+
 import './RigComposer.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
@@ -17,17 +32,7 @@ import {
 } from './api';
 import { ArtworkDeck } from './AssetArtwork';
 import { ChainView } from './ChainView';
-import { Badge } from './components/ui/badge';
-import { Button } from './components/ui/button';
 import { Loading } from './components/ui/loading';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from './components/ui/select';
-import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs';
 import { GearIcon } from './GearIcon';
 import type { ResourceSource } from './generated/contract';
 import { friendlyError } from './lib/friendlyError';

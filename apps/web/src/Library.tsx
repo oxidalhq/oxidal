@@ -13,6 +13,21 @@ import {
 } from '@phosphor-icons/react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@oxidal/design-system/components/select';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@oxidal/design-system/components/tabs';
+
 import './Library.css';
 import {
   type AudioState,
@@ -28,16 +43,7 @@ import { ArtworkDeck } from './AssetArtwork';
 import { BackingTracks } from './components/media/BackingTracks';
 import { DiReamps } from './components/media/DiReamps';
 import { StemSongs } from './components/media/StemSongs';
-import { Button } from './components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from './components/ui/select';
 import { StateNotice } from './components/ui/state-notice';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 import { CreatedPreset } from './features/library/CreatedPreset';
 import { MineDialogs, type MineTarget } from './features/library/MineDialogs';

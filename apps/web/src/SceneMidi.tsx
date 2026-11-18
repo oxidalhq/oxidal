@@ -1,6 +1,16 @@
 import { ArrowCounterClockwise, PlugsConnected } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 
+import { Badge } from '@oxidal/design-system/components/badge';
+import { Button } from '@oxidal/design-system/components/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@oxidal/design-system/components/select';
+
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
   libraryCatalog,
@@ -10,17 +20,8 @@ import {
   type RigAudioAction,
   type RigAudioState,
 } from './api';
-import { Badge } from './components/ui/badge';
-import { Button } from './components/ui/button';
 import { DialogFooter } from './components/ui/dialog';
 import { RecoveryAction } from './components/ui/failure';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from './components/ui/select';
 import { friendlyError } from './lib/friendlyError';
 import { useFailure } from './lib/useFailure';
 import { midiConflicts } from './midiAssignments';

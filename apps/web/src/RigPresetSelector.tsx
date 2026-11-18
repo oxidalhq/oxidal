@@ -6,10 +6,11 @@ import {
 } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import './PresetPicker.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { CueLinkedMix } from './components/media/SongLinkControls';
-import { Button } from './components/ui/button';
 import { Loading } from './components/ui/loading';
 import type { FactoryRecipe } from './factoryRecipes';
 import { builtName } from './features/library/oxidal/oxidalSounds.model';

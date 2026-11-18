@@ -7,7 +7,8 @@ import {
 } from '@phosphor-icons/react';
 import type { ReactNode } from 'react';
 
-import { Button } from '../ui/button';
+import { Button } from '@oxidal/design-system/components/button';
+
 import { type ShownState, useSessionMedia } from './sessionMedia';
 
 function playLabel(state: ShownState) {

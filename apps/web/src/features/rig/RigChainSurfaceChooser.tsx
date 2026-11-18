@@ -1,5 +1,6 @@
+import { Button } from '@oxidal/design-system/components/button';
+
 import { AdjustmentDialog } from '../../AdjustmentDialog';
-import { Button } from '../../components/ui/button';
 import { lv2Effect, terminalEffect } from '../../rigDraft';
 import {
   type Route,

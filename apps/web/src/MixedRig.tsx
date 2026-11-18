@@ -1,9 +1,10 @@
+import { Badge } from '@oxidal/design-system/components/badge';
+import { Button } from '@oxidal/design-system/components/button';
+
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { rigAudioCommand, rigAudioState } from './api';
 import { BoostControl } from './BoostControl';
 import { MaybeSheet } from './components/RigSheet';
-import { Badge } from './components/ui/badge';
-import { Button } from './components/ui/button';
 import { FailureNotice } from './components/ui/failure';
 import { ControlAdjustDialog } from './features/rig/ControlAdjustDialog';
 import { ControlGrid } from './features/rig/ControlGrid';

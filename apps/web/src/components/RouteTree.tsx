@@ -10,12 +10,13 @@ import {
   useState,
 } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import './RouteTree.css';
 import { RigTile } from '../ChainView';
 import { panLabel } from '../lib/panLabel';
 import type { IdStep, RigBlockVM } from '../rigChain';
 import { pathMix, type RouteAt } from '../rigRoute';
-import { Button } from './ui/button';
 
 type Split = Exclude<IdStep, string>;
 /** A key that moves the focused block: Alt+arrow, the keyboard drag. */

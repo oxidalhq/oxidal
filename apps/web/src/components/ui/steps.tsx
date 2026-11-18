@@ -1,4 +1,4 @@
-import { Button } from './button';
+import { Button } from '@oxidal/design-system/components/button';
 
 /**
  * Long work that runs in known steps reports which one is running (7.21):

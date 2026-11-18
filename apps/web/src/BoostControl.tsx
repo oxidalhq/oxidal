@@ -1,10 +1,11 @@
 import { Minus, Plus } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import './MasterLevel.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { boosts as boostApi, type BoostState } from './api';
-import { Button } from './components/ui/button';
 import { friendlyError } from './lib/friendlyError';
 
 const RANGE = { min: -12, max: 12, step: 0.5 };

@@ -6,8 +6,9 @@ import {
 } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import { type DebugCommand, debugCommand, type DebugState } from './api';
-import { Button } from './components/ui/button';
 import { friendlyError } from './lib/friendlyError';
 /** Commands are intentionally sent only to the isolated, unprivileged debug executor. */
 export function DebugConsole() {

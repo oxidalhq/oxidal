@@ -11,6 +11,15 @@ import {
 } from '@phosphor-icons/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@oxidal/design-system/components/select';
+
 import {
   applyMidiTemplate,
   type AudioState,
@@ -30,15 +39,7 @@ import {
   type BackingKey,
   BackingPlayerControls,
 } from './BackingPlayerControls';
-import { Button } from './components/ui/button';
 import { RecoveryAction } from './components/ui/failure';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from './components/ui/select';
 import { StateNotice } from './components/ui/state-notice';
 import { ControllerSetup } from './ControllerSetup';
 import { ExtraControllers } from './ExtraControllers';

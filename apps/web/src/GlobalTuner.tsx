@@ -9,11 +9,12 @@ import {
 } from '@phosphor-icons/react';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import './Tuner.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { tuner, type TunerState } from './api';
 import { Alert, AlertDescription, AlertTitle } from './components/ui/alert';
-import { Button } from './components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 import { errorDetails } from './lib/friendlyError';
 

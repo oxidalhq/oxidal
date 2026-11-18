@@ -1,9 +1,10 @@
 import { useState } from 'react';
 
+import { Badge } from '@oxidal/design-system/components/badge';
+import { Button } from '@oxidal/design-system/components/button';
+
 import './SceneEditor.css';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
-import { Badge } from '../../components/ui/badge';
-import { Button } from '../../components/ui/button';
 import { SceneChange } from '../../SceneChange';
 import { ScenePads } from '../../ScenePads';
 import { rigBusy } from './mixedRigViewModel';

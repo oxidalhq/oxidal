@@ -17,6 +17,8 @@ import {
 } from '@phosphor-icons/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import './media.css';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
@@ -38,7 +40,6 @@ import {
 } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
 import { formatTime } from '../../lib/playerClock';
-import { Button } from '../ui/button';
 import { useConfirm } from '../ui/confirm';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import {
