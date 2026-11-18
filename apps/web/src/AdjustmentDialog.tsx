@@ -1,4 +1,10 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import {
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 
 import {
   Dialog,
@@ -32,14 +38,21 @@ export function AdjustmentDialog({
   useEffect(() => {
     cancel.current = onCancel;
   }, [onCancel]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!dialog) return;
     // Do not focus a number input automatically: Safari would open the keyboard
     // and zoom before the player chooses exact entry.
     const viewport = window.visualViewport;
     const fit = () => {
-      const height = viewport?.height ?? window.innerHeight;
-      const offset = viewport?.offsetTop ?? 0;
+      // WebKit can report the previous visual viewport during window resize.
+      const height = Math.min(
+        viewport?.height ?? window.innerHeight,
+        window.innerHeight,
+      );
+      const offset = Math.max(
+        0,
+        Math.min(viewport?.offsetTop ?? 0, window.innerHeight - height),
+      );
       dialog.style.setProperty(
         '--adjustment-height',
         `${Math.max(80, height - 16)}px`,
@@ -69,7 +82,10 @@ export function AdjustmentDialog({
     >
       <DialogContent
         ref={setDialog}
-        className={`top-[var(--adjustment-top,50%)] bottom-auto max-h-[min(calc(100dvh-1rem),var(--adjustment-height,100dvh))] transform-none ${className}`}
+        className={`bottom-auto max-h-[min(calc(100dvh-1rem),var(--adjustment-height,100dvh))] transform-none ${className}`}
+        style={{
+          top: 'min(var(--adjustment-top, 50dvh), calc(100dvh - min(var(--adjustment-height, 100dvh), calc(100dvh - 1rem)) / 2 - 0.5rem))',
+        }}
         {...(description ? {} : { 'aria-describedby': undefined })}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
