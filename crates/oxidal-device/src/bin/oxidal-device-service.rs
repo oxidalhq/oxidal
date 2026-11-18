@@ -64,7 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let _=tokio::time::timeout(Duration::from_secs(2),ipc::write(&mut stream,&bytes)).await;
                     continue;
                 }
-                let changing=matches!(&command,Some(Command::Join{..}|Command::Connect{..}|Command::Hotspot{..}|Command::Policy{..}));
+                let changing=matches!(&command,Some(Command::Join{..}|Command::JoinOpen{..}|Command::Connect{..}|Command::Hotspot{..}|Command::HotspotRadio{..}|Command::Policy{..}));
                 if matches!(&command,Some(Command::Packs{}|Command::Pack{..})) {
                     let result=match command {
                         Some(Command::Packs{})=>Ok(()),

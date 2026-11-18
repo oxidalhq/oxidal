@@ -3367,6 +3367,55 @@
             "interface": {
               "type": "string"
             },
+            "ssid": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "join_open"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "interface",
+            "ssid"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "channel": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "country": {
+              "type": "string"
+            },
+            "interface": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "hotspot_radio"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "interface",
+            "country",
+            "channel"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "interface": {
+              "type": "string"
+            },
             "type": {
               "type": "string",
               "const": "connect"
@@ -8290,6 +8339,14 @@
       "description": "Versioned privileged features; ordinary helper status replies omit this record.\n@see docs/device-service.md",
       "type": "object",
       "properties": {
+        "hotspot_radio": {
+          "type": "boolean",
+          "default": false
+        },
+        "open_join": {
+          "type": "boolean",
+          "default": false
+        },
         "saved_connect": {
           "type": "boolean"
         },

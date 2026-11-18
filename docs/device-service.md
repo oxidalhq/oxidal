@@ -92,15 +92,38 @@ state and that interface before enabling persistence. Failure, cancellation,
 timeout or restart restores the original profile bytes and recovery path.
 
 The new read-only `network_capabilities` helper command reports schema version 1
-and `saved_connect`. Ordinary helper status replies omit this field so older strict
+and capability flags `saved_connect`, `open_join` and `hotspot_radio`. Missing
+additional flags default false. Ordinary helper status replies omit this field so older strict
 daemons can still read them. The HTTP bridge adds optional `capabilities` and
 `capabilities_message` to network state after a read. Old, missing or future
 helpers do not claim support. Probes have a one-second deadline, shared 30-second
 success/two-second failure caches and no credentials. A write reads only an
 immediately available cache entry; it starts no probe and waits for no in-flight
-probe behind activation. Unsupported saved Connect requests receive a clear
+probe behind activation. Unsupported new network requests receive a clear
 service-update error. This API support is separate from completion of the
 Network screen and physical radio qualification.
+
+## Open clients and hotspot radio changes
+
+`join_open` accepts only an interface and SSID. It requires a freshly read advertised
+open network and rejects a secured network with the same SSID, an absent network,
+or an existing owned profile for that name. Use the saved profile or explicitly
+forget it first. Its infrastructure profile has no Wi-Fi security setting; an empty
+WPA2 password never selects this operation. Hotspots remain password-protected.
+Enterprise, WPA3-only and hidden open networks are not qualified.
+
+`hotspot_radio` accepts interface, country and channel. It reuses the managed AP's
+UUID and preserves its SSID/password, changing only band/channel and trial
+autoconnect through fixed NetworkManager arguments. Regulatory validation and
+exact-interface confirmation apply. Failure, cancellation, expiry or restart
+restores original profile bytes and country. Both actions require their advertised
+capability and the explicit administrative device-service update below.
+
+The shared 90-second clock starts before checkpoint creation and includes
+preparation. Activation has one deadline covering the entire sequence, bounded by
+the remaining trial time. An already expired trial rolls back before issuing
+activation commands. Readback reports time from that same clock; this software
+limit does not establish physical radio or reconnection timing.
 
 ## Administrator service updates
 
@@ -135,7 +158,7 @@ Storage mode uses the same typed boundary but a separate fixed target. The brows
 - Review explains the expected phone disconnection. Apply first creates a NetworkManager checkpoint and a durable backup of the affected profile, with trial autoconnect disabled. The helper returns a transaction token before activating the new connection.
 - Reconnect the phone and browse to `https://oxidal.local` (or `https://10.42.0.1` on the hotspot), then Keep this connection within 90 seconds. Confirmation requires active connection readback and only then enables persistence/autoconnect. A single radio normally cannot keep the old hotspot while joining the router.
 - No confirmation, a failed activation, explicit Cancel or helper restart restores the previous profile. NetworkManager's checkpoint timeout is independent of the browser/helper; the helper also restores persistent keyfiles and attempts the recovery hotspot if no Wi-Fi link returns. A durable journal blocks overlapping changes and permits retry after a failed recovery. Do not interpret this as physical-radio qualification.
-- Forget applies only to inactive, Oxidal-managed client profiles; it cannot delete the recovery hotspot or another application's connections. Switching to a previously saved SSID currently uses the join form again. Web credentials remain separate from Wi-Fi credentials.
+- Forget applies only to inactive, Oxidal-managed client profiles; it cannot delete the recovery hotspot or another application's connections. Saved reconnection uses its UUID and stored credentials when the helper advertises support. Web credentials remain separate from Wi-Fi credentials.
 
 ## Verification and remaining work
 

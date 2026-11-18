@@ -109,7 +109,8 @@ mod tests {
             decode(reply(
                 Some(NetworkCapabilities {
                     schema_version: 2,
-                    saved_connect: true
+                    saved_connect: true,
+                    ..Default::default()
                 }),
                 None
             ))
@@ -124,7 +125,8 @@ mod tests {
             decode(reply(
                 Some(NetworkCapabilities {
                     schema_version: 1,
-                    saved_connect: true
+                    saved_connect: true,
+                    ..Default::default()
                 }),
                 None
             ))
@@ -135,7 +137,8 @@ mod tests {
             !decode(reply(
                 Some(NetworkCapabilities {
                     schema_version: 1,
-                    saved_connect: false
+                    saved_connect: false,
+                    ..Default::default()
                 }),
                 None
             ))
@@ -154,6 +157,7 @@ mod tests {
             Ok(NetworkCapabilities {
                 schema_version: 1,
                 saved_connect: true,
+                ..Default::default()
             })
         };
         let (a, b) = tokio::join!(reader.cached(read), reader.cached(read));

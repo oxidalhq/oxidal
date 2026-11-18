@@ -27,7 +27,10 @@ async fn dispatch(shared: Arc<Shared>, command: Command) -> Response {
         };
     };
     let refresh_capabilities = matches!(&command, Command::Status {} | Command::Scan {});
-    let saved_connect = matches!(&command, Command::Connect { .. });
+    let new_network_action = matches!(
+        &command,
+        Command::Connect { .. } | Command::JoinOpen { .. } | Command::HotspotRadio { .. }
+    );
     #[cfg(unix)]
     let result = oxidal_device::ipc::request(path, &command).await;
     #[cfg(not(unix))]
@@ -90,9 +93,9 @@ async fn dispatch(shared: Arc<Shared>, command: Command) -> Response {
                 }
                 ([(header::CACHE_CONTROL, "no-store")], Json(state)).into_response()
             }
-            (_, Some(error)) if saved_connect && error == "Invalid device request" => failure(
+            (_, Some(error)) if new_network_action && error == "Invalid device request" => failure(
                 StatusCode::SERVICE_UNAVAILABLE,
-                "Update the device service to join saved Wi-Fi networks",
+                "Update the device service for this network change",
             ),
             (_, Some(error)) => failure(StatusCode::CONFLICT, &error),
             _ => failure(StatusCode::BAD_GATEWAY, "Invalid device response"),

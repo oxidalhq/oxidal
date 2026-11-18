@@ -25,6 +25,15 @@ pub enum Command {
     Status {},
     Scan {},
     NetworkCapabilities {},
+    JoinOpen {
+        interface: String,
+        ssid: String,
+    },
+    HotspotRadio {
+        interface: String,
+        country: String,
+        channel: u8,
+    },
     Connect {
         interface: String,
         uuid: String,
@@ -72,6 +81,8 @@ impl std::fmt::Debug for Command {
             Self::Status {} => "Status",
             Self::Scan {} => "Scan",
             Self::NetworkCapabilities {} => "NetworkCapabilities",
+            Self::JoinOpen { .. } => "JoinOpen",
+            Self::HotspotRadio { .. } => "HotspotRadio",
             Self::Connect { .. } => "Connect",
             Self::Join { .. } => "Join [redacted]",
             Self::Hotspot { .. } => "Hotspot [redacted]",
@@ -88,19 +99,22 @@ impl std::fmt::Debug for Command {
 }
 impl Command {
     pub fn validate(&self) -> Result<(), &'static str> {
-        if let Self::Hotspot {
-            country, channel, ..
-        } = self
+        let (country, channel) = match self {
+            Self::Hotspot {
+                country, channel, ..
+            } => (country.as_deref(), *channel),
+            Self::HotspotRadio {
+                country, channel, ..
+            } => (Some(country.as_str()), Some(*channel)),
+            _ => (None, None),
+        };
+        if country
+            .is_some_and(|value| value.len() != 2 || !value.bytes().all(|b| b.is_ascii_uppercase()))
         {
-            if country
-                .as_ref()
-                .is_some_and(|s| s.len() != 2 || !s.bytes().all(|b| b.is_ascii_uppercase()))
-            {
-                return Err("Use a two-letter country code");
-            }
-            if channel.is_some_and(|c| c > 13) {
-                return Err("Use automatic or a supported 2.4 GHz channel");
-            }
+            return Err("Use a two-letter country code");
+        }
+        if channel.is_some_and(|value| value > 13) {
+            return Err("Use automatic or a supported 2.4 GHz channel");
         }
         match self {
             Self::Policy { settings } => return settings.validate(),
@@ -116,9 +130,7 @@ impl Command {
                 ..
             } => {
                 validate_interface(interface)?;
-                if ssid.is_empty() || ssid.len() > 32 || ssid.chars().any(char::is_control) {
-                    return Err("SSID must contain 1–32 bytes without control characters");
-                }
+                validate_ssid(ssid)?;
                 // Initial slice deliberately admits WPA2-Personal only, never silently opens an AP.
                 if !(8..=63).contains(&password.len())
                     || !password.bytes().all(|b| (32..=126).contains(&b))
@@ -132,6 +144,11 @@ impl Command {
             {
                 return Err("Invalid network transaction");
             }
+            Self::JoinOpen { interface, ssid } => {
+                validate_interface(interface)?;
+                validate_ssid(ssid)?;
+            }
+            Self::HotspotRadio { interface, .. } => validate_interface(interface)?,
             Self::Forget { uuid } => validate_uuid(uuid)?,
             Self::Connect { interface, uuid } => {
                 validate_interface(interface)?;
@@ -142,6 +159,13 @@ impl Command {
             }
             _ => {}
         }
+        Ok(())
+    }
+}
+fn validate_ssid(ssid: &str) -> Result<(), &'static str> {
+    if ssid.is_empty() || ssid.len() > 32 || ssid.chars().any(char::is_control) {
+        Err("SSID must contain 1–32 bytes without control characters")
+    } else {
         Ok(())
     }
 }
@@ -175,9 +199,13 @@ fn validate_uuid(uuid: &str) -> Result<(), &'static str> {
 
 /// Versioned privileged features; ordinary helper status replies omit this record.
 /// @see docs/device-service.md
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct NetworkCapabilities {
+    #[serde(default)]
+    pub open_join: bool,
+    #[serde(default)]
+    pub hotspot_radio: bool,
     pub schema_version: u8,
     pub saved_connect: bool,
 }
@@ -364,6 +392,44 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn open_and_radio_actions_are_explicit_and_keep_wpa2_validation() {
+        assert!(
+            Command::JoinOpen {
+                interface: "wlan0".into(),
+                ssid: "Guest".into()
+            }
+            .validate()
+            .is_ok()
+        );
+        assert!(
+            Command::Join {
+                interface: "wlan0".into(),
+                ssid: "Guest".into(),
+                password: String::new()
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(serde_json::from_value::<Command>(serde_json::json!({"type":"join_open","interface":"wlan0","ssid":"Guest","password":"never accepted"})).is_err());
+        assert!(serde_json::from_value::<Command>(serde_json::json!({"type":"hotspot_radio","interface":"wlan0","country":"NZ","channel":6,"password":"never accepted"})).is_err());
+        for (country, channel) in [("NZ", 14), ("nz", 6), ("NZ;reboot", 6)] {
+            assert!(
+                Command::HotspotRadio {
+                    interface: "wlan0".into(),
+                    country: country.into(),
+                    channel
+                }
+                .validate()
+                .is_err()
+            );
+        }
+        let old: NetworkCapabilities =
+            serde_json::from_value(serde_json::json!({"schema_version":1,"saved_connect":true}))
+                .unwrap();
+        assert!(!old.open_join && !old.hotspot_radio);
     }
 
     #[test]

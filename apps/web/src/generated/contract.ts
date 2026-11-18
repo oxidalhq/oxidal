@@ -688,6 +688,17 @@ export type Command3 =
     }
   | {
       interface: string;
+      ssid: string;
+      type: "join_open";
+    }
+  | {
+      channel: number;
+      country: string;
+      interface: string;
+      type: "hotspot_radio";
+    }
+  | {
+      interface: string;
       type: "connect";
       uuid: string;
     }
@@ -2913,6 +2924,8 @@ export interface NetworkState {
  * @see docs/device-service.md
  */
 export interface NetworkCapabilities {
+  hotspot_radio?: boolean;
+  open_join?: boolean;
   saved_connect: boolean;
   schema_version: number;
 }

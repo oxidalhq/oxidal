@@ -16,6 +16,7 @@ use tokio::{io::AsyncReadExt, process::Command as Process};
 type Result<T> = std::result::Result<T, &'static str>;
 const CONNECTIONS: &str = "/etc/NetworkManager/system-connections";
 const STATE: &str = "/var/lib/oxidal-device";
+const NETWORK_TRIAL: Duration = Duration::from_secs(90);
 
 // stderr may contain an SSID or a secret; never forward it into a response/log.
 async fn run(program: &str, args: &[&str]) -> Result<String> {
@@ -157,19 +158,44 @@ fn atomic(path: &Path, bytes: &[u8]) -> Result<()> {
     }
     result
 }
+enum ProfileMode<'a> {
+    Wpa2 { password: &'a str, hotspot: bool },
+    Open,
+}
 fn profile(interface: &str, ssid: &str, password: &str, ap: bool, uuid: &str) -> String {
+    network_profile(
+        interface,
+        ssid,
+        ProfileMode::Wpa2 {
+            password,
+            hotspot: ap,
+        },
+        uuid,
+    )
+}
+fn network_profile(interface: &str, ssid: &str, mode: ProfileMode<'_>, uuid: &str) -> String {
+    let (ap, security) = match mode {
+        ProfileMode::Wpa2 { password, hotspot } => (
+            hotspot,
+            format!(
+                "[wifi-security]\nkey-mgmt=wpa-psk\nproto=rsn\npsk={}\n",
+                key(password)
+            ),
+        ),
+        ProfileMode::Open => (false, String::new()),
+    };
     let ssid_bytes = ssid.bytes().map(|b| format!("{b};")).collect::<String>();
     format!(
-        "[connection]\nid={}\nuuid={uuid}\ntype=wifi\ninterface-name={interface}\nautoconnect=false\nautoconnect-priority={}\n[wifi]\nmode={}\nssid={ssid_bytes}\n{}[wifi-security]\nkey-mgmt=wpa-psk\nproto=rsn\npsk={}\n[ipv4]\nmethod={}\n{}[ipv6]\nmethod=disabled\n",
+        "[connection]\nid={}\nuuid={uuid}\ntype=wifi\ninterface-name={interface}\nautoconnect=false\nautoconnect-priority={}\n[wifi]\nmode={}\nssid={ssid_bytes}\n{}{security}[ipv4]\nmethod={}\n{}[ipv6]\nmethod=disabled\n",
         if ap { "oxidal-hotspot" } else { "oxidal-wifi" },
         if ap { -100 } else { 100 },
         if ap { "ap" } else { "infrastructure" },
         if ap { "band=bg\n" } else { "" },
-        key(password),
         if ap { "shared" } else { "auto" },
         if ap { "address1=10.42.0.1/24\n" } else { "" }
     )
 }
+
 #[derive(Serialize, Deserialize)]
 struct Journal {
     file: String,
@@ -188,6 +214,8 @@ struct Journal {
     channel: Option<u8>,
     #[serde(default)]
     saved_connect: bool,
+    #[serde(default)]
+    radio_only: bool,
     #[serde(default)]
     activation_interface: Option<String>,
 }
@@ -447,7 +475,7 @@ impl Network {
         if self
             .pending
             .as_ref()
-            .is_some_and(|p| p.started.elapsed() >= Duration::from_secs(90))
+            .is_some_and(|p| p.started.elapsed() >= NETWORK_TRIAL)
         {
             let old = self.pending.take().unwrap();
             if self.rollback(old.journal).await.is_err() {
@@ -571,7 +599,9 @@ impl Network {
             saved,
             pending: self.pending.as_ref().map(|p| Pending {
                 transaction: p.id.clone(),
-                seconds_remaining: 90u64.saturating_sub(p.started.elapsed().as_secs()),
+                seconds_remaining: NETWORK_TRIAL
+                    .as_secs()
+                    .saturating_sub(p.started.elapsed().as_secs()),
                 phase: p.phase.clone(),
             }),
             message: self.message.clone(),
@@ -587,10 +617,14 @@ impl Network {
             _ => None,
         };
         let saved_connect = matches!(command, Command::Connect { .. });
+        let radio_only = matches!(command, Command::HotspotRadio { .. });
+        let open_join = matches!(command, Command::JoinOpen { .. });
         let empty = String::new();
         let (interface, ssid, password, ap) = match command {
             Command::Policy { settings } => (&settings.interface, &empty, &empty, true),
             Command::Connect { interface, .. } => (interface, &empty, &empty, false),
+            Command::JoinOpen { interface, ssid } => (interface, ssid, &empty, false),
+            Command::HotspotRadio { interface, .. } => (interface, &empty, &empty, true),
             Command::Join {
                 interface,
                 ssid,
@@ -608,6 +642,9 @@ impl Network {
             Command::Hotspot {
                 country, channel, ..
             } => (country.as_ref(), *channel),
+            Command::HotspotRadio {
+                country, channel, ..
+            } => (Some(country), Some(*channel)),
             _ => (None, None),
         };
         let previous_region = if let Some(country) = country {
@@ -630,6 +667,22 @@ impl Network {
             .any(|d| d.name == *interface && d.kind == "wifi")
         {
             return Err("Selected wireless interface is unavailable");
+        }
+        if open_join {
+            let matching = state
+                .networks
+                .iter()
+                .filter(|network| network.ssid == *ssid)
+                .collect::<Vec<_>>();
+            if matching.is_empty()
+                || matching
+                    .iter()
+                    .any(|network| !network.security.is_empty() && network.security != "--")
+            {
+                return Err(
+                    "Choose an advertised open network without a secured network of the same name",
+                );
+            }
         }
         if let Command::Connect { uuid, .. } = command
             && !state
@@ -672,7 +725,10 @@ impl Network {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
             Err(_) => return Err("Cannot read network profile"),
         };
-        if saved_connect && previous.is_none() {
+        if open_join && previous.is_some() {
+            return Err("Use the saved connection or forget it before choosing an open network");
+        }
+        if (saved_connect || radio_only) && previous.is_none() {
             return Err("Saved network profile is unavailable");
         }
         let dev = nm(&[
@@ -683,6 +739,7 @@ impl Network {
             interface,
         ])
         .await?;
+        let started = Instant::now();
         let result = checkpoint("CheckpointCreate", "aouu", &["1", dev.trim(), "90", "2"]).await?;
         let json: serde_json::Value =
             serde_json::from_str(&result).map_err(|_| "Invalid NetworkManager checkpoint")?;
@@ -693,7 +750,9 @@ impl Network {
             .to_string();
         let journal = Journal {
             saved_connect,
-            activation_interface: saved_connect.then(|| interface.clone()),
+            radio_only,
+            activation_interface: (saved_connect || radio_only || open_join)
+                .then(|| interface.clone()),
             file,
             previous,
             uuid,
@@ -727,7 +786,7 @@ impl Network {
             self.rollback(journal).await?;
             return Err(error);
         }
-        let write = if saved_connect {
+        let write = if saved_connect || radio_only {
             Ok(())
         } else if let Some(settings) = policy_settings {
             atomic(
@@ -735,7 +794,11 @@ impl Network {
                 &serde_json::to_vec(settings).map_err(|_| "Cannot encode hotspot policy")?,
             )
         } else {
-            let mut candidate = profile(interface, ssid, password, ap, &journal.uuid);
+            let mut candidate = if open_join {
+                network_profile(interface, ssid, ProfileMode::Open, &journal.uuid)
+            } else {
+                profile(interface, ssid, password, ap, &journal.uuid)
+            };
             if let Some(channel) = channel
                 && channel > 0
             {
@@ -748,15 +811,21 @@ impl Network {
             self.rollback(journal).await?;
             return Err(error);
         }
+        if started.elapsed() >= NETWORK_TRIAL {
+            self.rollback(journal).await?;
+            return Err("Network change expired during preparation");
+        }
         self.pending = Some(Transaction {
             id: transaction.clone(),
-            started: Instant::now(),
+            started,
             phase: "connecting".into(),
             journal,
         });
         state.pending = Some(Pending {
             transaction,
-            seconds_remaining: 90,
+            seconds_remaining: NETWORK_TRIAL
+                .as_secs()
+                .saturating_sub(started.elapsed().as_secs()),
             phase: "connecting".into(),
         });
         state.message="Reconnect your browser and confirm within 90 seconds, otherwise the previous network returns".into();
@@ -764,66 +833,93 @@ impl Network {
     }
     pub async fn activate(&mut self) {
         let Some(pending) = &self.pending else { return };
+        let started = pending.started;
+        let remaining = NETWORK_TRIAL.saturating_sub(started.elapsed());
+        if remaining.is_zero() {
+            self.tick().await;
+            return;
+        }
         let path = self.connections.clone().join(&pending.journal.file);
         let uuid = pending.journal.uuid.clone();
         let policy_change = pending.journal.policy_change;
         let saved_connect = pending.journal.saved_connect;
+        let radio_only = pending.journal.radio_only;
         let activation_interface = pending.journal.activation_interface.clone();
         let region_changed = pending.journal.previous_region.is_some();
         let radio_interface = pending.journal.radio_interface.clone();
         let channel = pending.journal.channel;
-        let result = if policy_change {
-            // Automatic decisions belong to this helper; do not let NM immediately
-            // autoconnect the AP again after a deliberate policy-driven disconnect.
-            match nm(&[
-                "connection",
-                "modify",
-                "id",
-                "oxidal-hotspot",
-                "connection.autoconnect",
-                "no",
-            ])
-            .await
-            {
-                Ok(_) => self.reconcile_policy(true).await.map(|()| String::new()),
-                Err(error) => Err(error),
-            }
-        } else {
-            async {
-                if region_changed {
-                    self.apply_region().await?;
+        let result = tokio::time::timeout(remaining, async {
+            if policy_change {
+                // Automatic decisions belong to this helper; do not let NM immediately
+                // autoconnect the AP again after a deliberate policy-driven disconnect.
+                match nm(&[
+                    "connection",
+                    "modify",
+                    "id",
+                    "oxidal-hotspot",
+                    "connection.autoconnect",
+                    "no",
+                ])
+                .await
+                {
+                    Ok(_) => self.reconcile_policy(true).await.map(|()| String::new()),
+                    Err(error) => Err(error),
                 }
-                if let Some(interface) = radio_interface {
-                    let radio = self.radio(&interface).await?;
-                    if let Some(channel) = channel
-                        && channel != 0
-                        && !radio.channels.contains(&channel)
-                    {
-                        return Err("Channel is not allowed by this radio and country");
+            } else {
+                async {
+                    if region_changed {
+                        self.apply_region().await?;
+                    }
+                    if let Some(interface) = radio_interface {
+                        let radio = self.radio(&interface).await?;
+                        if let Some(channel) = channel
+                            && channel != 0
+                            && !radio.channels.contains(&channel)
+                        {
+                            return Err("Channel is not allowed by this radio and country");
+                        }
+                    }
+                    if saved_connect || radio_only {
+                        nm(&[
+                            "connection",
+                            "modify",
+                            "uuid",
+                            &uuid,
+                            "connection.autoconnect",
+                            "no",
+                        ])
+                        .await?;
+                    }
+                    if radio_only {
+                        let channel = channel
+                            .ok_or("Configured hotspot channel is unavailable")?
+                            .to_string();
+                        nm(&[
+                            "connection",
+                            "modify",
+                            "uuid",
+                            &uuid,
+                            "802-11-wireless.band",
+                            "bg",
+                            "802-11-wireless.channel",
+                            &channel,
+                        ])
+                        .await?;
+                    }
+                    nm(&["connection", "load", path.to_str().unwrap()]).await?;
+                    nm(&["radio", "wifi", "on"]).await?;
+                    if let Some(interface) = activation_interface {
+                        nm(&["connection", "up", "uuid", &uuid, "ifname", &interface]).await
+                    } else {
+                        nm(&["connection", "up", "uuid", &uuid]).await
                     }
                 }
-                if saved_connect {
-                    nm(&[
-                        "connection",
-                        "modify",
-                        "uuid",
-                        &uuid,
-                        "connection.autoconnect",
-                        "no",
-                    ])
-                    .await?;
-                }
-                nm(&["connection", "load", path.to_str().unwrap()]).await?;
-                nm(&["radio", "wifi", "on"]).await?;
-                if let Some(interface) = activation_interface {
-                    nm(&["connection", "up", "uuid", &uuid, "ifname", &interface]).await
-                } else {
-                    nm(&["connection", "up", "uuid", &uuid]).await
-                }
+                .await
             }
-            .await
-        };
-        if result.is_ok() {
+        })
+        .await
+        .unwrap_or(Err("Network change expired"));
+        if result.is_ok() && started.elapsed() < NETWORK_TRIAL {
             self.pending.as_mut().unwrap().phase = "awaiting_confirmation".into();
         } else {
             let old = self.pending.take().unwrap();
@@ -843,6 +939,8 @@ impl Network {
                     capabilities: Some(crate::NetworkCapabilities {
                         schema_version: 1,
                         saved_connect: true,
+                        open_join: true,
+                        hotspot_radio: true,
                     }),
                     ..Default::default()
                 });
@@ -853,8 +951,7 @@ impl Network {
                 let Some(pending) = &self.pending else {
                     return Err("No network change is pending");
                 };
-                if pending.id != transaction || pending.started.elapsed() >= Duration::from_secs(90)
-                {
+                if pending.id != transaction || pending.started.elapsed() >= NETWORK_TRIAL {
                     return Err("Network transaction expired or changed");
                 }
                 if cancel {
@@ -1072,7 +1169,8 @@ mod tests {
                     capabilities.capabilities.as_ref().unwrap().schema_version,
                     1
                 );
-                assert!(capabilities.capabilities.unwrap().saved_connect);
+                let flags = capabilities.capabilities.unwrap();
+                assert!(flags.saved_connect && flags.open_join && flags.hotspot_radio);
                 let ordinary = network.command(Command::Status {}).await.unwrap();
                 assert!(ordinary.capabilities.is_none());
                 assert!(
@@ -1127,12 +1225,17 @@ mod tests {
                 assert_eq!(journal.activation_interface.as_deref(), Some("wlan0"));
                 let mut legacy = serde_json::to_value(&journal).unwrap();
                 legacy.as_object_mut().unwrap().remove("saved_connect");
+                legacy.as_object_mut().unwrap().remove("radio_only");
                 legacy
                     .as_object_mut()
                     .unwrap()
                     .remove("activation_interface");
                 let restored: Journal = serde_json::from_value(legacy).unwrap();
-                assert!(!restored.saved_connect && restored.activation_interface.is_none());
+                assert!(
+                    !restored.saved_connect
+                        && !restored.radio_only
+                        && restored.activation_interface.is_none()
+                );
                 assert!(network.begin(&connect()).await.is_err());
                 assert!(
                     network
@@ -1265,6 +1368,253 @@ mod tests {
                         assert!(network.pending.is_none());
                     }
                     assert_eq!(fs::read(path).unwrap(), original);
+                    assert!(!fixture.root.join("state/pending.json").exists());
+                    COMMANDS.with(|q| assert!(q.borrow().is_empty()));
+                })
+                .await;
+        }
+    }
+
+    #[tokio::test]
+    async fn expired_preparation_rolls_back_without_activating_saved_credentials() {
+        let fixture = Fixture::new();
+        let (path, original) = save_client(&fixture);
+        let mut network = fixture.network();
+        let mut commands = saved_begin();
+        commands.extend(saved_rollback());
+        COMMANDS
+            .scope(RefCell::new(commands), async {
+                let state = network.begin(&connect()).await.unwrap();
+                assert!(state.pending.unwrap().seconds_remaining <= NETWORK_TRIAL.as_secs());
+                network.pending.as_mut().unwrap().started = Instant::now() - NETWORK_TRIAL;
+                network.activate().await;
+                assert!(network.pending.is_none());
+                assert_eq!(fs::read(path).unwrap(), original);
+                assert!(!fixture.root.join("state/pending.json").exists());
+                COMMANDS.with(|q| assert!(q.borrow().is_empty()));
+            })
+            .await;
+    }
+
+    fn open_status(scan: &'static str) -> Responses {
+        let mut commands = status();
+        commands
+            .iter_mut()
+            .find(|(name, _)| name == "IN-USE,SSID,SIGNAL,SECURITY")
+            .unwrap()
+            .1 = Ok(scan);
+        commands
+    }
+    fn open_begin() -> Responses {
+        let mut commands = open_status(":Guest:55:--\n");
+        commands.extend(begin().into_iter().skip(4));
+        commands
+    }
+    #[tokio::test]
+    async fn explicit_open_join_creates_only_an_open_client_and_checks_its_interface() {
+        let fixture = Fixture::new();
+        let mut network = fixture.network();
+        let mut commands = open_begin();
+        commands.extend(responses(&[
+            ("connection load", Ok("")),
+            ("radio wifi on", Ok("")),
+            ("ifname wlan0", Ok("")),
+            ("GENERAL.STATE", Ok("activated\n")),
+            ("GENERAL.DEVICES", Ok("wlan0\n")),
+            ("connection.autoconnect yes", Ok("")),
+            ("CheckpointDestroy", Ok("")),
+        ]));
+        commands.extend(status());
+        COMMANDS
+            .scope(RefCell::new(commands), async {
+                let state = network
+                    .begin(&Command::JoinOpen {
+                        interface: "wlan0".into(),
+                        ssid: "Guest".into(),
+                    })
+                    .await
+                    .unwrap();
+                let path = fixture
+                    .root
+                    .join(format!("connections/oxidal-{}.nmconnection", uuid("Guest")));
+                let profile = fs::read_to_string(path).unwrap();
+                assert!(
+                    profile.contains("mode=infrastructure\n")
+                        && profile.contains("autoconnect=false\n")
+                );
+                assert!(
+                    !profile.contains("wifi-security")
+                        && !profile.contains("psk=")
+                        && !profile.contains("method=shared")
+                );
+                network.activate().await;
+                network
+                    .command(Command::Confirm {
+                        transaction: state.pending.unwrap().transaction,
+                    })
+                    .await
+                    .unwrap();
+                assert!(network.pending.is_none());
+                assert_eq!(
+                    fs::read(fixture.root.join("connections/oxidal.nmconnection")).unwrap(),
+                    b"original recovery AP"
+                );
+                COMMANDS.with(|q| assert!(q.borrow().is_empty()));
+            })
+            .await;
+    }
+    #[tokio::test]
+    async fn open_join_refuses_unknown_secured_ambiguous_or_existing_profiles_before_checkpoint() {
+        for scan in [
+            "",
+            ":Guest:55:WPA2\n",
+            ":Guest:55:--\n:Guest:50:WPA2\n",
+            ":Guest:55:--\n",
+        ] {
+            let fixture = Fixture::new();
+            if scan == ":Guest:55:--\n" {
+                fs::write(
+                    fixture
+                        .root
+                        .join(format!("connections/oxidal-{}.nmconnection", uuid("Guest"))),
+                    b"existing saved credentials",
+                )
+                .unwrap();
+            }
+            let mut network = fixture.network();
+            COMMANDS
+                .scope(RefCell::new(open_status(scan)), async {
+                    assert!(
+                        network
+                            .begin(&Command::JoinOpen {
+                                interface: "wlan0".into(),
+                                ssid: "Guest".into()
+                            })
+                            .await
+                            .is_err()
+                    );
+                    assert!(network.pending.is_none());
+                    assert!(!fixture.root.join("state/pending.json").exists());
+                    COMMANDS.with(|q| assert!(q.borrow().is_empty()));
+                })
+                .await;
+        }
+    }
+    fn radio_readback() -> Responses {
+        responses(&[
+            ("iw dev wlan0 info", Ok("Interface wlan0\n wiphy 0\n")),
+            ("iw phy phy0 info", Ok("* 2437 MHz [6] (20.0 dBm)\n")),
+        ])
+    }
+    #[tokio::test]
+    async fn radio_only_changes_preserve_hotspot_credentials_and_restore_country_on_failure() {
+        for failure in [false, true] {
+            let fixture = Fixture::new();
+            let mut network = fixture.network();
+            fs::write(&network.region, b"COUNTRY=NZ\n").unwrap();
+            let original = profile(
+                "wlan0",
+                "Original hotspot",
+                "existing-private-password",
+                true,
+                SAVED_UUID,
+            )
+            .into_bytes();
+            let path = fixture.root.join("connections/oxidal.nmconnection");
+            fs::write(&path, &original).unwrap();
+            let mut commands = status();
+            commands.extend(radio_readback());
+            commands.extend(responses(&[
+                (
+                    "connection.uuid",
+                    Ok("11111111-1111-1111-1111-111111111111\n"),
+                ),
+                (
+                    "GENERAL.DBUS-PATH",
+                    Ok("/org/freedesktop/NetworkManager/Devices/2\n"),
+                ),
+                (
+                    "CheckpointCreate",
+                    Ok(r#"{"data":["/org/freedesktop/NetworkManager/Checkpoint/1"]}"#),
+                ),
+                ("iw reg set AU", Ok("")),
+                ("iw reg get", Ok("global\ncountry AU: DFS-ETSI\n")),
+            ]));
+            commands.extend(radio_readback());
+            commands.extend(responses(&[
+                ("connection.autoconnect no", Ok("")),
+                ("802-11-wireless.band bg 802-11-wireless.channel 6", Ok("")),
+                ("connection load", Ok("")),
+                ("radio wifi on", Ok("")),
+                (
+                    "ifname wlan0",
+                    if failure {
+                        Err("Activation failed")
+                    } else {
+                        Ok("")
+                    },
+                ),
+            ]));
+            if failure {
+                commands.extend(responses(&[
+                    ("iw reg set NZ", Ok("")),
+                    ("iw reg get", Ok("global\ncountry NZ: DFS-ETSI\n")),
+                    ("connection load", Ok("")),
+                    ("CheckpointRollback", Ok("")),
+                    ("CheckpointDestroy", Ok("")),
+                    ("connection up id oxidal-hotspot", Ok("")),
+                    ("TYPE,STATE", Ok("wifi:connected\n")),
+                ]));
+            } else {
+                commands.extend(responses(&[
+                    ("GENERAL.STATE", Ok("activated\n")),
+                    ("GENERAL.DEVICES", Ok("wlan0\n")),
+                    ("connection.autoconnect yes", Ok("")),
+                    ("CheckpointDestroy", Ok("")),
+                ]));
+                commands.extend(status());
+                commands.extend(radio_readback());
+            }
+            COMMANDS
+                .scope(RefCell::new(commands), async {
+                    let state = network
+                        .begin(&Command::HotspotRadio {
+                            interface: "wlan0".into(),
+                            country: "AU".into(),
+                            channel: 6,
+                        })
+                        .await
+                        .unwrap();
+                    assert_eq!(
+                        fs::read(&path).unwrap(),
+                        original,
+                        "Preparing radio settings must not regenerate credentials"
+                    );
+                    let journal: Journal = serde_json::from_slice(
+                        &fs::read(fixture.root.join("state/pending.json")).unwrap(),
+                    )
+                    .unwrap();
+                    assert!(journal.radio_only);
+                    assert_eq!(journal.previous.as_ref().unwrap(), &original);
+                    network.activate().await;
+                    if !failure {
+                        network
+                            .command(Command::Confirm {
+                                transaction: state.pending.unwrap().transaction,
+                            })
+                            .await
+                            .unwrap();
+                    }
+                    assert!(network.pending.is_none());
+                    assert_eq!(fs::read(&path).unwrap(), original);
+                    assert_eq!(
+                        fs::read(&network.region).unwrap(),
+                        if failure {
+                            b"COUNTRY=NZ\n"
+                        } else {
+                            b"COUNTRY=AU\n"
+                        }
+                    );
                     assert!(!fixture.root.join("state/pending.json").exists());
                     COMMANDS.with(|q| assert!(q.borrow().is_empty()));
                 })
@@ -1511,6 +1861,7 @@ mod tests {
         atomic(&network.region, b"COUNTRY=AU\n").unwrap();
         let journal = Journal {
             saved_connect: false,
+            radio_only: false,
             activation_interface: None,
             file: "oxidal.nmconnection".into(),
             previous: Some(b"old hotspot".to_vec()),
