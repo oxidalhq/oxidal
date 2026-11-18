@@ -12,6 +12,7 @@ mod debug;
 mod device;
 mod device_addresses;
 mod device_hotspot;
+mod device_saved_names;
 mod device_wait;
 mod graph_playback;
 mod guitars;
@@ -288,6 +289,7 @@ struct Shared {
     debug: debug::DebugBridge,
     network_addresses: device_addresses::NetworkAddresses,
     hotspot_readback: device_hotspot::HotspotReadback,
+    saved_network_names: device_saved_names::SavedNetworkNames,
     monitor: watch::Receiver<monitor::Monitoring>,
     history: Arc<monitor_history::Journal>,
     audit: audit::Audit,
@@ -428,6 +430,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         debug: debug::DebugBridge::new(config.debug_socket.clone()),
         network_addresses: device_addresses::NetworkAddresses::default(),
         hotspot_readback: device_hotspot::HotspotReadback::default(),
+        saved_network_names: device_saved_names::SavedNetworkNames::default(),
         history: Arc::new(monitor_history::Journal::new(
             config.preset_dir.join("monitor-history"),
         )),

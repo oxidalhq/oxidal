@@ -34,10 +34,29 @@ async fn dispatch(shared: Arc<Shared>, command: Command) -> Response {
         Ok(reply) => match (reply.state, reply.error) {
             (Some(mut state), None) => {
                 if state.available {
-                    let ((), hotspot) = tokio::join!(
+                    let identifiers = state
+                        .saved
+                        .iter()
+                        .filter(|profile| profile.managed)
+                        .map(|profile| profile.uuid.clone())
+                        .collect::<Vec<_>>();
+                    let ((), hotspot, names) = tokio::join!(
                         shared.network_addresses.enrich(&mut state),
                         shared.hotspot_readback.current(),
+                        shared.saved_network_names.current(&identifiers),
                     );
+                    for profile in &mut state.saved {
+                        profile.ssid = if profile.managed {
+                            names
+                                .as_ref()
+                                .ok()
+                                .and_then(|values| values.get(&profile.uuid))
+                                .cloned()
+                        } else {
+                            None
+                        };
+                    }
+                    state.saved_message = names.err().map(str::to_owned);
                     match hotspot {
                         Ok(value) => {
                             state.hotspot = Some(value);

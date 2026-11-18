@@ -193,6 +193,8 @@ pub struct AccessPoint {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SavedNetwork {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssid: Option<String>,
     pub uuid: String,
     pub name: String,
     pub active: bool,
@@ -228,6 +230,8 @@ pub struct NetworkState {
     pub hotspot: Option<Hotspot>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hotspot_message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub saved_message: Option<String>,
     pub networks: Vec<AccessPoint>,
     pub saved: Vec<SavedNetwork>,
     pub pending: Option<Pending>,
@@ -268,9 +272,18 @@ mod tests {
         assert!(old.get("address_message").is_none());
         assert!(old.get("hotspot").is_none());
         assert!(old.get("hotspot_message").is_none());
+        assert!(old.get("saved_message").is_none());
         let decoded: NetworkState = serde_json::from_value(old.clone()).unwrap();
         assert!(decoded.hotspot.is_none());
         assert!(decoded.hotspot_message.is_none());
+        assert!(decoded.saved_message.is_none());
+        let saved: SavedNetwork = serde_json::from_value(serde_json::json!({
+            "uuid": "11111111-1111-1111-1111-111111111111",
+            "name": "oxidal-wifi", "active": false, "managed": true
+        }))
+        .unwrap();
+        assert!(saved.ssid.is_none());
+        assert!(serde_json::to_value(saved).unwrap().get("ssid").is_none());
         assert!(
             serde_json::from_value::<NetworkState>(old)
                 .unwrap()

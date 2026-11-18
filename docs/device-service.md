@@ -63,6 +63,23 @@ success/failure cache. This read runs alongside address readback. Optional omitt
 fields retain compatibility with older helper replies; no privileged helper
 upgrade is needed for this readback.
 
+## Saved Wi-Fi names
+
+`SavedNetwork.name` is the NetworkManager connection label. Oxidal-managed
+client profiles can share the label `oxidal-wifi`; it does not identify their
+SSID. Optional `ssid` contains the public network name read for that record's
+exact UUID. Existing actions continue to use UUIDs. `saved_message` reports
+unavailable names without presenting cached old values as current.
+
+The daemon reads at most 128 managed UUIDs in one fixed public-field `nmcli`
+command, with a 64 KiB output bound and two-second deadline. A sorted exact UUID
+set keys its shared two-second success/failure cache. Changed sets invalidate it;
+an empty set starts no command. Invalid, missing, duplicate or unexpected records
+fail closed. These reads run alongside current-address and hotspot reads, never
+request secrets and do not parse root keyfiles or activate a connection. Older
+helper replies remain compatible. More than 128 managed profiles leaves names
+unavailable with a message; existing connection identities and removal remain.
+
 ## Storage mode
 
 Storage mode uses the same typed boundary but a separate fixed target. The browser sends only `locked` or `unlocked`; the helper validates and atomically replaces `/boot/firmware/cmdline.txt`. It never remounts the running root. The control is unavailable until the appliance writable-data layout marker exists, and effect-pack work independently refuses an actively read-only root. See [storage lock](storage-lock.md).

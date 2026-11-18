@@ -530,6 +530,7 @@ impl Network {
                     return None;
                 }
                 Some(SavedNetwork {
+                    ssid: None,
                     uuid: f[0].clone(),
                     name: f[1].clone(),
                     active: !f[3].is_empty() && f[3] != "--",
@@ -559,6 +560,7 @@ impl Network {
             address_message: None,
             hotspot: None,
             hotspot_message: None,
+            saved_message: None,
             networks,
             saved,
             pending: self.pending.as_ref().map(|p| Pending {

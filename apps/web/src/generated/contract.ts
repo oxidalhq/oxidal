@@ -2895,6 +2895,7 @@ export interface NetworkState {
   policy?: Settings | null;
   radio?: Radio | null;
   saved: SavedNetwork[];
+  saved_message?: string | null;
   wireless_enabled: boolean;
 }
 /**
@@ -2937,6 +2938,7 @@ export interface SavedNetwork {
   active: boolean;
   managed: boolean;
   name: string;
+  ssid?: string | null;
   uuid: string;
 }
 export interface PlayerOrder {

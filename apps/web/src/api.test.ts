@@ -48,6 +48,15 @@ describe('runtime contract validation', () => {
     const current = {
       ...old,
       hotspot: { ssid: 'Actual device name', channel: 0 },
+      saved: [
+        {
+          uuid: '11111111-1111-1111-1111-111111111111',
+          name: 'oxidal-wifi',
+          ssid: 'Actual saved SSID',
+          active: false,
+          managed: true,
+        },
+      ],
     };
     vi.stubGlobal(
       'fetch',
@@ -58,6 +67,39 @@ describe('runtime contract validation', () => {
     );
     await expect(deviceNetwork()).resolves.toEqual(old);
     await expect(deviceNetwork()).resolves.toEqual(current);
+  });
+
+  it.each([
+    { ssid: 123 },
+    { ssid: 'Studio', password: 'must never be present' },
+  ])('rejects incompatible saved network metadata: %j', async (change) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        Response.json({
+          available: true,
+          wireless_enabled: true,
+          radio: null,
+          policy: null,
+          interfaces: [],
+          networks: [],
+          pending: null,
+          message: '',
+          saved: [
+            {
+              uuid: '11111111-1111-1111-1111-111111111111',
+              name: 'oxidal-wifi',
+              active: false,
+              managed: true,
+              ...change,
+            },
+          ],
+        }),
+      ),
+    );
+    await expect(deviceNetwork()).rejects.toThrow(
+      'Incompatible network response',
+    );
   });
 
   it.each([
