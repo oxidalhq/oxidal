@@ -28,6 +28,7 @@ import {
   DebugConsoleDemo,
   StorageLockDemo,
 } from '../patterns/device-flows.demo';
+import { DevicePower } from '../patterns/device-power';
 import { DisplaySettings } from '../patterns/display-settings';
 import {
   BuiltInEffectsDemo,
@@ -165,6 +166,10 @@ function Display() {
 
 function Device() {
   const [threshold, setThreshold] = useState(80);
+  const [powerAction, setPowerAction] = useState<'reboot' | 'shutdown' | null>(
+    null,
+  );
+  const [powerReceipt, setPowerReceipt] = useState('');
   return (
     <>
       <SettingGroup title="This device">
@@ -192,21 +197,25 @@ function Device() {
           />
         </SettingRow>
       </SettingGroup>
-      <SettingGroup title="Power">
-        <SettingRow label="Reboot">
-          <Button size="sm" variant="outline">
-            Reboot…
-          </Button>
-        </SettingRow>
-        <SettingRow
-          label="Shut down"
-          caption="Wait for the light before unplugging."
-        >
-          <Button size="sm" variant="destructive">
-            Shut down…
-          </Button>
-        </SettingRow>
-      </SettingGroup>
+      <DevicePower
+        action={powerAction}
+        disabled={Boolean(powerReceipt)}
+        notice={
+          powerReceipt && (
+            <p role="status" className="text-sm">
+              {powerReceipt}
+            </p>
+          )
+        }
+        onRequest={setPowerAction}
+        onCancel={() => setPowerAction(null)}
+        onConfirm={() => {
+          setPowerReceipt(
+            `Demo: ${powerAction === 'reboot' ? 'restart' : 'shutdown'} requested.`,
+          );
+          setPowerAction(null);
+        }}
+      />
     </>
   );
 }
