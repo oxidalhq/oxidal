@@ -15,6 +15,28 @@ For first boot and the generated credentials, follow the
 
 The helper uses a root-owned runtime directory and group-restricted socket, checks the connecting UID against the current `oxidald` DynamicUser via systemd NSS (or root), and admits only typed network, power and effect-pack commands. The HTTP bridge also verifies the server peer is root. JSON frames are limited to 64 KiB, reads/writes/commands have deadlines, and external commands use fixed absolute binaries and argument arrays. Package-manager stderr is retained in the service journal for diagnosis. There is no shell, caller-supplied executable, filesystem path, Debian package name or arbitrary command option. Network passwords are redacted from Debug, omitted from readback and never put on process command lines. Keyfiles and the temporary rollback journal are root-only. The existing authenticated HTTPS/origin boundary remains required; this endpoint does not make the loopback API a public service.
 
+## Current interface addresses
+
+Each `interfaces` record in the network response may include `addresses`, up to
+eight canonical IPv4 addresses read for that exact interface. Empty values are
+omitted; older helper replies remain compatible. The optional `address_message`
+reports unavailable readback. An error clears address values rather than
+presenting a previous address as current. The existing network transaction and
+confirmation message remain authoritative.
+
+The unprivileged API runs a fixed read-only NetworkManager query for device
+names and IPv4 addresses. It accepts no caller-selected command or arguments,
+limits output to 64 KiB, applies a two-second deadline, and shares a two-second
+positive/negative cache between viewers. The cache admits one concurrent read.
+Other hosts report unavailable without changing their network configuration.
+This avoids adding netlink sockets to the daemon's address-family permissions.
+
+The HTTPS proxy also accepts Host equal to its actual local socket address,
+and Origin exactly `https://` plus that address. Named address rules and
+authentication remain. Another private-looking IP or a forged forwarding header
+does not satisfy these checks. The existing certificate still covers only its
+listed names; reaching a current Wi-Fi IP does not resolve its TLS name mismatch.
+
 ## Effect packs
 
 Settings → Effects uses `GET /api/v1/packs` and the fixed `POST /api/v1/packs/{id}/install|remove` actions. The helper maps ten stable IDs to exact Debian packages: Guitarix, Dragonfly Reverb, Calf, Invada, x42, MDA, SWH, FOMP, ZamAudio and DISTRHO Ports (the last two qualified in an ARM64 container so far). LSP and any collection with no harness-usable plugins are absent. Browser input cannot select another package. The list reports measured usable counts from the ARM64 pack harness, approximate installed size, installed version and the relevant qualification note.

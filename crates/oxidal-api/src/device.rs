@@ -32,7 +32,8 @@ async fn dispatch(shared: Arc<Shared>, command: Command) -> Response {
     let result: Result<oxidal_device::Reply, &str> = Err("Device service requires Linux");
     match result {
         Ok(reply) => match (reply.state, reply.error) {
-            (Some(state), None) => {
+            (Some(mut state), None) => {
+                shared.network_addresses.enrich(&mut state).await;
                 ([(header::CACHE_CONTROL, "no-store")], Json(state)).into_response()
             }
             (_, Some(error)) => failure(StatusCode::CONFLICT, &error),

@@ -236,7 +236,7 @@ class PublicCertificateTests(unittest.TestCase):
             if name == 'oxidal-portal.conf' and not hotspot:
                 continue
             source = 'oxidal-nginx.conf' if name == 'oxidal.conf' else name
-            (configs / name).write_text((provision.HERE / 'config' / source).read_text().replace(block, ''))
+            (configs / name).write_text((provision.HERE / 'config' / source).read_text().replace(block, '').replace(deploy.NETWORK_GUARDS, deploy.OLD_NETWORK_GUARDS))
         return configs
 
     def test_metadata_fingerprint_matches_openssl_and_installed_chain(self):
@@ -249,6 +249,10 @@ class PublicCertificateTests(unittest.TestCase):
         self.assertEqual(metadata['hotspot_download'], '/certificate.crt')
         self.assertIsNone(json.loads(deploy.certificate_files(self.files()['ca.crt'], self.access / 'server.crt')['certificate.json'])['hotspot_download'])
         self.assertEqual(set(result), {'ca.crt', 'certificate.json'})
+        schema = json.loads((Path(__file__).parents[2] / 'apps/web/src/generated/contract.schema.json').read_text())['$defs']['PublicCertificate']
+        self.assertEqual(set(metadata), set(schema['properties']))
+        self.assertTrue(set(schema['required']).issubset(metadata))
+        self.assertFalse(schema['additionalProperties'])
 
     def test_only_one_bounded_public_ca_matching_the_server_is_accepted(self):
         ca = self.files()['ca.crt']
@@ -288,6 +292,16 @@ class PublicCertificateTests(unittest.TestCase):
         self.assertEqual((public / 'ca.crt').stat().st_mode & 0o777, 0o644)
         deploy.deploy_certificate(self.files(), self.root, run)
         self.assertEqual(len(calls), 2)
+
+    def test_address_guard_migration_is_exact_and_refuses_unknown_policy(self):
+        current = (provision.HERE / 'config/oxidal-nginx.conf').read_text()
+        self.assertEqual(current.count(deploy.NETWORK_GUARDS), 1)
+        old = current.replace(deploy.NETWORK_GUARDS, deploy.OLD_NETWORK_GUARDS)
+        self.assertEqual(deploy.network_address_locations(old), current)
+        self.assertEqual(deploy.network_address_locations(current), current)
+        for invalid in [old + deploy.OLD_NETWORK_GUARDS, current + deploy.NETWORK_GUARDS, current.replace('set $oxidal_host_ok 0;', 'set $oxidal_host_ok 1;'), 'unknown policy']:
+            with self.assertRaisesRegex(ValueError, 'Unrecognized'):
+                deploy.network_address_locations(invalid)
 
     def test_failed_validation_or_reload_restores_every_previous_file(self):
         for fail_at in [1, 2]:

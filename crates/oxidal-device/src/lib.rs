@@ -165,6 +165,22 @@ pub struct Interface {
     pub kind: String,
     pub state: String,
     pub connection: String,
+    /// Current canonical IPv4 addresses, enriched by the unprivileged API.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub addresses: Vec<String>,
+}
+
+/// Static public-certificate metadata served by the appliance HTTPS proxy.
+/// @see docs/device-service.md
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PublicCertificate {
+    pub schema_version: u8,
+    pub fingerprint_sha256: String,
+    pub file_name: String,
+    pub https_download: String,
+    pub hotspot_download: Option<String>,
+    pub server_names: Vec<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -197,6 +213,8 @@ pub struct NetworkState {
     pub radio: Option<radio::Radio>,
     pub policy: Option<policy::Settings>,
     pub interfaces: Vec<Interface>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub address_message: Option<String>,
     pub networks: Vec<AccessPoint>,
     pub saved: Vec<SavedNetwork>,
     pub pending: Option<Pending>,
@@ -216,6 +234,32 @@ pub struct Reply {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn older_helper_state_defaults_address_readback_without_changing_commands() {
+        let interface: Interface = serde_json::from_value(serde_json::json!({
+            "name": "wlan0", "kind": "wifi", "state": "connected", "connection": "hotspot"
+        }))
+        .unwrap();
+        assert!(interface.addresses.is_empty());
+        assert!(
+            serde_json::to_value(&interface)
+                .unwrap()
+                .get("addresses")
+                .is_none()
+        );
+        let state = NetworkState {
+            interfaces: vec![interface],
+            ..Default::default()
+        };
+        let old = serde_json::to_value(state).unwrap();
+        assert!(old.get("address_message").is_none());
+        assert!(
+            serde_json::from_value::<NetworkState>(old)
+                .unwrap()
+                .address_message
+                .is_none()
+        );
+    }
     #[test]
     fn validate_and_redact_credentials() {
         let command = Command::Join {

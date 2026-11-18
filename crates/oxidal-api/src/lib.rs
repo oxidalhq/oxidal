@@ -10,6 +10,7 @@ mod calibration;
 mod capture;
 mod debug;
 mod device;
+mod device_addresses;
 mod device_wait;
 mod graph_playback;
 mod guitars;
@@ -205,6 +206,7 @@ pub struct Contract {
     pub monitoring_history: monitor_history::History,
     pub control_audit: audit::AuditHistory,
     pub network_state: oxidal_device::NetworkState,
+    pub device_certificate: oxidal_device::PublicCertificate,
     pub network_command: oxidal_device::Command,
     pub effect_packs: oxidal_device::packs::PackState,
     pub storage_state: oxidal_device::storage::StorageState,
@@ -283,6 +285,7 @@ struct Shared {
     catalog_work: Arc<tokio::sync::Semaphore>,
     library_access: Arc<tokio::sync::RwLock<()>>,
     debug: debug::DebugBridge,
+    network_addresses: device_addresses::NetworkAddresses,
     monitor: watch::Receiver<monitor::Monitoring>,
     history: Arc<monitor_history::Journal>,
     audit: audit::Audit,
@@ -421,6 +424,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         bundle_work: Arc::new(tokio::sync::Semaphore::new(1)),
         catalog_work: Arc::new(tokio::sync::Semaphore::new(1)),
         debug: debug::DebugBridge::new(config.debug_socket.clone()),
+        network_addresses: device_addresses::NetworkAddresses::default(),
         history: Arc::new(monitor_history::Journal::new(
             config.preset_dir.join("monitor-history"),
         )),

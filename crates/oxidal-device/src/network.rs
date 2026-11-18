@@ -482,6 +482,7 @@ impl Network {
                     kind: f[1].clone(),
                     state: f[2].clone(),
                     connection: f[3].clone(),
+                    addresses: Vec::new(),
                 })
             })
             .collect();
@@ -555,6 +556,7 @@ impl Network {
             wireless_enabled,
             policy: self.policy()?,
             interfaces,
+            address_message: None,
             networks,
             saved,
             pending: self.pending.as_ref().map(|p| Pending {

@@ -42,6 +42,18 @@ ARCHIVES = {
 }
 CERTIFICATE_MAX_BYTES = 16384
 CERTIFICATE_MARKER = '# Oxidal public certificate'
+OLD_NETWORK_GUARDS = '''    if ($host !~ ^(oxidal\\.local|10\\.42\\.0\\.1)$) { return 403; }
+    if ($oxidal_origin_ok = 0) { return 403; }
+'''
+NETWORK_GUARDS = '''    # Oxidal current IPv4 address: exact local socket, never forwarded headers.
+    set $oxidal_host_ok 0;
+    if ($host ~ ^(oxidal\\.local|10\\.42\\.0\\.1)$) { set $oxidal_host_ok 1; }
+    if ($host = $server_addr) { set $oxidal_host_ok 1; }
+    if ($oxidal_host_ok = 0) { return 403; }
+    set $oxidal_request_origin_ok $oxidal_origin_ok;
+    if ($http_origin = "https://$server_addr") { set $oxidal_request_origin_ok 1; }
+    if ($oxidal_request_origin_ok = 0) { return 403; }
+'''
 HTTPS_CERTIFICATE_ROUTES = '''    # Oxidal public certificate: exact public files, still authenticated.
     location = /api/v1/device/certificate {
         if ($request_method !~ ^(GET|HEAD)$) { return 405; }
@@ -232,6 +244,15 @@ def certificate_locations(config, portal=False):
     return config.replace(anchor, block + anchor, 1)
 
 
+def network_address_locations(config):
+    """Admit only the actual current local address in addition to named hosts."""
+    if config.count(NETWORK_GUARDS) == 1 and OLD_NETWORK_GUARDS not in config:
+        return config
+    if config.count(OLD_NETWORK_GUARDS) != 1 or 'Oxidal current IPv4 address' in config:
+        raise ValueError('Unrecognized network guards; review them before updating')
+    return config.replace(OLD_NETWORK_GUARDS, NETWORK_GUARDS, 1)
+
+
 def deploy_certificate(files, filesystem=Path('/'), run=subprocess.run):
     """Install only the matching public CA and exact routes, with rollback."""
     if set(files) != {'ca.crt'}:
@@ -241,7 +262,7 @@ def deploy_certificate(files, filesystem=Path('/'), run=subprocess.run):
     public = filesystem / 'usr/share/oxidal/public'
     validated = certificate_files(files['ca.crt'], filesystem / 'etc/oxidal/tls/server.crt', portal.exists())
     updates = {public / name: data for name, data in validated.items()}
-    updates[config] = certificate_locations(config.read_text()).encode()
+    updates[config] = certificate_locations(network_address_locations(config.read_text())).encode()
     if portal.exists():
         updates[portal] = certificate_locations(portal.read_text(), True).encode()
     previous = {path: path.read_bytes() if path.exists() else None for path in updates}

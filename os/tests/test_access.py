@@ -77,7 +77,7 @@ class AccessTests(unittest.TestCase):
                     conn = http.client.HTTPSConnection('127.0.0.1', proxy_port, context=context)
                     raw = socket.create_connection(('127.0.0.1', proxy_port), timeout=5)
                     conn.sock = context.wrap_socket(raw, server_hostname='oxidal.local')
-                    headers = {'Host': host, 'Cookie': 'never-forward-me=1'}
+                    headers = {'Host': host, 'Cookie': 'never-forward-me=1', 'X-Forwarded-Host': '127.0.0.1', 'X-Forwarded-For': '127.0.0.1'}
                     if origin is not None:
                         headers['Origin'] = origin
                     if auth:
@@ -100,6 +100,10 @@ class AccessTests(unittest.TestCase):
                 self.assertNotIn('Authorization', headers)
                 self.assertNotIn('Cookie', headers)
                 self.assertEqual(request(host='10.42.0.1', origin='https://10.42.0.1')[0], 200)
+                self.assertEqual(request(host='127.0.0.1', origin='https://127.0.0.1')[0], 200)
+                self.assertEqual(request(host='127.0.0.2', origin='https://127.0.0.2')[0], 403)
+                self.assertEqual(request(host='127.0.0.1', origin='https://127.0.0.2')[0], 403)
+                self.assertEqual(request(host='evil.example', origin='https://127.0.0.1')[0], 403)
                 for path, expected in [('/api/v1/device/certificate', (access / 'ca.crt').read_bytes()), ('/api/v1/device/certificate.json', (public / 'certificate.json').read_bytes())]:
                     self.assertEqual(request(path=path, method='GET', auth=False)[0], 401)
                     self.assertEqual(request(path=path, method='GET', origin='https://evil.example')[0], 403)

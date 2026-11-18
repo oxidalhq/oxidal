@@ -1038,6 +1038,7 @@ export interface Contract {
   control_audit: AuditHistory;
   debug_command: Command2;
   debug_state: State;
+  device_certificate: PublicCertificate;
   effect_packs: PackState;
   error: ApiError;
   graph_audio_command: GraphAudioCommand;
@@ -1842,6 +1843,18 @@ export interface Job {
   id: string;
   output: string;
   phase: string;
+}
+/**
+ * Static public-certificate metadata served by the appliance HTTPS proxy.
+ * @see docs/device-service.md
+ */
+export interface PublicCertificate {
+  file_name: string;
+  fingerprint_sha256: string;
+  hotspot_download?: string | null;
+  https_download: string;
+  schema_version: number;
+  server_names: string[];
 }
 export interface PackState {
   audio_running: boolean;
@@ -2871,6 +2884,7 @@ export interface Settings {
   mode: Mode;
 }
 export interface NetworkState {
+  address_message?: string | null;
   available: boolean;
   interfaces: Interface[];
   message: string;
@@ -2882,6 +2896,10 @@ export interface NetworkState {
   wireless_enabled: boolean;
 }
 export interface Interface {
+  /**
+   * Current canonical IPv4 addresses, enriched by the unprivileged API.
+   */
+  addresses?: string[];
   connection: string;
   kind: string;
   name: string;

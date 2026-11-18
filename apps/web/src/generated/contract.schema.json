@@ -67,6 +67,9 @@
     "debug_state": {
       "$ref": "#/$defs/State"
     },
+    "device_certificate": {
+      "$ref": "#/$defs/PublicCertificate"
+    },
     "effect_packs": {
       "$ref": "#/$defs/PackState"
     },
@@ -419,6 +422,7 @@
     "monitoring_history",
     "control_audit",
     "network_state",
+    "device_certificate",
     "network_command",
     "effect_packs",
     "storage_state",
@@ -5963,6 +5967,13 @@
     "Interface": {
       "type": "object",
       "properties": {
+        "addresses": {
+          "description": "Current canonical IPv4 addresses, enriched by the unprivileged API.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "connection": {
           "type": "string"
         },
@@ -8224,6 +8235,12 @@
     "NetworkState": {
       "type": "object",
       "properties": {
+        "address_message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "available": {
           "type": "boolean"
         },
@@ -10073,6 +10090,47 @@
       "additionalProperties": false,
       "required": [
         "on"
+      ]
+    },
+    "PublicCertificate": {
+      "description": "Static public-certificate metadata served by the appliance HTTPS proxy.\n@see docs/device-service.md",
+      "type": "object",
+      "properties": {
+        "file_name": {
+          "type": "string"
+        },
+        "fingerprint_sha256": {
+          "type": "string"
+        },
+        "hotspot_download": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "https_download": {
+          "type": "string"
+        },
+        "schema_version": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "server_names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "fingerprint_sha256",
+        "file_name",
+        "https_download",
+        "server_names"
       ]
     },
     "Quarantined": {
