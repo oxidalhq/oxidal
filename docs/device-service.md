@@ -195,6 +195,11 @@ The web settings support Always, Never, No Ethernet, Not at home and No remember
 
 System Reboot and Shut down use an explicit confirmation in Settings and only two fixed systemctl verbs in the root helper. They invoke normal systemd shutdown, which sends SIGTERM to the daemon, awaits audio-worker cleanup and stops the service control group. They do not force power removal. Pending network changes block power requests. Audio Stop remains a separate operation that keeps the editor available. Unsaved editor changes must be saved first. Physical shutdown completion is not proven by the UI acknowledgement.
 
+Settings → Device uses shared power rows and a mandatory review dialog. Opening
+or cancelling the dialog sends no power command. Confirmation reads current
+availability and pending network state again before requesting power. An accepted
+request disables repeated actions; the dialog cannot be dismissed while sending.
+
 ## Hotspot welcome and discovery
 
 Pi hotspot provisioning includes an offline Oxidal welcome page with the shipped

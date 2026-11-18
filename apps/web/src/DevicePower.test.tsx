@@ -5,18 +5,20 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 
 import { deviceNetwork, type NetworkState } from './api';
 import { DevicePower } from './DevicePower';
 vi.mock('./api', () => ({ deviceNetwork: vi.fn() }));
-vi.mock('./AdjustmentDialog', () => ({
-  AdjustmentDialog: ({ children }: { children: ReactNode }) => (
-    <div role="dialog">{children}</div>
-  ),
-}));
-const ready = { available: true, pending: null } as NetworkState;
+const ready: NetworkState = {
+  available: true,
+  wireless_enabled: true,
+  interfaces: [],
+  networks: [],
+  saved: [],
+  pending: null,
+  message: '',
+};
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
@@ -42,11 +44,23 @@ it('requires confirmation and rechecks network state before requesting device po
     }),
   );
   expect(deviceNetwork).toHaveBeenCalledTimes(3);
+  expect(await screen.findByText(/Request accepted/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Restart device' })).toBeDisabled();
+  expect(
+    screen.getByRole('button', { name: 'Shut down device' }),
+  ).toBeDisabled();
 });
 it('does not power off if a network change became pending after opening the section', async () => {
   vi.mocked(deviceNetwork)
     .mockResolvedValueOnce(ready)
-    .mockResolvedValue({ ...ready, pending: {} } as NetworkState);
+    .mockResolvedValue({
+      ...ready,
+      pending: {
+        transaction: 'a'.repeat(32),
+        seconds_remaining: 80,
+        phase: 'connecting',
+      },
+    });
   render(<DevicePower connected />);
   await waitFor(() =>
     expect(
@@ -60,4 +74,9 @@ it('does not power off if a network change became pending after opening the sect
   expect(screen.getByRole('dialog')).toHaveTextContent(
     'Finish the pending network change',
   );
+  expect(
+    screen.getByRole('button', { name: 'Confirm shutdown' }),
+  ).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });

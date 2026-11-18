@@ -1,13 +1,15 @@
-import { ArrowClockwise, Power } from '@phosphor-icons/react';
+import { ArrowClockwise } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { DevicePower as DevicePowerView } from '@oxidal/design-system/patterns/device-power';
 
-import { AdjustmentDialog } from './AdjustmentDialog';
 import { deviceNetwork, type NetworkState } from './api';
 import { friendlyError } from './lib/friendlyError';
 
-/** Device power is separate from the audio transport and always confirmed. */
+/** Device power is separate from the audio transport and always confirmed.
+ * @see docs/device-service.md
+ */
 export function DevicePower({ connected }: { connected: boolean }) {
   const [state, setState] = useState<NetworkState | null>(null);
   const [action, setAction] = useState<'reboot' | 'shutdown' | null>(null);
@@ -55,87 +57,53 @@ export function DevicePower({ connected }: { connected: boolean }) {
   const disabled =
     !connected || !state?.available || !!state.pending || busy || sent;
   return (
-    <section className="panel space-y-3" aria-label="Device power">
-      <h2>Device power</h2>
-      <p className="caption">
-        Save your edits first. These controls stop audio and close the
-        connection.
-      </p>
-      <div className="action-row">
-        <Button
-          variant="outline"
-          disabled={disabled}
-          onClick={() => setAction('reboot')}
-        >
-          <ArrowClockwise aria-hidden="true" />
-          Restart device
-        </Button>
-        <Button
-          variant="outline"
-          disabled={disabled}
-          onClick={() => setAction('shutdown')}
-        >
-          <Power aria-hidden="true" />
-          Shut down device
-        </Button>
-      </div>
-      {!state && !readError && (
-        <p role="status" className="caption">
-          Reading device controls…
-        </p>
-      )}
-      {readError && (
-        <div className="space-y-2">
-          <p role="alert">{readError}</p>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setReadError('');
-              setRefresh((value) => value + 1);
-            }}
-          >
-            <ArrowClockwise aria-hidden="true" /> Retry device controls
-          </Button>
-        </div>
-      )}
-      {state?.pending && (
-        <p role="status">Finish the pending network change first.</p>
-      )}
-      {state && !state.available && (
-        <p role="status">Device power is unavailable on this installation.</p>
-      )}
-      {sent && (
-        <p role="status">
-          Request accepted. Restart reconnects when ready; after shutdown, wait
-          for the device to power down before unplugging it.
-        </p>
-      )}
-      {error && !action && <p role="alert">{error}</p>}
-      {action && (
-        <AdjustmentDialog
-          title={action === 'reboot' ? 'Restart device?' : 'Shut down device?'}
-          onCancel={() => {
-            if (!busy) setAction(null);
-          }}
-        >
-          <p>
-            Audio will stop. Save any edits you want to keep before continuing.
-          </p>
-          {error && <p role="alert">{error}</p>}
-          <div className="action-row">
-            <Button disabled={disabled} onClick={() => void confirm()}>
-              Confirm {action === 'reboot' ? 'restart' : 'shutdown'}
-            </Button>
-            <Button
-              variant="ghost"
-              disabled={busy}
-              onClick={() => setAction(null)}
-            >
-              Cancel
-            </Button>
-          </div>
-        </AdjustmentDialog>
-      )}
+    <section aria-label="Device power">
+      <DevicePowerView
+        action={action}
+        busy={busy}
+        disabled={disabled}
+        error={error}
+        onRequest={setAction}
+        onCancel={() => setAction(null)}
+        onConfirm={() => void confirm()}
+        notice={
+          <>
+            {!state && !readError && (
+              <p role="status" className="caption">
+                Reading device controls…
+              </p>
+            )}
+            {readError && (
+              <div className="space-y-2">
+                <p role="alert">{readError}</p>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setReadError('');
+                    setRefresh((value) => value + 1);
+                  }}
+                >
+                  <ArrowClockwise aria-hidden="true" /> Retry device controls
+                </Button>
+              </div>
+            )}
+            {state?.pending && (
+              <p role="status">Finish the pending network change first.</p>
+            )}
+            {state && !state.available && (
+              <p role="status">
+                Device power is unavailable on this installation.
+              </p>
+            )}
+            {sent && (
+              <p role="status">
+                Request accepted. Restart reconnects when ready; after shutdown,
+                wait for the device to power down before unplugging it.
+              </p>
+            )}
+          </>
+        }
+      />
     </section>
   );
 }
