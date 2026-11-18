@@ -7,11 +7,11 @@ import {
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Loading } from '@oxidal/design-system/components/states';
 
 import './PresetPicker.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { CueLinkedMix } from './components/media/SongLinkControls';
-import { Loading } from './components/ui/loading';
 import type { FactoryRecipe } from './factoryRecipes';
 import { builtName } from './features/library/oxidal/oxidalSounds.model';
 import {

@@ -29,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { Loading } from '@oxidal/design-system/components/states';
 import { Switch } from '@oxidal/design-system/components/switch';
 import {
   Tabs,
@@ -55,7 +56,6 @@ import { AudioSettings } from './AudioSettings';
 import { NowPlaying, SplitStatus } from './components/media/NowPlaying';
 import { MediaSheets } from './components/media/PlayerSheet';
 import { SessionMediaProvider } from './components/media/SessionMediaProvider';
-import { Loading } from './components/ui/loading';
 import { ControlEditor } from './ControlEditor';
 import { DebugConsole } from './DebugConsole';
 import { DevicePower } from './DevicePower';

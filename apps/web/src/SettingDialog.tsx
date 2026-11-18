@@ -1,13 +1,13 @@
 import { useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { DialogFooter } from '@oxidal/design-system/components/dialog';
 import { RelativeAdjustment as TouchAdjust } from '@oxidal/design-system/components/number-field';
 import { Switch } from '@oxidal/design-system/components/switch';
 
 import './ChainView.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import type { AudioState } from './api';
-import { DialogFooter } from './components/ui/dialog';
 import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 import { formatDefault } from './engineHelp';
 

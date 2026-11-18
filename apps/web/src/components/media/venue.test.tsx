@@ -111,6 +111,7 @@ afterEach(() => {
 async function shown(initial: VenueState) {
   vi.mocked(venueState).mockResolvedValue(initial);
   render(<VenueEq connected />);
+  await screen.findByRole('combobox', { name: 'Venue profile' });
   return screen.findByRole('region', { name: 'Venue EQ' });
 }
 

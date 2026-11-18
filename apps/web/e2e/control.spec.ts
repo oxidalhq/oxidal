@@ -308,7 +308,7 @@ test('guitar profiles explain automatic Levels use and guard removal', async ({
     page.getByText(/Levels follows the selected profile automatically/),
   ).toBeVisible();
   await expect(
-    page.locator('.ui-badge').filter({ hasText: /^Playing$/ }),
+    page.locator('[data-slot=badge]').filter({ hasText: /^Playing$/ }),
   ).toBeVisible();
   await expect(
     page.getByText('Level reference', { exact: true }),
@@ -1042,7 +1042,9 @@ test('native device defaults save independently of the playing tone', async ({
     if (!(await multiCore.isChecked())) await multiCore.click();
     // A switch keeps its 44px target and its thumb no longer fills the track.
     const track = await multiCore.boundingBox();
-    const thumb = await multiCore.locator('span').boundingBox();
+    const thumb = await multiCore
+      .locator('[data-slot=switch-thumb]')
+      .boundingBox();
     expect(track!.height).toBeGreaterThanOrEqual(44);
     expect(thumb!.width).toBeLessThan(track!.width / 2);
     await panel.getByRole('combobox', { name: 'Oversampling' }).click();

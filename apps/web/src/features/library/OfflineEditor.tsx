@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { Loading } from '@oxidal/design-system/components/states';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
@@ -21,7 +22,6 @@ import {
   rigLibrary,
   rigNativeSources,
 } from '../../api';
-import { Loading } from '../../components/ui/loading';
 import {
   errorRecovery,
   friendlyError,

@@ -2,6 +2,8 @@ import { ArrowSquareOut } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { DialogFooter } from '@oxidal/design-system/components/dialog';
+import { Loading } from '@oxidal/design-system/components/states';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
@@ -11,9 +13,7 @@ import {
   graphLibrary,
   rigLibrary,
 } from './api';
-import { DialogFooter } from './components/ui/dialog';
 import { RecoveryAction } from './components/ui/failure';
-import { Loading } from './components/ui/loading';
 import { type PresetPlugins, presetsUsingPack } from './lib/effectPackUsage';
 import { friendlyError } from './lib/friendlyError';
 import { useFailure } from './lib/useFailure';

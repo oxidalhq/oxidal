@@ -51,12 +51,14 @@ export function DialogHeader({
   title,
   description,
   closable = true,
+  closeLabel = 'Close',
   ...props
 }: React.ComponentProps<'header'> & {
   title: React.ReactNode;
   description?: React.ReactNode;
   /** Off for a question that must be answered, such as a change waiting to be kept. */
   closable?: boolean;
+  closeLabel?: string;
 }) {
   return (
     <header
@@ -68,7 +70,10 @@ export function DialogHeader({
       {...props}
     >
       <div className="grid gap-0.5">
-        <DialogPrimitive.Title className="m-0 text-lg font-semibold">
+        <DialogPrimitive.Title
+          tabIndex={-1}
+          className="m-0 text-lg font-semibold"
+        >
           {title}
         </DialogPrimitive.Title>
         {description ? (
@@ -83,7 +88,7 @@ export function DialogHeader({
       </div>
       {closable && (
         <DialogPrimitive.Close asChild>
-          <Button variant="ghost" size="icon-sm" aria-label="Close">
+          <Button variant="ghost" size="icon-sm" aria-label={closeLabel}>
             <X />
           </Button>
         </DialogPrimitive.Close>

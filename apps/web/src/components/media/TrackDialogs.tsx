@@ -1,11 +1,11 @@
 import { useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { DialogFooter } from '@oxidal/design-system/components/dialog';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { deleteAsset, type MediaAsset, updateAsset } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
-import { DialogFooter } from '../ui/dialog';
 import { useSessionMedia } from './sessionMedia';
 
 /** Rename a backing track. The title is metadata; the files never change.

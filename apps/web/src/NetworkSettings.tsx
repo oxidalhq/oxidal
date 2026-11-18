@@ -2,6 +2,7 @@ import { ArrowClockwise, Eye, EyeSlash, WifiHigh } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { DialogFooter } from '@oxidal/design-system/components/dialog';
 import {
   Select,
   SelectContent,
@@ -12,7 +13,6 @@ import {
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { deviceNetwork, type NetworkCommand, type NetworkState } from './api';
-import { DialogFooter } from './components/ui/dialog';
 import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 
 /** Phone-first setup with explicit link-loss warning and server-owned recovery.

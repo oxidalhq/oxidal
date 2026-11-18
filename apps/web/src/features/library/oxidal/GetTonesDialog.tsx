@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { DialogFooter } from '@oxidal/design-system/components/dialog';
 import {
   Select,
   SelectContent,
@@ -12,7 +13,6 @@ import {
 import './oxidal.css';
 import { AdjustmentDialog } from '../../../AdjustmentDialog';
 import { downloadVoice, tone3000Models, tone3000Tone } from '../../../api';
-import { DialogFooter } from '../../../components/ui/dialog';
 import { type FactoryRole, factoryRoles } from '../../../factoryRecipes';
 import { factoryVoices, isFactoryVoice } from '../../../factoryVoices';
 import type { RigNativeSource } from '../../../generated/contract';

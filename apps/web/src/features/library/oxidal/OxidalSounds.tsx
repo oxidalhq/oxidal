@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { Loading } from '@oxidal/design-system/components/states';
 
 import './oxidal.css';
 import {
@@ -17,7 +18,6 @@ import {
   AlertDescription,
   AlertTitle,
 } from '../../../components/ui/alert';
-import { Loading } from '../../../components/ui/loading';
 import { StepProgress } from '../../../components/ui/steps';
 import {
   ToggleGroup,

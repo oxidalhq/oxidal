@@ -1,16 +1,11 @@
-import { X } from '@phosphor-icons/react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-
-import { Button } from '@oxidal/design-system/components/button';
 
 import {
   Dialog,
   DialogBody,
   DialogContent,
-  DialogDescription,
   DialogHeader,
-  DialogTitle,
-} from './components/ui/dialog';
+} from '@oxidal/design-system/components/dialog';
 
 /** Shared modal adjustment surface. Radix modality keeps focus and touch events
  * inside the panel; the instrument stays visible behind it. */
@@ -53,6 +48,7 @@ export function AdjustmentDialog({
         '--adjustment-bottom',
         `${Math.max(8, window.innerHeight - height - offset + 8)}px`,
       );
+      dialog.style.setProperty('--adjustment-top', `${offset + height / 2}px`);
     };
     fit();
     viewport?.addEventListener('resize', fit);
@@ -73,7 +69,7 @@ export function AdjustmentDialog({
     >
       <DialogContent
         ref={setDialog}
-        className={`adjustment-dialog ${className}`}
+        className={`top-[var(--adjustment-top,50%)] bottom-auto max-h-[min(calc(100dvh-1rem),var(--adjustment-height,100dvh))] transform-none ${className}`}
         {...(description ? {} : { 'aria-describedby': undefined })}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
@@ -86,23 +82,14 @@ export function AdjustmentDialog({
           (returnFocus?.() ?? previous.current)?.focus({ preventScroll: true });
         }}
       >
-        <DialogHeader>
-          <div className="adjustment-title">
-            <DialogTitle tabIndex={-1}>{title}</DialogTitle>
-            {description && (
-              <DialogDescription>{description}</DialogDescription>
-            )}
-          </div>
-          <Button
-            variant="ghost"
-            className="h-11 w-11 shrink-0 p-0"
-            aria-label="Close dialog"
-            onClick={() => cancel.current()}
-          >
-            <X aria-hidden="true" />
-          </Button>
-        </DialogHeader>
-        <DialogBody>{children}</DialogBody>
+        <DialogHeader
+          title={title}
+          description={description}
+          closeLabel="Close dialog"
+        />
+        <DialogBody className="min-h-0 [&_[data-slot=dialog-footer]]:sticky [&_[data-slot=dialog-footer]]:bottom-0 [&_[data-slot=dialog-footer]]:z-10 [&_[data-slot=dialog-footer]]:bg-raised [&_[data-slot=dialog-footer]]:px-0">
+          {children}
+        </DialogBody>
       </DialogContent>
     </Dialog>
   );

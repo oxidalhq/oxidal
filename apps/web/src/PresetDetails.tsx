@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Loading } from '@oxidal/design-system/components/states';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
@@ -10,7 +11,6 @@ import {
   type PresetDetails,
   presetDetails,
 } from './api';
-import { Loading } from './components/ui/loading';
 import { friendlyError } from './lib/friendlyError';
 import { detailsKey } from './presetMetadata';
 

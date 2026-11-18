@@ -1,4 +1,10 @@
-import { act, cleanup, render, screen } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  render,
+  renderHook,
+  screen,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
@@ -22,6 +28,23 @@ import {
 
 afterEach(cleanup);
 beforeEach(resetNotices);
+
+it('cancels replaced and unmounted confirmations without leaving pending actions', async () => {
+  const { result, unmount } = renderHook(() => useConfirm());
+  let first!: Promise<boolean>;
+  let second!: Promise<boolean>;
+  act(() => {
+    first = result.current.ask({ title: 'First', confirm: 'Apply' });
+  });
+  act(() => {
+    second = result.current.ask({ title: 'Second', confirm: 'Delete' });
+  });
+  await expect(first).resolves.toBe(false);
+  const ask = result.current.ask;
+  unmount();
+  await expect(second).resolves.toBe(false);
+  await expect(ask({ title: 'Late', confirm: 'Apply' })).resolves.toBe(false);
+});
 
 function Asker({ onAnswer }: { onAnswer: (ok: boolean) => void }) {
   const { ask, dialog } = useConfirm();

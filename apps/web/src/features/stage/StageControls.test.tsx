@@ -24,7 +24,9 @@ it('turns Protect on in one tap and asks before turning it off', async () => {
   expect(setProtect).toHaveBeenLastCalledWith(true);
   await screen.findByRole('button', { name: /Protected/ });
   await user.click(screen.getByRole('button', { name: /Protected/ }));
-  expect(screen.getByText('Turn Protect off?')).toBeVisible();
+  expect(
+    screen.getByRole('heading', { name: 'Turn Protect off?' }),
+  ).toBeVisible();
   await user.click(screen.getByRole('button', { name: 'Keep Protect on' }));
   expect(setProtect).toHaveBeenCalledTimes(1);
   await user.click(screen.getByRole('button', { name: /Protected/ }));

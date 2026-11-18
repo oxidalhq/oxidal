@@ -10,11 +10,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { Loading } from '@oxidal/design-system/components/states';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { type AssetArtwork, presetArtwork } from './api';
 import { Alert, AlertDescription, AlertTitle } from './components/ui/alert';
-import { Loading } from './components/ui/loading';
 import { friendlyError } from './lib/friendlyError';
 import { type NativeDraft, splitNative } from './rigDraft';
 

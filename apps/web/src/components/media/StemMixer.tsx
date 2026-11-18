@@ -9,10 +9,10 @@ import { DownloadSimple, Faders } from '@phosphor-icons/react';
 import { useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Slider } from '@oxidal/design-system/components/slider';
 
 import { type PlayerSnapshot, saveSongMix, songView } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
-import { Slider } from '../ui/slider';
 import {
   mixSourceOf,
   useProtect,
@@ -158,7 +158,7 @@ function StemRow({
       ) : (
         <Slider
           className="stem-row-level"
-          aria-label={`${label} level`}
+          label={`${label} level`}
           min={GAIN_MIN}
           max={GAIN_MAX}
           step={5}

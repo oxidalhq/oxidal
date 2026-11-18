@@ -8,6 +8,7 @@ import { Metronome, Repeat, Waveform } from '@phosphor-icons/react';
 import { type PointerEvent, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Slider } from '@oxidal/design-system/components/slider';
 import { Switch } from '@oxidal/design-system/components/switch';
 
 import './media.css';
@@ -15,7 +16,6 @@ import { type PracticeTiming, practiceTiming } from '../../api';
 import type { PlayerCommand } from '../../generated/contract';
 import { deviceSentence } from '../../lib/friendlyError';
 import { clock, tapTempo } from '../../lib/playerClock';
-import { Slider } from '../ui/slider';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import { usePlayerPosition, useProtect, useSessionMedia } from './sessionMedia';
 
@@ -465,7 +465,7 @@ export function PracticeControls() {
           ) : (
             <Slider
               className="practice-level"
-              aria-label="Click level"
+              label="Click level"
               min={-60}
               max={0}
               step={1}

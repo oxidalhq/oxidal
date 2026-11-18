@@ -10,6 +10,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { DialogFooter } from '@oxidal/design-system/components/dialog';
 import {
   Select,
   SelectContent,
@@ -17,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { Loading } from '@oxidal/design-system/components/states';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
@@ -32,8 +34,6 @@ import {
   type ToneQuery,
   uploadLocalModel,
 } from './api';
-import { DialogFooter } from './components/ui/dialog';
-import { Loading } from './components/ui/loading';
 import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 import { GearIcon, GearLabel } from './GearIcon';
 import { friendlyError } from './lib/friendlyError';

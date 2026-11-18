@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 
+import { Slider } from '@oxidal/design-system/components/slider';
+
 import './MasterLevel.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { type SceneBlends, sceneBlends } from './api';
-import { Slider } from './components/ui/slider';
 import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 import { friendlyError } from './lib/friendlyError';
 
@@ -104,15 +105,12 @@ export function SceneChange({
             </p>
             {blend > 0 && (
               <div className="slider-field">
-                <div className="slider-label">
-                  <span>Blend time</span>
-                  <output>{seconds(blend)}</output>
-                </div>
                 <Slider
+                  label="Blend time"
+                  readout={seconds(blend)}
                   min={0.5}
                   max={MAX_SECONDS}
                   step={0.5}
-                  aria-label="Blend time"
                   disabled={busy}
                   value={[blend / 1000]}
                   onValueChange={([value]) => {

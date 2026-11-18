@@ -6,11 +6,11 @@ import {
 import { useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Loading } from '@oxidal/design-system/components/states';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { changeStorage, deviceNetwork, type StorageState } from './api';
 import { RecoveryAction } from './components/ui/failure';
-import { Loading } from './components/ui/loading';
 import { friendlyError } from './lib/friendlyError';
 import { useFailure } from './lib/useFailure';
 

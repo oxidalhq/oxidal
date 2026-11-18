@@ -11,11 +11,11 @@ import {
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Loading } from '@oxidal/design-system/components/states';
 
 import './LibraryManagement.css';
 import { type LibraryCatalog, libraryCatalog, type LibraryUpdate } from './api';
 import { FailureNotice } from './components/ui/failure';
-import { Loading } from './components/ui/loading';
 import {
   addSuggestedSet,
   duplicatePreset,

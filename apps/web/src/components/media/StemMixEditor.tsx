@@ -18,6 +18,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { useConfirm } from '@oxidal/design-system/components/confirm';
 
 import './media.css';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
@@ -40,7 +41,6 @@ import {
 } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
 import { formatTime } from '../../lib/playerClock';
-import { useConfirm } from '../ui/confirm';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import {
   canSplitBackingTrack,

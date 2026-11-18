@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { Loading } from '@oxidal/design-system/components/states';
 import {
   Tabs,
   TabsList,
@@ -32,7 +33,6 @@ import {
 } from './api';
 import { ArtworkDeck } from './AssetArtwork';
 import { ChainView } from './ChainView';
-import { Loading } from './components/ui/loading';
 import { GearIcon } from './GearIcon';
 import type { ResourceSource } from './generated/contract';
 import { friendlyError } from './lib/friendlyError';

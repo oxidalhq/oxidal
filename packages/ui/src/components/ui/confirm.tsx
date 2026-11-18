@@ -1,4 +1,10 @@
-import { type ReactNode, useCallback, useState } from 'react';
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 
 import { Button } from './button';
 import {
@@ -25,16 +31,33 @@ export interface ConfirmOptions {
  * Cancel is always the safe answer and is where focus starts.
  */
 export function useConfirm() {
-  const [request, setRequest] = useState<
-    (ConfirmOptions & { resolve: (ok: boolean) => void }) | null
-  >(null);
+  const [request, setRequest] = useState<ConfirmOptions | null>(null);
+  const pending = useRef<((ok: boolean) => void) | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      pending.current?.(false);
+      pending.current = null;
+    };
+  }, []);
   const ask = useCallback(
     (options: ConfirmOptions) =>
-      new Promise<boolean>((resolve) => setRequest({ ...options, resolve })),
+      new Promise<boolean>((resolve) => {
+        if (!mounted.current) {
+          resolve(false);
+          return;
+        }
+        pending.current?.(false);
+        pending.current = resolve;
+        setRequest(options);
+      }),
     [],
   );
   const close = (ok: boolean) => {
-    request?.resolve(ok);
+    pending.current?.(ok);
+    pending.current = null;
     setRequest(null);
   };
   const dialog = (

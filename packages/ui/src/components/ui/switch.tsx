@@ -26,7 +26,10 @@ export function Switch({
         aria-hidden="true"
         className="absolute inset-x-0 top-1/2 h-7 -translate-y-1/2 rounded-full border border-input bg-muted transition-colors duration-[var(--duration-fast)] group-data-[state=checked]:border-primary group-data-[state=checked]:bg-primary"
       />
-      <SwitchPrimitive.Thumb className="relative ml-[3px] size-5 rounded-full border border-input bg-background transition-transform duration-[var(--duration-fast)] ease-[var(--ease-out)] data-[state=checked]:translate-x-[1.375rem] data-[state=checked]:border-primary-foreground" />
+      <SwitchPrimitive.Thumb
+        data-slot="switch-thumb"
+        className="relative ml-[3px] size-5 rounded-full border border-input bg-background transition-transform duration-[var(--duration-fast)] ease-[var(--ease-out)] data-[state=checked]:translate-x-[1.375rem] data-[state=checked]:border-primary-foreground"
+      />
     </SwitchPrimitive.Root>
   );
 }

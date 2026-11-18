@@ -425,7 +425,9 @@ it('Sign in: signed out offers sign-in first; after sign-in the same Get tones d
   });
   render(<OxidalSounds connected onChanged={() => {}} />);
   const dialog = await screen.findByRole('dialog');
-  expect(within(dialog).getByText(`Get tones for ${BROWN}`)).toBeVisible();
+  expect(
+    within(dialog).getByRole('heading', { name: `Get tones for ${BROWN}` }),
+  ).toBeVisible();
 });
 
 it('Install pack: missing pack is the one action; Protect disables it with the reason', async () => {

@@ -2,6 +2,7 @@ import { Play, Record, Stop } from '@phosphor-icons/react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { DialogFooter } from '@oxidal/design-system/components/dialog';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
@@ -16,7 +17,6 @@ import {
 } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
 import { formatTime } from '../../lib/playerClock';
-import { DialogFooter } from '../ui/dialog';
 import { MediaRow, type MenuItem } from './MediaRow';
 import {
   channelsLabel,

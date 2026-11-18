@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
+import { DialogFooter } from '@oxidal/design-system/components/dialog';
 import {
   Select,
   SelectContent,
@@ -20,7 +21,6 @@ import {
   type RigAudioAction,
   type RigAudioState,
 } from './api';
-import { DialogFooter } from './components/ui/dialog';
 import { RecoveryAction } from './components/ui/failure';
 import { friendlyError } from './lib/friendlyError';
 import { useFailure } from './lib/useFailure';

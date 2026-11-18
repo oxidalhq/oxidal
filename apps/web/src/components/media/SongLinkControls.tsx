@@ -8,6 +8,7 @@ import { LinkSimple, MusicNotes, X } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { useConfirm } from '@oxidal/design-system/components/confirm';
 
 import {
   type LibraryCatalog,
@@ -17,7 +18,6 @@ import {
   type SongLinkUpdate,
 } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
-import { useConfirm } from '../ui/confirm';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import { useSessionMedia } from './sessionMedia';
 
