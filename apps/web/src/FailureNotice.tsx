@@ -1,6 +1,7 @@
 import { Button } from '@oxidal/design-system/components/button';
+import { StateNotice } from '@oxidal/design-system/components/states';
 
-import type { Failure } from '../../lib/useFailure';
+import type { Failure } from './lib/useFailure';
 
 /** The device's own words, when the message on screen rewords them. */
 function FailureDetails({ failure }: { failure: Failure }) {
@@ -65,9 +66,12 @@ export function FailureNotice({
 }) {
   if (!failure) return null;
   return (
-    <div className="failure-notice" role="alert">
-      <p>{failure.message}</p>
-      <RecoveryAction failure={failure} onRefresh={onRefresh} busy={busy} />
-    </div>
+    <StateNotice
+      kind="error"
+      title={failure.message}
+      action={
+        <RecoveryAction failure={failure} onRefresh={onRefresh} busy={busy} />
+      }
+    />
   );
 }

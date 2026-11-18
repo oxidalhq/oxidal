@@ -3,12 +3,15 @@ import { useState } from 'react';
 import { Button } from '@oxidal/design-system/components/button';
 import { DialogFooter } from '@oxidal/design-system/components/dialog';
 import { RelativeAdjustment as TouchAdjust } from '@oxidal/design-system/components/number-field';
+import {
+  Segment,
+  SegmentedControl,
+} from '@oxidal/design-system/components/segmented';
 import { Switch } from '@oxidal/design-system/components/switch';
 
 import './ChainView.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import type { AudioState } from './api';
-import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 import { formatDefault } from './engineHelp';
 
 /** Prepared engine/model setting: draft a value, then Apply (audio restarts). */
@@ -49,8 +52,7 @@ export function SettingDialog({
       <div className="setting-dialog">
         {detail && <p className="caption">{detail}</p>}
         {choices ? (
-          <ToggleGroup
-            type="single"
+          <SegmentedControl
             aria-label={control.label}
             value={String(Math.round(value * (choices.length - 1)))}
             disabled={busy || stale}
@@ -59,11 +61,11 @@ export function SettingDialog({
             }}
           >
             {choices.map((label, index) => (
-              <ToggleGroupItem key={label} value={String(index)}>
+              <Segment key={label} value={String(index)}>
                 {label}
-              </ToggleGroupItem>
+              </Segment>
             ))}
-          </ToggleGroup>
+          </SegmentedControl>
         ) : control.toggle ? (
           <label className="flex min-h-11 items-center justify-between gap-3 text-sm">
             <span>{value === 1 ? 'On' : 'Off'}</span>

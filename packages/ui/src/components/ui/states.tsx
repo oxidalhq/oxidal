@@ -4,8 +4,9 @@ import * as React from 'react';
 
 import { cn } from '../../lib/cn';
 import { Button } from './button';
+import { Card, CardTitle } from './card';
 import { StableLabel } from './stable-label';
-import { Caption } from './text';
+import { Caption, Description } from './text';
 
 /**
  * The states a section passes through: loading (Skeleton, Loading), empty
@@ -121,6 +122,43 @@ export function EmptyState({
       {children && <Caption className="max-w-prose">{children}</Caption>}
       {action && <div className="mt-2">{action}</div>}
     </div>
+  );
+}
+
+/** A section's loading, empty or failed state, composed from the same surfaces. */
+export function StateNotice({
+  kind,
+  title,
+  children,
+  action,
+  className,
+}: {
+  kind: 'loading' | 'empty' | 'error';
+  title: string;
+  children?: React.ReactNode;
+  action?: React.ReactNode;
+  className?: string;
+}) {
+  if (kind === 'empty')
+    return (
+      <EmptyState title={title} action={action} className={className}>
+        {children}
+      </EmptyState>
+    );
+  if (kind === 'loading')
+    return (
+      <div className={cn('grid gap-2', className)}>
+        <Loading label={title} />
+        {children && <Description>{children}</Description>}
+        {action}
+      </div>
+    );
+  return (
+    <Card role="alert" className={cn('gap-2', className)}>
+      <CardTitle>{title}</CardTitle>
+      {children && <Description>{children}</Description>}
+      {action && <div className="grid justify-items-start gap-2">{action}</div>}
+    </Card>
   );
 }
 

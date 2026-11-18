@@ -19,6 +19,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { useConfirm } from '@oxidal/design-system/components/confirm';
+import {
+  Segment,
+  SegmentedControl,
+} from '@oxidal/design-system/components/segmented';
 
 import './media.css';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
@@ -41,7 +45,6 @@ import {
 } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
 import { formatTime } from '../../lib/playerClock';
-import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import {
   canSplitBackingTrack,
   usePlayerPosition,
@@ -725,8 +728,7 @@ export function StemMixEditor({
               <div className="stem-section-head">
                 <h3 id="stem-files">Stems</h3>
                 {song.splits.length > 1 && (
-                  <ToggleGroup
-                    type="single"
+                  <SegmentedControl
                     aria-label="Stem set"
                     value={splitId}
                     onValueChange={(value) => {
@@ -745,11 +747,11 @@ export function StemMixEditor({
                     }}
                   >
                     {song.splits.map((row) => (
-                      <ToggleGroupItem key={row.id} value={row.id}>
+                      <Segment key={row.id} value={row.id}>
                         {splitLabel(row, song.splits)}
-                      </ToggleGroupItem>
+                      </Segment>
                     ))}
-                  </ToggleGroup>
+                  </SegmentedControl>
                 )}
               </div>
               <p className="caption">

@@ -4,6 +4,10 @@ import { useEffect, useState } from 'react';
 import { Button } from '@oxidal/design-system/components/button';
 import { DialogFooter } from '@oxidal/design-system/components/dialog';
 import {
+  Segment,
+  SegmentedControl,
+} from '@oxidal/design-system/components/segmented';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -13,7 +17,6 @@ import {
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { deviceNetwork, type NetworkCommand, type NetworkState } from './api';
-import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 
 /** Phone-first setup with explicit link-loss warning and server-owned recovery.
  * @see docs/device-service.md
@@ -223,8 +226,7 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
           ) : (
             <>
               <div className="network-toolbar">
-                <ToggleGroup
-                  type="single"
+                <SegmentedControl
                   value={mode}
                   disabled={busy}
                   aria-label="Network setup mode"
@@ -241,11 +243,9 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
                     }
                   }}
                 >
-                  <ToggleGroupItem value="join">Join Wi-Fi</ToggleGroupItem>
-                  <ToggleGroupItem value="hotspot">
-                    Edit hotspot
-                  </ToggleGroupItem>
-                </ToggleGroup>
+                  <Segment value="join">Join Wi-Fi</Segment>
+                  <Segment value="hotspot">Edit hotspot</Segment>
+                </SegmentedControl>
                 {mode === 'join' && (
                   <Button
                     variant="outline"

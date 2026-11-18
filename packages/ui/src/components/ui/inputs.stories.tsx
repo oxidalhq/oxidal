@@ -1,10 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { expect, userEvent, within } from 'storybook/test';
 
 import { Combobox, type ComboboxOption } from './combobox';
 import { NumberField, RelativeAdjustment } from './number-field';
-import { Slider } from './slider';
+import { InlineFader, Slider } from './slider';
 import { Caption, Label } from './text';
 
 /**
@@ -112,6 +112,76 @@ function Sliders() {
 }
 
 export const Sliders_: StoryObj = { name: 'Slider', render: () => <Sliders /> };
+
+function InlineFaderDemo() {
+  const [value, setValue] = useState(0.5);
+  const [dragging, setDragging] = useState(false);
+  const starting = useRef(0.5);
+  return (
+    <div className="grid max-w-md grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-3">
+      <Label>Gain</Label>
+      <NumberField
+        label="Gain"
+        value={value}
+        onChange={setValue}
+        min={0}
+        max={1}
+        step={0.01}
+        fine={0.001}
+        digits={2}
+      />
+      <InlineFader
+        value={value}
+        dragging={dragging}
+        disabled={false}
+        onBegin={(next) => {
+          starting.current = value;
+          setDragging(true);
+          setValue(next);
+        }}
+        onMove={setValue}
+        onEnd={(cancel) => {
+          if (cancel) setValue(starting.current);
+          setDragging(false);
+        }}
+      />
+    </div>
+  );
+}
+
+export const InlineFader_: StoryObj = {
+  name: 'Inline fader with exact entry',
+  render: () => <InlineFaderDemo />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const fader = canvasElement.querySelector<HTMLElement>(
+      '[data-slot=inline-fader]',
+    )!;
+    const box = fader.getBoundingClientRect();
+    await userEvent.pointer([
+      {
+        keys: '[MouseLeft>]',
+        target: fader,
+        coords: {
+          clientX: box.left + box.width / 4,
+          clientY: box.top + box.height / 2,
+        },
+      },
+      {
+        target: fader,
+        coords: {
+          clientX: box.left + (box.width * 3) / 4,
+          clientY: box.top + box.height / 2,
+        },
+      },
+      { keys: '[/MouseLeft]', target: fader },
+    ]);
+    await expect(canvas.getByRole('slider', { name: 'Gain' })).toHaveAttribute(
+      'aria-valuenow',
+      '0.75',
+    );
+  },
+};
 
 export const Faders: StoryObj = {
   render: () => (

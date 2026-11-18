@@ -9,7 +9,7 @@ import {
   type RigAudioState,
   rigAudioState,
 } from './api';
-import { RecoveryAction } from './components/ui/failure';
+import { RecoveryAction } from './FailureNotice';
 import { friendlyError } from './lib/friendlyError';
 import { useFailure } from './lib/useFailure';
 import { MidiMapScreen } from './MidiMapScreen';

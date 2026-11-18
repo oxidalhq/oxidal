@@ -5,17 +5,19 @@ import {
   Moon,
   Plus,
   Sun,
-  WarningCircle,
 } from '@phosphor-icons/react';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import {
+  Segment,
+  SegmentedControl,
+} from '@oxidal/design-system/components/segmented';
+import { StateNotice } from '@oxidal/design-system/components/states';
 
 import './Tuner.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { tuner, type TunerState } from './api';
-import { Alert, AlertDescription, AlertTitle } from './components/ui/alert';
-import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 import { errorDetails } from './lib/friendlyError';
 
 const NOTES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
@@ -241,13 +243,9 @@ export function GlobalTuner({
           </p>
         </div>
         {error && (
-          <Alert variant="warning" role="alert">
-            <WarningCircle aria-hidden="true" />
-            <AlertTitle>Tuner unavailable</AlertTitle>
-            <AlertDescription className="break-words text-current">
-              {error}
-            </AlertDescription>
-          </Alert>
+          <StateNotice kind="error" title="Tuner unavailable">
+            {error}
+          </StateNotice>
         )}
         {state?.standalone && !error && (
           <p className="caption tuner-alone">
@@ -256,8 +254,7 @@ export function GlobalTuner({
           </p>
         )}
         <div className="tuner-controls">
-          <ToggleGroup
-            type="single"
+          <SegmentedControl
             aria-label="Tuner monitoring"
             value={muted || state?.standalone ? 'mute' : 'hear'}
             disabled={!listening || !!state?.standalone}
@@ -265,9 +262,9 @@ export function GlobalTuner({
               if (value) void monitor(value === 'mute');
             }}
           >
-            <ToggleGroupItem value="mute">Mute</ToggleGroupItem>
-            <ToggleGroupItem value="hear">Hear sound</ToggleGroupItem>
-          </ToggleGroup>
+            <Segment value="mute">Mute</Segment>
+            <Segment value="hear">Hear sound</Segment>
+          </SegmentedControl>
           <div className="tuner-a4" role="group" aria-label="Reference pitch">
             <Button
               variant="outline"

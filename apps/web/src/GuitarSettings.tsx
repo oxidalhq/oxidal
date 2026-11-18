@@ -4,12 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
 import { DialogFooter } from '@oxidal/design-system/components/dialog';
+import { StateNotice } from '@oxidal/design-system/components/states';
 
 import './MasterLevel.css';
 import './GuitarSettings.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { boosts, type GuitarProfiles } from './api';
-import { StateNotice } from './components/ui/state-notice';
 import { guitarVerificationDetail } from './guitarVerification';
 import { useMonitorReadings } from './monitorFeed';
 import { ToolRow, ToolSection } from './ToolRow';

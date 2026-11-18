@@ -12,10 +12,10 @@ import {
 } from 'recharts';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { ChartContainer } from '@oxidal/design-system/components/chart';
 
 import './Monitoring.css';
 import type { Monitoring as Readings } from './api';
-import { ChartContainer } from './components/ui/chart';
 import { ControlAudit } from './ControlAudit';
 import {
   type MonitorReading,

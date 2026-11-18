@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { glyphFor, glyphs } from './blockGlyphs';
+import { glyphFor, glyphs } from '@oxidal/design-system/lib/block-glyphs';
 
 /**
  * Engine-neutral chain view model shared by native, hybrid and LV2 rigs.

@@ -12,6 +12,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@oxidal/design-system/components/button';
 import { DialogFooter } from '@oxidal/design-system/components/dialog';
 import {
+  Segment,
+  SegmentedControl,
+} from '@oxidal/design-system/components/segmented';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -34,7 +38,6 @@ import {
   type ToneQuery,
   uploadLocalModel,
 } from './api';
-import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 import { GearIcon, GearLabel } from './GearIcon';
 import { friendlyError } from './lib/friendlyError';
 import { remoteProblem, useSessionState } from './lib/sessionState';
@@ -474,8 +477,7 @@ export function ModelPicker({
                   </Select>
                 </label>
                 <div className="catalog-filters">
-                  <ToggleGroup
-                    type="single"
+                  <SegmentedControl
                     value={query.gear ?? 'all'}
                     disabled={locked}
                     aria-label="Gear type"
@@ -494,13 +496,12 @@ export function ModelPicker({
                         string,
                       ][]
                     ).map(([gear, label]) => (
-                      <ToggleGroupItem key={label} value={gear ?? 'all'}>
+                      <Segment key={label} value={gear ?? 'all'}>
                         {label}
-                      </ToggleGroupItem>
+                      </Segment>
                     ))}
-                  </ToggleGroup>
-                  <ToggleGroup
-                    type="single"
+                  </SegmentedControl>
+                  <SegmentedControl
                     value={view}
                     aria-label="Show tones as"
                     onValueChange={(value) => {
@@ -509,11 +510,11 @@ export function ModelPicker({
                     }}
                   >
                     {(['pictures', 'list'] as const).map((v) => (
-                      <ToggleGroupItem key={v} value={v}>
+                      <Segment key={v} value={v}>
                         {v === 'pictures' ? 'Pictures' : 'List'}
-                      </ToggleGroupItem>
+                      </Segment>
                     ))}
-                  </ToggleGroup>
+                  </SegmentedControl>
                 </div>
                 {paginated && (
                   <form

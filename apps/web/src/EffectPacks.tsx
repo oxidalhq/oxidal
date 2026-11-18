@@ -13,7 +13,7 @@ import {
   graphLibrary,
   rigLibrary,
 } from './api';
-import { RecoveryAction } from './components/ui/failure';
+import { RecoveryAction } from './FailureNotice';
 import { type PresetPlugins, presetsUsingPack } from './lib/effectPackUsage';
 import { friendlyError } from './lib/friendlyError';
 import { useFailure } from './lib/useFailure';

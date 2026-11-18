@@ -10,6 +10,7 @@ import {
 } from 'recharts';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { ChartContainer } from '@oxidal/design-system/components/chart';
 import {
   Select,
   SelectContent,
@@ -19,7 +20,6 @@ import {
 } from '@oxidal/design-system/components/select';
 
 import { type MonitoringHistory as History, monitoringHistory } from './api';
-import { ChartContainer } from './components/ui/chart';
 import { historyCsv, historyPoints } from './historyData';
 import { friendlyError } from './lib/friendlyError';
 

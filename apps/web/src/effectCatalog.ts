@@ -1,5 +1,9 @@
+import {
+  glyphFor,
+  type GlyphKey,
+} from '@oxidal/design-system/lib/block-glyphs';
+
 import type { Lv2Plugin } from './api';
-import { glyphFor, type GlyphKey } from './blockGlyphs';
 
 /**
  * Sorting installed LV2 effects for the effect chooser: what kind of effect

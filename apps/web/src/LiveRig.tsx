@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { RelativeAdjustment as TouchAdjust } from '@oxidal/design-system/components/number-field';
+import { InlineFader } from '@oxidal/design-system/components/slider';
 
 import './RigControls.css';
 import { AddBlockChooser } from './AddBlockChooser';
@@ -32,7 +33,6 @@ import { ArtworkDeck } from './AssetArtwork';
 import { BoostControl } from './BoostControl';
 import { ChainView, LedToggle } from './ChainView';
 import { MaybeSheet } from './components/RigSheet';
-import { DragFader } from './DragFader';
 import { EditQueue } from './editQueue';
 import { StageControls } from './features/stage/StageControls';
 import { GearIcon } from './GearIcon';
@@ -1590,7 +1590,7 @@ export function LiveRig({
                     </span>
                     <strong className="value-row-value">{item.display}</strong>
                     {!item.toggle && (
-                      <DragFader
+                      <InlineFader
                         value={
                           draft?.target === item.target
                             ? draft.value

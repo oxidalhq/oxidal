@@ -80,34 +80,6 @@
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
-.value-row-fader {
-  position: relative;
-  grid-column: 1 / -1;
-  height: 1.25rem;
-}
-.value-row-fader::before {
-  content: '';
-  position: absolute;
-  inset: 0.5625rem 0 auto;
-  border-top: 2px solid var(--border);
-}
-.value-row-fader i {
-  position: absolute;
-  top: 0.5rem;
-  left: 0;
-  height: 4px;
-  background: var(--foreground);
-}
-.value-row-fader b {
-  position: absolute;
-  top: 0.125rem;
-  width: 0.625rem;
-  height: 1.125rem;
-  margin-left: -0.3125rem;
-  border: 1.5px solid var(--foreground);
-  border-radius: 2px;
-  background: var(--card);
-}
 .value-row[data-toggle] {
   align-items: center;
 }
@@ -117,13 +89,6 @@
 }
 .value-row:disabled {
   opacity: 0.55;
-}
-:root[data-display='sunlight'] .value-row-fader::before {
-  border-top-width: 3px;
-  border-color: var(--foreground);
-}
-:root[data-display='sunlight'] .value-row-fader b {
-  border-width: 2px;
 }
 
 /* Save | ⌄ split button: one outline, a hairline between the halves. */
@@ -167,15 +132,6 @@
 }
 .value-cell:disabled {
   opacity: 0.55;
-}
-
-/* Drag the fader in place; vertical swipes still scroll the page. */
-.value-row-fader {
-  touch-action: pan-y;
-  cursor: ew-resize;
-}
-.value-row-fader[data-dragging] b {
-  background: var(--foreground);
 }
 
 /* + Add chooser: one row per block kind, glyph first. */

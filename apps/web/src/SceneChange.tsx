@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 
+import {
+  Segment,
+  SegmentedControl,
+} from '@oxidal/design-system/components/segmented';
 import { Slider } from '@oxidal/design-system/components/slider';
 
 import './MasterLevel.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { type SceneBlends, sceneBlends } from './api';
-import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 import { friendlyError } from './lib/friendlyError';
 
 const MAX_SECONDS = 10;
@@ -77,8 +80,7 @@ export function SceneChange({
       {open && (
         <AdjustmentDialog title="Scene change" onCancel={() => setOpen(false)}>
           <div className="control-stack">
-            <ToggleGroup
-              type="single"
+            <SegmentedControl
               value={blend ? 'blend' : 'trails'}
               disabled={busy}
               aria-label="Scene change"
@@ -89,11 +91,9 @@ export function SceneChange({
                 }
               }}
             >
-              <ToggleGroupItem value="trails">
-                {trails ? 'Trails' : 'Cut'}
-              </ToggleGroupItem>
-              <ToggleGroupItem value="blend">Blend</ToggleGroupItem>
-            </ToggleGroup>
+              <Segment value="trails">{trails ? 'Trails' : 'Cut'}</Segment>
+              <Segment value="blend">Blend</Segment>
+            </SegmentedControl>
             <p className="caption">
               {blend
                 ? trails

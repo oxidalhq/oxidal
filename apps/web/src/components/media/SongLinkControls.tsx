@@ -9,6 +9,10 @@ import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { useConfirm } from '@oxidal/design-system/components/confirm';
+import {
+  Segment,
+  SegmentedControl,
+} from '@oxidal/design-system/components/segmented';
 
 import {
   type LibraryCatalog,
@@ -18,7 +22,6 @@ import {
   type SongLinkUpdate,
 } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
-import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import { useSessionMedia } from './sessionMedia';
 
 const LINK_CHANGE = 'oxidal-song-links-changed';
@@ -147,8 +150,7 @@ export function MixLinks({ mix }: { mix: Mix }) {
       )}
       {catalog && (
         <div className="stem-link-form">
-          <ToggleGroup
-            type="single"
+          <SegmentedControl
             aria-label="Link to"
             value={scope}
             onValueChange={(value) => {
@@ -158,9 +160,9 @@ export function MixLinks({ mix }: { mix: Mix }) {
               }
             }}
           >
-            <ToggleGroupItem value="set_list">Set list entry</ToggleGroupItem>
-            <ToggleGroupItem value="rig">Saved rig</ToggleGroupItem>
-          </ToggleGroup>
+            <Segment value="set_list">Set list entry</Segment>
+            <Segment value="rig">Saved rig</Segment>
+          </SegmentedControl>
           <select
             aria-label={scope === 'rig' ? 'Saved rig' : 'Set list entry'}
             value={selected}

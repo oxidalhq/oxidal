@@ -8,9 +8,9 @@ import {
 } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 
-import { DeviceError } from '../../lib/friendlyError';
-import { useFailure } from '../../lib/useFailure';
-import { FailureNotice, RecoveryAction } from './failure';
+import { FailureNotice, RecoveryAction } from './FailureNotice';
+import { DeviceError } from './lib/friendlyError';
+import { useFailure } from './lib/useFailure';
 
 afterEach(cleanup);
 

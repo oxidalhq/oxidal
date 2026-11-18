@@ -15,7 +15,7 @@ import { Loading } from '@oxidal/design-system/components/states';
 
 import './LibraryManagement.css';
 import { type LibraryCatalog, libraryCatalog, type LibraryUpdate } from './api';
-import { FailureNotice } from './components/ui/failure';
+import { FailureNotice } from './FailureNotice';
 import {
   addSuggestedSet,
   duplicatePreset,

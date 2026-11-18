@@ -5,7 +5,7 @@ import { AdjustmentDialog } from './AdjustmentDialog';
 import { rigAudioCommand, rigAudioState } from './api';
 import { BoostControl } from './BoostControl';
 import { MaybeSheet } from './components/RigSheet';
-import { FailureNotice } from './components/ui/failure';
+import { FailureNotice } from './FailureNotice';
 import { ControlAdjustDialog } from './features/rig/ControlAdjustDialog';
 import { ControlGrid } from './features/rig/ControlGrid';
 import { rigBusy } from './features/rig/mixedRigViewModel';

@@ -8,6 +8,10 @@ import { Metronome, Repeat, Waveform } from '@phosphor-icons/react';
 import { type PointerEvent, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import {
+  Segment,
+  SegmentedControl,
+} from '@oxidal/design-system/components/segmented';
 import { Slider } from '@oxidal/design-system/components/slider';
 import { Switch } from '@oxidal/design-system/components/switch';
 
@@ -16,7 +20,6 @@ import { type PracticeTiming, practiceTiming } from '../../api';
 import type { PlayerCommand } from '../../generated/contract';
 import { deviceSentence } from '../../lib/friendlyError';
 import { clock, tapTempo } from '../../lib/playerClock';
-import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import { usePlayerPosition, useProtect, useSessionMedia } from './sessionMedia';
 
 type ClickCommand = Extract<PlayerCommand, { kind: 'set_click' }>['click'];
@@ -346,8 +349,7 @@ export function PracticeControls() {
 
       <div className="practice-row">
         <span className="practice-label">Speed</span>
-        <ToggleGroup
-          type="single"
+        <SegmentedControl
           aria-label="Playback speed"
           value={String(speed)}
           onValueChange={(value) => {
@@ -355,16 +357,16 @@ export function PracticeControls() {
           }}
         >
           {SPEEDS.map((percent) => (
-            <ToggleGroupItem
+            <Segment
               key={percent}
               value={String(percent)}
               disabled={pending}
               aria-label={`${percent / 100} times speed`}
             >
               {percent / 100}×
-            </ToggleGroupItem>
+            </Segment>
           ))}
-        </ToggleGroup>
+        </SegmentedControl>
       </div>
 
       <div className="practice-click" role="group" aria-label="Click">
@@ -384,8 +386,7 @@ export function PracticeControls() {
           />
         </label>
         {hasBeats && (
-          <ToggleGroup
-            type="single"
+          <SegmentedControl
             aria-label="Click timing"
             value={usesBeats ? 'beats' : 'steady'}
             onValueChange={(value) => {
@@ -394,9 +395,9 @@ export function PracticeControls() {
               updateClick({ follow: value === 'beats' });
             }}
           >
-            <ToggleGroupItem value="beats">Follow the song</ToggleGroupItem>
-            <ToggleGroupItem value="steady">Steady tempo</ToggleGroupItem>
-          </ToggleGroup>
+            <Segment value="beats">Follow the song</Segment>
+            <Segment value="steady">Steady tempo</Segment>
+          </SegmentedControl>
         )}
         {!usesBeats && (
           <div className="practice-row">

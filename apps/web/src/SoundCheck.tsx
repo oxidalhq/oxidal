@@ -17,6 +17,7 @@ import {
 
 import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
+import { StateNotice } from '@oxidal/design-system/components/states';
 import {
   Tabs,
   TabsContent,
@@ -37,7 +38,6 @@ import {
   type UnitLevels,
   unitLevels,
 } from './api';
-import { StateNotice } from './components/ui/state-notice';
 import { EvenOut } from './EvenOut';
 import {
   guitarVerificationDetail,

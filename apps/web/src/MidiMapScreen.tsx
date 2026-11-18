@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { StateNotice } from '@oxidal/design-system/components/states';
 
 import {
   applyMidiTemplate,
@@ -39,10 +40,9 @@ import {
   type BackingKey,
   BackingPlayerControls,
 } from './BackingPlayerControls';
-import { RecoveryAction } from './components/ui/failure';
-import { StateNotice } from './components/ui/state-notice';
 import { ControllerSetup } from './ControllerSetup';
 import { ExtraControllers } from './ExtraControllers';
+import { RecoveryAction } from './FailureNotice';
 import { friendlyError } from './lib/friendlyError';
 import { useFailure } from './lib/useFailure';
 import { firstAfter, useLearnGate } from './midiLearn';

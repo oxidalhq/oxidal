@@ -1,4 +1,8 @@
-import { glyphFor, type GlyphKey, glyphs } from './blockGlyphs';
+import {
+  glyphFor,
+  type GlyphKey,
+} from '@oxidal/design-system/lib/block-glyphs';
+import { BlockGlyph } from '@oxidal/design-system/widgets/block-glyph';
 
 const gearLabels: Record<string, string> = {
   amp: 'Amp head',
@@ -33,13 +37,9 @@ export function GearIcon({
   className?: string;
 }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
+    <BlockGlyph
+      glyph={glyph ?? glyphFor(gear, name)}
       className={`block-glyph ${className ?? ''}`}
-      dangerouslySetInnerHTML={{
-        __html: glyphs[glyph ?? glyphFor(gear, name)].svg,
-      }}
     />
   );
 }

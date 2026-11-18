@@ -1,14 +1,14 @@
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 
-import { DragFader } from './DragFader';
+import { InlineFader } from '@oxidal/design-system/components/slider';
 
 afterEach(cleanup);
 
 function setup(disabled = false) {
   const calls = { begin: vi.fn(), move: vi.fn(), end: vi.fn() };
   const view = render(
-    <DragFader
+    <InlineFader
       value={0.5}
       dragging={false}
       disabled={disabled}
@@ -17,7 +17,7 @@ function setup(disabled = false) {
       onEnd={calls.end}
     />,
   );
-  const fader = view.container.querySelector('.value-row-fader')!;
+  const fader = view.container.querySelector('[data-slot=inline-fader]')!;
   vi.spyOn(fader, 'getBoundingClientRect').mockReturnValue({
     left: 100,
     width: 200,
@@ -29,22 +29,22 @@ it('maps the drag position to a 0–1 value, clamped and snapped to hundredths',
   const { fader, begin, move, end } = setup();
   fireEvent.pointerDown(fader, { button: 0, clientX: 150, pointerId: 1 });
   expect(begin).toHaveBeenCalledWith(0.25);
-  fireEvent.pointerMove(window, { clientX: 150.2 });
+  fireEvent.pointerMove(window, { pointerId: 1, clientX: 150.2 });
   expect(move).not.toHaveBeenCalled();
-  fireEvent.pointerMove(window, { clientX: 333 });
+  fireEvent.pointerMove(window, { pointerId: 1, clientX: 333 });
   expect(move).toHaveBeenLastCalledWith(1);
-  fireEvent.pointerMove(window, { clientX: 40 });
+  fireEvent.pointerMove(window, { pointerId: 1, clientX: 40 });
   expect(move).toHaveBeenLastCalledWith(0);
-  fireEvent.pointerUp(window);
+  fireEvent.pointerUp(window, { pointerId: 1 });
   expect(end).toHaveBeenCalledWith(false);
-  fireEvent.pointerMove(window, { clientX: 200 });
+  fireEvent.pointerMove(window, { pointerId: 1, clientX: 200 });
   expect(move).toHaveBeenCalledTimes(2);
 });
 
 it('cancels on pointercancel and ignores input while disabled', () => {
   const live = setup();
   fireEvent.pointerDown(live.fader, { button: 0, clientX: 200, pointerId: 1 });
-  fireEvent.pointerCancel(window);
+  fireEvent.pointerCancel(window, { pointerId: 1 });
   expect(live.end).toHaveBeenCalledWith(true);
   cleanup();
   const off = setup(true);

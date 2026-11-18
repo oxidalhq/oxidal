@@ -1,8 +1,11 @@
-import { WarningCircle } from '@phosphor-icons/react';
 import { useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import { Button } from '@oxidal/design-system/components/button';
+import {
+  Segment,
+  SegmentedControl,
+} from '@oxidal/design-system/components/segmented';
 import {
   Select,
   SelectContent,
@@ -10,19 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
-import { Loading } from '@oxidal/design-system/components/states';
+import {
+  Loading,
+  StateNotice,
+  StepProgress,
+} from '@oxidal/design-system/components/states';
 
 import './oxidal.css';
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from '../../../components/ui/alert';
-import { StepProgress } from '../../../components/ui/steps';
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from '../../../components/ui/toggle-group';
 import { factoryEngineLabels, factoryGenres } from '../../../factoryMetadata';
 import {
   setReturnTarget,
@@ -190,8 +187,7 @@ export function OxidalSounds({
       <div className="oxidal-summary">
         <p role="status">{summaryLine(shown.length, [...states.values()])}</p>
         <div className="oxidal-summary-actions">
-          <ToggleGroup
-            type="single"
+          <SegmentedControl
             value={filters.groupBy}
             aria-label="Group by"
             onValueChange={(value) => {
@@ -199,9 +195,9 @@ export function OxidalSounds({
                 set({ groupBy: value });
             }}
           >
-            <ToggleGroupItem value="genre">Genre</ToggleGroupItem>
-            <ToggleGroupItem value="engine">Engine</ToggleGroupItem>
-          </ToggleGroup>
+            <Segment value="genre">Genre</Segment>
+            <Segment value="engine">Engine</Segment>
+          </SegmentedControl>
           {(active > 0 || filters.query) && (
             <Button
               variant="ghost"
@@ -224,15 +220,11 @@ export function OxidalSounds({
       {unit.notice && <p role="status">{unit.notice}</p>}
       {unit.error && <p role="alert">{unit.error}</p>}
       {unit.loadError && (
-        <Alert variant="destructive" role="alert">
-          <WarningCircle aria-hidden="true" />
-          <AlertTitle>Oxidal sounds unavailable</AlertTitle>
-          <AlertDescription className="break-words text-current">
-            Oxidal could not read the installed effects and library. You can
-            still browse these sounds, but they cannot be played from here.{' '}
-            {unit.loadError}
-          </AlertDescription>
-        </Alert>
+        <StateNotice kind="error" title="Oxidal sounds unavailable">
+          Oxidal could not read the installed effects and library. You can still
+          browse these sounds, but they cannot be played from here.{' '}
+          {unit.loadError}
+        </StateNotice>
       )}
       {!unit.facts.ready && !unit.loadError && (
         <Loading label="Checking this unit…" />

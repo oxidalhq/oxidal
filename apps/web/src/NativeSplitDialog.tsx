@@ -1,4 +1,3 @@
-import { WarningCircle } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
@@ -10,11 +9,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
-import { Loading } from '@oxidal/design-system/components/states';
+import { Loading, StateNotice } from '@oxidal/design-system/components/states';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { type AssetArtwork, presetArtwork } from './api';
-import { Alert, AlertDescription, AlertTitle } from './components/ui/alert';
 import { friendlyError } from './lib/friendlyError';
 import { type NativeDraft, splitNative } from './rigDraft';
 
@@ -128,13 +126,9 @@ export function NativeSplitDialog({
         </label>
         <p className="caption">48 kHz · one amp + mono IR · checked on Play.</p>
         {error && (
-          <Alert variant="destructive" role="alert">
-            <WarningCircle aria-hidden="true" />
-            <AlertTitle>Cannot separate this tone</AlertTitle>
-            <AlertDescription className="break-words text-current">
-              {error}
-            </AlertDescription>
-          </Alert>
+          <StateNotice kind="error" title="Cannot separate this tone">
+            {error}
+          </StateNotice>
         )}
         <div className="action-row sticky bottom-0 bg-card py-2">
           <Button

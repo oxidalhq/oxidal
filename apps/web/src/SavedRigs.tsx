@@ -11,7 +11,7 @@ import {
   rigLibrary,
   type RigPage,
 } from './api';
-import { FailureNotice } from './components/ui/failure';
+import { FailureNotice } from './FailureNotice';
 import { PresetRow } from './features/library/PresetRow';
 import { duplicatePreset, setListMember } from './features/library/setList';
 import { useFailure } from './lib/useFailure';

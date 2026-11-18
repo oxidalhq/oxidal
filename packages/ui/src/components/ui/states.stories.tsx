@@ -1,5 +1,7 @@
 import { MusicNotes, Plug, Stack } from '@phosphor-icons/react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
+import { expect, userEvent, within } from 'storybook/test';
 
 import { Button } from './button';
 import {
@@ -8,14 +10,14 @@ import {
   Progress,
   Skeleton,
   SkeletonRows,
+  StateNotice,
   StepProgress,
 } from './states';
 import { Caption } from './text';
 
 /**
- * Loading, empty and working. Errors are not here: an app-wide error goes
- * to the notice tray, a section's error is a Card with the message and one
- * recovery button.
+ * Loading, empty and working. An app-wide error goes to the notice tray;
+ * StateNotice composes a section's error from a Card and one recovery action.
  */
 const meta: Meta = {
   title: 'Components/Loading, empty, progress',
@@ -75,6 +77,37 @@ export const Empty: StoryObj = {
       </EmptyState>
     </div>
   ),
+};
+
+function RecoveryDemo() {
+  const [retrying, setRetrying] = useState(false);
+  return retrying ? (
+    <Loading label="Reading guitar profiles…" delay={0} />
+  ) : (
+    <StateNotice
+      kind="error"
+      title="Guitar profiles unavailable"
+      action={<Button onClick={() => setRetrying(true)}>Try again</Button>}
+    >
+      The device did not reply. Your saved profiles are unchanged.
+    </StateNotice>
+  );
+}
+
+export const SectionRecovery: StoryObj = {
+  name: 'Section error and recovery',
+  render: () => <RecoveryDemo />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('alert')).toHaveTextContent(
+      'Guitar profiles unavailable',
+    );
+    await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
+    await expect(canvas.getByRole('status')).toHaveTextContent(
+      'Reading guitar profiles…',
+    );
+    await expect(canvas.queryByRole('alert')).toBeNull();
+  },
 };
 
 export const Bars: StoryObj = {

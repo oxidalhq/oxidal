@@ -17,7 +17,7 @@ import {
   rigLibrary,
   rigNativeSources,
 } from '../../api';
-import { FailureNotice } from '../../components/ui/failure';
+import { FailureNotice } from '../../FailureNotice';
 import type {
   RigEntry,
   RigNativeSource,

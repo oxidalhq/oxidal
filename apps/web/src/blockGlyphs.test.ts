@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 
-import { glyphFor, glyphs } from './blockGlyphs';
+import { glyphFor, glyphs } from '@oxidal/design-system/lib/block-glyphs';
+
 import { blockKind } from './rigChain';
 
 it('keeps captured gear as its object, whatever the capture is called', () => {

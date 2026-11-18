@@ -15,12 +15,17 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import {
+  Segment,
+  SegmentedControl,
+} from '@oxidal/design-system/components/segmented';
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { StateNotice } from '@oxidal/design-system/components/states';
 import {
   Tabs,
   TabsContent,
@@ -43,8 +48,6 @@ import { ArtworkDeck } from './AssetArtwork';
 import { BackingTracks } from './components/media/BackingTracks';
 import { DiReamps } from './components/media/DiReamps';
 import { StemSongs } from './components/media/StemSongs';
-import { StateNotice } from './components/ui/state-notice';
-import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 import { CreatedPreset } from './features/library/CreatedPreset';
 import { MineDialogs, type MineTarget } from './features/library/MineDialogs';
 import { NewPresetDialog } from './features/library/NewPresetDialog';
@@ -474,8 +477,7 @@ export function Library({
     </Select>
   );
   const viewToggle = (
-    <ToggleGroup
-      type="single"
+    <SegmentedControl
       value={showArtwork ? 'artwork' : 'list'}
       aria-label="Library view"
       onValueChange={(value) => {
@@ -491,9 +493,9 @@ export function Library({
         }
       }}
     >
-      <ToggleGroupItem value="list">List</ToggleGroupItem>
-      <ToggleGroupItem value="artwork">Artwork</ToggleGroupItem>
-    </ToggleGroup>
+      <Segment value="list">List</Segment>
+      <Segment value="artwork">Artwork</Segment>
+    </SegmentedControl>
   );
   function search(
     value: string,
@@ -562,8 +564,7 @@ export function Library({
         }}
       >
         <div className="library-groups">
-          <ToggleGroup
-            type="single"
+          <SegmentedControl
             value={group}
             aria-label="Library group"
             className="library-group-switch"
@@ -572,9 +573,9 @@ export function Library({
               if (value === 'media' && group !== 'media') setSection('backing');
             }}
           >
-            <ToggleGroupItem value="sounds">Sounds</ToggleGroupItem>
-            <ToggleGroupItem value="media">Media</ToggleGroupItem>
-          </ToggleGroup>
+            <Segment value="sounds">Sounds</Segment>
+            <Segment value="media">Media</Segment>
+          </SegmentedControl>
           {sectionTabs('sounds', 'Sounds', soundSections)}
           {sectionTabs('media', 'Media', mediaSections)}
         </div>
@@ -820,8 +821,7 @@ export function Library({
           </details>
         </TabsContent>
         <TabsContent value="tones">
-          <ToggleGroup
-            type="single"
+          <SegmentedControl
             value={soundFormat}
             aria-label="Sound type"
             className="my-3"
@@ -829,9 +829,9 @@ export function Library({
               if (value === 'nam' || value === 'ir') setSoundFormat(value);
             }}
           >
-            <ToggleGroupItem value="nam">NAM captures</ToggleGroupItem>
-            <ToggleGroupItem value="ir">Cabinet IRs</ToggleGroupItem>
-          </ToggleGroup>
+            <Segment value="nam">NAM captures</Segment>
+            <Segment value="ir">Cabinet IRs</Segment>
+          </SegmentedControl>
           <ModelLibrary
             key={soundFormat}
             format={soundFormat}

@@ -16,7 +16,7 @@ import {
   resumeUnavailable,
 } from './audioResume';
 import { BufferFinder } from './BufferFinder';
-import { RecoveryAction } from './components/ui/failure';
+import { RecoveryAction } from './FailureNotice';
 import { friendlyError } from './lib/friendlyError';
 import { useFailure } from './lib/useFailure';
 import { RecoveryNotice } from './RecoveryNotice';
