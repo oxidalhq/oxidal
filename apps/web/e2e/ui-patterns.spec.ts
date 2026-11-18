@@ -1,5 +1,6 @@
-import { openSounds } from './display';
 import { expect, test } from '@playwright/test';
+
+import { openSounds } from './display';
 
 test('IR discovery keeps its empty state full width and returns keyboard focus', async ({
   page,

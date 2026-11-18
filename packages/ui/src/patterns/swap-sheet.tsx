@@ -1,6 +1,6 @@
-import * as React from 'react';
 import { ArrowCounterClockwise, Check } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
+import * as React from 'react';
+
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { List, ListRow } from '../components/ui/list-row';
@@ -12,15 +12,16 @@ import {
   TabsTrigger,
 } from '../components/ui/tabs';
 import { Caption, Eyebrow } from '../components/ui/text';
+import { glyphFor } from '../lib/block-glyphs';
+import { cn } from '../lib/cn';
 import type { BlockModel } from '../widgets/block-editor';
+import { BlockGlyph } from '../widgets/block-glyph';
 import {
   ModelBrowser,
   type ModelChoice,
   type ToneCatalogue,
 } from './model-browser';
 import { DockableSheet } from './tool-dock';
-import { BlockGlyph } from '../widgets/block-glyph';
-import { glyphFor } from '../lib/block-glyphs';
 
 export type { ModelChoice } from './model-browser';
 

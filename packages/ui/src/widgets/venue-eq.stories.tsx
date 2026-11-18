@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
+
 import { VenueEq } from './venue-eq';
 import { VENUE_PROFILES } from './venue-eq.data';
 

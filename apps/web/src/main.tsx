@@ -1,7 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './App';
+
 import './styles.css';
+import App from './App';
 
 // A deploy replaces the hashed chunks an open tab still points at. Reload once
 // to pick up the new build instead of leaving a blank page.

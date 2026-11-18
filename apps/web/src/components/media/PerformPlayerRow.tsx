@@ -1,9 +1,10 @@
 import { MusicNote } from '@phosphor-icons/react';
-import { Button } from '../ui/button';
+
 import { formatTime } from '../../lib/playerClock';
+import { Button } from '../ui/button';
+import { usePlayerPosition, useSessionMedia } from './sessionMedia';
 import { StateChip } from './StateChip';
 import { CompactTransport } from './TransportBar';
-import { usePlayerPosition, useSessionMedia } from './sessionMedia';
 
 /**
  * Perform's one backing-track row: the track, its time or state, Play/Pause,

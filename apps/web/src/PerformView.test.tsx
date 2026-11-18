@@ -1,20 +1,21 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { PerformView } from './PerformView';
-import { setPerform } from './performState';
+
 import {
-  midiPosition,
-  muteMidi,
-  navigateMidi,
-  monitoring,
-  nativeState,
+  type AudioState,
   libraryCatalog,
+  midiPosition,
+  type Monitoring,
+  monitoring,
+  muteMidi,
+  nativeState,
+  navigateMidi,
   presetDetails,
   presetLibrary,
   rigLibrary,
-  type AudioState,
-  type Monitoring,
 } from './api';
+import { setPerform } from './performState';
+import { PerformView } from './PerformView';
 vi.mock('./api', () => ({
   midiPosition: vi.fn(),
   muteMidi: vi.fn(),

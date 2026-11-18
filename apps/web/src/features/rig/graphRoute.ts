@@ -1,4 +1,4 @@
-import { isRigBlockNode, type IdStep } from '../../rigChain';
+import { type IdStep, isRigBlockNode } from '../../rigChain';
 
 type Graph = {
   nodes: { id: string; kind: string }[];

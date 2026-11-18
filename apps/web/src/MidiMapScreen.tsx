@@ -1,15 +1,3 @@
-import { RecoveryAction } from './components/ui/failure';
-import { useFailure } from './lib/useFailure';
-import { friendlyError } from './lib/friendlyError';
-import { firstAfter, useLearnGate } from './midiLearn';
-import { PresetNavigation, type NavigationKey } from './PresetNavigation';
-import {
-  BackingPlayerControls,
-  type BackingKey,
-} from './BackingPlayerControls';
-import { ControllerSetup } from './ControllerSetup';
-import { ExtraControllers } from './ExtraControllers';
-import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Broadcast,
   CopySimple,
@@ -21,8 +9,29 @@ import {
   UploadSimple,
   WarningCircle,
 } from '@phosphor-icons/react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+
+import {
+  applyMidiTemplate,
+  type AudioState,
+  type LibraryCatalog,
+  libraryCatalog,
+  type MidiAction,
+  midiAction,
+  type MidiDevices,
+  midiDevices,
+  type MidiMap,
+  midiMap,
+  type RigAudioState,
+  testMidi,
+  updateMidiMap,
+} from './api';
+import {
+  type BackingKey,
+  BackingPlayerControls,
+} from './BackingPlayerControls';
 import { Button } from './components/ui/button';
-import { StateNotice } from './components/ui/state-notice';
+import { RecoveryAction } from './components/ui/failure';
 import {
   Select,
   SelectContent,
@@ -30,21 +39,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from './components/ui/select';
-import {
-  libraryCatalog,
-  applyMidiTemplate,
-  midiAction,
-  midiDevices,
-  midiMap,
-  testMidi,
-  updateMidiMap,
-  type AudioState,
-  type LibraryCatalog,
-  type MidiAction,
-  type MidiDevices,
-  type MidiMap,
-  type RigAudioState,
-} from './api';
+import { StateNotice } from './components/ui/state-notice';
+import { ControllerSetup } from './ControllerSetup';
+import { ExtraControllers } from './ExtraControllers';
+import { friendlyError } from './lib/friendlyError';
+import { useFailure } from './lib/useFailure';
+import { firstAfter, useLearnGate } from './midiLearn';
+import { type NavigationKey, PresetNavigation } from './PresetNavigation';
 
 type MapEntry = MidiMap['entries'][number];
 type Message = NonNullable<

@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, within } from 'storybook/test';
-import { SourceCard, SourceLine, type BlockSource } from './block-source';
+
+import { type BlockSource, SourceCard, SourceLine } from './block-source';
 import { SOURCES } from './block-source.data';
 
 /**

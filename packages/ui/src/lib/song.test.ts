@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+
 import { formatOf, hasChords, isChordLine, parseSong } from './song';
 
 it('reads ChordPro directives, sections, comments and inline chords', () => {

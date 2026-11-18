@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { parseSnapshot } from './api';
 
 describe('runtime contract validation', () => {

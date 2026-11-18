@@ -8,8 +8,9 @@ import {
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { RigComposer } from './RigComposer';
+
 import { rigAudioCommand, type RigAudioState } from './api';
+import { RigComposer } from './RigComposer';
 import type { DraftEffect } from './rigDraft';
 const input = {
   endpoint: 'test',

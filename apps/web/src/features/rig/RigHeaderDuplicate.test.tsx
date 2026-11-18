@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { RigHeaderDuplicate } from './RigHeaderDuplicate';
+
 import { duplicatePreset } from '../library/setList';
+import { RigHeaderDuplicate } from './RigHeaderDuplicate';
 
 vi.mock('../library/setList', () => ({ duplicatePreset: vi.fn() }));
 vi.mock('../library/OfflineEditor', () => ({

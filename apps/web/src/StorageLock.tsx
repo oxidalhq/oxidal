@@ -1,16 +1,17 @@
-import { Loading } from './components/ui/loading';
-import { RecoveryAction } from './components/ui/failure';
-import { useFailure } from './lib/useFailure';
-import { friendlyError } from './lib/friendlyError';
-import { useState } from 'react';
 import {
   ArrowClockwise,
   LockSimple,
   LockSimpleOpen,
 } from '@phosphor-icons/react';
+import { useState } from 'react';
+
+import { AdjustmentDialog } from './AdjustmentDialog';
 import { changeStorage, deviceNetwork, type StorageState } from './api';
 import { Button } from './components/ui/button';
-import { AdjustmentDialog } from './AdjustmentDialog';
+import { RecoveryAction } from './components/ui/failure';
+import { Loading } from './components/ui/loading';
+import { friendlyError } from './lib/friendlyError';
+import { useFailure } from './lib/useFailure';
 
 export function StorageLock({
   connected,

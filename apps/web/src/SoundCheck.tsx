@@ -1,12 +1,4 @@
 import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react';
-import { StateNotice } from './components/ui/state-notice';
-import {
   CheckCircle,
   Gauge,
   Guitar,
@@ -16,30 +8,39 @@ import {
   WarningCircle,
 } from '@phosphor-icons/react';
 import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+
+import './SoundCheck.css';
+import {
   boosts,
-  calibration,
-  calibrationCoverage,
-  guitarProfiles,
-  unitLevels,
   type BoostState,
-  type CalibrationState,
+  calibration,
   type CalibrationCoverage,
+  calibrationCoverage,
+  type CalibrationState,
   type GuitarProfiles,
+  guitarProfiles,
   type UnitLevels,
+  unitLevels,
 } from './api';
 import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
+import { StateNotice } from './components/ui/state-notice';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { EvenOut } from './EvenOut';
-import { Monitoring } from './Monitoring';
-import { useMonitorFeed } from './monitorFeed';
-import { processingHeadroom } from './processingHeadroom';
-import { ToolRow, ToolSection } from './ToolRow';
 import {
   guitarVerificationDetail,
   guitarVerificationState,
 } from './guitarVerification';
-import './SoundCheck.css';
+import { useMonitorFeed } from './monitorFeed';
+import { Monitoring } from './Monitoring';
+import { processingHeadroom } from './processingHeadroom';
+import { ToolRow, ToolSection } from './ToolRow';
 
 type HealthData = {
   calibration: CalibrationState | null;

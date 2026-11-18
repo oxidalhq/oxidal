@@ -1,10 +1,11 @@
-import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
 import { expect, userEvent, within } from 'storybook/test';
+
 import { Card } from '../components/ui/card';
 import {
-  PluginPanel,
   type PluginControl,
+  PluginPanel,
   type PluginView,
 } from './plugin-panel';
 import {

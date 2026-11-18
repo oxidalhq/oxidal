@@ -6,6 +6,7 @@ import {
   screen,
 } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+
 import { ChainView } from './ChainView';
 import type { RigBlockVM } from './rigChain';
 

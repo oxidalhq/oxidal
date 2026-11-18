@@ -1,31 +1,32 @@
-import { useEffect, useRef, useState } from 'react';
 import { Faders, Pause, Play, UploadSimple } from '@phosphor-icons/react';
-import { Button } from '../ui/button';
+import { useEffect, useRef, useState } from 'react';
+
 import {
+  type MediaAsset,
   originalPath,
   setPlayerOrder,
   songList,
   wavPath,
-  type MediaAsset,
 } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
 import { formatTime } from '../../lib/playerClock';
+import { Button } from '../ui/button';
 import { MediaRow, type MenuItem } from './MediaRow';
+import {
+  canSplitBackingTrack,
+  channelsLabel,
+  durationOf,
+  formatLabel,
+  isStemSong,
+  mixSourceOf,
+  PROTECT_REASON,
+  useProtect,
+  useSessionMedia,
+} from './sessionMedia';
 import { StateChip } from './StateChip';
 import { splitLabel } from './stemMix';
 import { DeleteDialog, RenameDialog } from './TrackDialogs';
 import { UploadQueue } from './UploadQueue';
-import {
-  PROTECT_REASON,
-  canSplitBackingTrack,
-  isStemSong,
-  mixSourceOf,
-  channelsLabel,
-  durationOf,
-  formatLabel,
-  useProtect,
-  useSessionMedia,
-} from './sessionMedia';
 
 function gigabytes(bytes: number) {
   return `${(bytes / 1_000_000_000).toFixed(1)} GB`;

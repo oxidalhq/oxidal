@@ -1,8 +1,9 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { Tone3000Account } from './Tone3000Account';
+
 import { tone3000Account } from './api';
 import { readReturnTarget, setReturnTarget } from './lib/sessionState';
+import { Tone3000Account } from './Tone3000Account';
 
 vi.mock('./api', () => ({ tone3000Account: vi.fn() }));
 afterEach(() => {

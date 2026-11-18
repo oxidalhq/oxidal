@@ -6,12 +6,13 @@ import {
   useRef,
   useState,
 } from 'react';
+
 import {
-  protectState,
   type MediaAsset,
   type MediaLibrary,
   type PlayerRequest,
   type PlayerSnapshot,
+  protectState,
 } from '../../api';
 import type { UploadItem, UploadQueue } from '../../lib/mediaUpload';
 import { formatTime, lengthOf, positionAt } from '../../lib/playerClock';

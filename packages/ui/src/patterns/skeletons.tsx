@@ -1,7 +1,8 @@
 import * as React from 'react';
-import { cn } from '../lib/cn';
+
 import { Skeleton, SkeletonRows } from '../components/ui/states';
 import { Caption } from '../components/ui/text';
+import { cn } from '../lib/cn';
 
 /**
  * Screen skeletons: the shape of each screen while it loads, so a player

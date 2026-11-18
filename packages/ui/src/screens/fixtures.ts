@@ -1,7 +1,7 @@
 import type { LibraryItem } from '../patterns/library-list';
+import { SOURCES } from '../widgets/block-source.data';
 import type { BlockKind } from '../widgets/chain';
 import type { ResourceReadings } from '../widgets/resource-strip';
-import { SOURCES } from '../widgets/block-source.data';
 
 /** Realistic data for the screen stories; names from the product's showcase recipes. */
 export const READINGS: ResourceReadings = {

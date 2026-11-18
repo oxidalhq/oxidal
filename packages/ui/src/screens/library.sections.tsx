@@ -1,13 +1,14 @@
 import {
   Faders,
-  Notebook,
   ListNumbers,
   Microphone,
   MusicNotes,
+  Notebook,
   Stack,
   User,
   Waveform,
 } from '@phosphor-icons/react';
+
 import type { Section } from '../patterns/workspace';
 
 export const LIBRARY_SECTIONS: Section[] = [

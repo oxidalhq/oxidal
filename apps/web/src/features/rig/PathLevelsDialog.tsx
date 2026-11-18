@@ -1,11 +1,12 @@
+import { useState } from 'react';
+
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { Button } from '../../components/ui/button';
+import type { IdStep } from '../../rigChain';
 import { routePath, routeSplitAddPath } from '../../rigRoute';
-import type { RigViewProps } from './useMixedRigSession';
 import { rigBusy } from './mixedRigViewModel';
 import { PathLevel } from './PathLevel';
-import { useState } from 'react';
-import type { IdStep } from '../../rigChain';
+import type { RigViewProps } from './useMixedRigSession';
 
 /** Blocks on a path, nested splits included. */
 const blocksOn = (steps: IdStep[]): number =>

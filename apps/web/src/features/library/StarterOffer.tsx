@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+
+import './StarterOffer.css';
 import { libraryCatalog } from '../../api';
 import { Button } from '../../components/ui/button';
 import { friendlyError } from '../../lib/friendlyError';
@@ -9,7 +11,6 @@ import {
   starterMessage,
   starterRecipes,
 } from './setList';
-import './StarterOffer.css';
 
 /**
  * The starter set list, offered once on a fresh unit: an empty set list that

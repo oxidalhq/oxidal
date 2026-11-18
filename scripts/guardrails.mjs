@@ -1,6 +1,7 @@
-import { writeFileSync, unlinkSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { existsSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+
 import { root, rustEnv } from './process.mjs';
 
 /** Prove each configured gate rejects a representative broken fixture, then remove it.

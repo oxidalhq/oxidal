@@ -1,4 +1,3 @@
-import * as React from 'react';
 import {
   ArrowClockwise,
   CheckCircle,
@@ -7,11 +6,11 @@ import {
   Play,
   Warning,
 } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
-import { glyphForBlock } from '../lib/block-glyphs';
-import { useMedia } from '../lib/use-media';
+import * as React from 'react';
+
 import { Badge, Led } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
+import { FilterSelect } from '../components/ui/filter-select';
 import { List, ListRow } from '../components/ui/list-row';
 import {
   Sheet,
@@ -19,12 +18,14 @@ import {
   SheetContent,
   SheetHeader,
 } from '../components/ui/sheet';
-import { FilterSelect } from '../components/ui/filter-select';
 import { Switch } from '../components/ui/switch';
 import { Caption, Eyebrow, Title } from '../components/ui/text';
-import type { BlockKind } from '../widgets/chain';
+import { glyphForBlock } from '../lib/block-glyphs';
+import { cn } from '../lib/cn';
+import { useMedia } from '../lib/use-media';
 import { BlockGlyph } from '../widgets/block-glyph';
-import { SourceLine, type BlockSource } from '../widgets/block-source';
+import { type BlockSource, SourceLine } from '../widgets/block-source';
+import type { BlockKind } from '../widgets/chain';
 
 export type SoundEngine =
   'lv2' | 'tone3000-a2-lite' | 'tone3000-a2-full' | 'hybrid';

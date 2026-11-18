@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+
 import { shortValue } from './preview';
 
 it('writes values as short as they can be read', () => {

@@ -5,15 +5,16 @@
  * @see docs/factory-collection.md
  */
 import { expect, it } from 'vitest';
-import catalog from '../fixtures/factory-lv2.json';
+
+import type { Lv2Plugin } from '../api';
 import { allFactoryRecipes } from '../factoryCatalog';
+import { validateFactoryMetadata } from '../factoryMetadata';
 import {
   buildFactoryRecipe,
   factoryMissingPlugins,
   factoryRoles,
 } from '../factoryRecipes';
-import { validateFactoryMetadata } from '../factoryMetadata';
-import type { Lv2Plugin } from '../api';
+import catalog from '../fixtures/factory-lv2.json';
 import { lv2ShowcaseRecipes } from './lv2Showcase';
 
 const plugins = catalog as Lv2Plugin[];

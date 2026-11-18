@@ -1,13 +1,13 @@
+import './oxidal.css';
 import { Button } from '../../../components/ui/button';
+import { type CardHandlers, cardLine, primaryFor } from './cardActions';
 import {
+  type CardState,
   complexityLabel,
   engineLabel,
-  type CardState,
   type SoundItem,
 } from './oxidalSounds.model';
-import { cardLine, primaryFor, type CardHandlers } from './cardActions';
 import type { OxidalSounds } from './useOxidalSounds';
-import './oxidal.css';
 
 const chip = (state: CardState): string => {
   switch (state.kind) {

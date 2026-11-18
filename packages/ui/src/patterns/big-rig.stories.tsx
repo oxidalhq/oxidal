@@ -1,30 +1,31 @@
-import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
 import { expect, userEvent, within } from 'storybook/test';
-import { isSplit, updateBlock, type Step } from '../lib/route';
+
 import { Segment, SegmentedControl } from '../components/ui/segmented';
 import { Caption, Eyebrow, Title } from '../components/ui/text';
-import type { BlockModel } from '../widgets/block-editor';
+import { isSplit, type Step, updateBlock } from '../lib/route';
 import { sceneColour } from '../lib/scene-colours';
+import type { BlockModel } from '../widgets/block-editor';
 import { RouteView } from '../widgets/route-view';
 import { ScenePads } from '../widgets/scene-pad';
 import {
-  BRANCH_COUNTS,
-  ESTIMATE,
-  LIMIT,
-  SHARED_ESTIMATE,
-  SILENT,
-  branchFor,
-  branchesOf,
-  rigOf,
-  scenesFor,
   type BigScene,
   type Branch,
+  BRANCH_COUNTS,
   type BranchCount,
+  branchesOf,
+  branchFor,
   type CaptureSize,
+  ESTIMATE,
+  LIMIT,
+  rigOf,
+  scenesFor,
+  SHARED_ESTIMATE,
+  SILENT,
 } from './big-rig.fixtures';
+import { type BranchPolicy, ProcessingCard } from './processing-card';
 import { MODELS } from './swap.fixtures';
-import { ProcessingCard, type BranchPolicy } from './processing-card';
 
 const SIZES: CaptureSize[] = ['Standard', 'Lite', 'Feather', 'Nano'];
 const CANDIDATES = MODELS.filter((m) => m.kind === 'amp').map((m) => ({

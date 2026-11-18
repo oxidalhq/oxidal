@@ -5,10 +5,11 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
-import { afterEach, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
-import { DevicePower } from './DevicePower';
+import { afterEach, expect, it, vi } from 'vitest';
+
 import { deviceNetwork, type NetworkState } from './api';
+import { DevicePower } from './DevicePower';
 vi.mock('./api', () => ({ deviceNetwork: vi.fn() }));
 vi.mock('./AdjustmentDialog', () => ({
   AdjustmentDialog: ({ children }: { children: ReactNode }) => (

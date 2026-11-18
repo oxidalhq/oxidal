@@ -1,7 +1,7 @@
-import { readFileSync } from 'node:fs';
-import assert from 'node:assert/strict';
-import { test } from 'node:test';
 import Ajv2020 from 'ajv/dist/2020.js';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { test } from 'node:test';
 
 const read = (name) =>
   JSON.parse(

@@ -6,15 +6,16 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { BootPlayback } from './BootPlayback';
+
 import {
-  startupState,
-  setStartupFollow,
   libraryCatalog,
   rigAudioCommand,
   type RigAudioState,
+  setStartupFollow,
   type StartupState,
+  startupState,
 } from './api';
+import { BootPlayback } from './BootPlayback';
 vi.mock('./api', () => ({
   startupState: vi.fn(),
   setStartupFollow: vi.fn(),

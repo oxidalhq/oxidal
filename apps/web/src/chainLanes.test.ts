@@ -1,12 +1,13 @@
 import { expect, it } from 'vitest';
+
+import type { Lv2Plugin, Preset } from './api';
 import { chainLanes, isRigBlockNode } from './rigChain';
 import {
-  parallelRig,
-  serialRig,
   lv2Effect,
   type NativeDraft,
+  parallelRig,
+  serialRig,
 } from './rigDraft';
-import type { Lv2Plugin, Preset } from './api';
 
 const plugin = (channels: 1 | 2): Lv2Plugin => ({
   name: channels === 1 ? 'Mono fx' : 'Stereo fx',

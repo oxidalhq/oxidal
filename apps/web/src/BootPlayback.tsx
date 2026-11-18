@@ -1,20 +1,21 @@
 import { useEffect, useState } from 'react';
-import { Button } from './components/ui/button';
+
 import {
+  type AudioState,
   graphAudioCommand,
-  graphAudioState,
   type GraphAudioState,
+  graphAudioState,
+  libraryCatalog,
   playbackCommand,
   playbackState,
   rigAudioCommand,
+  type RigAudioState,
   rigAudioState,
   setStartupFollow,
-  startupState,
-  libraryCatalog,
   type StartupState,
-  type AudioState,
-  type RigAudioState,
+  startupState,
 } from './api';
+import { Button } from './components/ui/button';
 import { friendlyError } from './lib/friendlyError';
 
 /** A single boot choice remains reachable regardless of the current audio owner. */

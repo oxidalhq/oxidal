@@ -1,17 +1,18 @@
-import { Loading } from './components/ui/loading';
-import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
+
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { installedLv2, type Lv2Plugin } from './api';
 import { Button } from './components/ui/button';
-import { GearIcon } from './GearIcon';
+import { Loading } from './components/ui/loading';
 import {
   EFFECT_TYPES,
   effectGlyph,
   effectSource,
-  effectType,
   type EffectType,
+  effectType,
 } from './effectCatalog';
+import { GearIcon } from './GearIcon';
+import { friendlyError } from './lib/friendlyError';
 import type { Placement } from './slotEffects';
 
 /**

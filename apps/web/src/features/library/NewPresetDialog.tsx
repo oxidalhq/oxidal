@@ -1,20 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
+
+import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
   publishRig,
+  type RigDocument,
   rigDocument,
   rigLibrary,
   rigNativeSources,
-  type RigDocument,
 } from '../../api';
-import type {
-  RigEntry,
-  RigNativeSource,
-  RigPublish,
-} from '../../generated/contract';
-import { AdjustmentDialog } from '../../AdjustmentDialog';
-import { FailureNotice } from '../../components/ui/failure';
-import { useFailure } from '../../lib/useFailure';
 import { Button } from '../../components/ui/button';
+import { FailureNotice } from '../../components/ui/failure';
 import {
   Select,
   SelectContent,
@@ -22,6 +17,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../components/ui/select';
+import type {
+  RigEntry,
+  RigNativeSource,
+  RigPublish,
+} from '../../generated/contract';
+import { useFailure } from '../../lib/useFailure';
 import {
   emptyPreset,
   presetCopy,

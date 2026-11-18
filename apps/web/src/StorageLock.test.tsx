@@ -6,8 +6,9 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { StorageLock } from './StorageLock';
+
 import { changeStorage, deviceNetwork, type StorageState } from './api';
+import { StorageLock } from './StorageLock';
 
 vi.mock('./api', () => ({
   changeStorage: vi.fn(),

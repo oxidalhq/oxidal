@@ -1,11 +1,12 @@
-import { friendlyError } from './lib/friendlyError';
-import './RigControls.css';
 import { useEffect, useRef, useState } from 'react';
-import { type AudioAction, type AudioState } from './api';
+
+import './RigControls.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
-import { TouchAdjust } from './TouchAdjust';
-import { EditQueue } from './editQueue';
+import { type AudioAction, type AudioState } from './api';
 import { Button } from './components/ui/button';
+import { EditQueue } from './editQueue';
+import { friendlyError } from './lib/friendlyError';
+import { TouchAdjust } from './TouchAdjust';
 
 type Gesture = Extract<
   Extract<AudioAction, { kind: 'authoring' }>['action'],

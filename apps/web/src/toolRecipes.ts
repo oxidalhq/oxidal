@@ -3,6 +3,7 @@ import {
   compressor,
   coreScenes,
   echo,
+  type FactoryRecipe,
   fx,
   keyed,
   leadLift,
@@ -11,7 +12,6 @@ import {
   room,
   sub,
   voice,
-  type FactoryRecipe,
 } from './factoryRecipes.ts';
 
 /**

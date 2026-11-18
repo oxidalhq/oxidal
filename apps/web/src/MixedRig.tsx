@@ -1,30 +1,30 @@
 import { AdjustmentDialog } from './AdjustmentDialog';
-import { Badge } from './components/ui/badge';
+import { rigAudioCommand, rigAudioState } from './api';
 import { BoostControl } from './BoostControl';
+import { MaybeSheet } from './components/RigSheet';
+import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
 import { FailureNotice } from './components/ui/failure';
+import { ControlAdjustDialog } from './features/rig/ControlAdjustDialog';
+import { ControlGrid } from './features/rig/ControlGrid';
+import { rigBusy } from './features/rig/mixedRigViewModel';
+import { PathLevelsDialog } from './features/rig/PathLevelsDialog';
+import { RigChainSurface } from './features/rig/RigChainSurface';
+import { RigChoosers } from './features/rig/RigChoosers';
+import { RigHeader } from './features/rig/RigHeader';
+import { SceneEditor } from './features/rig/SceneEditor';
+import { SelectedBlockPanel } from './features/rig/SelectedBlockPanel';
+import { SelectedModelControls } from './features/rig/SelectedModelControls';
+import { useMixedRigSession } from './features/rig/useMixedRigSession';
 import { GuitarPicker } from './GuitarSettings';
+import { friendlyError } from './lib/friendlyError';
 import { MasterLevel } from './MasterLevel';
-import { MaybeSheet } from './components/RigSheet';
 import { PerformView } from './PerformView';
+import { boostKey, choiceKey } from './presetChoices';
 import { RecoveryNotice } from './RecoveryNotice';
 import { RigPresetSelector } from './RigPresetSelector';
 import { SceneMidi } from './SceneMidi';
 import { ScenePads } from './ScenePads';
-import { boostKey, choiceKey } from './presetChoices';
-import { friendlyError } from './lib/friendlyError';
-import { rigAudioCommand, rigAudioState } from './api';
-import { RigHeader } from './features/rig/RigHeader';
-import { SceneEditor } from './features/rig/SceneEditor';
-import { RigChainSurface } from './features/rig/RigChainSurface';
-import { RigChoosers } from './features/rig/RigChoosers';
-import { SelectedModelControls } from './features/rig/SelectedModelControls';
-import { SelectedBlockPanel } from './features/rig/SelectedBlockPanel';
-import { ControlGrid } from './features/rig/ControlGrid';
-import { ControlAdjustDialog } from './features/rig/ControlAdjustDialog';
-import { PathLevelsDialog } from './features/rig/PathLevelsDialog';
-import { useMixedRigSession } from './features/rig/useMixedRigSession';
-import { rigBusy } from './features/rig/mixedRigViewModel';
 
 /**
  * The sounding mixed rig: header, scenes, chain, selected block and dialogs.

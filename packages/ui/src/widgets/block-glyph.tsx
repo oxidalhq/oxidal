@@ -1,5 +1,5 @@
+import { type GlyphKey, glyphs } from '../lib/block-glyphs';
 import { cn } from '../lib/cn';
-import { glyphs, type GlyphKey } from '../lib/block-glyphs';
 
 /**
  * One of Oxidal's block glyphs: objects for captured gear, signal shapes

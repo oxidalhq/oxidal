@@ -1,8 +1,10 @@
-import { Eye, EyeSlash, WifiHigh, ArrowClockwise } from '@phosphor-icons/react';
+import { ArrowClockwise, Eye, EyeSlash, WifiHigh } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
-import { deviceNetwork, type NetworkCommand, type NetworkState } from './api';
+
 import { AdjustmentDialog } from './AdjustmentDialog';
+import { deviceNetwork, type NetworkCommand, type NetworkState } from './api';
 import { Button } from './components/ui/button';
+import { DialogFooter } from './components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -11,7 +13,6 @@ import {
   SelectValue,
 } from './components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
-import { DialogFooter } from './components/ui/dialog';
 
 /** Phone-first setup with explicit link-loss warning and server-owned recovery.
  * @see docs/device-service.md

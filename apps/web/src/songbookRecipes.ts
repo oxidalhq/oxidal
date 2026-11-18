@@ -5,6 +5,7 @@ import {
   drive,
   echo,
   echoAt,
+  type FactoryRecipe,
   flyHall,
   flyRoom,
   fx,
@@ -14,12 +15,11 @@ import {
   nam,
   orbit,
   pitch,
+  type RecipeScene,
   room,
+  type SceneSettings,
   silk,
   voice,
-  type FactoryRecipe,
-  type RecipeScene,
-  type SceneSettings,
 } from './factoryRecipes.ts';
 
 /**

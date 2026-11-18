@@ -1,8 +1,25 @@
-import { Loading } from './components/ui/loading';
-import { friendlyError } from './lib/friendlyError';
+import { ArrowDown, ArrowUp, Trash } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, ArrowDown, Trash } from '@phosphor-icons/react';
+
+import './RigComposer.css';
+import { AdjustmentDialog } from './AdjustmentDialog';
+import {
+  graphAudioState,
+  installedLv2,
+  type Lv2Plugin,
+  playbackState,
+  type Preset,
+  publishRig,
+  rigAudioCommand,
+  rigAudioState,
+  rigLibrary,
+  rigNativeSources,
+} from './api';
+import { ArtworkDeck } from './AssetArtwork';
+import { ChainView } from './ChainView';
+import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
+import { Loading } from './components/ui/loading';
 import {
   Select,
   SelectContent,
@@ -10,38 +27,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from './components/ui/select';
-import { Badge } from './components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs';
-import { AdjustmentDialog } from './AdjustmentDialog';
-import { ArtworkDeck } from './AssetArtwork';
-import { ChainView } from './ChainView';
 import { GearIcon } from './GearIcon';
+import type { ResourceSource } from './generated/contract';
+import { friendlyError } from './lib/friendlyError';
 import { NativeSplitDialog } from './NativeSplitDialog';
+import { blockKind, type RigBlockVM } from './rigChain';
 import {
-  terminalEffect,
-  serialRig,
-  sceneRig,
   canMoveEffect,
-  removeEffect,
-  type NativeDraft,
   type DraftEffect,
   type MonoInput,
+  type NativeDraft,
+  removeEffect,
+  sceneRig,
+  serialRig,
+  terminalEffect,
 } from './rigDraft';
-import {
-  installedLv2,
-  rigNativeSources,
-  rigLibrary,
-  rigAudioState,
-  rigAudioCommand,
-  publishRig,
-  playbackState,
-  graphAudioState,
-  type Lv2Plugin,
-  type Preset,
-} from './api';
-import type { ResourceSource } from './generated/contract';
-import { blockKind, type RigBlockVM } from './rigChain';
-import './RigComposer.css';
 
 /**
  * Draft editing leaves the sounding session alone. Play admits a verified revision.

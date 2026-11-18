@@ -1,9 +1,10 @@
-import * as React from 'react';
 import { PlugsConnected } from '@phosphor-icons/react';
-import { parseMidiBytes, type MidiMessage } from '../lib/midi';
+import * as React from 'react';
+
 import { Button } from '../components/ui/button';
 import { Slider } from '../components/ui/slider';
 import { Caption } from '../components/ui/text';
+import { type MidiMessage, parseMidiBytes } from '../lib/midi';
 import { useMidi } from './midi-context';
 
 /**

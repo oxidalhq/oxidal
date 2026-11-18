@@ -7,9 +7,10 @@ import {
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { SceneMidi } from './SceneMidi';
-import { midiDevices } from './api';
+
 import type { RigAudioState } from './api';
+import { midiDevices } from './api';
+import { SceneMidi } from './SceneMidi';
 vi.mock('./api', () => ({
   learnMidi: vi.fn(),
   midiDevices: vi.fn(async () => ({

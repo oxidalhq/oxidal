@@ -1,8 +1,9 @@
-import * as React from 'react';
 import { Metronome } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
+import * as React from 'react';
+
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
+import { cn } from '../lib/cn';
 import { tempoFromTaps } from '../lib/tempo';
 
 /**

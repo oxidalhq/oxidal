@@ -1,23 +1,24 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
 import {
   graphAudioState,
-  nativeState,
-  presetLibrary,
-  rigLibrary,
   libraryCatalog,
-  presetDetails,
+  nativeState,
   playbackState,
+  presetDetails,
+  presetLibrary,
   rigAudioCommand,
   rigAudioState,
+  rigLibrary,
 } from './api';
 import {
+  choiceKey,
   discardsSceneEdits,
   gaplessBank,
   loadPresetChoices,
-  choiceKey,
   playScenes,
-  rigTopologyLabel,
   type PresetChoice,
+  rigTopologyLabel,
 } from './presetChoices';
 vi.mock('./api', () => ({
   graphAudioCommand: vi.fn(),

@@ -1,7 +1,7 @@
-import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
-import { DEFAULT_MAP } from '../lib/midi';
+
 import { NoticeTray } from '../components/ui/notice-tray';
 import {
   Sheet,
@@ -10,6 +10,7 @@ import {
   SheetHeader,
 } from '../components/ui/sheet';
 import { Caption } from '../components/ui/text';
+import { DEFAULT_MAP } from '../lib/midi';
 import { MidiBar, MidiProvider } from '../widgets/midi';
 import { PretendController, WebMidiButton } from '../widgets/midi-controller';
 import { MidiMap } from '../widgets/midi-map';

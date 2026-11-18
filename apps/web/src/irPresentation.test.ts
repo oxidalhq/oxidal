@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
-import { groupIrs, presentIr } from './irPresentation';
+
 import type { LocalModel } from './api';
+import { groupIrs, presentIr } from './irPresentation';
 
 const folder =
   "IRs/Boutique Tones/Boutique Tones 412 Mezzabarba MZero '69 Cab G12M25 Impulse Responses (IRs) WAV/44.1 kHz/57";

@@ -1,20 +1,6 @@
-import * as React from 'react';
 import { CaretDown, CaretUp, GitFork, Plus } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
-import {
-  addBranch,
-  blocksOf,
-  branchName,
-  branchWith,
-  isSplit,
-  joinSplit,
-  moveStep,
-  nameBranch,
-  setBranchLevel,
-  type ListPath,
-  type Split,
-  type Step,
-} from '../lib/route';
+import * as React from 'react';
+
 import { Button } from '../components/ui/button';
 import {
   Popover,
@@ -23,8 +9,23 @@ import {
 } from '../components/ui/popover';
 import { Slider } from '../components/ui/slider';
 import { Caption } from '../components/ui/text';
-import { ChainBlock, ChainPort, type ChainBlockModel } from './chain';
+import { cn } from '../lib/cn';
+import {
+  addBranch,
+  blocksOf,
+  branchName,
+  branchWith,
+  isSplit,
+  joinSplit,
+  type ListPath,
+  moveStep,
+  nameBranch,
+  setBranchLevel,
+  type Split,
+  type Step,
+} from '../lib/route';
 import { useFlip } from '../lib/use-flip';
+import { ChainBlock, type ChainBlockModel, ChainPort } from './chain';
 
 export type RouteBlock = ChainBlockModel;
 export type Route = Step<RouteBlock>[];

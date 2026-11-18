@@ -2,10 +2,10 @@ import type { Lv2Plugin, Preset, RigDocument } from './api';
 import type { RigPublish } from './generated/contract';
 import { chainLanes } from './rigChain';
 import {
-  parallelRig,
-  serialRig,
   type DraftEffect,
   type MonoInput,
+  parallelRig,
+  serialRig,
 } from './rigDraft';
 
 /**

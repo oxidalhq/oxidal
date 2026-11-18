@@ -1,10 +1,10 @@
-import { createHash, randomUUID } from 'node:crypto';
 import {
-  expect,
-  test,
   type APIRequestContext,
+  expect,
   type Page,
+  test,
 } from '@playwright/test';
+import { createHash, randomUUID } from 'node:crypto';
 
 /**
  * Set list, Duplicate and scene management against the real daemon: Duplicate leaves "Name copy" outside the set list and opens it

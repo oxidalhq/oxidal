@@ -1,6 +1,7 @@
-import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
 import { expect, userEvent, within } from 'storybook/test';
+
 import { Combobox, type ComboboxOption } from './combobox';
 import { NumberField } from './number-field';
 import { Slider } from './slider';

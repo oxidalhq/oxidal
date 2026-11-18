@@ -4,13 +4,14 @@
  *
  * @see docs/media.md#stem-mix-recipes
  */
-import { useEffect, useState } from 'react';
 import { LinkSimple, MusicNotes, X } from '@phosphor-icons/react';
+import { useEffect, useState } from 'react';
+
 import {
-  libraryCatalog,
-  songLinks,
   type LibraryCatalog,
+  libraryCatalog,
   type SongLinks,
+  songLinks,
   type SongLinkUpdate,
 } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';

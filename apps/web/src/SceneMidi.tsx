@@ -1,12 +1,19 @@
-import { RecoveryAction } from './components/ui/failure';
-import { useFailure } from './lib/useFailure';
-import { friendlyError } from './lib/friendlyError';
-import { firstAfter, useLearnGate } from './midiLearn';
+import { ArrowCounterClockwise, PlugsConnected } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
-import { PlugsConnected, ArrowCounterClockwise } from '@phosphor-icons/react';
-import { Button } from './components/ui/button';
+
+import { AdjustmentDialog } from './AdjustmentDialog';
+import {
+  libraryCatalog,
+  type MidiDevices,
+  midiDevices,
+  midiMap,
+  type RigAudioAction,
+  type RigAudioState,
+} from './api';
 import { Badge } from './components/ui/badge';
+import { Button } from './components/ui/button';
 import { DialogFooter } from './components/ui/dialog';
+import { RecoveryAction } from './components/ui/failure';
 import {
   Select,
   SelectContent,
@@ -14,20 +21,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from './components/ui/select';
-import { AdjustmentDialog } from './AdjustmentDialog';
+import { friendlyError } from './lib/friendlyError';
+import { useFailure } from './lib/useFailure';
+import { midiConflicts } from './midiAssignments';
+import { firstAfter, useLearnGate } from './midiLearn';
 import {
   consumeMidiAssignmentRequest,
   OPEN_MIDI_EVENT,
 } from './midiNavigation';
-import {
-  midiDevices,
-  midiMap,
-  libraryCatalog,
-  type MidiDevices,
-  type RigAudioState,
-  type RigAudioAction,
-} from './api';
-import { midiConflicts } from './midiAssignments';
 
 type Settings = NonNullable<NonNullable<RigAudioState['configured']>['midi']>;
 type MidiView = Pick<

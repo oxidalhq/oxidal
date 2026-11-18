@@ -4,15 +4,16 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import {
-  factoryRoles,
-  buildFactoryRecipe,
-} from '../apps/web/src/factoryRecipes.ts';
-import { lv2ShowcaseRecipes } from '../apps/web/src/recipes/lv2Showcase.ts';
+
 import {
   factoryMetadata,
   validateFactoryMetadata,
 } from '../apps/web/src/factoryMetadata.ts';
+import {
+  buildFactoryRecipe,
+  factoryRoles,
+} from '../apps/web/src/factoryRecipes.ts';
+import { lv2ShowcaseRecipes } from '../apps/web/src/recipes/lv2Showcase.ts';
 const { values } = parseArgs({ options: { output: { type: 'string' } } });
 if (!values.output) throw new Error('Use --output directory');
 const plugins = JSON.parse(

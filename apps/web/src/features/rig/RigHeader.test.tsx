@@ -6,6 +6,7 @@ import {
   within,
 } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+
 import { RigHeader } from './RigHeader';
 import type { RigViewProps } from './useMixedRigSession';
 

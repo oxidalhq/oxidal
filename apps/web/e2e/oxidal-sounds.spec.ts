@@ -1,5 +1,6 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, type Page, type Route, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
+
 import { allFactoryRecipes } from '../src/factoryCatalog';
 import { emptyPreset } from '../src/features/library/newPreset';
 

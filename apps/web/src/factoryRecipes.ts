@@ -1,18 +1,18 @@
-import type { Lv2Plugin, RigDocument } from './api';
 import scalarLayouts from '../../../crates/oxidal-lv2/scalar-state.json' with { type: 'json' };
-import type {
-  NativeDefaultSettings,
-  RigNativeSource,
-  SceneControl,
-} from './generated/contract';
-import { rigBuilder, type DraftEffect } from './rigDraft.ts';
-import { readScenes, sealScenes } from './sceneFormat.ts';
-import type { FactoryVoiceId } from './factoryVoices.ts';
+import type { Lv2Plugin, RigDocument } from './api';
 import type {
   FactoryComplexity,
   FactoryEngine,
   FactoryGenre,
 } from './factoryMetadata.ts';
+import type { FactoryVoiceId } from './factoryVoices.ts';
+import type {
+  NativeDefaultSettings,
+  RigNativeSource,
+  SceneControl,
+} from './generated/contract';
+import { type DraftEffect, rigBuilder } from './rigDraft.ts';
+import { readScenes, sealScenes } from './sceneFormat.ts';
 
 const pluginUris: Record<string, string> = {
   'x42 Compressor Stereo': 'http://gareus.org/oss/lv2/darc#stereo',

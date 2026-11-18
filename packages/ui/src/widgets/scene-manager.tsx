@@ -1,13 +1,11 @@
-import * as React from 'react';
 import {
   ArrowCounterClockwise,
   CheckCircle,
   DotsThree,
   Plus,
 } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
-import { sceneColour } from '../lib/scene-colours';
-import { SceneStripe } from './scene-pad';
+import * as React from 'react';
+
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { useConfirm } from '../components/ui/confirm';
@@ -28,6 +26,9 @@ import {
 import { Segment, SegmentedControl } from '../components/ui/segmented';
 import { EmptyState } from '../components/ui/states';
 import { Caption, Label } from '../components/ui/text';
+import { cn } from '../lib/cn';
+import { sceneColour } from '../lib/scene-colours';
+import { SceneStripe } from './scene-pad';
 
 export type SceneSummary = { id: string; name: string; edited?: boolean };
 

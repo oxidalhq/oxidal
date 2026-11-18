@@ -7,24 +7,25 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
-import { beforeEach, afterEach, expect, it, vi } from 'vitest';
-import { MixedRig } from './MixedRig';
-import { setPerform } from './performState';
-import { playScenes } from './presetChoices';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
 import {
   installedLv2,
   libraryCatalog,
   publishRig,
-  rigAudioState,
   rigAudioCommand,
+  rigAudioState,
   rigDocument,
   rigLibrary,
   sceneDraft,
   type SharedSceneDraft,
 } from './api';
+import { MixedRig } from './MixedRig';
+import { setPerform } from './performState';
+import { playScenes } from './presetChoices';
+import { chainLanes } from './rigChain';
 import { lv2Effect } from './rigDraft';
 import { buildRoute } from './rigRoute';
-import { chainLanes } from './rigChain';
 // Mute/Protect have their own tests; the Rig header only places them.
 // Phone layout is switched per test; most tests use the wide layout.
 let narrow = false;

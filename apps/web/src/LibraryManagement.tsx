@@ -1,35 +1,36 @@
-import { FailureNotice } from './components/ui/failure';
-import { useFailure } from './lib/useFailure';
-import { useEffect, useRef, useState } from 'react';
 import {
-  ArrowUp,
-  ArrowDown,
   Archive,
   ArrowCounterClockwise,
+  ArrowDown,
+  ArrowUp,
   DotsSixVertical,
   DotsThree,
   DownloadSimple,
   Plus,
 } from '@phosphor-icons/react';
-import { Loading } from './components/ui/loading';
-import { libraryCatalog, type LibraryCatalog, type LibraryUpdate } from './api';
-import { Button } from './components/ui/button';
-import { PresetManagement } from './PresetManagement';
-import { useSetListDrag } from './useSetListDrag';
+import { useEffect, useRef, useState } from 'react';
+
 import './LibraryManagement.css';
-import { playScenes, playTone3000 } from './presetChoices';
-import { requestMidiAssignments } from './midiNavigation';
-import { friendlyError } from './lib/friendlyError';
+import { type LibraryCatalog, libraryCatalog, type LibraryUpdate } from './api';
+import { Button } from './components/ui/button';
+import { FailureNotice } from './components/ui/failure';
+import { Loading } from './components/ui/loading';
 import {
+  addSuggestedSet,
   duplicatePreset,
   setListMember,
   setUpStarter,
   starterMessage,
-  addSuggestedSet,
+  type SuggestedSet,
   suggestedSetMessage,
   suggestedSets,
-  type SuggestedSet,
 } from './features/library/setList';
+import { friendlyError } from './lib/friendlyError';
+import { useFailure } from './lib/useFailure';
+import { requestMidiAssignments } from './midiNavigation';
+import { playScenes, playTone3000 } from './presetChoices';
+import { PresetManagement } from './PresetManagement';
+import { useSetListDrag } from './useSetListDrag';
 
 type Item = LibraryCatalog['items'][number];
 const originOf = (item: Item) =>

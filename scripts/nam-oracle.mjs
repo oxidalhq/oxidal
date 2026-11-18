@@ -1,6 +1,7 @@
-import { resolve, join } from 'node:path';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+
 import { root, run } from './process.mjs';
 
 // Optional reference regeneration; normal CI uses committed independent golden vectors.

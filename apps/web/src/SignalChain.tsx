@@ -1,6 +1,7 @@
 import { ArrowRight } from '@phosphor-icons/react';
-import { Button } from './components/ui/button';
+
 import type { Snapshot } from './api';
+import { Button } from './components/ui/button';
 
 type Props = {
   state: Snapshot;

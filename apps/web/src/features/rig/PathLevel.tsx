@@ -1,7 +1,8 @@
-import { type PathMix, mixGains, pathMix } from '../../rigRoute';
-import { panLabel } from '../../lib/panLabel';
-import { Button } from '../../components/ui/button';
 import { useState } from 'react';
+
+import { Button } from '../../components/ui/button';
+import { panLabel } from '../../lib/panLabel';
+import { mixGains, type PathMix, pathMix } from '../../rigRoute';
 
 /** A path's level into its merge, set on both channels when released (7.26).
  * Live and unsaved until Save, like every other control.

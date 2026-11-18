@@ -1,4 +1,3 @@
-import { useMemo, useRef, useState } from 'react';
 import {
   CaretDown,
   GearSix,
@@ -8,9 +7,8 @@ import {
   Notebook,
   Playlist,
 } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
-import { sceneColour } from '../lib/scene-colours';
-import { parseSong } from '../lib/song';
+import { useMemo, useRef, useState } from 'react';
+
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader } from '../components/ui/dialog';
@@ -36,15 +34,18 @@ import {
 import { Switch } from '../components/ui/switch';
 import { Caption, Eyebrow, Label } from '../components/ui/text';
 import { Toggle } from '../components/ui/toggle';
+import { cn } from '../lib/cn';
+import { sceneColour } from '../lib/scene-colours';
+import { parseSong } from '../lib/song';
+import { tempoFromTaps } from '../lib/tempo';
+import { useRemembered } from '../lib/use-remembered';
 import { SCENES } from '../patterns/rig.fixtures';
 import { CONTROLLERS, type SwitchAction } from '../widgets/controllers';
 import { Footswitches, type StageState } from '../widgets/footswitches';
 import { Meter } from '../widgets/meter';
-import { SheetViewer } from '../widgets/sheet-viewer';
-import { tempoFromTaps } from '../lib/tempo';
-import { useRemembered } from '../lib/use-remembered';
-import { TapTempo } from '../widgets/tap-tempo';
 import { MidiTarget } from '../widgets/midi';
+import { SheetViewer } from '../widgets/sheet-viewer';
+import { TapTempo } from '../widgets/tap-tempo';
 import { Transport } from '../widgets/transport';
 import { TunerFace } from '../widgets/tuner-face';
 import { FRIDAY_SET } from './perform.data';

@@ -1,7 +1,10 @@
+import type { FactoryGenre } from '../factoryMetadata.ts';
 import {
   compressor,
   drive,
   echoAt,
+  type Effect,
+  type FactoryRecipe,
   flyHall,
   flyRoom,
   fx,
@@ -9,15 +12,12 @@ import {
   leadLift,
   nam,
   pitch,
-  silk,
-  voice,
-  type Effect,
-  type FactoryRecipe,
   type RecipeScene,
   type RoutedPath,
   type SceneSettings,
+  silk,
+  voice,
 } from '../factoryRecipes.ts';
-import type { FactoryGenre } from '../factoryMetadata.ts';
 
 /**
  * Showcase presets for Oxidal's own reverb (Bloom), sustainer (Sustain), delay

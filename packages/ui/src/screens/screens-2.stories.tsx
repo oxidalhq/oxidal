@@ -1,10 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
+
 import { Guitars } from './guitars';
 import { Levels } from './levels';
+import { Perform } from './perform';
 import { Settings } from './settings';
 import { Screen } from './shell';
-import { Perform } from './perform';
 
 const meta: Meta = {
   title: 'Screens/Guitars, Levels, Settings, sheets',

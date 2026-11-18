@@ -1,4 +1,3 @@
-import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import {
   CornersIn,
   CornersOut,
@@ -8,13 +7,15 @@ import {
   Sun,
   WarningCircle,
 } from '@phosphor-icons/react';
-import { tuner, type TunerState } from './api';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
+
+import './Tuner.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
+import { tuner, type TunerState } from './api';
 import { Alert, AlertDescription, AlertTitle } from './components/ui/alert';
 import { Button } from './components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 import { errorDetails } from './lib/friendlyError';
-import './Tuner.css';
 
 const NOTES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
 /** Within this many cents the note counts as in tune. */

@@ -1,17 +1,18 @@
-import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
 import { expect, userEvent, within } from 'storybook/test';
+
 import { CONTROLLERS } from './controllers';
 import { Footswitches, type StageState } from './footswitches';
-import { StemMixer, type StemControls, type StemRole } from './stem-strip';
+import { SceneChange, type SceneChangeSettings } from './scene-change';
+import { type StemControls, StemMixer, type StemRole } from './stem-strip';
 import { TapTempo } from './tap-tempo';
 import {
   ChangeList,
   CompareToggle,
-  VersionPicker,
   type PresetVersion,
+  VersionPicker,
 } from './versions';
-import { SceneChange, type SceneChangeSettings } from './scene-change';
 
 /**
  * More rig parts on their own: versions and the change list, tap tempo,

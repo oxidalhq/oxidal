@@ -1,4 +1,3 @@
-import * as React from 'react';
 import {
   ArrowsDownUp,
   MagnifyingGlass,
@@ -6,8 +5,8 @@ import {
   Star,
   X,
 } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
-import { useMedia } from '../lib/use-media';
+import * as React from 'react';
+
 import { Badge, Led } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import {
@@ -18,24 +17,26 @@ import {
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
 import { Segment, SegmentedControl } from '../components/ui/segmented';
-import { EmptyState } from '../components/ui/states';
-import { Caption } from '../components/ui/text';
-import { Toggle } from '../components/ui/toggle';
-import type { BlockKind } from '../widgets/chain';
-import { BlockGlyph } from '../widgets/block-glyph';
-import { glyphForBlock } from '../lib/block-glyphs';
 import {
   Sheet,
   SheetBody,
   SheetContent,
   SheetHeader,
 } from '../components/ui/sheet';
+import { EmptyState } from '../components/ui/states';
+import { Caption } from '../components/ui/text';
+import { Toggle } from '../components/ui/toggle';
+import { glyphForBlock } from '../lib/block-glyphs';
+import { cn } from '../lib/cn';
+import { useMedia } from '../lib/use-media';
+import { BlockGlyph } from '../widgets/block-glyph';
 import {
+  type BlockSource,
   SourceCard,
   SourceLine,
   SourcePicture,
-  type BlockSource,
 } from '../widgets/block-source';
+import type { BlockKind } from '../widgets/chain';
 
 export type LibraryItem = {
   id: string;

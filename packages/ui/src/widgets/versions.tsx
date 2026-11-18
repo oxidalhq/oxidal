@@ -1,4 +1,3 @@
-import * as React from 'react';
 import {
   ArrowCounterClockwise,
   CaretDown,
@@ -6,8 +5,8 @@ import {
   ClockCounterClockwise,
   Star,
 } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
-import { describeChange, type Change } from '../lib/route-diff';
+import * as React from 'react';
+
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import {
@@ -25,6 +24,8 @@ import {
 import { Segment, SegmentedControl } from '../components/ui/segmented';
 import { Separator } from '../components/ui/separator';
 import { Caption, Label } from '../components/ui/text';
+import { cn } from '../lib/cn';
+import { type Change, describeChange } from '../lib/route-diff';
 
 export type PresetVersion = {
   id: string;

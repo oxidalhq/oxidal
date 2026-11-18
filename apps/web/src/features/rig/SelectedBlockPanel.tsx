@@ -1,9 +1,11 @@
-import './SelectedBlockPanel.css';
-import { AdjustmentDialog } from '../../AdjustmentDialog';
-import { Button } from '../../components/ui/button';
-import { LedToggle } from '../../ChainView';
 import { Trash } from '@phosphor-icons/react';
 import { useState } from 'react';
+
+import './SelectedBlockPanel.css';
+import { AdjustmentDialog } from '../../AdjustmentDialog';
+import { LedToggle } from '../../ChainView';
+import { Button } from '../../components/ui/button';
+import type { IdStep } from '../../rigChain';
 import {
   MAX_PATHS,
   routeAddBranch,
@@ -13,10 +15,9 @@ import {
   routeRemove,
   routeRemoveBranch,
 } from '../../rigRoute';
-import type { IdStep } from '../../rigChain';
-import type { RigViewProps } from './useMixedRigSession';
 import { rigBusy } from './mixedRigViewModel';
 import { PathLevel } from './PathLevel';
+import type { RigViewProps } from './useMixedRigSession';
 
 /** Why the routing actions are unavailable for this block, or null. */
 const SCENE_PATH =

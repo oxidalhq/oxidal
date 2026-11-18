@@ -1,4 +1,5 @@
 import * as React from 'react';
+
 import type { ToneCatalogue, ToneSearch } from './model-browser';
 import type { ModelChoice } from './swap-sheet';
 

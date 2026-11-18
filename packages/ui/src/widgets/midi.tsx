@@ -1,23 +1,24 @@
-import * as React from 'react';
 import { PlugsConnected, X } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
-import {
-  DEFAULT_TARGETS,
-  addressOf,
-  assign,
-  clear,
-  formatAddress,
-  midiProblems,
-  sameAddress,
-  type MidiMapping,
-  type MidiMessage,
-  type MidiTargetInfo,
-  type TargetKind,
-} from '../lib/midi';
+import * as React from 'react';
+
 import { Button } from '../components/ui/button';
 import { notify } from '../components/ui/notices';
 import { Toggle } from '../components/ui/toggle';
-import { MidiContext, useMidi, type MidiApi } from './midi-context';
+import { cn } from '../lib/cn';
+import {
+  addressOf,
+  assign,
+  clear,
+  DEFAULT_TARGETS,
+  formatAddress,
+  type MidiMapping,
+  type MidiMessage,
+  midiProblems,
+  type MidiTargetInfo,
+  sameAddress,
+  type TargetKind,
+} from '../lib/midi';
+import { type MidiApi, MidiContext, useMidi } from './midi-context';
 
 /**
  * Holds the MIDI map for the screens under it and routes incoming messages:

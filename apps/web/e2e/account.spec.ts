@@ -1,7 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
-import { test, expect } from '@playwright/test';
-import { setDisplayMode } from './display';
+import { expect, test } from '@playwright/test';
+
 import type { AccountState } from '../src/api';
+import { setDisplayMode } from './display';
 
 test('TONE3000 account rejects secret keys before any sign-in request', async ({
   page,

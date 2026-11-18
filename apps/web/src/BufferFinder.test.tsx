@@ -6,8 +6,9 @@ import {
   screen,
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
+import { type Monitoring, monitoring, type StartAudio } from './api';
 import { BufferFinder } from './BufferFinder';
-import { monitoring, type Monitoring, type StartAudio } from './api';
 vi.mock('./api', () => ({ monitoring: vi.fn() }));
 
 class Events extends EventTarget {

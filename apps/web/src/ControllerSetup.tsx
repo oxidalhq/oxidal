@@ -1,4 +1,6 @@
 import { useState } from 'react';
+
+import type { MidiMap } from './api';
 import { Button } from './components/ui/button';
 import {
   Select,
@@ -10,14 +12,13 @@ import {
 import {
   applyLayout,
   checkPassed,
+  type Layout,
   layoutConflicts,
   layoutFromCurrent,
   profiles,
   savedToLayout,
-  type Layout,
   type SwitchRow,
 } from './controllerLayouts';
-import type { MidiMap } from './api';
 
 type Message = {
   kind: string;

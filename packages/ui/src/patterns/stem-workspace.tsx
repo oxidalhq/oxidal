@@ -1,10 +1,11 @@
-import * as React from 'react';
 import {
   ArrowClockwise,
   ArrowCounterClockwise,
   Link,
   UploadSimple,
 } from '@phosphor-icons/react';
+import * as React from 'react';
+
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle } from '../components/ui/card';
@@ -20,8 +21,8 @@ import { Segment, SegmentedControl } from '../components/ui/segmented';
 import { Progress } from '../components/ui/states';
 import { Caption } from '../components/ui/text';
 import {
-  StemMixer,
   type StemControls,
+  StemMixer,
   type StemRole,
 } from '../widgets/stem-strip';
 

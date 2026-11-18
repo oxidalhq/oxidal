@@ -7,6 +7,7 @@ import {
   within,
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
 import { boosts, type BoostState } from './api';
 import { BoostControl } from './BoostControl';
 vi.mock('./api', () => ({ boosts: vi.fn() }));

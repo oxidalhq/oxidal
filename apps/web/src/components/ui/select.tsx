@@ -1,7 +1,7 @@
-import * as React from 'react';
-import * as SelectPrimitive from '@radix-ui/react-select';
 import { CaretDown, CaretUp, Check } from '@phosphor-icons/react';
+import * as SelectPrimitive from '@radix-ui/react-select';
 import { clsx } from 'clsx';
+import * as React from 'react';
 import { twMerge } from 'tailwind-merge';
 
 export const Select = SelectPrimitive.Root;

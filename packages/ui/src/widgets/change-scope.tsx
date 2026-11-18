@@ -1,6 +1,6 @@
-import * as React from 'react';
 import { CaretDown, Check, SquaresFour } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
+import * as React from 'react';
+
 import { Button } from '../components/ui/button';
 import {
   Popover,
@@ -9,6 +9,7 @@ import {
 } from '../components/ui/popover';
 import { Separator } from '../components/ui/separator';
 import { Caption } from '../components/ui/text';
+import { cn } from '../lib/cn';
 
 export type ChangeScopeValue = 'scene' | 'preset';
 

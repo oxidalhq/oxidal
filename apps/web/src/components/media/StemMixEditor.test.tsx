@@ -8,17 +8,18 @@ import {
 } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
+
 import type {
   MediaAsset,
   PlayerSnapshot,
   SavedSongMix,
   SongView,
 } from '../../api';
-import { SessionMediaContext, type SessionMedia } from './sessionMedia';
+import { SplitStatus } from './NowPlaying';
+import { type SessionMedia, SessionMediaContext } from './sessionMedia';
 import { StemMixEditor } from './StemMixEditor';
 import { LiveStemsPanel } from './StemMixer';
 import { StemSongs } from './StemSongs';
-import { SplitStatus } from './NowPlaying';
 
 const source: MediaAsset = {
   id: 'song',

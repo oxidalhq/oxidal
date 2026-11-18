@@ -1,17 +1,17 @@
 import {
-  libraryCatalog,
   type LibraryCatalog,
+  libraryCatalog,
   type LibraryUpdate,
 } from '../../api';
-import { finishEffectsOnly } from './oxidal/finish';
-import { builtName } from './oxidal/oxidalSounds.model';
-import { lv2ShowcaseRecipes } from '../../recipes/lv2Showcase';
 import { allFactoryRecipes } from '../../factoryCatalog';
+import type { FactoryRecipe } from '../../factoryRecipes';
+import { lv2ShowcaseRecipes } from '../../recipes/lv2Showcase';
 import {
   oxidalEffectsSetList,
   oxidalWorshipSetList,
 } from '../../recipes/oxidalEffectsShowcase';
-import type { FactoryRecipe } from '../../factoryRecipes';
+import { finishEffectsOnly } from './oxidal/finish';
+import { builtName } from './oxidal/oxidalSounds.model';
 import { saveReadySound, unsavedReadySounds } from './oxidal/readySounds';
 
 /**

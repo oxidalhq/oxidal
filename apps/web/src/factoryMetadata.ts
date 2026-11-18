@@ -1,12 +1,12 @@
+import type { Lv2Plugin } from './api';
 import { allFactoryRecipes } from './factoryCatalog.ts';
 import {
   factoryMissingPlugins,
+  type FactoryRecipe,
   factoryRoles,
   recipeEffects,
-  type FactoryRecipe,
 } from './factoryRecipes.ts';
 import { factoryVoices } from './factoryVoices.ts';
-import type { Lv2Plugin } from './api';
 
 /**
  * Sound metadata for Oxidal sounds: the fixed genre list, engine and complexity

@@ -1,8 +1,9 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
-import { AudioReconfigure } from './AudioReconfigure';
+
 import type { AudioProbe, StartAudio } from './api';
+import { AudioReconfigure } from './AudioReconfigure';
 afterEach(cleanup);
 const input: AudioProbe = {
   endpoint: 'hw:test',

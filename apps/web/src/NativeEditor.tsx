@@ -1,17 +1,15 @@
-import { friendlyError } from './lib/friendlyError';
-import { ArtworkDeck } from './AssetArtwork';
 import { useEffect, useRef, useState } from 'react';
+
+import { AdjustmentDialog } from './AdjustmentDialog';
 import {
   capabilities,
-  nativeState,
+  type NativeAction,
   nativeCommand,
   type NativeSnapshot,
-  type NativeAction,
+  nativeState,
   type Preset,
 } from './api';
-import { EditQueue } from './editQueue';
-import { TouchAdjust } from './TouchAdjust';
-import { AdjustmentDialog } from './AdjustmentDialog';
+import { ArtworkDeck } from './AssetArtwork';
 import { Button } from './components/ui/button';
 import {
   Select,
@@ -22,6 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from './components/ui/select';
+import { EditQueue } from './editQueue';
+import { friendlyError } from './lib/friendlyError';
+import { TouchAdjust } from './TouchAdjust';
 
 const blockLabels: Record<string, string> = {
   enabled: 'Enabled',

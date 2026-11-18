@@ -48,3 +48,17 @@ OXIDAL_E2E_API_PORT=3211 OXIDAL_E2E_WEB_PORT=5174 pnpm test:e2e
 The API proxy and browser requests use that pair together. Defaults remain 3210
 and 5173; occupied test ports fail rather than reusing a potentially unrelated
 server or its preset library. Native-worker qualification flags remain unchanged.
+
+## Import order
+
+ESLint enforces import order using `eslint-plugin-simple-import-sort`, with one
+configuration shared by tooling, web, Storybook and the UI package. Keep external
+packages/Node built-ins first, `@oxidal/*` workspace libraries second and relative
+modules last, with one blank line between groups. Paths and named specifiers are
+sorted automatically; type imports follow the same grouping. All imports belong
+above executable declarations. Side-effect imports keep their relative order
+within a group, including CSS initialization.
+
+Run the package's `pnpm exec eslint . --fix`, followed by its Prettier formatter.
+The repository VS Code settings enable ESLint fixes on explicit save. Prettier
+handles formatting and does not compete with ESLint for import sorting.

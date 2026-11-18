@@ -1,4 +1,4 @@
-import { factoryRecipes, type FactoryRecipe } from './factoryRecipes.ts';
+import { type FactoryRecipe, factoryRecipes } from './factoryRecipes.ts';
 import { hybridShowcaseRecipes } from './recipes/hybridShowcase.ts';
 import { lv2ShowcaseRecipes } from './recipes/lv2Showcase.ts';
 import { oxidalEffectsShowcaseRecipes } from './recipes/oxidalEffectsShowcase.ts';

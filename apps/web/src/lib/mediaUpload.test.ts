@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
+
 import { OffsetConflict, type UploadState } from '../api';
 import { DeviceError } from './friendlyError';
 import { CHUNK_BYTES, UploadQueue, type UploadTransport } from './mediaUpload';

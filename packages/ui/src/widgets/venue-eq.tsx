@@ -1,21 +1,6 @@
-import * as React from 'react';
 import { CheckCircle, DotsThree, Warning } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
-import {
-  BANDS,
-  GAIN_LIMIT,
-  TRIM_MAX,
-  TRIM_MIN,
-  clamp,
-  formatDb,
-  formatHz,
-  headroom,
-  isPass,
-  responseCurve,
-  roundHz,
-  withBand,
-  type VenueSettings,
-} from '../lib/venue-eq';
+import * as React from 'react';
+
 import { Button } from '../components/ui/button';
 import {
   DropdownMenu,
@@ -31,10 +16,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-import { Switch } from '../components/ui/switch';
-import { Toggle } from '../components/ui/toggle';
-import { Caption } from '../components/ui/text';
 import { StableLabel } from '../components/ui/stable-label';
+import { Switch } from '../components/ui/switch';
+import { Caption } from '../components/ui/text';
+import { Toggle } from '../components/ui/toggle';
+import { cn } from '../lib/cn';
+import {
+  BANDS,
+  clamp,
+  formatDb,
+  formatHz,
+  GAIN_LIMIT,
+  headroom,
+  isPass,
+  responseCurve,
+  roundHz,
+  TRIM_MAX,
+  TRIM_MIN,
+  type VenueSettings,
+  withBand,
+} from '../lib/venue-eq';
 
 export type VenueProfile = {
   id: string;

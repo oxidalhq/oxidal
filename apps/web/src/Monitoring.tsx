@@ -1,6 +1,3 @@
-import { ControlAudit } from './ControlAudit';
-import { MonitoringHistory } from './MonitoringHistory';
-import './Monitoring.css';
 import { useRef, useState } from 'react';
 import {
   Area,
@@ -13,14 +10,18 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+
+import './Monitoring.css';
 import type { Monitoring as Readings } from './api';
-import {
-  refreshMonitorFeed,
-  useMonitorReadings,
-  type MonitorReading,
-} from './monitorFeed';
 import { Button } from './components/ui/button';
 import { ChartContainer } from './components/ui/chart';
+import { ControlAudit } from './ControlAudit';
+import {
+  type MonitorReading,
+  refreshMonitorFeed,
+  useMonitorReadings,
+} from './monitorFeed';
+import { MonitoringHistory } from './MonitoringHistory';
 type Point = {
   time: string;
   left: number | null;

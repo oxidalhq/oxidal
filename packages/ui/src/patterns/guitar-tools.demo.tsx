@@ -1,9 +1,10 @@
 import * as React from 'react';
+
 import {
   EvenOut,
   LevelMatch,
-  SoundCheck,
   type LevelMatchState,
+  SoundCheck,
   type SoundCheckItem,
 } from './guitar-tools';
 

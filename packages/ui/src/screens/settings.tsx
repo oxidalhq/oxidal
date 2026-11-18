@@ -1,5 +1,6 @@
-import { useState } from 'react';
 import { ArrowsClockwise } from '@phosphor-icons/react';
+import { useState } from 'react';
+
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { CollapsibleSection } from '../components/ui/collapsible';
@@ -14,37 +15,37 @@ import {
 } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
 import { Caption, Readout, Title } from '../components/ui/text';
+import { DEFAULT_MAP } from '../lib/midi';
 import { PageHeading } from '../patterns/app-shell';
+import { AudioChangeDemo } from '../patterns/audio-change.demo';
+import {
+  ControllerSetupDemo,
+  ExtraControllersDemo,
+} from '../patterns/controller-setup.demo';
 import { Credits } from '../patterns/credits';
 import { STACK_CREDITS } from '../patterns/credits.data';
-import {
-  SettingGroup,
-  SettingRow,
-  SettingsPage,
-} from '../patterns/settings-page';
-import { SETTINGS_SECTIONS } from './settings.sections';
-import { AudioChangeDemo } from '../patterns/audio-change.demo';
-import { Tone3000AccountDemo } from '../patterns/tone3000.demo';
-import { NetworkSettingsDemo } from '../patterns/network-settings.demo';
 import {
   BootPlaybackDemo,
   DebugConsoleDemo,
   StorageLockDemo,
 } from '../patterns/device-flows.demo';
 import {
-  ControllerSetupDemo,
-  ExtraControllersDemo,
-} from '../patterns/controller-setup.demo';
-import {
   BuiltInEffectsDemo,
   NamEngineDemo,
   PluginPacksDemo,
 } from '../patterns/engine-settings.demo';
-import { DEFAULT_MAP } from '../lib/midi';
+import { SoundCheck } from '../patterns/guitar-tools';
+import { NetworkSettingsDemo } from '../patterns/network-settings.demo';
+import {
+  SettingGroup,
+  SettingRow,
+  SettingsPage,
+} from '../patterns/settings-page';
+import { Tone3000AccountDemo } from '../patterns/tone3000.demo';
 import { MidiBar, MidiProvider } from '../widgets/midi';
 import { PretendController, WebMidiButton } from '../widgets/midi-controller';
 import { MidiMap } from '../widgets/midi-map';
-import { SoundCheck } from '../patterns/guitar-tools';
+import { SETTINGS_SECTIONS } from './settings.sections';
 
 function Audio() {
   return (

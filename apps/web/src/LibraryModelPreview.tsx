@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { GearIcon } from './GearIcon';
-import { ToneDetails } from './ToneDetails';
-import { AdjustmentDialog } from './AdjustmentDialog';
-import { toneImage, type LocalModel } from './api';
-import { LibraryModelAudition } from './LibraryModelAudition';
 import { ArrowSquareOut } from '@phosphor-icons/react';
+import { useState } from 'react';
+
+import { AdjustmentDialog } from './AdjustmentDialog';
+import { type LocalModel, toneImage } from './api';
+import { GearIcon } from './GearIcon';
+import { LibraryModelAudition } from './LibraryModelAudition';
 import { modelSourceLink, modelToneId } from './modelProvenance';
+import { ToneDetails } from './ToneDetails';
 
 export function ModelPicture({ model }: { model: LocalModel }) {
   const [failed, setFailed] = useState(false);

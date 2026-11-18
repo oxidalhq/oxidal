@@ -2,16 +2,16 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 
+import { setProtect } from '../../api';
+import { setOutputMute } from './outputMute';
+import { StageControls } from './StageControls';
+
 vi.mock('../../api', () => ({
   protectState: vi.fn(async () => ({ on: false })),
   setProtect: vi.fn(async (on: boolean) => ({ on })),
   monitoring: vi.fn(async () => ({ audio: { monitoring: {} } })),
 }));
 vi.mock('./outputMute', () => ({ setOutputMute: vi.fn(async () => {}) }));
-
-import { setProtect } from '../../api';
-import { setOutputMute } from './outputMute';
-import { StageControls } from './StageControls';
 
 afterEach(cleanup);
 

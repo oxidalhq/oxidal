@@ -1,7 +1,5 @@
-import { friendlyError } from './lib/friendlyError';
-import { historyPoints, historyCsv } from './historyData';
-import { useEffect, useState } from 'react';
 import { ArrowClockwise, DownloadSimple } from '@phosphor-icons/react';
+import { useEffect, useState } from 'react';
 import {
   CartesianGrid,
   Line,
@@ -10,7 +8,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { monitoringHistory, type MonitoringHistory as History } from './api';
+
+import { type MonitoringHistory as History, monitoringHistory } from './api';
 import { Button } from './components/ui/button';
 import { ChartContainer } from './components/ui/chart';
 import {
@@ -20,6 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from './components/ui/select';
+import { historyCsv, historyPoints } from './historyData';
+import { friendlyError } from './lib/friendlyError';
 
 /** Appliance-owned samples, distinct from the live browser's Freeze/Reset view. */
 export function MonitoringHistory() {

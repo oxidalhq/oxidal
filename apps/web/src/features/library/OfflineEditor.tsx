@@ -1,20 +1,17 @@
 import { useEffect, useState } from 'react';
-import { NativeEditor } from '../../NativeEditor';
-import { panLabel } from '../../lib/panLabel';
-import { replaceNativeFiles } from '../../nativeResourceEdit';
-import { readBlock } from '../../rigEdit';
+
+import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
+  importRigResource,
   installedLv2,
   libraryCatalog,
+  type Lv2Plugin,
   publishRig,
+  type RigDocument,
   rigDocument,
   rigLibrary,
   rigNativeSources,
-  importRigResource,
-  type Lv2Plugin,
-  type RigDocument,
 } from '../../api';
-import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { Button } from '../../components/ui/button';
 import { Loading } from '../../components/ui/loading';
 import {
@@ -29,22 +26,26 @@ import {
   friendlyError,
   type Recovery,
 } from '../../lib/friendlyError';
-import { lv2Effect, type DraftEffect, type NativeDraft } from '../../rigDraft';
+import { panLabel } from '../../lib/panLabel';
+import { NativeEditor } from '../../NativeEditor';
+import { replaceNativeFiles } from '../../nativeResourceEdit';
+import { type DraftEffect, lv2Effect, type NativeDraft } from '../../rigDraft';
+import { readBlock } from '../../rigEdit';
 import {
   buildRoute,
   isSplit,
+  type PathMix,
+  pathMix,
   readRoute,
+  type Route,
   routeAddPath,
   routeAppend,
   routeControl,
   routePath,
   routePathMix,
-  pathMix,
-  type PathMix,
   routeRemove,
-  routeShift,
   routeReplaceNative,
-  type Route,
+  routeShift,
   type RouteSplit,
 } from '../../rigRoute';
 import { keepScenes } from '../../sceneEdit';

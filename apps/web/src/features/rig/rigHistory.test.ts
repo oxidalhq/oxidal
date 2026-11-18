@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
+
 import {
-  HISTORY_LIMIT,
   afterStep,
+  HISTORY_LIMIT,
   historyShortcut,
   historyTarget,
   parseHistory,

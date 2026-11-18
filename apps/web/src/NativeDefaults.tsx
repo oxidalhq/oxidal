@@ -1,6 +1,6 @@
-import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
-import { nativeDefaults, type NativeDefaults as Defaults } from './api';
+
+import { type NativeDefaults as Defaults, nativeDefaults } from './api';
 import { Button } from './components/ui/button';
 import {
   Select,
@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from './components/ui/select';
 import { Switch } from './components/ui/switch';
+import { friendlyError } from './lib/friendlyError';
 const QUALITY_DEFAULTS: Defaults['settings'] = {
   nam_size: 1,
   multi_core: true,

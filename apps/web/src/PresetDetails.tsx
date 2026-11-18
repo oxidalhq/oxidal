@@ -1,16 +1,17 @@
 import type { ReactNode } from 'react';
-import { Loading } from './components/ui/loading';
-import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
+
+import { AdjustmentDialog } from './AdjustmentDialog';
 import {
-  presetDetails,
   type DetailsCatalog,
   type LibraryCatalog,
   type PresetDetails,
+  presetDetails,
 } from './api';
-import { detailsKey } from './presetMetadata';
-import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
+import { Loading } from './components/ui/loading';
+import { friendlyError } from './lib/friendlyError';
+import { detailsKey } from './presetMetadata';
 
 type Entry = Pick<LibraryCatalog['items'][number], 'kind' | 'id' | 'name'>;
 const emptyDetails: PresetDetails = {

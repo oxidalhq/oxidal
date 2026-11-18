@@ -1,6 +1,7 @@
-import { useEffect, useRef, type ReactNode } from 'react';
-import './RigSheet.css';
 import { CaretDown, CaretUp, X } from '@phosphor-icons/react';
+import { type ReactNode, useEffect, useRef } from 'react';
+
+import './RigSheet.css';
 import { useSessionState } from '../lib/sessionState';
 
 /**

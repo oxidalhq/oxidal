@@ -5,11 +5,11 @@
  * @see docs/interface.md
  */
 import {
+  type Dispatch,
+  type SetStateAction,
   useEffect,
   useRef,
   useState,
-  type Dispatch,
-  type SetStateAction,
 } from 'react';
 
 const prefix = 'oxidal-page:';

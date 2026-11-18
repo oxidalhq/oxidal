@@ -1,9 +1,10 @@
 import { expect, it } from 'vitest';
+
 import {
-  DEFAULT_MAP,
-  DEFAULT_TARGETS,
   assign,
   clear,
+  DEFAULT_MAP,
+  DEFAULT_TARGETS,
   formatAddress,
   midiProblems,
   parseMidiBytes,

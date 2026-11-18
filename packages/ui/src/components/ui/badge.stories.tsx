@@ -1,5 +1,6 @@
-import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Play } from '@phosphor-icons/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
+
 import { Badge, Led } from './badge';
 import { Caption } from './text';
 

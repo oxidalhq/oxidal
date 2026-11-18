@@ -1,20 +1,21 @@
-import './RouteTree.css';
 import { Plus } from '@phosphor-icons/react';
 import {
-  useEffect,
-  useRef,
-  useState,
   type CSSProperties,
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type RefObject,
+  useEffect,
+  useRef,
+  useState,
 } from 'react';
-import { Button } from './ui/button';
+
+import './RouteTree.css';
 import { RigTile } from '../ChainView';
 import { panLabel } from '../lib/panLabel';
-import { pathMix, type RouteAt } from '../rigRoute';
 import type { IdStep, RigBlockVM } from '../rigChain';
+import { pathMix, type RouteAt } from '../rigRoute';
+import { Button } from './ui/button';
 
 type Split = Exclude<IdStep, string>;
 /** A key that moves the focused block: Alt+arrow, the keyboard drag. */

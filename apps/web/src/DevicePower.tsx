@@ -1,9 +1,10 @@
-import { friendlyError } from './lib/friendlyError';
-import { useEffect, useState } from 'react';
 import { ArrowClockwise, Power } from '@phosphor-icons/react';
+import { useEffect, useState } from 'react';
+
+import { AdjustmentDialog } from './AdjustmentDialog';
 import { deviceNetwork, type NetworkState } from './api';
 import { Button } from './components/ui/button';
-import { AdjustmentDialog } from './AdjustmentDialog';
+import { friendlyError } from './lib/friendlyError';
 
 /** Device power is separate from the audio transport and always confirmed. */
 export function DevicePower({ connected }: { connected: boolean }) {

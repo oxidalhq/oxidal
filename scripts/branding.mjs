@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
+
 import { root } from './process.mjs';
 
 // Render the checked-in vector masters; no private source checkout is needed.

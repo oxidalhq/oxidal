@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+
 import type { Lv2Plugin } from './api';
 import type { RigNativeSource } from './generated/contract';
 import { effectShortName, playingTone, presetWithEffect } from './slotEffects';

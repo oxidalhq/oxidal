@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+
 import { Badge } from '../components/ui/badge';
 import { Card, CardHeader, CardTitle } from '../components/ui/card';
 import { Segment, SegmentedControl } from '../components/ui/segmented';
@@ -6,9 +7,9 @@ import { Slider } from '../components/ui/slider';
 import { Switch } from '../components/ui/switch';
 import { Caption, Readout } from '../components/ui/text';
 import { PageHeading } from '../patterns/app-shell';
-import { StereoMeter } from '../widgets/meter';
 import { DeviceDashboard } from '../patterns/device-dashboard';
 import { READINGS } from '../patterns/device-dashboard.data';
+import { StereoMeter } from '../widgets/meter';
 import { VenueEq } from '../widgets/venue-eq';
 import { VENUE_PROFILES } from '../widgets/venue-eq.data';
 

@@ -6,6 +6,7 @@ import {
   screen,
 } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+
 import { unitLevels } from './api';
 import { formatLevel, levelToPosition, positionToLevel } from './levelTaper';
 vi.unmock('./MasterLevel');

@@ -1,9 +1,10 @@
 import { useState } from 'react';
+
 import { AdjustmentDialog } from '../../AdjustmentDialog';
+import { deleteAsset, type MediaAsset, updateAsset } from '../../api';
+import { deviceSentence } from '../../lib/friendlyError';
 import { Button } from '../ui/button';
 import { DialogFooter } from '../ui/dialog';
-import { deleteAsset, updateAsset, type MediaAsset } from '../../api';
-import { deviceSentence } from '../../lib/friendlyError';
 import { useSessionMedia } from './sessionMedia';
 
 /** Rename a backing track. The title is metadata; the files never change.

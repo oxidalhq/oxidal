@@ -1,31 +1,32 @@
+import { createElement } from 'react';
+
+import type { RigAudioState, RigControl, RigDocument } from '../../api';
+import type { SceneLanes } from '../../components/RouteTree';
 import { GearIcon } from '../../GearIcon';
+import { lv2Control } from '../../lv2Control';
 import { oxidalEffectControls } from '../../oxidalEffectLabels';
 import {
-  type NewScene,
-  type SceneControl,
-  branchEffects,
-  scenePaths,
-} from '../../sceneEdit';
-import type { RigAudioState, RigControl, RigDocument } from '../../api';
-import {
-  type IdStep,
-  type RigBlockVM,
-  type RigLaneVM,
   blockKind,
   chainLanes,
   chainRoute,
+  type IdStep,
   isRigBlockNode,
+  type RigBlockVM,
+  type RigLaneVM,
   routeBranchOf,
   routeSpot,
 } from '../../rigChain';
-import { sceneSplitIndex } from '../../rigRoute';
-import type { SceneLanes } from '../../components/RouteTree';
 import { controlGroup } from '../../rigControls';
-import { createElement } from 'react';
-import { lv2Control } from '../../lv2Control';
 import { rigNodeLabel } from '../../rigDraft';
-import { graphRoute } from './graphRoute';
+import { sceneSplitIndex } from '../../rigRoute';
+import {
+  branchEffects,
+  type NewScene,
+  type SceneControl,
+  scenePaths,
+} from '../../sceneEdit';
 import { readScenes } from '../../sceneFormat';
+import { graphRoute } from './graphRoute';
 
 /**
  * Pure view model of the sounding mixed rig: the selected block, its controls,

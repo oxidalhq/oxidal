@@ -1,9 +1,9 @@
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { Button } from '../../components/ui/button';
-import { TouchAdjust } from '../../TouchAdjust';
 import { confirmedControlDisplay } from '../../rigControls';
-import type { RigViewProps } from './useMixedRigSession';
+import { TouchAdjust } from '../../TouchAdjust';
 import { key } from './mixedRigViewModel';
+import type { RigViewProps } from './useMixedRigSession';
 
 /**
  * Adjustment dialog for one continuous control, previewed live until Done.

@@ -1,7 +1,6 @@
-import * as React from 'react';
 import { CaretRight } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
-import { useRemembered } from '../lib/use-remembered';
+import * as React from 'react';
+
 import {
   Collapsible,
   CollapsibleContent,
@@ -15,8 +14,10 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { Caption, Label } from '../components/ui/text';
-import type { Section } from './workspace';
 import { Description } from '../components/ui/text';
+import { cn } from '../lib/cn';
+import { useRemembered } from '../lib/use-remembered';
+import type { Section } from './workspace';
 
 /**
  * Settings: a list of sections on the left and the chosen section's form on

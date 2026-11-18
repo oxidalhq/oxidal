@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
+
 import { Combobox } from './combobox';
 import { NumberField } from './number-field';
 import { EmptyState, StepProgress } from './states';

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
 import {
   effectPacks,
   installedLv2,
+  type Lv2Plugin,
   nativeDefaults,
   presetDetails,
   protectState,
@@ -12,32 +14,31 @@ import {
   rigNativeSources,
   tone3000Account,
   voiceCaptures,
-  type Lv2Plugin,
 } from '../../../api';
+import { allFactoryRecipes } from '../../../factoryCatalog';
+import { factoryMetadata } from '../../../factoryMetadata';
+import {
+  buildFactoryRecipe,
+  type FactoryRole,
+  factoryRoles,
+} from '../../../factoryRecipes';
+import { factoryVoices, isFactoryVoice } from '../../../factoryVoices';
 import type {
   NativeDefaultSettings,
   RecipeMetadata,
   RigNativeSource,
 } from '../../../generated/contract';
-import { allFactoryRecipes } from '../../../factoryCatalog';
-import { factoryMetadata } from '../../../factoryMetadata';
-import {
-  buildFactoryRecipe,
-  factoryRoles,
-  type FactoryRole,
-} from '../../../factoryRecipes';
-import { factoryVoices, isFactoryVoice } from '../../../factoryVoices';
 import { friendlyError } from '../../../lib/friendlyError';
 import { playScenes } from '../../../presetChoices';
 import { presetCopy } from '../newPreset';
 import { installPack, matchLevels } from './finish';
 import {
+  type BuiltEntry,
   builtName,
   cardState,
   installedKey,
-  soundItems,
-  type BuiltEntry,
   type SoundItem,
+  soundItems,
   type UnitFacts,
 } from './oxidalSounds.model';
 

@@ -6,8 +6,9 @@ import {
   screen,
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
+import { type Monitoring, monitoring, unitLevels } from './api';
 import { LevelMatch } from './LevelMatch';
-import { monitoring, unitLevels, type Monitoring } from './api';
 import { averageDb, outputDb, outputValue } from './loudnessMatch';
 vi.mock('./api', () => ({ monitoring: vi.fn(), unitLevels: vi.fn() }));
 

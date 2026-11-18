@@ -1,17 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
-import { StateNotice } from './components/ui/state-notice';
-import { boosts, type GuitarProfiles } from './api';
 import { Guitar as GuitarIcon, Minus, Plus } from '@phosphor-icons/react';
-import { AdjustmentDialog } from './AdjustmentDialog';
-import { Button } from './components/ui/button';
-import { Badge } from './components/ui/badge';
-import { DialogFooter } from './components/ui/dialog';
+import { useEffect, useRef, useState } from 'react';
+
 import './MasterLevel.css';
 import './GuitarSettings.css';
+import { AdjustmentDialog } from './AdjustmentDialog';
+import { boosts, type GuitarProfiles } from './api';
+import { Badge } from './components/ui/badge';
+import { Button } from './components/ui/button';
+import { DialogFooter } from './components/ui/dialog';
+import { StateNotice } from './components/ui/state-notice';
+import { guitarVerificationDetail } from './guitarVerification';
 import { useMonitorReadings } from './monitorFeed';
 import { ToolRow, ToolSection } from './ToolRow';
 import { gateFor, useGuitars } from './useGuitars';
-import { guitarVerificationDetail } from './guitarVerification';
 
 type Guitar = GuitarProfiles['guitars'][number];
 

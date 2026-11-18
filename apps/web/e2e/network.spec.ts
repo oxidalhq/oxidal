@@ -1,5 +1,6 @@
-import { test, expect } from '@playwright/test';
-import type { NetworkState, NetworkCommand } from '../src/api';
+import { expect, test } from '@playwright/test';
+
+import type { NetworkCommand, NetworkState } from '../src/api';
 
 // Browser recovery workflow with a controlled transport. The Rust suite exercises
 // durable rollback; physical Wi-Fi switching is an additional hardware gate.

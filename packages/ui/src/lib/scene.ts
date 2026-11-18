@@ -1,6 +1,6 @@
-import { blocksOf, isSplit, type Step } from './route';
 import type { BlockModel } from '../widgets/block-editor';
 import type { SceneModel } from '../widgets/scene-editor';
+import { blocksOf, isSplit, type Step } from './route';
 
 type Route = Step<BlockModel>[];
 

@@ -1,9 +1,8 @@
-import { friendlyError } from './lib/friendlyError';
 import { CaretLeft, CaretRight } from '@phosphor-icons/react';
-import { NativeTools } from './NativeTools';
-import { ToolRow, ToolSection } from './ToolRow';
 import { useEffect, useRef, useState } from 'react';
-import { tone3000Tone, type AudioState, type AudioAction } from './api';
+
+import { AdjustmentDialog } from './AdjustmentDialog';
+import { type AudioAction, type AudioState, tone3000Tone } from './api';
 import { Button } from './components/ui/button';
 import {
   Select,
@@ -12,9 +11,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from './components/ui/select';
-import { AdjustmentDialog } from './AdjustmentDialog';
-import { SettingDialog } from './SettingDialog';
 import { formatDefault, settingHelp } from './engineHelp';
+import { friendlyError } from './lib/friendlyError';
+import { NativeTools } from './NativeTools';
+import { SettingDialog } from './SettingDialog';
+import { ToolRow, ToolSection } from './ToolRow';
 const inputLabels = {
   stereo: {
     name: 'Stereo',

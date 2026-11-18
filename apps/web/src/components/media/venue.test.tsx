@@ -8,14 +8,15 @@ import {
   within,
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
 import {
-  VenueConflict,
   keepVenuePreview,
   protectState,
   venueCommand,
-  venueState,
+  VenueConflict,
   type VenueSettings,
   type VenueState,
+  venueState,
 } from '../../api';
 import { DeviceError } from '../../lib/friendlyError';
 import { leaveScreen } from '../../lib/leaveGuard';

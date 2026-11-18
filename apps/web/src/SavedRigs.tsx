@@ -1,18 +1,20 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Button } from './components/ui/button';
-import { PresetRow } from './features/library/PresetRow';
-import { FailureNotice } from './components/ui/failure';
-import { useFailure } from './lib/useFailure';
-import { Checkbox } from './components/ui/checkbox';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
+
 import { AdjustmentDialog } from './AdjustmentDialog';
-import { detailsMatch } from './presetMetadata';
 import {
   libraryCatalog,
-  rigLibrary,
-  rigAudioState,
-  type RigPage,
   type PresetDetails,
+  rigAudioState,
+  rigLibrary,
+  type RigPage,
 } from './api';
+import { Button } from './components/ui/button';
+import { Checkbox } from './components/ui/checkbox';
+import { FailureNotice } from './components/ui/failure';
+import { PresetRow } from './features/library/PresetRow';
+import { duplicatePreset, setListMember } from './features/library/setList';
+import { useFailure } from './lib/useFailure';
+import { requestMidiAssignments } from './midiNavigation';
 import {
   GAPLESS_BANK_SIZE,
   gaplessBank,
@@ -23,8 +25,7 @@ import {
   rigTopologyLabel,
   writeKeepReady,
 } from './presetChoices';
-import { requestMidiAssignments } from './midiNavigation';
-import { duplicatePreset, setListMember } from './features/library/setList';
+import { detailsMatch } from './presetMetadata';
 
 /**
  * Portable rigs in the Library: rows look and play like every other

@@ -7,6 +7,7 @@ import {
   within,
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
 import { sceneBlends } from './api';
 import { SceneChange } from './SceneChange';
 vi.mock('./api', () => ({ sceneBlends: vi.fn() }));

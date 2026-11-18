@@ -4,39 +4,40 @@
  *
  * @see docs/factory-collection.md
  */
-import { describe, expect, it } from 'vitest';
 import Ajv from 'ajv/dist/2020';
+import { describe, expect, it } from 'vitest';
+
 import schema from '../../../../docs/presets/manifest.schema.json';
-import catalog from '../fixtures/factory-lv2.json';
 import type { Lv2Plugin } from '../api';
-import type { RigNativeSource } from '../generated/contract';
 import { allFactoryRecipes } from '../factoryCatalog';
-import {
-  buildFactoryRecipe,
-  factoryMissingPlugins,
-  factoryRoles,
-  recipeEffects,
-  sceneControlProblems,
-  type FactoryRecipe,
-} from '../factoryRecipes';
 import {
   factoryGenres,
   factoryPackFor,
   factoryPluginNames,
   validateFactoryMetadata,
 } from '../factoryMetadata';
+import {
+  buildFactoryRecipe,
+  factoryMissingPlugins,
+  type FactoryRecipe,
+  factoryRoles,
+  recipeEffects,
+  sceneControlProblems,
+} from '../factoryRecipes';
 import { factoryVoices, isFactoryVoice } from '../factoryVoices';
+import catalog from '../fixtures/factory-lv2.json';
+import type { RigNativeSource } from '../generated/contract';
 import { scenesKey } from '../sceneFormat';
 import {
   oxidalEffectPlugins,
   oxidalEffectsFeatured,
   oxidalEffectsSetList,
   oxidalEffectsShowcaseRecipes,
+  type OxidalFeaturedEffect,
   oxidalGenreSet,
   oxidalLimitRigIds,
   oxidalMomentSounds,
   oxidalWorshipSetList,
-  type OxidalFeaturedEffect,
 } from './oxidalEffectsShowcase';
 import { tone3000CaptureBudget } from './tone3000Showcase';
 

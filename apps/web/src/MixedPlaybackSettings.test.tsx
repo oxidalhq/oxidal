@@ -6,13 +6,14 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { MixedPlaybackSettings } from './MixedPlaybackSettings';
+
 import {
+  type AudioProbe,
   probeAudio,
   rigAudioCommand,
-  type AudioProbe,
   type RigAudioState,
 } from './api';
+import { MixedPlaybackSettings } from './MixedPlaybackSettings';
 
 vi.mock('./api', () => ({
   probeAudio: vi.fn(),

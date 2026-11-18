@@ -1,6 +1,7 @@
-import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
 import { expect, userEvent, within } from 'storybook/test';
+
 import { Title } from '../components/ui/text';
 import { SceneEditor } from './scene-editor';
 import { FOUR_JOBS, FOUR_SCENES } from './scene-editor.fixtures';

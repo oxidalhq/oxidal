@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+
 import type { RigDocument } from '../../api';
 import type { RigNativeSource } from '../../generated/contract';
 import { readLanes } from '../../rigEdit';

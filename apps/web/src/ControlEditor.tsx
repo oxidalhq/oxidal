@@ -1,11 +1,12 @@
+import { useEffect, useRef, useState } from 'react';
+
+import { AdjustmentDialog } from './AdjustmentDialog';
+import { sendCommand, type Snapshot } from './api';
+import { Button } from './components/ui/button';
+import { EditQueue } from './editQueue';
 import { friendlyError } from './lib/friendlyError';
 import type { ControlScale } from './lv2Control';
-import { useEffect, useRef, useState } from 'react';
-import { sendCommand, type Snapshot } from './api';
 import { TouchAdjust } from './TouchAdjust';
-import { EditQueue } from './editQueue';
-import { AdjustmentDialog } from './AdjustmentDialog';
-import { Button } from './components/ui/button';
 
 type Parameter = Snapshot['parameters'][number];
 export function ControlEditor({

@@ -20,6 +20,7 @@
  * @see os/README.md
  * @see docs/media.md
  */
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   copyFileSync,
@@ -30,7 +31,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
+
 import { root, run } from './process.mjs';
 
 const host = process.env.OXIDAL_PI ?? 'oxidal-admin@oxidal.local';

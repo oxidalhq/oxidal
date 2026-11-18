@@ -1,5 +1,6 @@
-import { useEffect, useId, useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+
 import { Button } from './components/ui/button';
 
 /** Relative adjustment: touching the track never seeks to an absolute value.

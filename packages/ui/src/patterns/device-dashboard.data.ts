@@ -1,3 +1,5 @@
+import type { DeviceReadings } from './device-dashboard';
+
 /** Example readings in the shape the device reports (monitor.rs) or would report. */
 export const STREAM = {
   device: 'Hotone Jogg',
@@ -104,8 +106,6 @@ export const DROPOUTS = Array.from({ length: 10 }, (_, i) => ({
   minute: i - 9,
   count: i === 3 ? 2 : i === 7 ? 1 : 0,
 }));
-
-import type { DeviceReadings } from './device-dashboard';
 
 /** All the example readings, for stories and reference screens. */
 export const READINGS: DeviceReadings = {

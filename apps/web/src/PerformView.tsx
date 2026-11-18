@@ -5,22 +5,23 @@ import {
   CaretRight,
 } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
+
+import './ChainView.css';
+import './PerformView.css';
 import {
+  type MidiPosition,
   midiPosition,
+  type Monitoring,
   muteMidi,
   navigateMidi,
-  type MidiPosition,
-  type Monitoring,
 } from './api';
-import { friendlyError } from './lib/friendlyError';
-import { GuitarSwitch } from './GuitarSettings';
-import { MasterLevel } from './MasterLevel';
 import { PerformPlayerRow } from './components/media/PerformPlayerRow';
+import { GuitarSwitch } from './GuitarSettings';
+import { friendlyError } from './lib/friendlyError';
+import { MasterLevel } from './MasterLevel';
 import { useMonitorReadings } from './monitorFeed';
 import { setPerform, usePerform } from './performState';
 import type { RigLaneVM } from './rigChain';
-import './ChainView.css';
-import './PerformView.css';
 
 const FLOOR_DB = -60;
 const HOLD_MS = 1500;

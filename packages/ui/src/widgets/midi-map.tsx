@@ -1,19 +1,20 @@
 import { Warning } from '@phosphor-icons/react';
-import {
-  DEFAULT_MAP,
-  DEFAULT_TARGETS,
-  clear,
-  formatAddress,
-  midiProblems,
-  type MidiTargetInfo,
-} from '../lib/midi';
+
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { useConfirm } from '../components/ui/confirm';
 import { List, ListRow } from '../components/ui/list-row';
-import { Caption } from '../components/ui/text';
-import { useMidi } from './midi-context';
 import { StableLabel } from '../components/ui/stable-label';
+import { Caption } from '../components/ui/text';
+import {
+  clear,
+  DEFAULT_MAP,
+  DEFAULT_TARGETS,
+  formatAddress,
+  midiProblems,
+  type MidiTargetInfo,
+} from '../lib/midi';
+import { useMidi } from './midi-context';
 
 /**
  * Settings › MIDI: every control you can map, grouped, with what it is

@@ -1,5 +1,5 @@
-import * as React from 'react';
 import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
+import * as React from 'react';
 
 export function ToggleGroup({
   className = '',

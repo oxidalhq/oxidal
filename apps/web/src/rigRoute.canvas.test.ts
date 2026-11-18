@@ -1,13 +1,15 @@
-import { expect, it } from 'vitest';
 import Ajv from 'ajv/dist/2020';
+import { expect, it } from 'vitest';
+
 import schema from '../../../docs/presets/manifest.schema.json';
 import type { Lv2Plugin, Preset, RigDocument } from './api';
-import { chainRoute, routeSpot, type IdStep } from './rigChain';
-import { lv2Effect, sceneRig, type NativeDraft } from './rigDraft';
+import { chainRoute, type IdStep, routeSpot } from './rigChain';
+import { lv2Effect, type NativeDraft, sceneRig } from './rigDraft';
 import {
   buildRoute,
   buildSceneRoute,
   readRoute,
+  type Route,
   routeAddPath,
   routeDuplicate,
   routeInsertAt,
@@ -20,7 +22,6 @@ import {
   routeStep,
   sceneSplitIndex,
   sceneTones,
-  type Route,
 } from './rigRoute';
 import { addSceneEffect } from './sceneEdit';
 import { readScenes } from './sceneFormat';

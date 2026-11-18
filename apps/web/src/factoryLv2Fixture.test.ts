@@ -5,9 +5,10 @@
  * @see docs/lv2.md
  */
 import { expect, it } from 'vitest';
-import catalog from './fixtures/factory-lv2.json';
+
 import layouts from '../../../crates/oxidal-lv2/scalar-state.json';
 import type { Lv2Plugin } from './api';
+import catalog from './fixtures/factory-lv2.json';
 
 const plugins = catalog as Lv2Plugin[];
 const scalar: Record<string, { controls: string[]; atoms: string[] }> = layouts;

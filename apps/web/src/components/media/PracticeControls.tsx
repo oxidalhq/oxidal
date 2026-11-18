@@ -4,9 +4,11 @@
  *
  * @see docs/media.md#song-preparation-and-practice-timing
  */
-import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { Metronome, Repeat, Waveform } from '@phosphor-icons/react';
-import { practiceTiming, type PracticeTiming } from '../../api';
+import { type PointerEvent, useEffect, useRef, useState } from 'react';
+
+import './media.css';
+import { type PracticeTiming, practiceTiming } from '../../api';
 import type { PlayerCommand } from '../../generated/contract';
 import { deviceSentence } from '../../lib/friendlyError';
 import { clock, tapTempo } from '../../lib/playerClock';
@@ -15,7 +17,6 @@ import { Slider } from '../ui/slider';
 import { Switch } from '../ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import { usePlayerPosition, useProtect, useSessionMedia } from './sessionMedia';
-import './media.css';
 
 type ClickCommand = Extract<PlayerCommand, { kind: 'set_click' }>['click'];
 const SPEEDS = [50, 75, 100, 125, 150];

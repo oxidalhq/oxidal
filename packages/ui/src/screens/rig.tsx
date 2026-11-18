@@ -1,12 +1,12 @@
 import { Button } from '../components/ui/button';
 import { Card, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
-import { RigSurface } from '../patterns/rig-surface';
-import { SCENES, SERIAL_ROUTE } from '../patterns/rig.fixtures';
-import { useRigDemo } from '../patterns/use-rig.demo';
-import { NamBlockToolsDemo } from '../patterns/nam-block.demo';
-import { BLOCK_TYPES, MODELS } from '../patterns/swap.fixtures';
 import { EFFECTS } from '../patterns/block-chooser.data';
+import { NamBlockToolsDemo } from '../patterns/nam-block.demo';
+import { SCENES, SERIAL_ROUTE } from '../patterns/rig.fixtures';
+import { RigSurface } from '../patterns/rig-surface';
 import { useModelDownloads } from '../patterns/swap.demo';
+import { BLOCK_TYPES, MODELS } from '../patterns/swap.fixtures';
+import { useRigDemo } from '../patterns/use-rig.demo';
 
 /** The Rig screen: the rig surface, or the card that says why audio is not playing. */
 export function Rig({ audio = true }: { audio?: boolean }) {

@@ -6,10 +6,11 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { afterEach, expect, it } from 'vitest';
+
 import {
-  WorkspaceMemory,
-  useWorkspaceState,
   useWorkspaceNavigation,
+  useWorkspaceState,
+  WorkspaceMemory,
 } from './workspaceMemory';
 afterEach(() => {
   cleanup();

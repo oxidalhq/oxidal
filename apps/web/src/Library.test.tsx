@@ -6,8 +6,9 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { Library } from './Library';
+
 import { importPreset, presetLibrary } from './api';
+import { Library } from './Library';
 
 vi.mock('./api', () => ({
   importPreset: vi.fn(),

@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+
 import type { Control } from './generated/contract';
 import { oxidalEffectControls } from './oxidalEffectLabels';
 

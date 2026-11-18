@@ -1,21 +1,22 @@
-import { openComposer, openSounds, setDisplayMode } from './display';
-import { createHash, randomUUID } from 'node:crypto';
+import AxeBuilder from '@axe-core/playwright';
 import {
-  test,
+  type APIRequestContext,
   expect,
   type Locator,
   type Page,
-  type APIRequestContext,
+  test,
 } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
-import { readFileSync, readdirSync } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import type { Lv2Plugin, Preset } from '../src/api';
-import { lv2Effect, sceneRig, type NativeDraft } from '../src/rigDraft';
-import { buildRoute, type Route } from '../src/rigRoute';
 import { chainRoute } from '../src/rigChain';
+import { lv2Effect, type NativeDraft, sceneRig } from '../src/rigDraft';
+import { buildRoute, type Route } from '../src/rigRoute';
 import { addSceneEffect } from '../src/sceneEdit';
+import { openComposer, openSounds, setDisplayMode } from './display';
 const fixtures = new URL(
   '../../../crates/oxidal-presets/tests/fixtures/',
   import.meta.url,

@@ -1,7 +1,7 @@
-import type { EffectChoice } from './block-chooser';
-import { delay, drive, gate, mod, reverb } from './rig.fixtures';
 import type { BlockSource } from '../widgets/block-source';
 import { SOURCES } from '../widgets/block-source.data';
+import type { EffectChoice } from './block-chooser';
+import { delay, drive, gate, mod, reverb } from './rig.fixtures';
 
 const named =
   (label: string, caption: string) => (b: ReturnType<typeof drive>) => ({

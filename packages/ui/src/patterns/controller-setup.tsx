@@ -1,10 +1,9 @@
-import * as React from 'react';
 import { ArrowLeft } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
+import * as React from 'react';
+
 import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle } from '../components/ui/card';
 import { Segment, SegmentedControl } from '../components/ui/segmented';
-import { StepProgress } from '../components/ui/states';
 import {
   Select,
   SelectContent,
@@ -12,7 +11,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import { StepProgress } from '../components/ui/states';
 import { Caption } from '../components/ui/text';
+import { cn } from '../lib/cn';
 import type { ControllerProfile, SwitchAction } from '../widgets/controllers';
 
 const DOES: Record<SwitchAction['kind'], string> = {

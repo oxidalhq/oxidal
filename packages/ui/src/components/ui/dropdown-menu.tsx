@@ -1,6 +1,7 @@
-import * as React from 'react';
-import * as MenuPrimitive from '@radix-ui/react-dropdown-menu';
 import { Check } from '@phosphor-icons/react';
+import * as MenuPrimitive from '@radix-ui/react-dropdown-menu';
+import * as React from 'react';
+
 import { cn } from '../../lib/cn';
 
 /**

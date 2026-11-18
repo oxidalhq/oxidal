@@ -1,18 +1,19 @@
-import { RecoveryAction } from './components/ui/failure';
-import { useFailure } from './lib/useFailure';
-import { friendlyError } from './lib/friendlyError';
 import { useEffect, useRef, useState } from 'react';
-import { MidiControls } from './SceneMidi';
-import { MidiMapScreen } from './MidiMapScreen';
+
 import {
-  type MidiMap,
-  playbackState,
-  playbackCommand,
-  rigAudioState,
-  rigAudioCommand,
   type AudioState,
+  type MidiMap,
+  playbackCommand,
+  playbackState,
+  rigAudioCommand,
   type RigAudioState,
+  rigAudioState,
 } from './api';
+import { RecoveryAction } from './components/ui/failure';
+import { friendlyError } from './lib/friendlyError';
+import { useFailure } from './lib/useFailure';
+import { MidiMapScreen } from './MidiMapScreen';
+import { MidiControls } from './SceneMidi';
 
 /** Settings and Rig configure the same sounding MIDI owner. */
 export function MidiSettings({ connected }: { connected: boolean }) {

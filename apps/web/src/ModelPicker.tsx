@@ -1,18 +1,31 @@
-import { Loading } from './components/ui/loading';
-import { friendlyError } from './lib/friendlyError';
 import {
-  CaretRight,
   ArrowLeft,
+  CaretRight,
+  Check,
   CloudArrowDown,
   FolderOpen,
-  Play,
   MagnifyingGlass,
-  Check,
+  Play,
 } from '@phosphor-icons/react';
-import { GearIcon, GearLabel } from './GearIcon';
 import { useEffect, useRef, useState } from 'react';
+
 import { AdjustmentDialog } from './AdjustmentDialog';
+import {
+  type LocalModelPage,
+  localModels,
+  type ModelPage,
+  stageLocalCollection,
+  stageTone3000,
+  tone3000Models,
+  tone3000Tones,
+  toneImage,
+  type TonePage,
+  type ToneQuery,
+  uploadLocalModel,
+} from './api';
 import { Button } from './components/ui/button';
+import { DialogFooter } from './components/ui/dialog';
+import { Loading } from './components/ui/loading';
 import {
   Select,
   SelectContent,
@@ -20,22 +33,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from './components/ui/select';
-import { DialogFooter } from './components/ui/dialog';
 import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
+import { GearIcon, GearLabel } from './GearIcon';
+import { friendlyError } from './lib/friendlyError';
 import { remoteProblem, useSessionState } from './lib/sessionState';
-import {
-  stageTone3000,
-  localModels,
-  uploadLocalModel,
-  stageLocalCollection,
-  type LocalModelPage,
-  tone3000Models,
-  tone3000Tones,
-  type ModelPage,
-  type TonePage,
-  type ToneQuery,
-  toneImage,
-} from './api';
 
 /** Gear types TONE3000 can narrow a list to, per model type. */
 const GEARS = {

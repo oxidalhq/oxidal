@@ -1,4 +1,5 @@
-import { useState, type CSSProperties } from 'react';
+import { type CSSProperties, useState } from 'react';
+
 import { formatTime, spokenTime } from '../../lib/playerClock';
 import { usePlayerPosition, useSessionMedia } from './sessionMedia';
 

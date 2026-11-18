@@ -1,7 +1,7 @@
-import { friendlyError } from './lib/friendlyError';
-import { useEffect, useState } from 'react';
 import { ArrowClockwise, DownloadSimple, FunnelX } from '@phosphor-icons/react';
-import { controlAudit, type ControlAudit as History } from './api';
+import { useEffect, useState } from 'react';
+
+import { type ControlAudit as History, controlAudit } from './api';
 import { Button } from './components/ui/button';
 import {
   Select,
@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from './components/ui/select';
+import { friendlyError } from './lib/friendlyError';
 
 const labels: Record<History['records'][number]['operation'], string> = {
   native_audio: 'TONE3000 audio',

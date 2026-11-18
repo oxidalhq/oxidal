@@ -2,11 +2,11 @@
 // at the widths the owner plays from, failing when the page or an element
 // runs off the side of the screen. (Accessibility and interactions are
 // covered by `pnpm test:stories`; this checks what they cannot: overflow.)
-import { createServer } from 'node:http';
-import { existsSync, readFileSync } from 'node:fs';
-import { extname, join, resolve } from 'node:path';
-import { chromium } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { chromium } from '@playwright/test';
+import { existsSync, readFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { extname, join, resolve } from 'node:path';
 
 const WIDTHS = [
   ['Z Fold 4 cover', 344, 882],

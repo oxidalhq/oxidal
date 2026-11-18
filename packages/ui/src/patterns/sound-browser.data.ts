@@ -1,5 +1,5 @@
-import type { OxidalSound } from './sound-browser';
 import { SOURCES } from '../widgets/block-source.data';
+import type { OxidalSound } from './sound-browser';
 
 /** Example sounds, from the product's own recipes (descriptions shortened). */
 export const SOUNDS: OxidalSound[] = [

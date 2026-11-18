@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react';
 import { ArrowSquareOut } from '@phosphor-icons/react';
+import type { ReactNode } from 'react';
+
 import { toneLink } from '../../../toneLink';
 
 /**

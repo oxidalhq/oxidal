@@ -1,8 +1,9 @@
-import { setDisplayMode } from './display';
-import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { expect, test } from '@playwright/test';
 import { mkdir, readFile } from 'node:fs/promises';
+
 import type { Monitoring } from '../src/api';
+import { setDisplayMode } from './display';
 test('monitor shows measured stereo data, freezes, resets and marks stale readings', async ({
   page,
 }, info) => {

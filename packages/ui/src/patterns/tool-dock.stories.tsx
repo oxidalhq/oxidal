@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
+
 import { Caption, Title } from '../components/ui/text';
 import { ToolDockDemo } from './tool-dock.demo';
 

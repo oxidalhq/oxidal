@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
+
 import { FirstRun } from '../patterns/first-run';
 
 /** The first time Oxidal opens: five steps, Wi-Fi first. */

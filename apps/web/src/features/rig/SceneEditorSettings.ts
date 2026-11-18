@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
+
 import { installedLv2, type Lv2Plugin, type RigControl } from '../../api';
 import { controlLabel } from '../../lv2Control';
 import {
-  MAX_SCENE_CONTROLS,
   blockLabel,
+  MAX_SCENE_CONTROLS,
   type SceneControl,
 } from '../../sceneEdit';
 import type { RigViewProps } from './useMixedRigSession';

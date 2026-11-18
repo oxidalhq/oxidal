@@ -1,4 +1,3 @@
-import { choiceSummary } from './presetChoices';
 import {
   cleanup,
   fireEvent,
@@ -7,25 +6,27 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { RigPresetSelector } from './RigPresetSelector';
+
 import {
+  libraryCatalog,
   nativeState,
+  presetDetails,
   presetLibrary,
   rigLibrary,
-  libraryCatalog,
-  presetDetails,
 } from './api';
+import { allFactoryRecipes } from './factoryCatalog';
 import {
   saveReadySound,
   unsavedReadySounds,
 } from './features/library/oxidal/readySounds';
-import { allFactoryRecipes } from './factoryCatalog';
+import { choiceSummary } from './presetChoices';
 import {
   assertAuditionOwner,
-  controlGroup,
   confirmedControlDisplay,
+  controlGroup,
   movedBlockOrder,
 } from './rigControls';
+import { RigPresetSelector } from './RigPresetSelector';
 vi.mock('./features/library/oxidal/readySounds', () => ({
   unsavedReadySounds: vi.fn().mockResolvedValue([]),
   saveReadySound: vi.fn(),

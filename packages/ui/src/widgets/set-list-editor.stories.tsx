@@ -1,13 +1,14 @@
-import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
 import { expect, userEvent, within } from 'storybook/test';
-import { SetListEditor, type SetListEntry } from './set-list-editor';
+
 import {
   FRIDAY_ENTRIES,
   SET_PRESETS,
   SET_SHEETS,
   SET_TRACKS,
 } from './set-list.data';
+import { SetListEditor, type SetListEntry } from './set-list-editor';
 
 /**
  * The set list in one place: add presets (several at once), drag them into

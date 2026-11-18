@@ -1,19 +1,12 @@
-import { friendlyError } from './lib/friendlyError';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
-import { useWorkspaceState } from './workspaceMemory';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { EngineSettings } from './EngineSettings';
-import { MasterLevel } from './MasterLevel';
-import { VenueEq } from './components/media/VenueEq';
-import { leaveScreen } from './lib/leaveGuard';
-import { NativeDefaults } from './NativeDefaults';
-import { PlaybackSettings } from './PlaybackSettings';
+
 import {
-  audioDevices,
-  probeAudio,
   type AudioDevices,
+  audioDevices,
   type AudioProbe,
+  probeAudio,
 } from './api';
+import { VenueEq } from './components/media/VenueEq';
 import { Button } from './components/ui/button';
 import {
   Select,
@@ -22,6 +15,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from './components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
+import { EngineSettings } from './EngineSettings';
+import { friendlyError } from './lib/friendlyError';
+import { leaveScreen } from './lib/leaveGuard';
+import { MasterLevel } from './MasterLevel';
+import { NativeDefaults } from './NativeDefaults';
+import { PlaybackSettings } from './PlaybackSettings';
+import { useWorkspaceState } from './workspaceMemory';
 
 /** Hardware inspection only; playback lifecycle stays separate from the editor service.
  * @see docs/audio.md

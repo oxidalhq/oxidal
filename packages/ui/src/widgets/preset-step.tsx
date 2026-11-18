@@ -1,7 +1,8 @@
 import { CaretLeft, CaretRight } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
+
 import { Button } from '../components/ui/button';
 import { Caption, Eyebrow, Title } from '../components/ui/text';
+import { cn } from '../lib/cn';
 
 /**
  * Where you are in the set list and the two buttons that move you: the

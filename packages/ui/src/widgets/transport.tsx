@@ -1,4 +1,3 @@
-import * as React from 'react';
 import {
   Metronome,
   Pause,
@@ -8,10 +7,12 @@ import {
   SkipForward,
   Stop,
 } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
+import * as React from 'react';
+
 import { Button } from '../components/ui/button';
-import { Toggle } from '../components/ui/toggle';
 import { Readout } from '../components/ui/text';
+import { Toggle } from '../components/ui/toggle';
+import { cn } from '../lib/cn';
 import { formatTime } from '../lib/time';
 
 export type TransportState = 'stopped' | 'cued' | 'playing' | 'paused';

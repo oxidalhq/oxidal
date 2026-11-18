@@ -1,10 +1,11 @@
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { createElement } from 'react';
-import { fireEvent, render, screen, cleanup } from '@testing-library/react';
 import { vi } from 'vitest';
-import { TouchAdjust } from './TouchAdjust';
 import { expect, it } from 'vitest';
-import { controlDisplay, lv2Control, scalePointLabel } from './lv2Control';
+
 import type { Lv2Plugin } from './api';
+import { controlDisplay, lv2Control, scalePointLabel } from './lv2Control';
+import { TouchAdjust } from './TouchAdjust';
 
 const port: Lv2Plugin['ports'][number] = {
   index: 0,

@@ -6,12 +6,13 @@ import {
   Monitor,
   Plug,
   PuzzlePiece,
-  Waveform,
   SlidersHorizontal,
   SpeakerHifi,
   UserCircle,
+  Waveform,
   Wrench,
 } from '@phosphor-icons/react';
+
 import type { Section } from '../patterns/workspace';
 
 export const SETTINGS_SECTIONS: Section[] = [

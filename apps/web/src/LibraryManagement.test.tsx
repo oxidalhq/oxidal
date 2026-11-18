@@ -6,8 +6,9 @@ import {
   screen,
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
+import { type LibraryCatalog, libraryCatalog } from './api';
 import { LibraryManagement } from './LibraryManagement';
-import { libraryCatalog, type LibraryCatalog } from './api';
 vi.mock('./presetChoices', () => ({
   playScenes: vi.fn(),
   playTone3000: vi.fn(),

@@ -7,17 +7,18 @@ import {
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
 import {
   boosts,
+  type BoostState,
   calibration,
   calibrationCoverage,
-  guitarProfiles,
-  unitLevels,
-  type BoostState,
   type CalibrationState,
   type GuitarProfiles,
+  guitarProfiles,
   type Monitoring,
   type UnitLevels,
+  unitLevels,
 } from './api';
 import { useMonitorFeed } from './monitorFeed';
 import { SoundCheck } from './SoundCheck';

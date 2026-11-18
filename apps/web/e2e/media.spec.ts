@@ -1,9 +1,10 @@
 import {
-  expect,
-  test,
   type APIRequestContext,
+  expect,
   type Page,
+  test,
 } from '@playwright/test';
+
 import { setDisplayMode } from './display';
 
 /**

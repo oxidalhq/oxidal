@@ -1,6 +1,6 @@
 import { Check } from '@phosphor-icons/react';
 import { clsx } from 'clsx';
-import { forwardRef, type ComponentProps } from 'react';
+import { type ComponentProps, forwardRef } from 'react';
 import { twMerge } from 'tailwind-merge';
 
 /** Shared checkbox for selection and acknowledgement, with native form semantics. */

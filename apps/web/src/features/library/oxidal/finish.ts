@@ -4,23 +4,23 @@ import {
   effectPacks,
   installedLv2,
   libraryCatalog,
+  type Lv2Plugin,
   nativeDefaults,
   presetDetails,
   publishRig,
   rigLibrary,
-  type Lv2Plugin,
 } from '../../../api';
+import { factoryMetadata, factoryMissingPacks } from '../../../factoryMetadata';
+import {
+  buildFactoryRecipe,
+  type FactoryRecipe,
+  type FactoryRole,
+  factoryRoles,
+} from '../../../factoryRecipes';
 import type {
   NativeDefaultSettings,
   RigNativeSource,
 } from '../../../generated/contract';
-import { factoryMetadata, factoryMissingPacks } from '../../../factoryMetadata';
-import {
-  buildFactoryRecipe,
-  factoryRoles,
-  type FactoryRecipe,
-  type FactoryRole,
-} from '../../../factoryRecipes';
 import { builtName } from './oxidalSounds.model';
 
 /**

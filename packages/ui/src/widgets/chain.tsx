@@ -1,9 +1,10 @@
-import * as React from 'react';
 import { Plus } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
-import { glyphForBlock } from '../lib/block-glyphs';
-import { BlockGlyph } from './block-glyph';
+import * as React from 'react';
+
 import { Led } from '../components/ui/badge';
+import { glyphForBlock } from '../lib/block-glyphs';
+import { cn } from '../lib/cn';
+import { BlockGlyph } from './block-glyph';
 
 export type BlockKind = 'amp' | 'cab' | 'pedal' | 'time' | 'mod' | 'lv2';
 

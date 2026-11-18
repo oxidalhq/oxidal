@@ -5,18 +5,19 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
-import { LiveRig } from './LiveRig';
-import { WorkspaceMemory } from './workspaceMemory';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
 import {
-  presetArtwork,
+  type AudioState,
   playbackCommand,
   playbackState,
+  presetArtwork,
   removalPreview,
   removePreset,
-  type AudioState,
 } from './api';
+import { LiveRig } from './LiveRig';
+import { WorkspaceMemory } from './workspaceMemory';
 // Mute/Protect have their own tests; the Rig header only places them.
 vi.mock('./features/stage/StageControls', () => ({
   StageControls: () => null,

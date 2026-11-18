@@ -5,9 +5,10 @@
  *
  * @see docs/media.md#stem-mix-recipes
  */
-import { useState } from 'react';
 import { DownloadSimple, Faders } from '@phosphor-icons/react';
-import { saveSongMix, songView, type PlayerSnapshot } from '../../api';
+import { useState } from 'react';
+
+import { type PlayerSnapshot, saveSongMix, songView } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
 import { Button } from '../ui/button';
 import { Slider } from '../ui/slider';
@@ -18,18 +19,18 @@ import {
   useStemMixSender,
 } from './sessionMedia';
 import {
-  GAIN_MAX,
-  GAIN_MIN,
-  ROLE_ORDER,
   audible,
   controls,
   formatGain,
+  GAIN_MAX,
+  GAIN_MIN,
+  type Recipe,
+  ROLE_ORDER,
   roleLabel,
   sameRecipe,
-  withControls,
-  type Recipe,
   type StemControls,
   type StemRole,
+  withControls,
 } from './stemMix';
 
 export function StemMixer({

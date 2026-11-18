@@ -1,22 +1,23 @@
-import { expect, it } from 'vitest';
 import Ajv from 'ajv/dist/2020';
+import { expect, it } from 'vitest';
+
 import schema from '../../../../docs/presets/manifest.schema.json';
-import catalog from '../fixtures/factory-lv2.json';
+import type { Lv2Plugin } from '../api';
+import { validateFactoryMetadata } from '../factoryMetadata';
 import {
   buildFactoryRecipe,
   factoryMissingPlugins,
   factoryRoles,
 } from '../factoryRecipes';
-import { validateFactoryMetadata } from '../factoryMetadata';
 import {
   factoryVoiceIds,
   factoryVoices,
   isFactoryVoice,
 } from '../factoryVoices';
-import type { Lv2Plugin } from '../api';
+import catalog from '../fixtures/factory-lv2.json';
 import type { RigNativeSource } from '../generated/contract';
-import { hybridShowcaseRecipes } from './hybridShowcase';
 import { scenesKey } from '../sceneFormat';
+import { hybridShowcaseRecipes } from './hybridShowcase';
 
 const plugins = catalog as Lv2Plugin[];
 const source: RigNativeSource = {

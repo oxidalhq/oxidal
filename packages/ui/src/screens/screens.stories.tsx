@@ -1,9 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
+
 import { Library } from './library';
+import { Perform } from './perform';
 import { Rig } from './rig';
 import { Screen } from './shell';
-import { Perform } from './perform';
 
 /**
  * Every product screen rebuilt on the system with fixture data, inside the

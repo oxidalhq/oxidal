@@ -1,10 +1,11 @@
-import { useState } from 'react';
 import { Copy } from '@phosphor-icons/react';
+import { useState } from 'react';
+
+import './RigHeaderDuplicate.css';
 import { Button } from '../../components/ui/button';
 import { friendlyError } from '../../lib/friendlyError';
-import { duplicatePreset } from '../library/setList';
 import { OfflineEditor } from '../library/OfflineEditor';
-import './RigHeaderDuplicate.css';
+import { duplicatePreset } from '../library/setList';
 
 /**
  * Rig header Duplicate: "Name copy" of the saved preset in Mine, with its

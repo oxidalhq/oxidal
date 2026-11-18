@@ -1,14 +1,15 @@
-import { friendlyError } from './lib/friendlyError';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { unitLevels, type UnitLevels } from './api';
+
+import './MasterLevel.css';
+import { type UnitLevels, unitLevels } from './api';
 import {
+  formatLevel,
   LEVEL_MAX,
   LEVEL_MIN,
-  formatLevel,
   levelToPosition,
   positionToLevel,
 } from './levelTaper';
-import './MasterLevel.css';
+import { friendlyError } from './lib/friendlyError';
 
 const STEPS = 1000;
 

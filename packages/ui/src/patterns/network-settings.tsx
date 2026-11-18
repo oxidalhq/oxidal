@@ -1,5 +1,6 @@
-import * as React from 'react';
 import { Lock, WifiHigh, WifiLow, WifiMedium } from '@phosphor-icons/react';
+import * as React from 'react';
+
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import {
@@ -18,13 +19,13 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { Description } from '../components/ui/text';
-import { SettingGroup, SettingRow } from './settings-page';
 import { ConfirmChange } from './confirm-change';
 import {
+  type CertificateFile,
   DeviceAddresses,
   DeviceCertificate,
-  type CertificateFile,
 } from './device-access';
+import { SettingGroup, SettingRow } from './settings-page';
 
 export type WifiNetwork = {
   ssid: string;

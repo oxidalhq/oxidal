@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { safeLink } from './links';
 
 describe('safeLink', () => {

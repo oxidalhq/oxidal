@@ -1,8 +1,6 @@
-import * as React from 'react';
 import { ArrowCounterClockwise, MagnifyingGlass } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
-import { glyphFor } from '../lib/block-glyphs';
-import { controlLabel } from '../lib/plugin';
+import * as React from 'react';
+
 import { Button } from '../components/ui/button';
 import { CollapsibleSection } from '../components/ui/collapsible';
 import { NumberField } from '../components/ui/number-field';
@@ -16,8 +14,11 @@ import {
 } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
 import { Caption } from '../components/ui/text';
+import { glyphFor } from '../lib/block-glyphs';
+import { cn } from '../lib/cn';
+import { controlLabel } from '../lib/plugin';
 import { BlockGlyph } from '../widgets/block-glyph';
-import { SourceLine, type BlockSource } from '../widgets/block-source';
+import { type BlockSource, SourceLine } from '../widgets/block-source';
 
 /** One control of a plugin, as LV2 describes it. Only `symbol` and the range are certain. */
 export type PluginControl = {

@@ -1,11 +1,12 @@
+import type { Meta, StoryObj } from '@storybook/react-vite';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, userEvent, within } from 'storybook/test';
+
 import { Caption } from '../components/ui/text';
+import { HealthStatus } from './health-status';
 import { Meter, StereoMeter } from './meter';
 import { PresetStepper } from './preset-step';
-import { expect, userEvent, within } from 'storybook/test';
-import { HealthStatus } from './health-status';
 import { ResourceStrip } from './resource-strip';
 import { ScenePads } from './scene-pad';
 import { TunerFace } from './tuner-face';

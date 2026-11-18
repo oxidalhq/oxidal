@@ -6,8 +6,9 @@ import {
   within,
 } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+
 import type { Lv2Plugin, Preset, RigAudioState, RigDocument } from '../../api';
-import { lv2Effect, sceneRig, type NativeDraft } from '../../rigDraft';
+import { lv2Effect, type NativeDraft, sceneRig } from '../../rigDraft';
 import {
   buildRoute,
   buildSceneRoute,

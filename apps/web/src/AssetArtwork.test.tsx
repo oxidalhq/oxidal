@@ -6,8 +6,9 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { ArtworkDeck } from './AssetArtwork';
+
 import { presetArtwork, saveArtwork } from './api';
+import { ArtworkDeck } from './AssetArtwork';
 vi.mock('./api', () => ({
   presetArtwork: vi.fn(),
   saveArtwork: vi.fn(),

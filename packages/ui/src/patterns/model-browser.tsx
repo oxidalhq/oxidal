@@ -1,4 +1,3 @@
-import * as React from 'react';
 import {
   ArrowClockwise,
   CircleNotch,
@@ -6,9 +5,8 @@ import {
   MagnifyingGlass,
   Play,
 } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
-import { glyphFor } from '../lib/block-glyphs';
-import { useMedia } from '../lib/use-media';
+import * as React from 'react';
+
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { FilterSelect } from '../components/ui/filter-select';
@@ -16,10 +14,13 @@ import { List, ListRow } from '../components/ui/list-row';
 import { Segment, SegmentedControl } from '../components/ui/segmented';
 import { Progress } from '../components/ui/states';
 import { Caption, Eyebrow } from '../components/ui/text';
+import { glyphFor } from '../lib/block-glyphs';
+import { cn } from '../lib/cn';
+import { useMedia } from '../lib/use-media';
 import {
+  type BlockSource,
   SourceCard,
   SourcePicture,
-  type BlockSource,
 } from '../widgets/block-source';
 import { PoweredByTone3000 } from './credits';
 

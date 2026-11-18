@@ -1,13 +1,14 @@
-import type { BlockKind, RigBlockVM, RigLaneVM } from './rigChain';
 import { ArrowRight, Plus } from '@phosphor-icons/react';
 import {
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
   useEffect,
   useRef,
   useState,
-  type CSSProperties,
-  type PointerEvent as ReactPointerEvent,
 } from 'react';
+
 import './ChainView.css';
+import type { BlockKind, RigBlockVM, RigLaneVM } from './rigChain';
 
 /**
  * One chain for every engine: plain outlined tiles on a wire, an LED for the

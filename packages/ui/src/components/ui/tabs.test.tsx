@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it } from 'vitest';
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
 
 afterEach(cleanup);

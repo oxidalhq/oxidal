@@ -1,6 +1,7 @@
-import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+
 import { root } from './process.mjs';
 
 /** Local preview of the documented pre-1.0 Conventional Commit version policy.

@@ -1,7 +1,8 @@
 import { MusicNote, Scissors } from '@phosphor-icons/react';
+
+import { stateWord, useSessionMedia, useTimeText } from './sessionMedia';
 import { StateChip } from './StateChip';
 import { CompactTransport } from './TransportBar';
-import { stateWord, useSessionMedia, useTimeText } from './sessionMedia';
 
 const SPLIT_WORDS = {
   running: 'Splitting',

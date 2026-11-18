@@ -1,15 +1,16 @@
-import * as React from 'react';
 import { Faders, MusicNotes, Notebook, Waveform } from '@phosphor-icons/react';
+import * as React from 'react';
+
 import { parseSong } from '../lib/song';
+import { useRemembered } from '../lib/use-remembered';
 import { SheetViewer } from '../widgets/sheet-viewer';
 import type { StemRole } from '../widgets/stem-strip';
 import type { TransportState } from '../widgets/transport';
-import { useRemembered } from '../lib/use-remembered';
 import { TunerFace } from '../widgets/tuner-face';
 import { VenueEq } from '../widgets/venue-eq';
 import { VENUE_PROFILES } from '../widgets/venue-eq.data';
 import { BackingPanel, type BackingStems } from './backing-panel';
-import { ToolDock, type DockTool, type ToolPlaces } from './tool-dock';
+import { type DockTool, ToolDock, type ToolPlaces } from './tool-dock';
 
 const SONG = parseSong(
   `{title: Harbour Lights}

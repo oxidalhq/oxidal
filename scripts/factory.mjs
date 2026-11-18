@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /** Explicit local recipe assembly. @see docs/factory-collection.md */
-import { parseArgs } from 'node:util';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { buildFactoryRecipe } from '../apps/web/src/factoryRecipes.ts';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { parseArgs } from 'node:util';
+
 import { allFactoryRecipes as factoryRecipes } from '../apps/web/src/factoryCatalog.ts';
+import { buildFactoryRecipe } from '../apps/web/src/factoryRecipes.ts';
 const { values } = parseArgs({
   options: {
     api: { type: 'string', default: 'http://127.0.0.1:3230' },

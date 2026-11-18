@@ -1,4 +1,3 @@
-import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
   ArrowClockwise,
   ArrowCounterClockwise,
@@ -9,18 +8,20 @@ import {
   Play,
   Stop,
 } from '@phosphor-icons/react';
-import { Button } from '../../components/ui/button';
-import { RigPresetSelector } from '../../RigPresetSelector';
-import { StageControls } from '../stage/StageControls';
-import { TunerButton } from '../../TunerButton';
-import { RigHeaderDuplicate } from './RigHeaderDuplicate';
-import { WAITING_FOR_DEVICE } from '../../lib/deviceWait';
-import { choiceKey } from '../../presetChoices';
-import { requestMidiAssignments } from '../../midiNavigation';
-import type { RigViewProps } from './useMixedRigSession';
-import { rigBusy } from './mixedRigViewModel';
-import { historyShortcut } from './rigHistory';
 import { useEffect, useRef } from 'react';
+
+import { AdjustmentDialog } from '../../AdjustmentDialog';
+import { Button } from '../../components/ui/button';
+import { WAITING_FOR_DEVICE } from '../../lib/deviceWait';
+import { requestMidiAssignments } from '../../midiNavigation';
+import { choiceKey } from '../../presetChoices';
+import { RigPresetSelector } from '../../RigPresetSelector';
+import { TunerButton } from '../../TunerButton';
+import { StageControls } from '../stage/StageControls';
+import { rigBusy } from './mixedRigViewModel';
+import { RigHeaderDuplicate } from './RigHeaderDuplicate';
+import { historyShortcut } from './rigHistory';
+import type { RigViewProps } from './useMixedRigSession';
 
 /**
  * Rig header: preset selector, Perform, Save, Duplicate, Undo and Redo,

@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import type { AudioState } from './api';
-import { AdjustmentDialog } from './AdjustmentDialog';
-import { Button } from './components/ui/button';
-import { TouchAdjust } from './TouchAdjust';
-import { DialogFooter } from './components/ui/dialog';
-import { formatDefault } from './engineHelp';
-import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
-import { Switch } from './components/ui/switch';
+
 import './ChainView.css';
+import { AdjustmentDialog } from './AdjustmentDialog';
+import type { AudioState } from './api';
+import { Button } from './components/ui/button';
+import { DialogFooter } from './components/ui/dialog';
+import { Switch } from './components/ui/switch';
+import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
+import { formatDefault } from './engineHelp';
+import { TouchAdjust } from './TouchAdjust';
 
 /** Prepared engine/model setting: draft a value, then Apply (audio restarts). */
 export function SettingDialog({

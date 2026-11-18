@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+
+import './oxidal.css';
 import { AdjustmentDialog } from '../../../AdjustmentDialog';
 import { downloadVoice, tone3000Models, tone3000Tone } from '../../../api';
-import type { RigNativeSource } from '../../../generated/contract';
 import { Button } from '../../../components/ui/button';
 import { DialogFooter } from '../../../components/ui/dialog';
 import {
@@ -11,22 +12,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../../components/ui/select';
-import { factoryRoles, type FactoryRole } from '../../../factoryRecipes';
+import { type FactoryRole, factoryRoles } from '../../../factoryRecipes';
 import { factoryVoices, isFactoryVoice } from '../../../factoryVoices';
+import type { RigNativeSource } from '../../../generated/contract';
 import {
   DeviceError,
   errorDetails,
   friendlyError,
 } from '../../../lib/friendlyError';
-import { ToneLink } from './ToneLink';
 import {
+  type MissingTone,
   missingTones,
   roleLabel,
-  type MissingTone,
   type SoundItem,
 } from './oxidalSounds.model';
+import { ToneLink } from './ToneLink';
 import type { OxidalSounds } from './useOxidalSounds';
-import './oxidal.css';
 
 type Capture = { tone: number; model?: number };
 type Info =

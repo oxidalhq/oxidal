@@ -6,8 +6,9 @@ import {
   Stop,
 } from '@phosphor-icons/react';
 import type { ReactNode } from 'react';
+
 import { Button } from '../ui/button';
-import { useSessionMedia, type ShownState } from './sessionMedia';
+import { type ShownState, useSessionMedia } from './sessionMedia';
 
 function playLabel(state: ShownState) {
   return state === 'ended'

@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+
 import { ChainView } from './ChainView';
 import type { RigLaneVM } from './rigChain';
 afterEach(cleanup);

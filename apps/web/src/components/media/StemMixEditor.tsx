@@ -5,7 +5,6 @@
  *
  * @see docs/media.md#stem-mix-recipes
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowClockwise,
   ArrowCounterClockwise,
@@ -16,24 +15,27 @@ import {
   Trash,
   Warning,
 } from '@phosphor-icons/react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+
+import './media.css';
+import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
   cancelSongSplit,
   deleteSongMix,
   deleteSongSplit,
+  type MediaAsset,
+  type SavedSongMix,
   saveSongMix,
-  songView,
+  type SongSplitJob,
   songSplitJob,
+  type SongView,
+  songView,
   splitOptions,
   startSongSplit,
   stemArchivePath,
   stemWavPath,
   wavPath,
-  type MediaAsset,
-  type SavedSongMix,
-  type SongSplitJob,
-  type SongView,
 } from '../../api';
-import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { deviceSentence } from '../../lib/friendlyError';
 import { formatTime } from '../../lib/playerClock';
 import { Button } from '../ui/button';
@@ -45,29 +47,28 @@ import {
   useSessionMedia,
   useStemMixSender,
 } from './sessionMedia';
-import { StemMixer } from './StemMixer';
 import { MixLinks } from './SongLinkControls';
 import {
-  MODE_INFO,
   applyQuickMix,
   blankRecipe,
   commit,
   describeRecipe,
+  type Draft,
   freshHistory,
+  type History,
   matchingQuickMix,
+  MODE_INFO,
   quickMixes,
+  type Recipe,
   redo,
   roleLabel,
   sameRecipe,
+  type Split,
   splitLabel,
   splitRoles,
   undo,
-  type Draft,
-  type History,
-  type Recipe,
-  type Split,
 } from './stemMix';
-import './media.css';
+import { StemMixer } from './StemMixer';
 
 type Mode = Recipe['mode'];
 

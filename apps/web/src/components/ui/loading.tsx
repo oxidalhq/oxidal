@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
 import { CircleNotch } from '@phosphor-icons/react';
+import { useEffect, useState } from 'react';
 
 /**
  * One preloader for the whole interface (7.21). It waits ~300 ms before

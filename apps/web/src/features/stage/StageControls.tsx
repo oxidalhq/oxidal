@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
 import {
   LockSimple,
   LockSimpleOpen,
   SpeakerSlash,
 } from '@phosphor-icons/react';
-import { monitoring, protectState, setProtect } from '../../api';
+import { useEffect, useState } from 'react';
+
 import { AdjustmentDialog } from '../../AdjustmentDialog';
+import { monitoring, protectState, setProtect } from '../../api';
 import { Button } from '../../components/ui/button';
 import { friendlyError } from '../../lib/friendlyError';
 import { setOutputMute } from './outputMute';

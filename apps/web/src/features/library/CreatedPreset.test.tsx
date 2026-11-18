@@ -6,16 +6,17 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { CreatedPreset } from './CreatedPreset';
+
 import {
+  type AudioState,
+  type GraphAudioState,
   graphAudioState,
   playbackState,
-  rigAudioState,
-  type AudioState,
   type RigAudioState,
-  type GraphAudioState,
+  rigAudioState,
 } from '../../api';
 import { playScenes } from '../../presetChoices';
+import { CreatedPreset } from './CreatedPreset';
 vi.mock('../../api', () => ({
   graphAudioState: vi.fn(),
   playbackState: vi.fn(),

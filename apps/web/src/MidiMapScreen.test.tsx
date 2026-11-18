@@ -8,20 +8,21 @@ import {
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
-import { MidiMapScreen } from './MidiMapScreen';
+
 import {
   applyMidiTemplate,
+  type AudioState,
+  type LibraryCatalog,
   libraryCatalog,
   midiAction,
   midiDevices,
+  type MidiMap,
   midiMap,
+  type RigAudioState,
   testMidi,
   updateMidiMap,
-  type AudioState,
-  type LibraryCatalog,
-  type MidiMap,
-  type RigAudioState,
 } from './api';
+import { MidiMapScreen } from './MidiMapScreen';
 
 vi.mock('./api', () => ({
   learnMidi: vi.fn(),

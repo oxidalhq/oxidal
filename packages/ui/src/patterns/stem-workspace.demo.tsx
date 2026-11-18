@@ -1,10 +1,11 @@
 import * as React from 'react';
+
 import type { StemControls, StemRole } from '../widgets/stem-strip';
 import {
-  StemWorkspace,
   type StemImport,
   type StemMix,
   type StemSplit,
+  StemWorkspace,
 } from './stem-workspace';
 
 const on = (level = 0): StemControls => ({ level, muted: false, solo: false });

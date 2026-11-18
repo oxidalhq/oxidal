@@ -1,13 +1,14 @@
-import * as React from 'react';
 import {
   ArrowSquareOut,
   BookOpen,
   GithubLogo,
   User,
 } from '@phosphor-icons/react';
+import * as React from 'react';
+
+import { glyphForSource, type GlyphKey } from '../lib/block-glyphs';
 import { cn } from '../lib/cn';
 import { safeLink } from '../lib/links';
-import { glyphForSource, type GlyphKey } from '../lib/block-glyphs';
 import { BlockGlyph } from './block-glyph';
 
 /**

@@ -1,8 +1,9 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
+
+import { type NativeDefaults as Defaults, nativeDefaults } from './api';
 import { NativeDefaults } from './NativeDefaults';
-import { nativeDefaults, type NativeDefaults as Defaults } from './api';
 
 vi.mock('./api', () => ({ nativeDefaults: vi.fn() }));
 afterEach(() => {

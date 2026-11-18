@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../lib/cn';
+
 import { Segment, SegmentedControl } from '../components/ui/segmented';
 import {
   Select,
@@ -14,6 +14,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '../components/ui/tabs';
+import { cn } from '../lib/cn';
 
 export type Section = {
   id: string;

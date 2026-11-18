@@ -1,5 +1,5 @@
-import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vitest/config';
 
 /** Behaviour tests in jsdom. Stories run from `apps/storybook` in real Chromium. */
 export default defineConfig({

@@ -1,3 +1,4 @@
+import type { MidiDevices, MidiMap } from './api';
 import { Button } from './components/ui/button';
 import {
   Select,
@@ -6,7 +7,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from './components/ui/select';
-import type { MidiDevices, MidiMap } from './api';
 
 type Extra = NonNullable<MidiMap['extra_inputs']>[number];
 /** The first controller plus at most three more, as the device allows. */

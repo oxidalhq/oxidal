@@ -1,6 +1,5 @@
 import { ArrowRight } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
-import { healthOf } from '../lib/health';
+
 import { Button } from '../components/ui/button';
 import {
   Popover,
@@ -8,6 +7,8 @@ import {
   PopoverTrigger,
 } from '../components/ui/popover';
 import { Caption } from '../components/ui/text';
+import { cn } from '../lib/cn';
+import { healthOf } from '../lib/health';
 import type { ResourceReadings, ResourceState } from './resource-strip';
 
 const DOT = {

@@ -1,5 +1,5 @@
-import type { ComponentProps } from 'react';
 import { clsx } from 'clsx';
+import type { ComponentProps } from 'react';
 import { twMerge } from 'tailwind-merge';
 
 export function Alert({

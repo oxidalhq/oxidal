@@ -1,7 +1,8 @@
-import { spawnSync } from 'node:child_process';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import { compile } from 'json-schema-to-typescript';
+import { spawnSync } from 'node:child_process';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+
 import { rustEnv } from './process.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));

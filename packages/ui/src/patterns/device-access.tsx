@@ -1,5 +1,6 @@
-import * as React from 'react';
 import { DownloadSimple } from '@phosphor-icons/react';
+import * as React from 'react';
+
 import { Button } from '../components/ui/button';
 import { Segment, SegmentedControl } from '../components/ui/segmented';
 import { StableLabel } from '../components/ui/stable-label';

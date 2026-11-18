@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { glyphs, type GlyphKey } from '../lib/block-glyphs';
+
+import { type GlyphKey, glyphs } from '../lib/block-glyphs';
 import { BlockGlyph } from '../widgets/block-glyph';
 
 /**

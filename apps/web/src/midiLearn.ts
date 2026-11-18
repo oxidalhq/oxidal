@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+
 import { learnMidi } from './api';
 
 const gate = async (on: boolean) => learnMidi(on);

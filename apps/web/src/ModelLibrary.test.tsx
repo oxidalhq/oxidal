@@ -7,7 +7,8 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { localModels, uploadLocalModel, type LocalModel } from './api';
+
+import { type LocalModel, localModels, uploadLocalModel } from './api';
 import { ModelLibrary } from './ModelLibrary';
 vi.mock('./api', () => ({ localModels: vi.fn(), uploadLocalModel: vi.fn() }));
 const model = (title: string, tone_id = 0): LocalModel => ({

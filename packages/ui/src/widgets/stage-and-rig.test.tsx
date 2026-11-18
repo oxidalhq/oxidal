@@ -7,6 +7,7 @@ import {
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
+
 import { diffRoutes } from '../lib/route-diff';
 import { tempoFromTaps } from '../lib/tempo';
 import { SERIAL_ROUTE } from '../patterns/rig.fixtures';

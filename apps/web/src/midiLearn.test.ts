@@ -1,5 +1,6 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+
 import { learnMidi } from './api';
 import { firstAfter, useLearnGate } from './midiLearn';
 

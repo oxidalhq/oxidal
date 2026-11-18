@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+
 import { Caption, Eyebrow, Title } from '../components/ui/text';
 
 /**

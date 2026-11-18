@@ -1,22 +1,23 @@
-import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
+
 import { Caption } from '../components/ui/text';
 import {
   BlockFullEditor,
-  BlockQuickEditor,
   type BlockModel,
+  BlockQuickEditor,
 } from '../widgets/block-editor';
 import { RouteView } from '../widgets/route-view';
-import { PARALLEL_ROUTE, SCENES, SERIAL, SERIAL_ROUTE } from './rig.fixtures';
-import { RigSurface, type RigRoute } from './rig-surface';
-import { bigRig } from './big-rig.fixtures';
-import { BLOCK_TYPES, MODELS } from './swap.fixtures';
-import { EFFECTS } from './block-chooser.data';
-import { useRigDemo } from './use-rig.demo';
-import { useModelDownloads } from './swap.demo';
 import { FOUR_JOBS, FOUR_SCENES } from '../widgets/scene-editor.fixtures';
+import { bigRig } from './big-rig.fixtures';
+import { EFFECTS } from './block-chooser.data';
 import { NamBlockToolsDemo } from './nam-block.demo';
+import { PARALLEL_ROUTE, SCENES, SERIAL, SERIAL_ROUTE } from './rig.fixtures';
+import { type RigRoute, RigSurface } from './rig-surface';
+import { useModelDownloads } from './swap.demo';
+import { BLOCK_TYPES, MODELS } from './swap.fixtures';
+import { useRigDemo } from './use-rig.demo';
 
 /**
  * The rig: shape a sound. Try: hold a block to hear the rig without it;

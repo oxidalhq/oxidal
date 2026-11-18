@@ -1,4 +1,4 @@
-import { glyphFor, glyphs, type GlyphKey } from './blockGlyphs';
+import { glyphFor, type GlyphKey, glyphs } from './blockGlyphs';
 
 const gearLabels: Record<string, string> = {
   amp: 'Amp head',

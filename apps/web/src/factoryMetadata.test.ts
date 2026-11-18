@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { allFactoryRecipes } from './factoryCatalog.ts';
 import {
   allFactoryMetadataProblems,

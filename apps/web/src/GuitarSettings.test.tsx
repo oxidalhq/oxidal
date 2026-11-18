@@ -7,7 +7,8 @@ import {
   within,
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { boosts, guitarProfiles, monitoring, type GuitarProfiles } from './api';
+
+import { boosts, type GuitarProfiles, guitarProfiles, monitoring } from './api';
 import { gateFor, trimFor } from './useGuitars';
 vi.unmock('./GuitarSettings');
 vi.mock('./api', () => ({

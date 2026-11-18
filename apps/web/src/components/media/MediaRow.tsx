@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { DotsThree } from '@phosphor-icons/react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
+
 import { Button } from '../ui/button';
 
 export type MenuItem =

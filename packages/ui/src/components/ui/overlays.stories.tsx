@@ -1,6 +1,3 @@
-import { useState } from 'react';
-import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, userEvent, within } from 'storybook/test';
 import {
   ArrowsDownUp,
   Copy,
@@ -12,6 +9,10 @@ import {
   Plus,
   Trash,
 } from '@phosphor-icons/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
+import { expect, userEvent, within } from 'storybook/test';
+
 import { Badge } from './badge';
 import { Button } from './button';
 import { useConfirm } from './confirm';

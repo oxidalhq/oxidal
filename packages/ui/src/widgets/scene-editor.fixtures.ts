@@ -1,6 +1,4 @@
 import type { Step } from '../lib/route';
-import type { BlockModel } from './block-editor';
-import { SILENT, type SceneModel } from './scene-editor';
 import {
   amp,
   cab,
@@ -10,6 +8,8 @@ import {
   mod,
   reverb,
 } from '../patterns/rig.fixtures';
+import type { BlockModel } from './block-editor';
+import { type SceneModel, SILENT } from './scene-editor';
 
 const named = (block: BlockModel, label: string, caption?: string) => ({
   ...block,

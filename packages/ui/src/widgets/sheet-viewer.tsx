@@ -1,13 +1,14 @@
-import * as React from 'react';
 import { Minus, Pause, Play, Plus, TextAa } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
+import * as React from 'react';
+
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
-import { Toggle } from '../components/ui/toggle';
 import { Caption, Eyebrow, Readout, Title } from '../components/ui/text';
+import { Toggle } from '../components/ui/toggle';
+import { cn } from '../lib/cn';
 import {
-  hasChords,
   type ChordPart,
+  hasChords,
   type Song,
   type SongLine,
 } from '../lib/song';

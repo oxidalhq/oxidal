@@ -1,12 +1,13 @@
-import * as React from 'react';
 import {
   ArrowsClockwise,
-  Faders,
   ArrowsLeftRight,
+  Faders,
 } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
+import * as React from 'react';
+
 import { Badge, Led } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
+import { CollapsibleSection } from '../components/ui/collapsible';
 import { Combobox, type ComboboxOption } from '../components/ui/combobox';
 import { NumberField } from '../components/ui/number-field';
 import {
@@ -22,16 +23,16 @@ import {
   SheetHeader,
 } from '../components/ui/sheet';
 import { Slider } from '../components/ui/slider';
+import { StableLabel } from '../components/ui/stable-label';
+import { Switch } from '../components/ui/switch';
 import { Caption, Label, Title } from '../components/ui/text';
 import { Toggle } from '../components/ui/toggle';
-import { CollapsibleSection } from '../components/ui/collapsible';
-import { IrFacts } from './ir-facts';
-import { Switch } from '../components/ui/switch';
-import { VisualControl } from './visual-control';
-import type { ChainBlockModel } from './chain';
+import { cn } from '../lib/cn';
 import type { BlockSource } from './block-source';
 import { SourceLine } from './block-source';
-import { StableLabel } from '../components/ui/stable-label';
+import type { ChainBlockModel } from './chain';
+import { IrFacts } from './ir-facts';
+import { VisualControl } from './visual-control';
 
 export type BlockControl = {
   id: string;

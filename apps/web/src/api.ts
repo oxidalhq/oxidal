@@ -1,7 +1,8 @@
-import { deviceError } from './lib/friendlyError';
 import Ajv2020 from 'ajv/dist/2020';
-import schema from './generated/contract.schema.json';
+
 import type { Contract } from './generated/contract';
+import schema from './generated/contract.schema.json';
+import { deviceError } from './lib/friendlyError';
 
 export type Snapshot = Contract['snapshot'];
 export type Action = Contract['command']['action'];

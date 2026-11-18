@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../lib/cn';
+
 import { Segment, SegmentedControl } from '../components/ui/segmented';
 import {
   Select,
@@ -12,6 +12,7 @@ import {
 } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
 import { Caption, Eyebrow } from '../components/ui/text';
+import { cn } from '../lib/cn';
 import type { ControllerProfile } from '../widgets/controllers';
 
 export type SwitchMode = 'stomp' | 'scene' | 'preset';

@@ -1,6 +1,7 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
+
 import { root } from './process.mjs';
 
 const read = (path) => readFileSync(join(root, path), 'utf8');

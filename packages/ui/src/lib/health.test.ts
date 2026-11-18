@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+
 import { healthOf } from './health';
 
 const calm = {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { applyTogether } from './pathSides';
 
 /** A pretend rig: control values by side, and which sets fail. */

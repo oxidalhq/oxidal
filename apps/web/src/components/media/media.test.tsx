@@ -9,15 +9,16 @@ import {
 } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
 import {
+  type MediaAsset,
   mediaLibrary,
+  type Monitoring,
   monitoring,
   playerCommand,
+  type PlayerSnapshot,
   protectState,
   setPlayerOrder,
-  type MediaAsset,
-  type Monitoring,
-  type PlayerSnapshot,
 } from '../../api';
 import { DeviceError } from '../../lib/friendlyError';
 import { publishPlayer } from '../../lib/playerFeed';
@@ -25,8 +26,8 @@ import { BackingTracks } from './BackingTracks';
 import { NowPlaying } from './NowPlaying';
 import { PerformPlayerRow } from './PerformPlayerRow';
 import { MediaSheets } from './PlayerSheet';
+import { type SessionMedia, SessionMediaContext } from './sessionMedia';
 import { SessionMediaProvider } from './SessionMediaProvider';
-import { SessionMediaContext, type SessionMedia } from './sessionMedia';
 
 vi.mock('../../api', async (original) => ({
   ...(await original<typeof import('../../api')>()),

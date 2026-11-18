@@ -1,25 +1,26 @@
-import { friendlyError, errorDetails } from './lib/friendlyError';
-import { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
-  FolderOpen,
-  UploadSimple,
   CloudArrowDown,
+  FolderOpen,
   MagnifyingGlass,
   Trash,
+  UploadSimple,
   X,
 } from '@phosphor-icons/react';
-import { DeleteSoundDialog } from './features/library/DeleteSoundDialog';
-import { localModels, uploadLocalModel, type LocalModelPage } from './api';
-import { Button } from './components/ui/button';
-import { useWorkspaceState } from './workspaceMemory';
-import { ModelPicker } from './ModelPicker';
+import { useEffect, useRef, useState } from 'react';
+
 import { AdjustmentDialog } from './AdjustmentDialog';
+import type { LocalModel } from './api';
+import { type LocalModelPage, localModels, uploadLocalModel } from './api';
+import { Button } from './components/ui/button';
+import { DeleteSoundDialog } from './features/library/DeleteSoundDialog';
 import { GearLabel } from './GearIcon';
 import { groupIrs } from './irPresentation';
-import { ModelPicture, LibraryModelPreview } from './LibraryModelPreview';
-import type { LocalModel } from './api';
+import { errorDetails, friendlyError } from './lib/friendlyError';
+import { LibraryModelPreview, ModelPicture } from './LibraryModelPreview';
+import { ModelPicker } from './ModelPicker';
+import { useWorkspaceState } from './workspaceMemory';
 
 const FILE_LIMIT = 32 * 1024 * 1024;
 const folderLabel = (folder: string) => {

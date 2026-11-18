@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useEffect, useState } from 'react';
+
 import { Caption } from '../components/ui/text';
 import { Credits, PoweredByTone3000 } from './credits';
 import { STACK_CREDITS } from './credits.data';

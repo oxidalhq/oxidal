@@ -1,5 +1,3 @@
-import * as React from 'react';
-import { createPortal } from 'react-dom';
 import {
   ArrowsInSimple,
   PictureInPicture,
@@ -7,16 +5,10 @@ import {
   Toolbox,
   X,
 } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
-import { useMedia } from '../lib/use-media';
+import * as React from 'react';
+import { createPortal } from 'react-dom';
+
 import { Button } from '../components/ui/button';
-import {
-  Sheet,
-  SheetBody,
-  SheetContent,
-  SheetFooter,
-  SheetHeader,
-} from '../components/ui/sheet';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -25,9 +17,18 @@ import {
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
 import {
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+} from '../components/ui/sheet';
+import { cn } from '../lib/cn';
+import { useMedia } from '../lib/use-media';
+import {
+  type Dock,
   DockContext,
   LauncherSlotContext,
-  type Dock,
   type ToolPlace,
   type ToolPlaces,
 } from './dock-context';

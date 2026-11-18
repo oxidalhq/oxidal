@@ -1,46 +1,47 @@
-import { EditQueue } from '../../editQueue';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
 import {
-  type Lv2Plugin,
-  type RigAudioAction,
-  type RigAudioState,
-  type RigControl,
-  type RigDocument,
   installedLv2,
   libraryCatalog,
+  type Lv2Plugin,
   presetArtwork,
   publishRig,
   removalPreview,
   removePreset,
+  type RigAudioAction,
   rigAudioCommand,
+  type RigAudioState,
   rigAudioState,
+  type RigControl,
+  type RigDocument,
   rigDocument,
   rigLibrary,
   sceneDraft as sharedSceneDraft,
 } from '../../api';
+import { EditQueue } from '../../editQueue';
+import type { RigPublish } from '../../generated/contract';
+import { errorDetails, friendlyError } from '../../lib/friendlyError';
+import { useFailure } from '../../lib/useFailure';
+import { useNarrow } from '../../lib/useNarrow';
+import { setPerform, usePerform } from '../../performState';
 import {
-  type PresetChoice,
   discardsSceneEdits,
   playChoice,
   playScenes,
+  type PresetChoice,
 } from '../../presetChoices';
-import type { RigPublish } from '../../generated/contract';
 import {
-  type Route,
-  type RouteAt,
   buildRoute,
   buildSceneRoute,
   readRoute,
+  type Route,
+  type RouteAt,
   routeMoveTo,
   routePathStep,
   routeStep,
   sceneTones,
 } from '../../rigRoute';
-import { errorDetails, friendlyError } from '../../lib/friendlyError';
 import { keepScenes, updateScenes } from '../../sceneEdit';
-import { setPerform, usePerform } from '../../performState';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useFailure } from '../../lib/useFailure';
-import { useNarrow } from '../../lib/useNarrow';
 import {
   key,
   mixedRigViewModel,
@@ -49,11 +50,11 @@ import {
 } from './mixedRigViewModel';
 import { applyTogether } from './pathSides';
 import {
-  type RigHistory,
   afterStep,
   historyTarget,
   parseHistory,
   recordEdit,
+  type RigHistory,
 } from './rigHistory';
 
 /**

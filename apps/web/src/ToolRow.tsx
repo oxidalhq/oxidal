@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+
 import './RigTools.css';
 
 /** One explained setting or action: name, current value, what it does, controls. */

@@ -1,29 +1,30 @@
-import { useRef, useState, type CSSProperties } from 'react';
 import { DownloadSimple, Stop, Warning } from '@phosphor-icons/react';
+import { type CSSProperties, useRef, useState } from 'react';
+
 import { AdjustmentDialog } from '../../AdjustmentDialog';
-import { Button } from '../ui/button';
-import { originalPath, updateAsset, type MediaAsset } from '../../api';
+import { type MediaAsset, originalPath, updateAsset } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
 import { formatDb, formatTime } from '../../lib/playerClock';
+import { Button } from '../ui/button';
 import { PositionBar } from './PositionBar';
 import { PracticeControls } from './PracticeControls';
-import { LiveStemsPanel } from './StemMixer';
-import { StemMixEditor } from './StemMixEditor';
-import { StateChip } from './StateChip';
-import { FullTransport } from './TransportBar';
-import { DeleteDialog, RenameDialog } from './TrackDialogs';
 import {
-  PROTECT_REASON,
   channelsLabel,
   durationOf,
-  formatLabel,
   fileSize,
+  formatLabel,
   nextUp,
+  PROTECT_REASON,
   stateWord,
   usePlayerPosition,
   useProtect,
   useSessionMedia,
 } from './sessionMedia';
+import { StateChip } from './StateChip';
+import { StemMixEditor } from './StemMixEditor';
+import { LiveStemsPanel } from './StemMixer';
+import { DeleteDialog, RenameDialog } from './TrackDialogs';
+import { FullTransport } from './TransportBar';
 
 const LEVEL_MIN = -60;
 const LEVEL_MAX = 6;

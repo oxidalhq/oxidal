@@ -1,5 +1,6 @@
-import { expect, test, type APIRequestContext } from '@playwright/test';
+import { type APIRequestContext, expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
+
 import { openSounds } from './display';
 
 /**

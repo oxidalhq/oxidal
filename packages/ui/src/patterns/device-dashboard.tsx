@@ -11,13 +11,14 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+
 import { Badge } from '../components/ui/badge';
 import { Card, CardHeader, CardTitle } from '../components/ui/card';
 import { ChartContainer, ChartTooltipContent } from '../components/ui/chart';
 import { Segment, SegmentedControl } from '../components/ui/segmented';
 import { Caption } from '../components/ui/text';
-import type { AuditRecord } from './device-dashboard.data';
 import { useMotion } from '../lib/use-media';
+import type { AuditRecord } from './device-dashboard.data';
 
 const INK = 'var(--foreground)';
 const LIMIT = 'var(--brand)';

@@ -7,20 +7,21 @@ import {
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
 import {
+  importRigResource,
   installedLv2,
   libraryCatalog,
+  type Lv2Plugin,
   publishRig,
   rigDocument,
   rigLibrary,
   rigNativeSources,
-  type Lv2Plugin,
-  importRigResource,
 } from '../../api';
+import { DeviceError } from '../../lib/friendlyError';
 import { chainLanes } from '../../rigChain';
 import { lv2Effect } from '../../rigDraft';
 import { buildRoute } from '../../rigRoute';
-import { DeviceError } from '../../lib/friendlyError';
 import { OfflineEditor } from './OfflineEditor';
 
 // The native editor has its own tests; here it opens, then saves a copy.

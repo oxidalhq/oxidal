@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useEffect, useState } from 'react';
+
 import { Caption } from '../components/ui/text';
-import { StemMixer, type StemControls, type StemRole } from './stem-strip';
+import { type StemControls, StemMixer, type StemRole } from './stem-strip';
 import { PositionBar, Transport, type TransportState } from './transport';
 
 /** The backing player's parts: transport, position with A–B, and the stem strips. */

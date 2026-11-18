@@ -1,10 +1,11 @@
-import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
+
+import './MasterLevel.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
-import { sceneBlends, type SceneBlends } from './api';
+import { type SceneBlends, sceneBlends } from './api';
 import { Slider } from './components/ui/slider';
 import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
-import './MasterLevel.css';
+import { friendlyError } from './lib/friendlyError';
 
 const MAX_SECONDS = 10;
 const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} s`;

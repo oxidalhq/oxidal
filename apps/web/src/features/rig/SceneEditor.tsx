@@ -1,15 +1,16 @@
 import { useState } from 'react';
+
+import './SceneEditor.css';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { SceneChange } from '../../SceneChange';
 import { ScenePads } from '../../ScenePads';
-import type { RigViewProps } from './useMixedRigSession';
 import { rigBusy } from './mixedRigViewModel';
-import { SceneMenu } from './SceneEditorMenu';
 import { SceneSettings } from './SceneEditorControls';
+import { SceneMenu } from './SceneEditorMenu';
 import { useSceneSettings } from './SceneEditorSettings';
-import './SceneEditor.css';
+import type { RigViewProps } from './useMixedRigSession';
 
 /**
  * Scene pads and the current-scene panel: mix, Update scene, Save as new

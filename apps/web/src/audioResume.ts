@@ -1,4 +1,4 @@
-import { probeAudio, type AudioProbe } from './api';
+import { type AudioProbe, probeAudio } from './api';
 
 function sameProbe(checked: AudioProbe | null, saved: AudioProbe) {
   return (

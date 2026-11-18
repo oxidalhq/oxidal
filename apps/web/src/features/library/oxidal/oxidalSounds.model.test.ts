@@ -1,19 +1,20 @@
 import { describe, expect, it } from 'vitest';
+
 import { allFactoryRecipes } from '../../../factoryCatalog';
 import { factoryRoles } from '../../../factoryRecipes';
 import { factoryVoices, isFactoryVoice } from '../../../factoryVoices';
 import {
-  CAPTURE_BUDGET,
   bufferThatFits,
-  cardState,
+  CAPTURE_BUDGET,
   captureLimit,
+  cardState,
   filterItems,
   groupItems,
   missingTones,
   noFilters,
   sceneLine,
-  summaryLine,
   type SoundItem,
+  summaryLine,
   type UnitFacts,
 } from './oxidalSounds.model';
 

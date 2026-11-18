@@ -1,4 +1,3 @@
-import * as React from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -9,7 +8,8 @@ import {
   Plus,
   Trash,
 } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
+import * as React from 'react';
+
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Checkbox } from '../components/ui/checkbox';
@@ -31,6 +31,7 @@ import {
 } from '../components/ui/sheet';
 import { EmptyState } from '../components/ui/states';
 import { Caption, Label, Title } from '../components/ui/text';
+import { cn } from '../lib/cn';
 import { useFlip } from '../lib/use-flip';
 
 export type PresetChoice = {

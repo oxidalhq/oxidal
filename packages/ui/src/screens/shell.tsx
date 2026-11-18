@@ -1,6 +1,7 @@
-import { useState, type ReactNode } from 'react';
-import { AppShell, type Destination } from '../patterns/app-shell';
+import { type ReactNode, useState } from 'react';
+
 import { Badge } from '../components/ui/badge';
+import { AppShell, type Destination } from '../patterns/app-shell';
 import { ToolDockDemo } from '../patterns/tool-dock.demo';
 import { READINGS } from './fixtures';
 

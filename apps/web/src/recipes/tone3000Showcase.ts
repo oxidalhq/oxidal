@@ -1,13 +1,13 @@
+import type { FactoryGenre } from '../factoryMetadata.ts';
 import {
-  nam,
-  voice,
   type Effect,
   type FactoryRecipe,
+  nam,
   type RoutedPath,
   type RoutedStep,
   type Voice,
+  voice,
 } from '../factoryRecipes.ts';
-import type { FactoryGenre } from '../factoryMetadata.ts';
 
 /**
  * TONE3000 showcase presets, captures only. Every preset names Oxidal voices

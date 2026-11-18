@@ -1,38 +1,38 @@
-import { useState } from 'react';
 import {
   ArrowsClockwise,
+  Copy,
   DownloadSimple,
   FilePlus,
   ListPlus,
-  MusicNotes,
   Microphone,
+  MusicNotes,
   PencilSimple,
   Play,
   Plus,
   Queue,
   Scissors,
   SlidersHorizontal,
-  Copy,
   Trash,
 } from '@phosphor-icons/react';
+import { useState } from 'react';
+
 import { Button } from '../components/ui/button';
 import { useConfirm } from '../components/ui/confirm';
-import { PageHeading } from '../patterns/app-shell';
-import { LibraryList, type LibraryItem } from '../patterns/library-list';
-import { ModelBrowser } from '../patterns/model-browser';
-import { StemWorkspaceDemo } from '../patterns/stem-workspace.demo';
-import { useModelDownloads } from '../patterns/swap.demo';
-import { MODELS } from '../patterns/swap.fixtures';
-import { Workspace } from '../patterns/workspace';
 import {
   Sheet,
   SheetBody,
   SheetContent,
   SheetHeader,
 } from '../components/ui/sheet';
-import { LIBRARY_SECTIONS } from './library.sections';
-import { Songbook } from './songbook';
-import { SetListSection } from './set-list-section';
+import { PageHeading } from '../patterns/app-shell';
+import { type LibraryItem, LibraryList } from '../patterns/library-list';
+import { ModelBrowser } from '../patterns/model-browser';
+import { SoundBrowser } from '../patterns/sound-browser';
+import { SOUNDS as OXIDAL_SOUNDS } from '../patterns/sound-browser.data';
+import { StemWorkspaceDemo } from '../patterns/stem-workspace.demo';
+import { useModelDownloads } from '../patterns/swap.demo';
+import { MODELS } from '../patterns/swap.fixtures';
+import { Workspace } from '../patterns/workspace';
 import {
   DI,
   PRESETS,
@@ -42,8 +42,9 @@ import {
   TRACKS,
   withUsage,
 } from './fixtures';
-import { SoundBrowser } from '../patterns/sound-browser';
-import { SOUNDS as OXIDAL_SOUNDS } from '../patterns/sound-browser.data';
+import { LIBRARY_SECTIONS } from './library.sections';
+import { SetListSection } from './set-list-section';
+import { Songbook } from './songbook';
 
 /** Library › TONE3000: the same search the rig's Change sheet uses. */
 function Tone3000Section() {

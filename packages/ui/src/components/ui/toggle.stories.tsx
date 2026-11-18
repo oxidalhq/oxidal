@@ -1,8 +1,9 @@
+import { Metronome, Repeat, SpeakerSlash } from '@phosphor-icons/react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
-import { Repeat, SpeakerSlash, Metronome } from '@phosphor-icons/react';
+
+import { Segment, SegmentedControl } from './segmented';
 import { Toggle, ToggleGroup, ToggleGroupItem } from './toggle';
-import { SegmentedControl, Segment } from './segmented';
 
 /**
  * Toggle: a state that stays until pressed again (bypass, mute, loop,

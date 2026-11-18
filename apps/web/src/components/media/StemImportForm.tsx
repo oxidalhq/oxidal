@@ -4,24 +4,25 @@
  *
  * @see docs/media.md#importing-prepared-stems
  */
-import { useRef, useState } from 'react';
 import { FilePlus, Warning, X } from '@phosphor-icons/react';
+import { useRef, useState } from 'react';
+
+import './media.css';
+import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
   cancelUpload,
   importSongStems,
+  type MediaAsset,
   OffsetConflict,
   sendChunk,
-  startUpload,
-  type MediaAsset,
   type SongImportStems,
+  startUpload,
 } from '../../api';
-import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { deviceSentence } from '../../lib/friendlyError';
 import { CHUNK_BYTES } from '../../lib/mediaUpload';
 import { Button } from '../ui/button';
 import { fileSize } from './sessionMedia';
-import { ROLE_ORDER, guessRole, roleLabel } from './stemMix';
-import './media.css';
+import { guessRole, ROLE_ORDER, roleLabel } from './stemMix';
 
 type Role = SongImportStems['stems'][number]['role'];
 const roles = ROLE_ORDER as Role[];

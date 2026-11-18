@@ -1,10 +1,11 @@
-import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
 import { expect, userEvent, within } from 'storybook/test';
-import { sceneColour } from '../lib/scene-colours';
+
 import { Button } from '../components/ui/button';
 import { StableLabel } from '../components/ui/stable-label';
-import { ChainBlock, ChainPort, type ChainBlockModel } from './chain';
+import { sceneColour } from '../lib/scene-colours';
+import { ChainBlock, type ChainBlockModel, ChainPort } from './chain';
 import { ScenePads } from './scene-pad';
 
 /**

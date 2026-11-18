@@ -1,15 +1,16 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { LibraryModelAudition } from './LibraryModelAudition';
+
 import {
-  playbackState,
-  playbackCommand,
-  rigAudioState,
-  rigAudioCommand,
   type AudioState,
+  playbackCommand,
+  playbackState,
+  rigAudioCommand,
   type RigAudioState,
+  rigAudioState,
 } from './api';
+import { LibraryModelAudition } from './LibraryModelAudition';
 vi.mock('./api', () => ({
   playbackState: vi.fn(),
   playbackCommand: vi.fn(),

@@ -1,12 +1,12 @@
 import type { Lv2Plugin, RigDocument } from './api';
 import type { RigPublish } from './generated/contract';
-import { chainRoute, routePaths, type IdStep } from './rigChain';
+import { chainRoute, type IdStep, routePaths } from './rigChain';
 import {
-  rigBuilder,
-  validateStages,
   type DraftEffect,
   type NativeDraft,
+  rigBuilder,
   type Stereo,
+  validateStages,
 } from './rigDraft';
 import { readBlock } from './rigEdit';
 import { readScenes, sealScenes } from './sceneFormat';

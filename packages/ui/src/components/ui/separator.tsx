@@ -1,5 +1,6 @@
-import * as React from 'react';
 import * as SeparatorPrimitive from '@radix-ui/react-separator';
+import * as React from 'react';
+
 import { cn } from '../../lib/cn';
 
 /** A 1 px rule between groups. With a label it names the group below. */

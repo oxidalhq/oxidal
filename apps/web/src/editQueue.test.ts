@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
-import { EditQueue } from './editQueue';
+import { describe, expect, it, vi } from 'vitest';
+
 import type { Action, Snapshot } from './api';
+import { EditQueue } from './editQueue';
 type Edit = Extract<Action, { type: 'edit' }>['edit'];
 const snapshot = { revision: 1 } as Snapshot;
 function deferred<T>() {

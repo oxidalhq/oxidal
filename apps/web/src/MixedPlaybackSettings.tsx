@@ -1,23 +1,24 @@
-import { RecoveryAction } from './components/ui/failure';
-import { useFailure } from './lib/useFailure';
-import { friendlyError } from './lib/friendlyError';
-import { RecoveryNotice } from './RecoveryNotice';
 import { useState } from 'react';
-import { Button } from './components/ui/button';
-import { AudioReconfigure } from './AudioReconfigure';
-import { BufferFinder } from './BufferFinder';
+
 import {
-  rigAudioCommand,
-  rigAudioState,
-  type RigAudioState,
-  type RigAudioAction,
   type AudioProbe,
+  type RigAudioAction,
+  rigAudioCommand,
+  type RigAudioState,
+  rigAudioState,
 } from './api';
+import { AudioReconfigure } from './AudioReconfigure';
 import {
   canResumeAudio,
   checkSavedStream,
   resumeUnavailable,
 } from './audioResume';
+import { BufferFinder } from './BufferFinder';
+import { Button } from './components/ui/button';
+import { RecoveryAction } from './components/ui/failure';
+import { friendlyError } from './lib/friendlyError';
+import { useFailure } from './lib/useFailure';
+import { RecoveryNotice } from './RecoveryNotice';
 
 /** Device controls target the same mixed owner shown by the sounding rig. */
 export function MixedPlaybackSettings({

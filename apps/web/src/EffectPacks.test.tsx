@@ -6,15 +6,16 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { EffectPacks } from './EffectPacks';
-import { DeviceError } from './lib/friendlyError';
+
 import {
+  changeEffectPack,
+  type EffectPacks as EffectPacksState,
+  effectPacks,
   graphLibrary,
   rigLibrary,
-  changeEffectPack,
-  effectPacks,
-  type EffectPacks as EffectPacksState,
 } from './api';
+import { EffectPacks } from './EffectPacks';
+import { DeviceError } from './lib/friendlyError';
 
 vi.mock('./api', () => ({
   changeEffectPack: vi.fn(),

@@ -1,10 +1,11 @@
-import * as React from 'react';
-import * as ProgressPrimitive from '@radix-ui/react-progress';
 import { CircleNotch } from '@phosphor-icons/react';
+import * as ProgressPrimitive from '@radix-ui/react-progress';
+import * as React from 'react';
+
 import { cn } from '../../lib/cn';
 import { Button } from './button';
-import { Caption } from './text';
 import { StableLabel } from './stable-label';
+import { Caption } from './text';
 
 /**
  * The states a section passes through: loading (Skeleton, Loading), empty

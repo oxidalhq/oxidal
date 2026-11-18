@@ -6,8 +6,9 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { NativeEditor } from './NativeEditor';
+
 import { capabilities, nativeCommand, nativeState } from './api';
+import { NativeEditor } from './NativeEditor';
 
 vi.mock('./api', () => ({
   capabilities: vi.fn(),

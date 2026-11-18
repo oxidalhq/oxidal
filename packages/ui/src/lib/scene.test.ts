@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+
+import { FOUR_JOBS, FOUR_SCENES } from '../widgets/scene-editor.fixtures';
 import { blocksOf, isSplit, updateBlock } from './route';
 import { applyScene, splitSceneEdit } from './scene';
-import { FOUR_JOBS, FOUR_SCENES } from '../widgets/scene-editor.fixtures';
 
 const verse = FOUR_SCENES[0]!;
 

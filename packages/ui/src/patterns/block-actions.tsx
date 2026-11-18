@@ -1,11 +1,11 @@
-import * as React from 'react';
 import {
   ArrowsOutCardinal,
   Copy,
   DotsThree,
   Trash,
 } from '@phosphor-icons/react';
-import { getList, locate, moveStep, placesOf, type Step } from '../lib/route';
+import * as React from 'react';
+
 import { Button } from '../components/ui/button';
 import {
   Dialog,
@@ -30,6 +30,7 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { Caption } from '../components/ui/text';
+import { getList, locate, moveStep, placesOf, type Step } from '../lib/route';
 import type { BlockModel } from '../widgets/block-editor';
 
 /**

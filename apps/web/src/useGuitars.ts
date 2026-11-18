@@ -1,6 +1,7 @@
-import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
-import { guitarProfiles, type GuitarProfiles } from './api';
+
+import { type GuitarProfiles, guitarProfiles } from './api';
+import { friendlyError } from './lib/friendlyError';
 
 /** Sent on the window when the active guitar changed outside this view. */
 export const GUITARS_CHANGED_EVENT = 'oxidal:guitars-changed';

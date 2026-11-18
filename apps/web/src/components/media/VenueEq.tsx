@@ -6,19 +6,22 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react';
+
+import './media.css';
+import './venue.css';
 import {
-  VenueConflict,
   keepVenuePreview,
-  venueCommand,
-  venueState,
   type VenueCommand,
+  venueCommand,
+  VenueConflict,
   type VenueSettings,
   type VenueState,
+  venueState,
 } from '../../api';
 import { DeviceError, deviceSentence } from '../../lib/friendlyError';
 import { setLeaveGuard } from '../../lib/leaveGuard';
-import { onVenue } from '../../lib/venueFeed';
 import { formatDb, headroom, withBand } from '../../lib/venueEq';
+import { onVenue } from '../../lib/venueFeed';
 import { PreviewThrottle } from '../../lib/venuePreview';
 import { Button } from '../ui/button';
 import {
@@ -35,12 +38,10 @@ import { EqGraph, type GraphChange } from './EqGraph';
 import { MoreMenu } from './MediaRow';
 import { useProtect } from './sessionMedia';
 import {
+  DeleteProfileDialog,
   LeaveDialog,
   ProfileDialog,
-  DeleteProfileDialog,
 } from './VenueDialogs';
-import './media.css';
-import './venue.css';
 
 /** An untouched preview is discarded after five minutes; keep it alive. */
 const KEEP_MS = 60_000;

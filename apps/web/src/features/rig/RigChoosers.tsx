@@ -1,15 +1,15 @@
 import { AddBlockChooser } from '../../AddBlockChooser';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
+import { rigAudioCommand, rigAudioState } from '../../api';
 import { Button } from '../../components/ui/button';
 import { ModelPicker } from '../../ModelPicker';
-import { SlotChooser } from '../../SlotChooser';
-import { addSceneEffect } from '../../sceneEdit';
 import { assertAuditionOwner } from '../../rigControls';
 import { lv2Effect, terminalEffect } from '../../rigDraft';
-import { rigAudioCommand, rigAudioState } from '../../api';
 import { routeAppend, routeInsert, routeLanes } from '../../rigRoute';
-import type { RigViewProps } from './useMixedRigSession';
+import { addSceneEffect } from '../../sceneEdit';
+import { SlotChooser } from '../../SlotChooser';
 import { END, PATH } from './mixedRigViewModel';
+import type { RigViewProps } from './useMixedRigSession';
 
 /**
  * Choosers opened from the chain: slot and block choosers, native insertion

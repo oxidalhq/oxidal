@@ -1,9 +1,10 @@
-import { readFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkVersions, nextVersion } from './release.mjs';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { test } from 'node:test';
+
 import { validateCommit } from './commits.mjs';
+import { checkVersions, nextVersion } from './release.mjs';
 
 test('release bump policy handles fixes, features and pre-1.0 breaking changes', () => {
   assert.equal(nextVersion('0.1.0', ['fix(core): repair routing']), '0.1.1');

@@ -1,9 +1,10 @@
 import { expect, it } from 'vitest';
+
+import type { GuitarProfiles, Monitoring } from './api';
 import {
   guitarVerificationDetail,
   guitarVerificationState,
 } from './guitarVerification';
-import type { GuitarProfiles, Monitoring } from './api';
 
 const verification = {
   endpoint: 'hw:CARD=Jogg,DEV=0',

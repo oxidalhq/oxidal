@@ -1,15 +1,15 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
+  existsSync,
   mkdtempSync,
-  writeFileSync,
   readFileSync,
   rmSync,
-  existsSync,
+  writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, delimiter } from 'node:path';
+import { delimiter, join } from 'node:path';
+import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { format } from 'prettier';
 

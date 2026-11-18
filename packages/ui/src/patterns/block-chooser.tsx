@@ -1,5 +1,6 @@
-import * as React from 'react';
 import { ArrowLeft, MagnifyingGlass } from '@phosphor-icons/react';
+import * as React from 'react';
+
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { List, ListRow } from '../components/ui/list-row';
@@ -10,11 +11,11 @@ import {
   SheetHeader,
 } from '../components/ui/sheet';
 import { Caption, Eyebrow } from '../components/ui/text';
-import type { BlockModel } from '../widgets/block-editor';
-import type { ModelChoice } from './swap-sheet';
-import { SourceLine, type BlockSource } from '../widgets/block-source';
-import { BlockGlyph } from '../widgets/block-glyph';
 import { glyphFor } from '../lib/block-glyphs';
+import type { BlockModel } from '../widgets/block-editor';
+import { BlockGlyph } from '../widgets/block-glyph';
+import { type BlockSource, SourceLine } from '../widgets/block-source';
+import type { ModelChoice } from './swap-sheet';
 
 /** An effect the chooser offers. LV2 effects come from packs the player installs. */
 export type EffectChoice = {

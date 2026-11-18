@@ -1,8 +1,9 @@
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { ResourceStrip } from './ResourceStrip';
-import { monitoring, type Monitoring } from './api';
+
+import { type Monitoring, monitoring } from './api';
 import { refreshMonitorFeed } from './monitorFeed';
+import { ResourceStrip } from './ResourceStrip';
 vi.mock('./api', () => ({ monitoring: vi.fn() }));
 const snapshot = (sequence: number, phase: string): Monitoring => ({
   sequence,

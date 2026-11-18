@@ -1,23 +1,9 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { useSectionLocation, useWorkspaceState } from './workspaceMemory';
-import { useSessionState } from './lib/sessionState';
-import { StateNotice } from './components/ui/state-notice';
-import {
-  importPreset,
-  presetLibrary,
-  playbackState,
-  nativeState,
-  presetDetails,
-  type PresetDetails,
-  type AudioState,
-  type Preset,
-} from './api';
 import {
   CloudArrowDown,
   Equalizer,
+  Faders,
   ListNumbers,
   MagnifyingGlass,
-  Faders,
   MusicNotes,
   Plug,
   Plus,
@@ -25,15 +11,23 @@ import {
   User,
   X,
 } from '@phosphor-icons/react';
-import { LibraryManagement } from './LibraryManagement';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
+
+import './Library.css';
+import {
+  type AudioState,
+  importPreset,
+  nativeState,
+  playbackState,
+  type Preset,
+  type PresetDetails,
+  presetDetails,
+  presetLibrary,
+} from './api';
 import { ArtworkDeck } from './AssetArtwork';
-import { NativeEditor } from './NativeEditor';
-import { GraphAuthor } from './GraphAuthor';
-import { SavedRigs, type SetListControls } from './SavedRigs';
-import { OxidalSounds } from './features/library/oxidal';
-import { StarterOffer } from './features/library/StarterOffer';
-import { MineDialogs, type MineTarget } from './features/library/MineDialogs';
-import { playTone3000 } from './presetChoices';
+import { BackingTracks } from './components/media/BackingTracks';
+import { DiReamps } from './components/media/DiReamps';
+import { StemSongs } from './components/media/StemSongs';
 import { Button } from './components/ui/button';
 import {
   Select,
@@ -42,22 +36,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from './components/ui/select';
+import { StateNotice } from './components/ui/state-notice';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
+import { CreatedPreset } from './features/library/CreatedPreset';
+import { MineDialogs, type MineTarget } from './features/library/MineDialogs';
+import { NewPresetDialog } from './features/library/NewPresetDialog';
+import { OfflineEditor } from './features/library/OfflineEditor';
+import { OxidalSounds } from './features/library/oxidal';
+import { PresetRow } from './features/library/PresetRow';
+import { duplicatePreset } from './features/library/setList';
+import { StarterOffer } from './features/library/StarterOffer';
+import { GraphAuthor } from './GraphAuthor';
+import { friendlyError } from './lib/friendlyError';
+import { useSessionState } from './lib/sessionState';
+import { LibraryManagement } from './LibraryManagement';
+import { requestMidiAssignments } from './midiNavigation';
+import { ModelLibrary } from './ModelLibrary';
+import { NativeEditor } from './NativeEditor';
+import { playTone3000 } from './presetChoices';
 import { PresetDetailsDialog } from './PresetDetails';
 import { detailsKey, detailsMatch } from './presetMetadata';
-import { ModelLibrary } from './ModelLibrary';
-import { requestMidiAssignments } from './midiNavigation';
-import { PresetRow } from './features/library/PresetRow';
-import { OfflineEditor } from './features/library/OfflineEditor';
-import { NewPresetDialog } from './features/library/NewPresetDialog';
-import { CreatedPreset } from './features/library/CreatedPreset';
-import { duplicatePreset } from './features/library/setList';
-import { friendlyError } from './lib/friendlyError';
-import { BackingTracks } from './components/media/BackingTracks';
-import { StemSongs } from './components/media/StemSongs';
-import { DiReamps } from './components/media/DiReamps';
-import './Library.css';
+import { SavedRigs, type SetListControls } from './SavedRigs';
+import { useSectionLocation, useWorkspaceState } from './workspaceMemory';
 
 const soundSections = [
   'mine',

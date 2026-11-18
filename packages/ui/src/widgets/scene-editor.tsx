@@ -1,16 +1,5 @@
 import { Copy, DotsThree, Plus, Trash } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
-import { sceneColour } from '../lib/scene-colours';
-import { SceneStripe } from './scene-pad';
-import {
-  blocksOf,
-  branchName,
-  insertStep,
-  isSplit,
-  locate,
-  removeStep,
-  type Step,
-} from '../lib/route';
+
 import { Button } from '../components/ui/button';
 import {
   DropdownMenu,
@@ -25,7 +14,19 @@ import {
 } from '../components/ui/popover';
 import { Slider } from '../components/ui/slider';
 import { Caption } from '../components/ui/text';
+import { cn } from '../lib/cn';
+import {
+  blocksOf,
+  branchName,
+  insertStep,
+  isSplit,
+  locate,
+  removeStep,
+  type Step,
+} from '../lib/route';
+import { sceneColour } from '../lib/scene-colours';
 import type { BlockModel } from './block-editor';
+import { SceneStripe } from './scene-pad';
 
 /** A branch level this low is silent. */
 export const SILENT = -60;

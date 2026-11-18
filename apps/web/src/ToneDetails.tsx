@@ -1,9 +1,10 @@
-import { friendlyError } from './lib/friendlyError';
-import './ToneDetails.css';
 import { ArrowSquareOut } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
+
+import './ToneDetails.css';
 import { tone3000Tone, toneImage, type TonePage } from './api';
 import { GearIcon, GearLabel } from './GearIcon';
+import { friendlyError } from './lib/friendlyError';
 import { toneLink } from './toneLink';
 
 type Tone = TonePage['data'][number];

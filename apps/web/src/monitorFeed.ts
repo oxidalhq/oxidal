@@ -1,5 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
-import { monitoring, type Monitoring } from './api';
+
+import { type Monitoring, monitoring } from './api';
 
 /** One monitor reading shared by every view. */
 export type MonitorReading = {

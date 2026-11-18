@@ -1,13 +1,13 @@
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { Button } from '../../components/ui/button';
-import { SlotChooser } from '../../SlotChooser';
 import { lv2Effect, terminalEffect } from '../../rigDraft';
 import {
+  type Route,
   routeInsertAt,
   routeReplace,
   routeSplitAt,
-  type Route,
 } from '../../rigRoute';
+import { SlotChooser } from '../../SlotChooser';
 import type { RigViewProps } from './useMixedRigSession';
 
 /**

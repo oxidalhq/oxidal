@@ -1,17 +1,18 @@
 import {
+  type KeyboardEvent,
+  type PointerEvent,
   useEffect,
   useRef,
   useState,
-  type KeyboardEvent,
-  type PointerEvent,
 } from 'react';
+
 import type { VenueBand, VenueSettings } from '../../api';
 import {
   BANDS,
-  GAIN_LIMIT,
   clamp,
   formatDb,
   formatHz,
+  GAIN_LIMIT,
   isPass,
   responseCurve,
   roundHz,

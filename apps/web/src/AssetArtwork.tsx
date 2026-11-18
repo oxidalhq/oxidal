@@ -1,13 +1,14 @@
-import { friendlyError } from './lib/friendlyError';
-import { GearIcon, GearLabel } from './GearIcon';
 import { useEffect, useRef, useState } from 'react';
+
 import {
   artworkPath,
+  type AssetArtwork,
   presetArtwork,
   saveArtwork,
-  type AssetArtwork,
 } from './api';
 import { Button } from './components/ui/button';
+import { GearIcon, GearLabel } from './GearIcon';
+import { friendlyError } from './lib/friendlyError';
 
 /** Device-owned images only: no third-party URLs, tracking or network fetches by img. */
 type ArtworkProps = {

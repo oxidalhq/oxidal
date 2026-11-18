@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+
 import { Caption, Eyebrow, Label, Readout, Title } from './text';
 
 const meta: Meta = {

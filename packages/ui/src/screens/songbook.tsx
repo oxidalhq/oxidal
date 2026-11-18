@@ -1,4 +1,3 @@
-import { useMemo, useRef, useState } from 'react';
 import {
   DownloadSimple,
   FilePlus,
@@ -8,7 +7,8 @@ import {
   Plus,
   Trash,
 } from '@phosphor-icons/react';
-import { useMedia } from '../lib/use-media';
+import { useMemo, useRef, useState } from 'react';
+
 import { Button } from '../components/ui/button';
 import { Combobox } from '../components/ui/combobox';
 import {
@@ -27,16 +27,17 @@ import {
   SheetHeader,
 } from '../components/ui/sheet';
 import { Eyebrow, Label } from '../components/ui/text';
-import { LibraryList } from '../patterns/library-list';
 import { parseSong, type SongFormat } from '../lib/song';
+import { useMedia } from '../lib/use-media';
+import { LibraryList } from '../patterns/library-list';
 import { SheetViewer } from '../widgets/sheet-viewer';
 import {
   KIND_LABEL,
-  SONGS,
-  TARGETS,
   type LinkKind,
   type SongEntry,
   type SongLink,
+  SONGS,
+  TARGETS,
 } from './songs.data';
 
 const FORMAT_LABEL: Record<SongFormat, string> = {

@@ -1,7 +1,8 @@
-import { setDisplayMode } from './display';
-import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { expect, type Page, test } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
+
+import { setDisplayMode } from './display';
 
 // CSS viewports are representative: Android density, browser chrome and zoom vary.
 // Hardware resolution is not the browser viewport. See README.md for the matrix.

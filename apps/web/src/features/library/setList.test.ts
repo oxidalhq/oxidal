@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest';
+
 import { suggestedSetMessage, suggestedSets } from './setList';
 
 vi.mock('../../api', () => ({ libraryCatalog: vi.fn() }));

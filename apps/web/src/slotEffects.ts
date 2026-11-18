@@ -2,10 +2,10 @@ import type { Lv2Plugin } from './api';
 import type { RigNativeSource, RigPublish } from './generated/contract';
 import {
   lv2Effect,
+  type NativeDraft,
   parallelRig,
   serialRig,
   terminalEffect,
-  type NativeDraft,
 } from './rigDraft';
 
 /** Where an effect goes around a TONE3000 chain, which it cannot enter. */

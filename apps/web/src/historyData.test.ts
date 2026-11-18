@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
-import { historyCsv, historyPoints } from './historyData';
+
 import type { MonitoringHistory } from './api';
+import { historyCsv, historyPoints } from './historyData';
 type Sample = MonitoringHistory['records'][number];
 function sample(elapsed: number, xruns: number): Sample {
   return {

@@ -1,30 +1,31 @@
 import { useEffect, useState } from 'react';
+
 import { AdjustmentDialog } from '../../AdjustmentDialog';
-import { Button } from '../../components/ui/button';
 import {
   installedLv2,
+  type Lv2Plugin,
   publishRig,
+  type RigDocument,
   rigDocument,
   rigLibrary,
-  type Lv2Plugin,
-  type RigDocument,
   type RigPage,
 } from '../../api';
+import { Button } from '../../components/ui/button';
 import { friendlyError } from '../../lib/friendlyError';
 import {
-  LAST_SCENE,
-  MAX_SCENES,
   copySceneTo,
   deleteScene,
   duplicateScene,
+  LAST_SCENE,
+  MAX_SCENES,
   moveScene,
   renameScene,
-  sceneCopyPlan,
   type SceneCopyPlan,
+  sceneCopyPlan,
 } from '../../sceneEdit';
 import { readScenes } from '../../sceneFormat';
-import type { RigViewProps } from './useMixedRigSession';
 import { rigBusy } from './mixedRigViewModel';
+import type { RigViewProps } from './useMixedRigSession';
 
 type Step =
   | { kind: 'menu' }

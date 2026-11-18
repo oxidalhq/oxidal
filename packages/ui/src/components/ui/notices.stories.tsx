@@ -1,5 +1,6 @@
-import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
+
 import { Button } from './button';
 import {
   Collapsible,
@@ -10,8 +11,8 @@ import {
 import { NoticeTray } from './notice-tray';
 import { notify, useNotice } from './notices';
 import { ScrollArea } from './scroll-area';
-import { Caption } from './text';
 import { Switch } from './switch';
+import { Caption } from './text';
 
 /**
  * Notices: state notices stay while the condition holds; toasts leave by

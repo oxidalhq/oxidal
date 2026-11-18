@@ -1,4 +1,5 @@
 import { SpeakerSlash } from '@phosphor-icons/react';
+
 import { cn } from '../lib/cn';
 
 const NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];

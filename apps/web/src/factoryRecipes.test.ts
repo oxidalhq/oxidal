@@ -1,32 +1,33 @@
-import { chainRoute } from './rigChain';
-import { expect, it } from 'vitest';
 import Ajv from 'ajv/dist/2020';
+import { expect, it } from 'vitest';
+
 import schema from '../../../docs/presets/manifest.schema.json';
-import catalog from './fixtures/factory-lv2.json';
+import type { Lv2Plugin } from './api';
+import { allFactoryRecipes } from './factoryCatalog';
 import {
   buildFactoryRecipe,
-  factoryRecipes,
   factoryMissingPlugins,
+  type FactoryRecipe,
+  factoryRecipes,
   factoryRoles,
   keyed,
   pitch,
   recipeEffects,
   sceneControlProblems,
-  type FactoryRecipe,
   type SceneSettings,
 } from './factoryRecipes';
-import { allFactoryRecipes } from './factoryCatalog';
-import { songbookRecipes } from './songbookRecipes';
-import { toolRecipes } from './toolRecipes';
 import {
   factoryVoiceIds,
   factoryVoices,
   isFactoryVoice,
   primaryCapture,
 } from './factoryVoices';
+import catalog from './fixtures/factory-lv2.json';
 import type { RigNativeSource } from './generated/contract';
-import type { Lv2Plugin } from './api';
+import { chainRoute } from './rigChain';
 import { scenesKey } from './sceneFormat';
+import { songbookRecipes } from './songbookRecipes';
+import { toolRecipes } from './toolRecipes';
 const plugins = catalog as Lv2Plugin[];
 const source: RigNativeSource = {
   preset: {

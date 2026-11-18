@@ -1,12 +1,13 @@
 import * as React from 'react';
-import { cn } from '../lib/cn';
-import { formatTime } from '../lib/time';
+
 import { Button } from '../components/ui/button';
 import { NumberField } from '../components/ui/number-field';
 import { Segment, SegmentedControl } from '../components/ui/segmented';
 import { Slider } from '../components/ui/slider';
 import { Caption, Eyebrow } from '../components/ui/text';
 import { Toggle } from '../components/ui/toggle';
+import { cn } from '../lib/cn';
+import { formatTime } from '../lib/time';
 
 const SPEEDS = [50, 75, 100, 125, 150];
 

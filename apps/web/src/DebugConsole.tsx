@@ -1,13 +1,14 @@
-import { friendlyError } from './lib/friendlyError';
-import { useEffect, useState } from 'react';
 import {
   Copy,
   DownloadSimple,
   Pause,
   TerminalWindow,
 } from '@phosphor-icons/react';
-import { debugCommand, type DebugState, type DebugCommand } from './api';
+import { useEffect, useState } from 'react';
+
+import { type DebugCommand, debugCommand, type DebugState } from './api';
 import { Button } from './components/ui/button';
+import { friendlyError } from './lib/friendlyError';
 /** Commands are intentionally sent only to the isolated, unprivileged debug executor. */
 export function DebugConsole() {
   const [state, setState] = useState<DebugState | null>(null);

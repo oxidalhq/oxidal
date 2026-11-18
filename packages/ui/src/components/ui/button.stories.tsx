@@ -1,5 +1,6 @@
-import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FloppyDisk, Play, Plus, Trash } from '@phosphor-icons/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
+
 import { Button } from './button';
 
 /**

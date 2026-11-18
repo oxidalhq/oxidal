@@ -1,72 +1,73 @@
-import { friendlyError, errorDetails } from './lib/friendlyError';
-import { GearIcon } from './GearIcon';
-import { ChainView, LedToggle } from './ChainView';
-import { GuitarPicker } from './GuitarSettings';
-import { PerformView } from './PerformView';
-import { setPerform, usePerform } from './performState';
-import './RigControls.css';
-import { blockKind, type RigLaneVM } from './rigChain';
-import { useWorkspaceState } from './workspaceMemory';
-import { MidiControls } from './SceneMidi';
-import { NativeAuthoring } from './NativeAuthoring';
 import {
+  ArrowLeft,
   ArrowRight,
+  CaretDown,
   Lightning,
   Plus,
-  CaretDown,
-  ArrowLeft,
   X,
 } from '@phosphor-icons/react';
-import { RigPresetSelector } from './RigPresetSelector';
-import { SlotChooser } from './SlotChooser';
-import { playingTone, presetWithEffect, type Placement } from './slotEffects';
+import { useEffect, useRef, useState } from 'react';
+
+import './RigControls.css';
+import { AddBlockChooser } from './AddBlockChooser';
+import { AdjustmentDialog } from './AdjustmentDialog';
+import {
+  type AssetArtwork,
+  type AudioAction,
+  type AudioState,
+  type Lv2Plugin,
+  playbackCommand,
+  playbackState,
+  presetArtwork,
+  publishRig,
+  removalPreview,
+  removePreset,
+  rigLibrary,
+  rigNativeSources,
+} from './api';
+import { ArtworkDeck } from './AssetArtwork';
 import { BoostControl } from './BoostControl';
+import { ChainView, LedToggle } from './ChainView';
+import { MaybeSheet } from './components/RigSheet';
+import { Button } from './components/ui/button';
+import { DragFader } from './DragFader';
+import { EditQueue } from './editQueue';
+import { StageControls } from './features/stage/StageControls';
+import { GearIcon } from './GearIcon';
+import { GuitarPicker } from './GuitarSettings';
+import { LevelMatch } from './LevelMatch';
+import { WAITING_FOR_DEVICE } from './lib/deviceWait';
+import { errorDetails, friendlyError } from './lib/friendlyError';
+import { LiveEq } from './LiveEq';
+import { MasterLevel } from './MasterLevel';
+import { requestMidiAssignments } from './midiNavigation';
+import { ModelPicker } from './ModelPicker';
+import { NativeAuthoring } from './NativeAuthoring';
+import { setPerform, usePerform } from './performState';
+import { PerformView } from './PerformView';
 import {
   boostKey,
   playScenes,
-  tone3000Key,
   type PresetChoice,
+  tone3000Key,
 } from './presetChoices';
+import { blockKind, type RigLaneVM } from './rigChain';
 import {
   assertAuditionOwner,
-  movedBlockOrder,
-  controlGroup,
-  shortControlLabel,
   confirmedControlDisplay,
   type ControlGroup,
+  controlGroup,
+  movedBlockOrder,
+  shortControlLabel,
 } from './rigControls';
-import { LiveEq } from './LiveEq';
-import { ArtworkDeck } from './AssetArtwork';
+import { RigPresetSelector } from './RigPresetSelector';
+import { MidiControls } from './SceneMidi';
+import { SlotChooser } from './SlotChooser';
+import { type Placement, playingTone, presetWithEffect } from './slotEffects';
 import { ToneDetails } from './ToneDetails';
-import { ModelPicker } from './ModelPicker';
-import { WAITING_FOR_DEVICE } from './lib/deviceWait';
-import { StageControls } from './features/stage/StageControls';
-import { MaybeSheet } from './components/RigSheet';
-import { useEffect, useRef, useState } from 'react';
-import {
-  presetArtwork,
-  type AssetArtwork,
-  playbackCommand,
-  playbackState,
-  type AudioState,
-  type AudioAction,
-  publishRig,
-  rigLibrary,
-  rigNativeSources,
-  type Lv2Plugin,
-  removalPreview,
-  removePreset,
-} from './api';
-import { AddBlockChooser } from './AddBlockChooser';
-import { AdjustmentDialog } from './AdjustmentDialog';
-import { Button } from './components/ui/button';
 import { TouchAdjust } from './TouchAdjust';
-import { DragFader } from './DragFader';
-import { LevelMatch } from './LevelMatch';
-import { MasterLevel } from './MasterLevel';
-import { EditQueue } from './editQueue';
-import { requestMidiAssignments } from './midiNavigation';
 import { TunerButton } from './TunerButton';
+import { useWorkspaceState } from './workspaceMemory';
 
 /** The sounding worker owns these controls; no simulator or offline editor writes. */
 const blockName = (label: string) =>

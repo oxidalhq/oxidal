@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process';
-import { mkdtempSync, existsSync, cpSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+
 import { root, run, rustEnv } from './process.mjs';
 
 const cargo = (...args) =>
@@ -405,6 +406,7 @@ if (mode === 'bootstrap') {
       '--test',
       'scripts/markdown.test.mjs',
       'scripts/commits.test.mjs',
+      'scripts/import-order.test.mjs',
       'scripts/release.test.mjs',
     ]);
     run('node', ['scripts/dependencies.mjs']);

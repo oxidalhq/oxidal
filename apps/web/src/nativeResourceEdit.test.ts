@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
-import { replaceNativeFiles } from './nativeResourceEdit';
+
 import type { RigDocument } from './api';
+import { replaceNativeFiles } from './nativeResourceEdit';
 
 const document = {
   revision: 'r'.repeat(64),

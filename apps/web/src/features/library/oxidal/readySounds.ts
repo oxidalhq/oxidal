@@ -7,10 +7,10 @@ import {
   rigLibrary,
   voiceCaptures,
 } from '../../../api';
-import type { RigNativeSource } from '../../../generated/contract';
 import { allFactoryRecipes } from '../../../factoryCatalog';
 import type { FactoryRecipe, FactoryRole } from '../../../factoryRecipes';
 import { factoryVoices, isFactoryVoice } from '../../../factoryVoices';
+import type { RigNativeSource } from '../../../generated/contract';
 import { saveRecipe } from './finish';
 import {
   builtName,

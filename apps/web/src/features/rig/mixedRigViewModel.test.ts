@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+
 import { rigBusy, rigLocked, soundingLane } from './mixedRigViewModel';
 
 const gain = (port: number, value: number) => ({

@@ -1,12 +1,13 @@
 import * as React from 'react';
+
 import {
   BlockEq,
+  type BootMode,
   BootPlayback,
   DebugConsole,
   DiReamps,
-  StorageLock,
-  type BootMode,
   type EqPosition,
+  StorageLock,
 } from './device-flows';
 
 const BANDS = [

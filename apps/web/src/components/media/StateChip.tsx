@@ -1,4 +1,5 @@
 import { Warning } from '@phosphor-icons/react';
+
 import type { ShownState } from './sessionMedia';
 
 const chipText: Record<ShownState, string> = {

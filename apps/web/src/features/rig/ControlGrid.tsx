@@ -1,10 +1,10 @@
+import { rigAudioCommand } from '../../api';
 import { Button } from '../../components/ui/button';
 import { LiveEq } from '../../LiveEq';
-import { NativeAuthoring } from '../../NativeAuthoring';
 import { controlDisplay, controlLabel } from '../../lv2Control';
-import { rigAudioCommand } from '../../api';
-import type { RigViewProps } from './useMixedRigSession';
+import { NativeAuthoring } from '../../NativeAuthoring';
 import { key, rigBusy } from './mixedRigViewModel';
+import type { RigViewProps } from './useMixedRigSession';
 
 /**
  * Controls of the selected block, with native authoring and live EQ.

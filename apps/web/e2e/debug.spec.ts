@@ -1,6 +1,7 @@
+import { expect, test } from '@playwright/test';
+
+import type { DebugCommand, DebugState } from '../src/api';
 import { setDisplayMode } from './display';
-import { test, expect } from '@playwright/test';
-import type { DebugState, DebugCommand } from '../src/api';
 test('debug requires enablement, executes once, cancels and keeps commands out of storage', async ({
   page,
 }) => {

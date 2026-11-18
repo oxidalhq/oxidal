@@ -1,5 +1,5 @@
-import * as React from 'react';
 import * as SliderPrimitive from '@radix-ui/react-slider';
+import * as React from 'react';
 
 /** shadcn slider composition with a full touch target around the track. */
 export function Slider({

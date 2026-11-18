@@ -6,6 +6,7 @@ import {
   screen,
 } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+
 import { DebugConsole } from './DebugConsole';
 vi.mock('./api', () => ({
   debugCommand: vi.fn(async () => ({ available: false, message: 'Disabled' })),

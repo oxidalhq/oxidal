@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
+
 import { CONTROLLERS } from '../widgets/controllers';
 import { SwitchLayouts } from './switch-layouts';
 import { LAYOUT_LISTS } from './switch-layouts.data';

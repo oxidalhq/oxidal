@@ -1,5 +1,7 @@
 import {
   echoAt,
+  type Effect,
+  type FactoryRecipe,
   flyHall,
   flyRoom,
   fx,
@@ -7,12 +9,10 @@ import {
   nam,
   orbit,
   pitch,
+  type SceneSettings,
   silk,
   sub,
   voice,
-  type Effect,
-  type FactoryRecipe,
-  type SceneSettings,
 } from '../factoryRecipes.ts';
 
 /**

@@ -1,5 +1,6 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { test } from 'node:test';
+
 import { validateCommit } from './commits.mjs';
 
 test('accepts semantic titles including automated release titles', () => {

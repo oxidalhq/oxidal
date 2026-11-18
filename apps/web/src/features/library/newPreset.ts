@@ -1,6 +1,6 @@
 import type { RigDocument } from '../../api';
 import type { RigNativeSource, RigPublish } from '../../generated/contract';
-import { serialRig, type NativeDraft } from '../../rigDraft';
+import { type NativeDraft, serialRig } from '../../rigDraft';
 
 /**
  * New presets for the Library's one New preset entry (Sprint 07 7.3). Every

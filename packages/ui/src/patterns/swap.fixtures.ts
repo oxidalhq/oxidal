@@ -1,6 +1,6 @@
 import type { ToneGear } from './model-browser';
-import type { BlockType, ModelChoice } from './swap-sheet';
 import { delay, drive, gate, mod, reverb } from './rig.fixtures';
+import type { BlockType, ModelChoice } from './swap-sheet';
 
 /**
  * Models a block can try: captures and IRs already on the device, and

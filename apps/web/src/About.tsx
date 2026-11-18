@@ -1,4 +1,3 @@
-import { useEffect, useState, type ReactNode } from 'react';
 import {
   Code,
   GithubLogo,
@@ -12,6 +11,8 @@ import {
   Sparkle,
   SpeakerHifi,
 } from '@phosphor-icons/react';
+import { type ReactNode, useEffect, useState } from 'react';
+
 import { capabilities } from './api';
 
 type Health = Awaited<ReturnType<typeof capabilities>>;

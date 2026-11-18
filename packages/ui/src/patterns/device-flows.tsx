@@ -4,16 +4,17 @@ import {
   Microphone,
   Play,
 } from '@phosphor-icons/react';
-import { responseCurve, type VenueSettings } from '../lib/venue-eq';
+
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle } from '../components/ui/card';
 import { List, ListRow } from '../components/ui/list-row';
 import { Segment, SegmentedControl } from '../components/ui/segmented';
 import { Slider } from '../components/ui/slider';
+import { StableLabel } from '../components/ui/stable-label';
 import { Caption } from '../components/ui/text';
 import { Toggle } from '../components/ui/toggle';
-import { StableLabel } from '../components/ui/stable-label';
+import { responseCurve, type VenueSettings } from '../lib/venue-eq';
 
 export type EqBand = { id: number; name: string; hz: number };
 export type EqPosition = 'before' | 'after';

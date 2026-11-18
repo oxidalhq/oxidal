@@ -1,6 +1,7 @@
-import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+
 import { run } from './process.mjs';
 
 /** Enforce the owner's semantic title-only commit convention.

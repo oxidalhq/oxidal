@@ -1,5 +1,8 @@
+import { WarningCircle } from '@phosphor-icons/react';
 import { useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
+
+import './oxidal.css';
 import {
   Alert,
   AlertDescription,
@@ -25,23 +28,21 @@ import {
   useScrollMemory,
   useSessionState,
 } from '../../../lib/sessionState';
-import { WarningCircle } from '@phosphor-icons/react';
+import type { CardHandlers } from './cardActions';
 import { DetailsSheet } from './DetailsSheet';
 import { GetTonesDialog } from './GetTonesDialog';
 import {
   cardState,
   complexityLabels,
   filterItems,
+  type Filters,
   groupItems,
   noFilters,
-  summaryLine,
-  type Filters,
   type SoundItem,
+  summaryLine,
 } from './oxidalSounds.model';
-import type { CardHandlers } from './cardActions';
 import { SoundCard } from './SoundCard';
 import { useOxidalSounds } from './useOxidalSounds';
-import './oxidal.css';
 
 function FilterSelect({
   label,

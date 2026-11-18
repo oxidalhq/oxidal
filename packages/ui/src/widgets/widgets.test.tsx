@@ -1,12 +1,13 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
+
+import { formatTime } from '../lib/time';
 import { Chain } from './chain';
 import { Meter } from './meter';
 import { PresetStepper } from './preset-step';
 import { ScenePads } from './scene-pad';
 import { PositionBar } from './transport';
-import { formatTime } from '../lib/time';
 import { TunerFace } from './tuner-face';
 
 afterEach(cleanup);

@@ -1,12 +1,13 @@
 import * as React from 'react';
+
 import { cn } from '../lib/cn';
 import { sceneColour } from '../lib/scene-colours';
-import { SceneStripe } from './scene-pad';
 import type {
   ControllerProfile,
   Footswitch,
   SwitchAction,
 } from './controllers';
+import { SceneStripe } from './scene-pad';
 
 export type StageState = {
   scene: string | null;

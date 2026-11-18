@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
+
 import { PracticePanel } from './practice';
 import { exampleWaveform } from './practice.data';
 

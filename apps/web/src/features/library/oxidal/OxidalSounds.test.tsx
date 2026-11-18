@@ -7,6 +7,7 @@ import {
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
 import {
   changeEffectPack,
   downloadVoice,
@@ -24,10 +25,10 @@ import {
   tone3000Tone,
   voiceCaptures,
 } from '../../../api';
+import catalog from '../../../fixtures/factory-lv2.json';
+import type { RigNativeSource } from '../../../generated/contract';
 import { DeviceError } from '../../../lib/friendlyError';
 import { playScenes } from '../../../presetChoices';
-import type { RigNativeSource } from '../../../generated/contract';
-import catalog from '../../../fixtures/factory-lv2.json';
 import { OxidalSounds } from './index';
 
 /** @see docs/factory-collection.md */

@@ -1,21 +1,22 @@
-import * as React from 'react';
 import {
+  ChartLine,
   Gear,
   Guitar,
   Stack,
   Waveform,
-  ChartLine,
 } from '@phosphor-icons/react';
-import { cn } from '../lib/cn';
+import * as React from 'react';
+
 import { Button } from '../components/ui/button';
 import { NoticeTray } from '../components/ui/notice-tray';
 import { Caption, Eyebrow, Title } from '../components/ui/text';
+import { cn } from '../lib/cn';
+import { HealthStatus } from '../widgets/health-status';
 import {
-  ResourceStrip,
   type ResourceReadings,
   type ResourceState,
+  ResourceStrip,
 } from '../widgets/resource-strip';
-import { HealthStatus } from '../widgets/health-status';
 import { LauncherSlotContext } from './dock-context';
 
 export type Destination = 'rig' | 'guitars' | 'library' | 'levels' | 'settings';

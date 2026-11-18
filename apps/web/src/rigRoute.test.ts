@@ -1,30 +1,31 @@
 import { expect, it } from 'vitest';
+
 import type { Lv2Plugin, Preset, RigDocument } from './api';
 import { chainLanes, chainRoute } from './rigChain';
-import { lv2Effect, parallelRig, type NativeDraft } from './rigDraft';
+import { lv2Effect, type NativeDraft, parallelRig } from './rigDraft';
 import {
   buildRoute,
   isSplit,
+  mixGains,
+  pathMix,
   readRoute,
+  type Route,
   routeAddBranch,
   routeAddPath,
   routeAppend,
   routeControl,
-  routePath,
-  routePathMix,
-  pathMix,
-  mixGains,
-  routePathGain,
-  routeShift,
   routeCopyBranch,
   routeInsert,
   routeLanes,
   routeMove,
+  routePath,
+  routePathGain,
+  routePathMix,
   routeRemove,
   routeRemoveBranch,
-  routeSplitAddPath,
+  routeShift,
   type RouteSplit,
-  type Route,
+  routeSplitAddPath,
 } from './rigRoute';
 import { keepScenes } from './sceneEdit';
 

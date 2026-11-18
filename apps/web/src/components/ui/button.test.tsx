@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, it, vi } from 'vitest';
+
 import { Button } from './button';
 
 it('supports keyboard activation and native disabled behavior', async () => {

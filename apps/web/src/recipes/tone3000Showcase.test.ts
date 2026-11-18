@@ -1,19 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import catalog from '../fixtures/factory-lv2.json';
+
 import type { Lv2Plugin } from '../api';
-import type { RigNativeSource } from '../generated/contract';
+import { validateFactoryMetadata } from '../factoryMetadata.ts';
 import {
   buildFactoryRecipe,
   factoryRoles,
   recipeEffects,
 } from '../factoryRecipes.ts';
-import { validateFactoryMetadata } from '../factoryMetadata.ts';
 import { factoryVoices, isFactoryVoice } from '../factoryVoices.ts';
+import catalog from '../fixtures/factory-lv2.json';
+import type { RigNativeSource } from '../generated/contract';
+import { scenesKey } from '../sceneFormat';
 import {
   tone3000CaptureBudget,
   tone3000ShowcaseRecipes,
 } from './tone3000Showcase.ts';
-import { scenesKey } from '../sceneFormat';
 
 /**
  * @see docs/factory-collection.md

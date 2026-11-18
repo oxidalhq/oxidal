@@ -1,14 +1,15 @@
-import { useMemo, useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useMemo, useState } from 'react';
 import { expect, userEvent, within } from 'storybook/test';
-import { blocksOf, isSplit, updateBlock, type Step } from '../lib/route';
+
 import { Card, CardHeader, CardTitle } from '../components/ui/card';
 import { Caption, Eyebrow, Title } from '../components/ui/text';
-import type { BlockModel } from '../widgets/block-editor';
+import { blocksOf, isSplit, type Step, updateBlock } from '../lib/route';
 import { sceneColour } from '../lib/scene-colours';
+import type { BlockModel } from '../widgets/block-editor';
 import { RouteView } from '../widgets/route-view';
 import { SceneManager } from '../widgets/scene-manager';
-import { THREE_SCENES, THREE_SOUNDS, type SceneModel } from './scenes.fixtures';
+import { type SceneModel, THREE_SCENES, THREE_SOUNDS } from './scenes.fixtures';
 
 /**
  * What a scene is, and how to make one. A scene belongs to one preset: one

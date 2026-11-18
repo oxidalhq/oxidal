@@ -1,34 +1,35 @@
-import { friendlyError } from './lib/friendlyError';
-import { Plus, Stop, FloppyDisk, Eraser } from '@phosphor-icons/react';
-import { ChainView, LedToggle } from './ChainView';
-import { GearIcon } from './GearIcon';
-import { blockKind } from './rigChain';
-import { RigComposer } from './RigComposer';
-import { lv2Effect, type DraftEffect } from './rigDraft';
-import { rigAudioState } from './api';
-import { lv2Control } from './lv2Control';
+import { Eraser, FloppyDisk, Plus, Stop } from '@phosphor-icons/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { StageControls } from './features/stage/StageControls';
-import { Button } from './components/ui/button';
+
 import { AdjustmentDialog } from './AdjustmentDialog';
-import { ControlEditor } from './ControlEditor';
-import { ModelPicker } from './ModelPicker';
+import { rigAudioState } from './api';
 import {
-  graphAudioState,
-  graphAudioCommand,
-  graphLibrary,
-  installedLv2,
-  playbackState,
-  playbackCommand,
-  type GraphAudioState,
-  type GraphAudioAction,
-  type GraphSettings,
-  type Lv2Plugin,
-  type SavedGraph,
-  type AudioState,
   type Action,
+  type AudioState,
+  type GraphAudioAction,
+  graphAudioCommand,
+  type GraphAudioState,
+  graphAudioState,
+  graphLibrary,
+  type GraphSettings,
+  installedLv2,
+  type Lv2Plugin,
+  playbackCommand,
+  playbackState,
+  type SavedGraph,
   type Snapshot,
 } from './api';
+import { ChainView, LedToggle } from './ChainView';
+import { Button } from './components/ui/button';
+import { ControlEditor } from './ControlEditor';
+import { StageControls } from './features/stage/StageControls';
+import { GearIcon } from './GearIcon';
+import { friendlyError } from './lib/friendlyError';
+import { lv2Control } from './lv2Control';
+import { ModelPicker } from './ModelPicker';
+import { blockKind } from './rigChain';
+import { RigComposer } from './RigComposer';
+import { type DraftEffect, lv2Effect } from './rigDraft';
 
 const emptyRig: GraphSettings['rig'] = {
   nodes: [

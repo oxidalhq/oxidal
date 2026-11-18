@@ -1,5 +1,5 @@
-import { NoticeTray } from './components/ui/NoticeTray';
 import { useNotice } from './components/ui/notices';
+import { NoticeTray } from './components/ui/NoticeTray';
 import { useMonitorFeed } from './monitorFeed';
 import { processingHeadroom } from './processingHeadroom';
 

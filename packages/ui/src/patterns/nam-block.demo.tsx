@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { NamBlockTools, type CaptureSize } from './nam-block';
+
+import { type CaptureSize, NamBlockTools } from './nam-block';
 
 export function NamBlockToolsDemo({
   fromTone3000 = true,

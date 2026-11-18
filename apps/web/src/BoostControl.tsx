@@ -1,10 +1,11 @@
-import { friendlyError } from './lib/friendlyError';
-import { useEffect, useState } from 'react';
 import { Minus, Plus } from '@phosphor-icons/react';
+import { useEffect, useState } from 'react';
+
+import './MasterLevel.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { boosts as boostApi, type BoostState } from './api';
 import { Button } from './components/ui/button';
-import './MasterLevel.css';
+import { friendlyError } from './lib/friendlyError';
 
 const RANGE = { min: -12, max: 12, step: 0.5 };
 const db = (n: number) =>

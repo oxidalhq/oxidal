@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
+
 import { SoundBrowser, type SoundsStatus } from './sound-browser';
 import { SOUNDS } from './sound-browser.data';
 

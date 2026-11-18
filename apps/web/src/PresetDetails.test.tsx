@@ -6,6 +6,7 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+
 import { presetDetails } from './api';
 import { PresetDetailsDialog } from './PresetDetails';
 import { detailsMatch } from './presetMetadata';

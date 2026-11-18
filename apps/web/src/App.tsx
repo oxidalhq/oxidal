@@ -1,15 +1,22 @@
-import { friendlyError } from './lib/friendlyError';
 import {
-  WorkspaceMemory,
-  useSectionLocation,
-  useWorkspaceNavigation,
-} from './workspaceMemory';
-import { GuitarSettings } from './GuitarSettings';
-import { MidiSettings } from './MidiSettings';
-import { GlobalTuner } from './GlobalTuner';
-import { DevicePower } from './DevicePower';
-import { EffectPacks } from './EffectPacks';
-import { StorageLock } from './StorageLock';
+  ArrowsSplit,
+  ChartLine,
+  Cpu,
+  Faders,
+  GearSix,
+  Guitar,
+  Info,
+  Monitor,
+  PianoKeys,
+  Power,
+  SpeakerHigh,
+  Stack,
+  UserCircle,
+  WarningCircle,
+  Waveform,
+  WifiHigh,
+  Wrench,
+} from '@phosphor-icons/react';
 import {
   lazy,
   Suspense,
@@ -18,27 +25,26 @@ import {
   useRef,
   useState,
 } from 'react';
+
+import { About } from './About';
 import {
-  ArrowsSplit,
-  Power,
-  WarningCircle,
-  Waveform,
-  Stack,
-  ChartLine,
-  Guitar,
-  GearSix,
-  SpeakerHigh,
-  WifiHigh,
-  UserCircle,
-  PianoKeys,
-  Faders,
-  Monitor,
-  Cpu,
-  Wrench,
-  Info,
-} from '@phosphor-icons/react';
+  type Action,
+  capabilities,
+  deviceStorage,
+  type MappingFile,
+  midiAction,
+  parseSnapshot,
+  sendCommand,
+  type Snapshot,
+  type StorageState,
+} from './api';
+import { AudioSettings } from './AudioSettings';
+import { NowPlaying, SplitStatus } from './components/media/NowPlaying';
+import { MediaSheets } from './components/media/PlayerSheet';
+import { SessionMediaProvider } from './components/media/SessionMediaProvider';
 import { Button } from './components/ui/button';
-import { Switch } from './components/ui/switch';
+import { Loading } from './components/ui/loading';
+import { useNotice } from './components/ui/notices';
 import {
   Select,
   SelectContent,
@@ -46,55 +52,51 @@ import {
   SelectTrigger,
   SelectValue,
 } from './components/ui/select';
+import { Switch } from './components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
+import { ControlEditor } from './ControlEditor';
+import { DebugConsole } from './DebugConsole';
+import { DevicePower } from './DevicePower';
+import { EffectPacks } from './EffectPacks';
+import { GlobalTuner } from './GlobalTuner';
+import { GuitarSettings } from './GuitarSettings';
+import { friendlyError } from './lib/friendlyError';
+import { leaveScreen } from './lib/leaveGuard';
+import { publishPlayer } from './lib/playerFeed';
+import { publishVenue } from './lib/venueFeed';
 import { LiveRig } from './LiveRig';
+import { MidiSettings } from './MidiSettings';
+import { refreshMonitorFeed } from './monitorFeed';
+import { NetworkSettings } from './NetworkSettings';
+import { ResourceStrip } from './ResourceStrip';
+import { SignalChain } from './SignalChain';
+import { StorageLock } from './StorageLock';
+import { Tone3000Account } from './Tone3000Account';
+import { TunerButton } from './TunerButton';
+import { OPEN_TUNER_EVENT, requestTuner } from './tunerNavigation';
+import { GUITARS_CHANGED_EVENT } from './useGuitars';
+import { useScreenSession } from './useScreenSession';
+import {
+  useSectionLocation,
+  useWorkspaceNavigation,
+  WorkspaceMemory,
+} from './workspaceMemory';
+
 const MixedRig = lazy(() =>
   import('./MixedRig').then((m) => ({ default: m.MixedRig })),
 );
 const GraphAuthor = lazy(() =>
   import('./GraphAuthor').then((m) => ({ default: m.GraphAuthor })),
 );
-import { useScreenSession } from './useScreenSession';
-import { ResourceStrip } from './ResourceStrip';
-import { OPEN_TUNER_EVENT, requestTuner } from './tunerNavigation';
-import { GUITARS_CHANGED_EVENT } from './useGuitars';
-import { TunerButton } from './TunerButton';
-import { refreshMonitorFeed } from './monitorFeed';
-import { publishPlayer } from './lib/playerFeed';
-import { publishVenue } from './lib/venueFeed';
-import { leaveScreen } from './lib/leaveGuard';
-import { SignalChain } from './SignalChain';
 const Library = lazy(() =>
   import('./Library').then((m) => ({ default: m.Library })),
 );
 const SoundCheck = lazy(() =>
   import('./SoundCheck').then((m) => ({ default: m.SoundCheck })),
 );
-import { DebugConsole } from './DebugConsole';
 const WebTerminal = lazy(() =>
   import('./WebTerminal').then((m) => ({ default: m.WebTerminal })),
 );
-import { Tone3000Account } from './Tone3000Account';
-import { NetworkSettings } from './NetworkSettings';
-import { Loading } from './components/ui/loading';
-import { AudioSettings } from './AudioSettings';
-import { About } from './About';
-import { ControlEditor } from './ControlEditor';
-import { SessionMediaProvider } from './components/media/SessionMediaProvider';
-import { NowPlaying, SplitStatus } from './components/media/NowPlaying';
-import { MediaSheets } from './components/media/PlayerSheet';
-import { useNotice } from './components/ui/notices';
-import {
-  capabilities,
-  midiAction,
-  deviceStorage,
-  parseSnapshot,
-  sendCommand,
-  type Action,
-  type MappingFile,
-  type Snapshot,
-  type StorageState,
-} from './api';
 
 /** Quiet rig control over a single authoritative Rust state model.
  * @see docs/architecture.md

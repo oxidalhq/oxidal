@@ -1,5 +1,5 @@
-import { Button } from './components/ui/button';
 import type { MidiMap } from './api';
+import { Button } from './components/ui/button';
 
 type Navigation = NonNullable<MidiMap['navigation']>;
 export type NavigationKey = 'previous' | 'next' | 'mute' | 'tuner' | 'guitar';

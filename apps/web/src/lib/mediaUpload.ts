@@ -1,11 +1,11 @@
 import {
-  OffsetConflict,
   cancelUpload,
   importCopy,
+  OffsetConflict,
   sendChunk,
   startUpload,
-  uploadStatus,
   type UploadState,
+  uploadStatus,
 } from '../api';
 import { DeviceError, deviceSentence } from './friendlyError';
 

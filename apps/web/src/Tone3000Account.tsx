@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { tone3000Account, type AccountAction, type AccountState } from './api';
-import { Button } from './components/ui/button';
+
+import { type AccountAction, type AccountState, tone3000Account } from './api';
 import { Badge } from './components/ui/badge';
+import { Button } from './components/ui/button';
 import { clearReturnTarget, readReturnTarget } from './lib/sessionState';
 
 /** Device authorization stays on the daemon; only its public sign-in code reaches this view. */

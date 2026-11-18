@@ -1,17 +1,18 @@
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
-  mkdirSync,
   copyFileSync,
   cpSync,
-  readFileSync,
-  writeFileSync,
-  rmSync,
+  mkdirSync,
   readdirSync,
+  readFileSync,
+  rmSync,
   statSync,
+  writeFileSync,
 } from 'node:fs';
-import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
+
 import { root, run, rustEnv } from './process.mjs';
 import { checkVersions } from './release.mjs';
 

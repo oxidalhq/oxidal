@@ -1,11 +1,11 @@
-import { Button } from '../../components/ui/button';
-import { RouteTree, type MoveKey } from '../../components/RouteTree';
+import { type MoveKey, RouteTree } from '../../components/RouteTree';
 import { useEpaper } from '../../components/RouteTree.display';
-import { pathMix, type RouteAt } from '../../rigRoute';
+import { Button } from '../../components/ui/button';
 import { routeSpot } from '../../rigChain';
-import type { RigViewProps } from './useMixedRigSession';
+import { pathMix, type RouteAt } from '../../rigRoute';
 import { laneBlockId, rigLocked } from './mixedRigViewModel';
 import { RigChainSurfaceChooser } from './RigChainSurfaceChooser';
+import type { RigViewProps } from './useMixedRigSession';
 
 /**
  * The chain: one renderer (RouteTree) for every preset shape — a straight

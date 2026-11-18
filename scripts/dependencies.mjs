@@ -1,4 +1,5 @@
-import { join, delimiter } from 'node:path';
+import { delimiter, join } from 'node:path';
+
 import { root, run, rustEnv } from './process.mjs';
 
 const env = rustEnv();

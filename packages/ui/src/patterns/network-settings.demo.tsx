@@ -1,7 +1,8 @@
 import * as React from 'react';
+
 import {
-  NetworkSettings,
   type HotspotPolicy,
+  NetworkSettings,
   type WifiNetwork,
 } from './network-settings';
 

@@ -1,29 +1,30 @@
-import { useCallback, useEffect, useState } from 'react';
 import { Play, Record, Stop } from '@phosphor-icons/react';
+import { useCallback, useEffect, useState } from 'react';
+
 import { AdjustmentDialog } from '../../AdjustmentDialog';
-import { Button } from '../ui/button';
-import { DialogFooter } from '../ui/dialog';
 import {
+  type CaptureJob,
   captureState,
+  type MediaAsset,
+  type ReampRequest,
   recordDi,
   startReamp,
   stopCapture,
   wavPath,
-  type CaptureJob,
-  type MediaAsset,
-  type ReampRequest,
 } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
 import { formatTime } from '../../lib/playerClock';
+import { Button } from '../ui/button';
+import { DialogFooter } from '../ui/dialog';
 import { MediaRow, type MenuItem } from './MediaRow';
-import { DeleteDialog, RenameDialog } from './TrackDialogs';
 import {
-  PROTECT_REASON,
   channelsLabel,
   durationOf,
+  PROTECT_REASON,
   useProtect,
   useSessionMedia,
 } from './sessionMedia';
+import { DeleteDialog, RenameDialog } from './TrackDialogs';
 
 /** Keeps the current or last job in view; jobs outlive a closed page. */
 function useCaptureJob(): [CaptureJob | null, () => void] {

@@ -1,7 +1,7 @@
 import type { Lv2Plugin, RigDocument } from './api';
-import { controlLabel, scalePointLabel } from './lv2Control';
 import type { RigPublish, SceneControl } from './generated/contract';
-import { rigBuilder, type DraftEffect } from './rigDraft';
+import { controlLabel, scalePointLabel } from './lv2Control';
+import { type DraftEffect, rigBuilder } from './rigDraft';
 import { readScenes, sealScenes, writeScenes } from './sceneFormat';
 
 /**

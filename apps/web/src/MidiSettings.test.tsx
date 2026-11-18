@@ -6,15 +6,16 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { MidiSettings } from './MidiSettings';
+
 import {
-  playbackState,
-  playbackCommand,
-  rigAudioState,
-  rigAudioCommand,
   type AudioState,
+  playbackCommand,
+  playbackState,
+  rigAudioCommand,
   type RigAudioState,
+  rigAudioState,
 } from './api';
+import { MidiSettings } from './MidiSettings';
 vi.mock('./api', () => ({
   playbackState: vi.fn(),
   playbackCommand: vi.fn(),

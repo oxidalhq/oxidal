@@ -1,10 +1,12 @@
-import * as React from 'react';
 import {
-  CaretDown,
-  CaretUp,
   ArrowCounterClockwise,
   ArrowDown,
+  ArrowsLeftRight,
   ArrowUp,
+  CaretDown,
+  CaretLeft,
+  CaretRight,
+  CaretUp,
   ClockCounterClockwise,
   Faders,
   GitFork,
@@ -12,11 +14,25 @@ import {
   PencilSimple,
   SquaresFour,
   Trash,
-  ArrowsLeftRight,
-  CaretLeft,
-  CaretRight,
 } from '@phosphor-icons/react';
+import * as React from 'react';
+
+import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
+import { useConfirm } from '../components/ui/confirm';
+import { NumberField } from '../components/ui/number-field';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '../components/ui/popover';
+import { Switch } from '../components/ui/switch';
+import { Caption, Eyebrow, Label, Title } from '../components/ui/text';
+import { Toggle } from '../components/ui/toggle';
+import { glyphForBlock } from '../lib/block-glyphs';
 import { cn } from '../lib/cn';
+import { scaleFromMidi } from '../lib/midi';
+import { originOf } from '../lib/model-origin';
 import { previewOf } from '../lib/preview';
 import {
   blocksOf,
@@ -24,37 +40,16 @@ import {
   getList,
   insertStep,
   isSplit,
+  type ListPath,
   locate,
   moveStep,
   removeStep,
-  startBranch,
-  updateBlock,
-  type ListPath,
   type Split,
+  startBranch,
   type Step,
+  updateBlock,
 } from '../lib/route';
-import { Switch } from '../components/ui/switch';
 import { diffRoutes } from '../lib/route-diff';
-import { Badge } from '../components/ui/badge';
-import { Button } from '../components/ui/button';
-import { NumberField } from '../components/ui/number-field';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '../components/ui/popover';
-import { Caption, Eyebrow, Label, Title } from '../components/ui/text';
-import { Toggle } from '../components/ui/toggle';
-import {
-  BlockEditor,
-  BlockFullEditor,
-  type BlockModel,
-} from '../widgets/block-editor';
-import { RouteView } from '../widgets/route-view';
-import { ScenePads, type Scene } from '../widgets/scene-pad';
-import { sceneColour } from '../lib/scene-colours';
-import { SceneEditor, type SceneModel } from '../widgets/scene-editor';
-import { SceneChange, type SceneChangeSettings } from '../widgets/scene-change';
 import {
   applyScene,
   sceneDifferences,
@@ -62,31 +57,37 @@ import {
   setSceneValue,
   splitSceneEdit,
 } from '../lib/scene';
+import { sceneColour } from '../lib/scene-colours';
+import { useRemembered } from '../lib/use-remembered';
+import {
+  BlockEditor,
+  BlockFullEditor,
+  type BlockModel,
+} from '../widgets/block-editor';
+import { SourceCard, SourceLine, SourcePicture } from '../widgets/block-source';
+import { ChangeScope } from '../widgets/change-scope';
+import { IrFacts } from '../widgets/ir-facts';
+import { MidiTarget } from '../widgets/midi';
+import { RouteView } from '../widgets/route-view';
+import { SceneChange, type SceneChangeSettings } from '../widgets/scene-change';
+import { SceneEditor, type SceneModel } from '../widgets/scene-editor';
+import { type Scene, ScenePads } from '../widgets/scene-pad';
 import {
   ChangeList,
   CompareToggle,
-  VersionPicker,
   type PresetVersion,
+  VersionPicker,
 } from '../widgets/versions';
-import { IrFacts } from '../widgets/ir-facts';
-import { BlockChooser, type EffectChoice } from './block-chooser';
+import { VisualControl } from '../widgets/visual-control';
 import { BlockActions } from './block-actions';
-import { useConfirm } from '../components/ui/confirm';
+import { BlockChooser, type EffectChoice } from './block-chooser';
+import type { ToneCatalogue } from './model-browser';
 import {
-  SwapSheet,
   type BlockType,
   type ModelChoice,
+  SwapSheet,
   type Trial,
 } from './swap-sheet';
-import type { ToneCatalogue } from './model-browser';
-import { useRemembered } from '../lib/use-remembered';
-import { ChangeScope } from '../widgets/change-scope';
-import { VisualControl } from '../widgets/visual-control';
-import { MidiTarget } from '../widgets/midi';
-import { scaleFromMidi } from '../lib/midi';
-import { SourceCard, SourceLine, SourcePicture } from '../widgets/block-source';
-import { glyphForBlock } from '../lib/block-glyphs';
-import { originOf } from '../lib/model-origin';
 import { DockableSheet } from './tool-dock';
 
 export type RigRoute = Step<BlockModel>[];

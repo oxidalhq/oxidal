@@ -1,13 +1,14 @@
-import { friendlyError } from './lib/friendlyError';
 import { useEffect, useRef, useState } from 'react';
+
+import './Library.css';
 import {
   calibration,
-  calibrationCoverage,
   type CalibrationCoverage,
+  calibrationCoverage,
   type CalibrationState,
 } from './api';
 import { Button } from './components/ui/button';
-import './Library.css';
+import { friendlyError } from './lib/friendlyError';
 
 const db = (n: number) =>
   `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n).toFixed(1)} dB`;

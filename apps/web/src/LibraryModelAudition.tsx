@@ -1,14 +1,13 @@
-import { friendlyError } from './lib/friendlyError';
 import { useEffect, useRef, useState } from 'react';
+
 import {
-  playbackState,
-  playbackCommand,
-  rigAudioState,
-  rigAudioCommand,
   type AudioState,
+  playbackCommand,
+  playbackState,
+  rigAudioCommand,
   type RigAudioState,
+  rigAudioState,
 } from './api';
-import { assertAuditionOwner } from './rigControls';
 import { Button } from './components/ui/button';
 import {
   Select,
@@ -17,6 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from './components/ui/select';
+import { friendlyError } from './lib/friendlyError';
+import { assertAuditionOwner } from './rigControls';
 
 type Owner =
   | { kind: 'native'; state: AudioState }

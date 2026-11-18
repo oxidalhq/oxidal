@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
+
 import { StemWorkspaceDemo } from './stem-workspace.demo';
 
 /**

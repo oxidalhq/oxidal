@@ -6,13 +6,14 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { DeletePresetDialog, PresetManagement } from './PresetManagement';
+
 import {
   libraryCatalog,
+  type RemovalPreview,
   removalPreview,
   removePreset,
-  type RemovalPreview,
 } from './api';
+import { DeletePresetDialog, PresetManagement } from './PresetManagement';
 vi.mock('./api', () => ({
   libraryCatalog: vi.fn(),
   removalPreview: vi.fn(),

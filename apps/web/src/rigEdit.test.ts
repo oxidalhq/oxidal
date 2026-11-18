@@ -1,19 +1,20 @@
 import { expect, it } from 'vitest';
+
 import type { Lv2Plugin, Preset, RigDocument } from './api';
 import {
   lv2Effect,
+  type NativeDraft,
   parallelRig,
   serialRig,
   terminalEffect,
-  type NativeDraft,
 } from './rigDraft';
 import {
   buildLanes,
   insertBlock,
+  type Lanes,
   moveBlock,
   readLanes,
   removeBlock,
-  type Lanes,
 } from './rigEdit';
 
 const port = (

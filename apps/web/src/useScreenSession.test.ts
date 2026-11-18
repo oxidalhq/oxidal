@@ -1,5 +1,6 @@
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
 import { useScreenSession } from './useScreenSession';
 
 class Lock extends EventTarget {

@@ -1,5 +1,5 @@
-import { cn } from '../lib/cn';
 import { Caption } from '../components/ui/text';
+import { cn } from '../lib/cn';
 import type { BlockSource } from './block-source';
 
 const lengthOf = (ms: number) =>

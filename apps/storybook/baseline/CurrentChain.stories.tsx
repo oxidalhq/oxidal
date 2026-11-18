@@ -1,18 +1,20 @@
-import { useState } from 'react';
-import type { Meta, StoryObj } from '@storybook/react-vite';
 import {
   Lightning,
   SpeakerHifi,
   Waveform,
   WaveSine,
 } from '@phosphor-icons/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
+
 import { Caption } from '@oxidal/design-system/components/text';
+import { previewOf } from '@oxidal/design-system/lib/preview';
 import { Chain } from '@oxidal/design-system/widgets/chain';
+
 import {
   PARALLEL,
   SERIAL,
 } from '../../../packages/ui/src/patterns/rig.fixtures';
-import { previewOf } from '@oxidal/design-system/lib/preview';
 // The product's current chain view, drawn with its own CSS, for comparison.
 import { ChainView } from '../../web/src/ChainView';
 import type { RigLaneVM } from '../../web/src/rigChain';

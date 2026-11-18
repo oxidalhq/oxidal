@@ -1,16 +1,17 @@
-import { AddBlockChooser } from '../../AddBlockChooser';
 import {
   ArrowsSplit,
   MusicNotes,
   SlidersHorizontal,
   Waveform,
 } from '@phosphor-icons/react';
+
+import { AddBlockChooser } from '../../AddBlockChooser';
 import { ArtworkDeck } from '../../AssetArtwork';
 import { Button } from '../../components/ui/button';
-import { ToneDetails } from '../../ToneDetails';
 import { controlGroup } from '../../rigControls';
-import type { RigViewProps } from './useMixedRigSession';
+import { ToneDetails } from '../../ToneDetails';
 import { rigBusy } from './mixedRigViewModel';
+import type { RigViewProps } from './useMixedRigSession';
 
 /**
  * Model controls of the selected native block: control groups, model

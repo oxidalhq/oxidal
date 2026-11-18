@@ -4,26 +4,27 @@
  *
  * @see docs/media.md#stem-mix-recipes
  */
-import { useCallback, useEffect, useState } from 'react';
 import { Faders, FilePlus, Pause, Play, Scissors } from '@phosphor-icons/react';
-import { songList, type MediaAsset, type SongList } from '../../api';
+import { useCallback, useEffect, useState } from 'react';
+
+import './media.css';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
+import { type MediaAsset, type SongList, songList } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
 import { formatTime } from '../../lib/playerClock';
 import { Button } from '../ui/button';
 import { useConfirm } from '../ui/confirm';
 import {
-  PROTECT_REASON,
   canSplitBackingTrack,
   durationOf,
   mixSourceOf,
+  PROTECT_REASON,
   useProtect,
   useSessionMedia,
 } from './sessionMedia';
 import { StateChip } from './StateChip';
 import { StemImportForm } from './StemImportForm';
 import { describeRecipe, splitLabel, splitRoles } from './stemMix';
-import './media.css';
 
 export function StemSongs({ connected }: { connected: boolean }) {
   const media = useSessionMedia();

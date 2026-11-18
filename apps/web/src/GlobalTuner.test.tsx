@@ -5,10 +5,11 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
-import { GlobalTuner } from './GlobalTuner';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
 import { tuner as tunerApi, type TunerState } from './api';
+import { GlobalTuner } from './GlobalTuner';
 vi.mock('./api', () => ({ tuner: vi.fn() }));
 const tuner = vi.mocked(tunerApi);
 vi.mock('./AdjustmentDialog', () => ({

@@ -1,17 +1,18 @@
 import { Minus, Plus } from '@phosphor-icons/react';
+
 import type { VenueBand, VenueSettings } from '../../api';
 import {
   BANDS,
-  GAIN_LIMIT,
-  TRIM_MAX,
-  TRIM_MIN,
   clamp,
   formatDb,
   formatHz,
   formatHzShort,
+  GAIN_LIMIT,
   isPass,
   stepHz,
   stepQ,
+  TRIM_MAX,
+  TRIM_MIN,
 } from '../../lib/venueEq';
 import { Button } from '../ui/button';
 

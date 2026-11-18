@@ -1,16 +1,17 @@
-import { friendlyError, errorDetails } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
+
+import { AdjustmentDialog } from './AdjustmentDialog';
 import {
+  type LibraryCatalog,
   libraryCatalog,
+  type RemovalPreview,
   removalPreview,
   removePreset,
-  type LibraryCatalog,
-  type RemovalPreview,
 } from './api';
-import { PresetDetailsDialog } from './PresetDetails';
-import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
 import { Checkbox } from './components/ui/checkbox';
+import { errorDetails, friendlyError } from './lib/friendlyError';
+import { PresetDetailsDialog } from './PresetDetails';
 
 type Entry = Pick<LibraryCatalog['items'][number], 'kind' | 'id' | 'name'>;
 const size = (bytes: number) =>

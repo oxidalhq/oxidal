@@ -1,10 +1,11 @@
 import {
+  type PointerEvent,
+  type RefObject,
   useEffect,
   useRef,
   useState,
-  type PointerEvent,
-  type RefObject,
 } from 'react';
+
 import type { LibraryCatalog } from './api';
 type Entry = LibraryCatalog['items'][number];
 const key = (item: Pick<Entry, 'kind' | 'id'>) => `${item.kind}:${item.id}`;

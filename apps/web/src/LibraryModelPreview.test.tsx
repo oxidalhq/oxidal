@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
-import { modelSourceLink, modelToneId } from './modelProvenance';
+
 import type { LocalModel } from './api';
+import { modelSourceLink, modelToneId } from './modelProvenance';
 const model: LocalModel = {
   id: 'asset',
   name: 'Amp.nam',

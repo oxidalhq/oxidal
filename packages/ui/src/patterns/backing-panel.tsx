@@ -1,11 +1,12 @@
 import { SkipForward } from '@phosphor-icons/react';
+
 import { Button } from '../components/ui/button';
 import { CollapsibleSection } from '../components/ui/collapsible';
 import { Segment, SegmentedControl } from '../components/ui/segmented';
 import { Caption } from '../components/ui/text';
 import {
-  StemMixer,
   type StemControls,
+  StemMixer,
   type StemRole,
 } from '../widgets/stem-strip';
 import {

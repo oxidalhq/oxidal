@@ -1,33 +1,34 @@
 import {
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
-  type ReactNode,
 } from 'react';
+
+import './media.css';
 import {
   currentSplit,
+  type MediaLibrary,
   mediaLibrary,
   monitoring,
   playerCommand,
-  songSplitJob,
-  type MediaLibrary,
   type PlayerSnapshot,
+  songSplitJob,
 } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
 import { UploadQueue } from '../../lib/mediaUpload';
 import { onPlayer } from '../../lib/playerFeed';
-import './media.css';
 import {
-  SessionMediaContext,
-  stateWord,
   type MediaSheet,
   type PlayerCommand,
   type SessionMedia,
+  SessionMediaContext,
   type ShownState,
   type SplitActivity,
+  stateWord,
 } from './sessionMedia';
 
 /** How often the device's split is checked while one runs and while idle. */

@@ -3,11 +3,12 @@
  * @see docs/presets/format.md
  */
 import { expect, it } from 'vitest';
+
 import type { RigDocument } from './api';
 import {
+  readScenes,
   SCENES_V1,
   SCENES_V2,
-  readScenes,
   scenesFormat,
   scenesKey,
   sealScenes,

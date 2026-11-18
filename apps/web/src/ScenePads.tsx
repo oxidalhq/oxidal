@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+
 import './ScenePads.css';
 
 type Scene = { id: string; name: string };

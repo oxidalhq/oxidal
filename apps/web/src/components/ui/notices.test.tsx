@@ -6,8 +6,9 @@ import {
   screen,
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
+import { type Notice, useNotice } from './notices';
 import { NoticeTray } from './NoticeTray';
-import { useNotice, type Notice } from './notices';
 
 function Poster({ notice }: { notice: Notice | null }) {
   useNotice('test', notice);

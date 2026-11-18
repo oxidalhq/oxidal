@@ -5,10 +5,11 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
-import { afterEach, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
+import { afterEach, expect, it, vi } from 'vitest';
+
+import { stageTone3000, tone3000Models, tone3000Tones } from './api';
 import { ModelPicker } from './ModelPicker';
-import { tone3000Tones, tone3000Models, stageTone3000 } from './api';
 vi.mock('./api', () => ({
   tone3000Tones: vi.fn(),
   tone3000Models: vi.fn(),

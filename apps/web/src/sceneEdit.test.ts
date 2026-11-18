@@ -1,17 +1,18 @@
-import { expect, it } from 'vitest';
 import Ajv from 'ajv/dist/2020';
+import { expect, it } from 'vitest';
+
 import schema from '../../../docs/presets/manifest.schema.json';
 import type { Lv2Plugin, Preset, RigDocument } from './api';
 import { chainRoute } from './rigChain';
-import { lv2Effect, sceneRig, type NativeDraft } from './rigDraft';
+import { lv2Effect, type NativeDraft, sceneRig } from './rigDraft';
 import {
-  LAST_SCENE,
   addSceneEffect,
   branchEffects,
   copySceneTo,
   deleteScene,
   duplicateScene,
   keepScenes,
+  LAST_SCENE,
   moveScene,
   removeSceneEffect,
   renameScene,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import type { AudioProbe } from './api';
 import { canResumeAudio } from './audioResume';
 

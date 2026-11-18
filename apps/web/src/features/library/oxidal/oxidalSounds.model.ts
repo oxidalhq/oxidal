@@ -1,23 +1,19 @@
 import type { Lv2Plugin } from '../../../api';
-import type {
-  RecipeMetadata,
-  RigNativeSource,
-} from '../../../generated/contract';
 import { BUFFER_SIZES } from '../../../bufferTiming';
 import {
+  type FactoryEngine,
   factoryEngineLabels,
   factoryGenres,
   factoryMetadata,
   factoryMissingPacks,
   factoryPackFor,
-  type FactoryEngine,
 } from '../../../factoryMetadata';
 import {
   factoryMissingPlugins,
-  factoryRoles,
-  recipeEffects,
   type FactoryRecipe,
   type FactoryRole,
+  factoryRoles,
+  recipeEffects,
 } from '../../../factoryRecipes';
 import {
   factoryVoices,
@@ -25,6 +21,10 @@ import {
   primaryCapture,
   type VoiceCapture,
 } from '../../../factoryVoices';
+import type {
+  RecipeMetadata,
+  RigNativeSource,
+} from '../../../generated/contract';
 
 /**
  * Pure model of the Oxidal sounds browser: one item per example, the state of

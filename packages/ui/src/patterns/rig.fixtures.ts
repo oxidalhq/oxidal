@@ -1,8 +1,8 @@
-import type { BlockControl, BlockModel } from '../widgets/block-editor';
-import type { Scene } from '../widgets/scene-pad';
 import type { Step } from '../lib/route';
-import type { ChainLaneModel } from '../widgets/chain';
+import type { BlockControl, BlockModel } from '../widgets/block-editor';
 import { SOURCES } from '../widgets/block-source.data';
+import type { ChainLaneModel } from '../widgets/chain';
+import type { Scene } from '../widgets/scene-pad';
 
 type RigLane = Omit<ChainLaneModel, 'blocks'> & { blocks: BlockModel[] };
 

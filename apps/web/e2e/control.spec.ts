@@ -1,7 +1,8 @@
-import { setDisplayMode } from './display';
-import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { expect, type Page, test } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
+
+import { setDisplayMode } from './display';
 
 test.beforeEach(async ({ request }) => {
   let state = (await (await request.get('/api/v1/state')).json()) as {

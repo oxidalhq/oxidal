@@ -1,5 +1,6 @@
-import { useState } from 'react';
 import { Faders, MusicNotes } from '@phosphor-icons/react';
+import { useState } from 'react';
+
 import { Button } from '../components/ui/button';
 import {
   Sheet,
@@ -8,16 +9,16 @@ import {
   SheetFooter,
   SheetHeader,
 } from '../components/ui/sheet';
-import { PracticePanel } from '../widgets/practice';
 import { Label } from '../components/ui/text';
 import { Toggle } from '../components/ui/toggle';
+import { PracticePanel } from '../widgets/practice';
+import { exampleWaveform } from '../widgets/practice.data';
 import {
-  StemMixer,
   type StemControls,
+  StemMixer,
   type StemRole,
 } from '../widgets/stem-strip';
 import { Transport, type TransportState } from '../widgets/transport';
-import { exampleWaveform } from '../widgets/practice.data';
 
 const WAVEFORM = exampleWaveform();
 

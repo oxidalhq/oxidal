@@ -1,17 +1,18 @@
-import { expect, it } from 'vitest';
 import Ajv from 'ajv/dist/2020';
+import { expect, it } from 'vitest';
+
 import schema from '../../../docs/presets/manifest.schema.json';
-import {
-  lv2Effect,
-  serialRig,
-  parallelRig,
-  sceneRig,
-  splitNative,
-  removeEffect,
-  canMoveEffect,
-  type NativeDraft,
-} from './rigDraft';
 import type { Lv2Plugin, Preset } from './api';
+import {
+  canMoveEffect,
+  lv2Effect,
+  type NativeDraft,
+  parallelRig,
+  removeEffect,
+  sceneRig,
+  serialRig,
+  splitNative,
+} from './rigDraft';
 import { scenesKey } from './sceneFormat';
 const validator = new Ajv({ strict: false }).compile(schema);
 const mono: Lv2Plugin = {
