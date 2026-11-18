@@ -3707,7 +3707,7 @@ async fn media_uploads_resume_at_the_confirmed_offset_within_chunk_and_file_limi
     assert_eq!(create("song.flac", 10).await.unwrap().status(), 415);
     assert_eq!(create("song.wav", 3 << 30).await.unwrap().status(), 413);
     assert_eq!(create("song.wav", 0).await.unwrap().status(), 413);
-    let created = create("Rehearsal 01.mp3", 20).await.unwrap();
+    let created = create("Rehearsal 01.mp3", 21).await.unwrap();
     assert_eq!(created.status(), 201);
     let upload: Value = created.json().await.unwrap();
     let id = upload["id"].as_str().unwrap().to_owned();
@@ -3730,21 +3730,26 @@ async fn media_uploads_resume_at_the_confirmed_offset_within_chunk_and_file_limi
     let stale = put(0, vec![1; 12]).await.unwrap();
     assert_eq!(stale.status(), 409);
     assert_eq!(stale.json::<Value>().await.unwrap()["offset"], 12);
-    assert_eq!(put(12, vec![2; 9]).await.unwrap().status(), 422);
+    assert_eq!(put(12, vec![2; 10]).await.unwrap().status(), 422);
     assert_eq!(put(12, vec![2; 9 << 20]).await.unwrap().status(), 413);
-    let done: Value = put(12, vec![2; 8]).await.unwrap().json().await.unwrap();
-    assert_eq!(done["complete"], true);
+    let partial: Value = put(12, vec![2; 8]).await.unwrap().json().await.unwrap();
+    assert_eq!(partial["complete"], false);
+    assert_eq!(partial["offset"], 20);
     let part = media.join("incoming").join(format!("{id}.part"));
     let mut expected = vec![1u8; 12];
     expected.extend([2u8; 8]);
     assert_eq!(std::fs::read(&part).unwrap(), expected);
+    // Completion transfers the part to the importer; inspect its bytes before that handoff.
+    let done: Value = put(20, vec![3; 1]).await.unwrap().json().await.unwrap();
+    assert_eq!(done["complete"], true);
+    assert_eq!(done["offset"], 21);
     let state: Value = reqwest::get(format!("{url}/media/uploads/{id}"))
         .await
         .unwrap()
         .json()
         .await
         .unwrap();
-    assert_eq!(state["offset"], 20);
+    assert_eq!(state["offset"], 21);
 
     let cancel = client
         .delete(format!("{url}/media/uploads/{id}"))
