@@ -225,6 +225,38 @@ test('disconnect disables edits and reconnect restores the authoritative snapsho
   await expect(namLevel).toBeEnabled();
 });
 
+test('a failed editor download keeps navigation and device readback available', async ({
+  page,
+}) => {
+  const editor = '**/src/GraphAuthor.tsx*';
+  await page.route(editor, (route) => route.abort());
+  await page.goto('/?development=simulator');
+  const failure = page
+    .getByRole('alert')
+    .filter({ hasText: 'Could not open the effects rig' });
+  await expect(failure).toBeVisible();
+  const resources = page.getByRole('complementary', {
+    name: 'DSP and system resources',
+  });
+  await expect(resources).toHaveAttribute('data-connected', 'true');
+  const level = page.getByRole('button', { name: 'Adjust NAM A level value' });
+  await expect(level).toBeEnabled();
+  const value = await level.innerText();
+  await expect(
+    page.getByRole('navigation', { name: 'Instrument navigation' }),
+  ).toBeVisible();
+  await page.unroute(editor);
+  const downloaded = page.waitForResponse(
+    (response) =>
+      response.url().includes('/src/GraphAuthor.tsx') && response.ok(),
+  );
+  await failure.getByRole('button', { name: 'Reload interface' }).click();
+  await downloaded;
+  await expect(resources).toHaveAttribute('data-connected', 'true');
+  await expect(failure).toHaveCount(0);
+  await expect(level).toHaveText(value);
+});
+
 test('quiet interface has no detected WCAG AA violations', async ({
   page,
 }, testInfo) => {

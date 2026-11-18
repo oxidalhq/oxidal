@@ -58,6 +58,7 @@ import { ControlEditor } from './ControlEditor';
 import { DebugConsole } from './DebugConsole';
 import { DevicePower } from './DevicePower';
 import { EffectPacks } from './EffectPacks';
+import { FeatureBoundary } from './FeatureBoundary';
 import { GlobalTuner } from './GlobalTuner';
 import { GuitarSettings } from './GuitarSettings';
 import { friendlyError } from './lib/friendlyError';
@@ -652,22 +653,26 @@ function InstrumentApp() {
         ) : view === 'guitars' ? (
           <GuitarSettings />
         ) : view === 'monitor' ? (
-          <Suspense fallback={<Loading label="Loading Levels…" />}>
-            <SoundCheck
-              connected={connected}
-              displayMode={displayMode}
-              onGuitars={() => setView('guitars')}
-              onLibrary={() => setView('library')}
-              onAudioSetup={() => {
-                showSettings();
-                setSettingsSection('audio');
-              }}
-            />
-          </Suspense>
+          <FeatureBoundary name="Levels">
+            <Suspense fallback={<Loading label="Loading Levels…" />}>
+              <SoundCheck
+                connected={connected}
+                displayMode={displayMode}
+                onGuitars={() => setView('guitars')}
+                onLibrary={() => setView('library')}
+                onAudioSetup={() => {
+                  showSettings();
+                  setSettingsSection('audio');
+                }}
+              />
+            </Suspense>
+          </FeatureBoundary>
         ) : view === 'library' ? (
-          <Suspense fallback={<Loading label="Loading Library…" />}>
-            <Library connected={connected} onOpenRig={() => setView('rig')} />
-          </Suspense>
+          <FeatureBoundary name="the Library">
+            <Suspense fallback={<Loading label="Loading Library…" />}>
+              <Library connected={connected} onOpenRig={() => setView('rig')} />
+            </Suspense>
+          </FeatureBoundary>
         ) : view === 'rig' ? (
           <>
             {/* Every Rig view's header holds Mute/Protect (7.28). */}
@@ -684,17 +689,21 @@ function InstrumentApp() {
               }
             />
             <Suspense fallback={<Loading label="Loading the rig…" />}>
-              <MixedRig
-                connected={connected}
-                onPlaying={setMixedName}
-                onPresent={setMixedPresent}
-                otherPlaying={playingName !== null || graphName !== null}
-              />
-              <GraphAuthor
-                connected={connected}
-                liveOnly
-                onPlaying={setGraphName}
-              />
+              <FeatureBoundary name="the mixed rig">
+                <MixedRig
+                  connected={connected}
+                  onPlaying={setMixedName}
+                  onPresent={setMixedPresent}
+                  otherPlaying={playingName !== null || graphName !== null}
+                />
+              </FeatureBoundary>
+              <FeatureBoundary name="the effects rig">
+                <GraphAuthor
+                  connected={connected}
+                  liveOnly
+                  onPlaying={setGraphName}
+                />
+              </FeatureBoundary>
             </Suspense>
             {developmentSimulator && !audioRunning && (
               <>
@@ -944,9 +953,11 @@ function InstrumentApp() {
                   Device maintenance · control protocol {state.protocol}. Audio
                   setup and monitoring remain available from their own pages.
                 </p>
-                <Suspense fallback={<Loading label="Loading terminal…" />}>
-                  <WebTerminal />
-                </Suspense>
+                <FeatureBoundary name="the terminal">
+                  <Suspense fallback={<Loading label="Loading terminal…" />}>
+                    <WebTerminal />
+                  </Suspense>
+                </FeatureBoundary>
                 <DebugConsole />
                 {developmentSimulator && (
                   <details className="panel">
