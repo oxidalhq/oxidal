@@ -1,15 +1,8 @@
 import { Lock, WifiHigh, WifiLow, WifiMedium } from '@phosphor-icons/react';
-import * as React from 'react';
+import type { ReactNode } from 'react';
 
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-} from '../components/ui/dialog';
 import { List, ListRow } from '../components/ui/list-row';
 import {
   Select,
@@ -20,11 +13,6 @@ import {
 } from '../components/ui/select';
 import { Description } from '../components/ui/text';
 import { ConfirmChange } from './confirm-change';
-import {
-  type CertificateFile,
-  DeviceAddresses,
-  DeviceCertificate,
-} from './device-access';
 import { SettingGroup, SettingRow } from './settings-page';
 
 export type WifiNetwork = {
@@ -32,16 +20,26 @@ export type WifiNetwork = {
   /** Signal bars, 1 to 3. */
   strength: number;
   secured: boolean;
-  /** Saved on the device. */
-  known: boolean;
+  connected?: boolean;
+  /** Exactly one eligible saved profile for this SSID; otherwise use saved rows. */
+  savedId?: string;
+  joinDisabled?: boolean;
+  reason?: string;
 };
-export type HotspotPolicy = 'no-wifi' | 'always' | 'boot' | 'button' | 'never';
-export type Hotspot = {
-  policy: HotspotPolicy;
-  /** Name and when its password last changed, such as "Oxidal-7F2A · changed on 2 Nov". */
+export type HotspotPolicy =
+  'never' | 'no_ethernet' | 'not_at_home' | 'no_remembered' | 'always';
+export type SavedWifiNetwork = {
+  uuid: string;
   name: string;
-  /** Country and channel, such as "United Kingdom · channel 6". */
+  active: boolean;
+  managed: boolean;
+  canConnect?: boolean;
+};
+export type Hotspot = {
+  policy?: HotspotPolicy;
+  name: string;
   radio: string;
+  canEditRadio?: boolean;
 };
 
 const Bars = ({ n }: { n: number }) =>
@@ -58,7 +56,7 @@ const Bars = ({ n }: { n: number }) =>
  * device's own hotspot, every address that reaches it, and the certificate
  * that stops browsers warning. A change that could cut this screen off (a
  * new network, a new hotspot password) has to be confirmed from the new
- * connection within a minute, or the device goes back to how it was.
+ * connection within 90 seconds, or the device goes back to how it was.
  */
 export function NetworkSettings({
   networks,
@@ -66,9 +64,15 @@ export function NetworkSettings({
   address,
   pending,
   hotspot,
-  hostName,
-  hotspotAddress,
-  certificate,
+  saved,
+  disabled = false,
+  busy = false,
+  notice,
+  interfaceControl,
+  access,
+  dialogs,
+  onManualJoin,
+  onConnect,
   onJoin,
   onForget,
   onScan,
@@ -78,21 +82,26 @@ export function NetworkSettings({
   onChangeRadio,
 }: {
   networks: WifiNetwork[];
-  /** The network the device is on now. */
   current: string;
-  /** The device's address on it. */
   address: string;
-  /** A network just joined, waiting for confirmation, and the seconds left. */
-  pending?: { ssid: string; secondsLeft: number };
+  pending?: {
+    label?: string;
+    secondsLeft: number;
+    applying?: string;
+    recovery?: ReactNode;
+  };
   hotspot: Hotspot;
-  /** The device's name on the network, such as "oxidal.local". */
-  hostName: string;
-  /** The device's address on its own hotspot, such as "10.42.0.1". */
-  hotspotAddress: string;
-  certificate: CertificateFile;
-  /** Join a network; the password only for a new secured one. */
-  onJoin: (ssid: string, password?: string) => void;
-  onForget: (ssid: string) => void;
+  saved: SavedWifiNetwork[];
+  disabled?: boolean;
+  busy?: boolean;
+  notice?: ReactNode;
+  interfaceControl?: ReactNode;
+  access: ReactNode;
+  dialogs?: ReactNode;
+  onManualJoin: () => void;
+  onJoin: (ssid: string, secured: boolean) => void;
+  onConnect: (uuid: string) => void;
+  onForget: (uuid: string) => void;
   onScan: () => void;
   /** Keep the new network (true) or go back now (false). */
   onConfirm: (keep: boolean) => void;
@@ -100,49 +109,58 @@ export function NetworkSettings({
   onChangeName: () => void;
   onChangeRadio: () => void;
 }) {
-  const [joining, setJoining] = React.useState<string | null>(null);
-  const [password, setPassword] = React.useState('');
-  const join = (ssid: string, secret?: string) => {
-    setJoining(null);
-    setPassword('');
-    onJoin(ssid, secret);
-  };
   return (
     <div data-slot="network-settings" className="grid gap-6">
+      {notice}
       <ConfirmChange
         open={Boolean(pending)}
-        title={`Keep ${pending?.ssid ?? ''}?`}
+        title={
+          pending?.label ? `Keep ${pending.label}?` : 'Keep this connection?'
+        }
         body={
           <>
-            The device joined {pending?.ssid}. If you can see this, keep it.
-            Otherwise it goes back to {current} so you can reach it again.
+            Reconnect to the new Wi-Fi or hotspot and keep this connection.
+            Otherwise the previous network returns automatically.
           </>
         }
+        applying={busy ? 'Updating network settings…' : pending?.applying}
+        disabled={disabled || busy || (pending?.secondsLeft ?? 0) <= 0}
+        recovery={pending?.recovery}
+        canGoBackWhileApplying
         secondsLeft={pending?.secondsLeft ?? 0}
-        totalSeconds={60}
-        keepLabel={`Keep ${pending?.ssid ?? ''}`}
+        totalSeconds={90}
+        keepLabel={
+          pending?.label ? `Keep ${pending.label}` : 'Keep this connection'
+        }
         onKeep={() => onConfirm(true)}
         onGoBack={() => onConfirm(false)}
       />
       <SettingGroup title="Wi-Fi">
         <List aria-label="Networks">
+          {networks.length === 0 && (
+            <Description>
+              No nearby networks. Scan again or enter a Wi-Fi name.
+            </Description>
+          )}
           {networks.map((n) => (
             <ListRow
-              key={n.ssid}
+              key={`${n.ssid}-${n.secured}`}
               leading={<Bars n={n.strength} />}
               title={n.ssid}
               caption={
-                n.ssid === pending?.ssid
+                n.ssid === pending?.label
                   ? 'Joined · waiting for you to keep it'
                   : n.ssid === current && pending
                     ? 'Previous network · goes back here if not kept'
-                    : n.ssid === current
-                      ? `Connected · ${address}`
-                      : n.known
-                        ? 'Saved'
-                        : n.secured
-                          ? 'Needs a password'
-                          : 'Open network'
+                    : n.connected
+                      ? `Connected${address ? ` · ${address}` : ''}`
+                      : n.reason
+                        ? n.reason
+                        : n.savedId
+                          ? 'Saved'
+                          : n.secured
+                            ? 'Needs a password'
+                            : 'Open network'
               }
               trailing={
                 <span className="flex items-center gap-1">
@@ -152,39 +170,30 @@ export function NetworkSettings({
                       className="size-4 text-muted-foreground"
                     />
                   )}
-                  {n.ssid === pending?.ssid ? (
+                  {n.ssid === pending?.label ? (
                     <Badge size="sm" tone="selected">
                       Joined
                     </Badge>
-                  ) : n.ssid === current ? (
+                  ) : n.connected ? (
                     <Badge size="sm">
                       {pending ? 'Previous' : 'Connected'}
                     </Badge>
                   ) : (
-                    <>
-                      {n.known && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          aria-label={`Forget ${n.ssid}`}
-                          onClick={() => onForget(n.ssid)}
-                        >
-                          Forget
-                        </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        aria-label={`Join ${n.ssid}`}
-                        onClick={() =>
-                          n.known || !n.secured
-                            ? join(n.ssid)
-                            : setJoining(n.ssid)
-                        }
-                      >
-                        Join
-                      </Button>
-                    </>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      aria-label={`Join ${n.ssid}`}
+                      disabled={
+                        disabled || busy || Boolean(pending) || n.joinDisabled
+                      }
+                      onClick={() =>
+                        n.savedId
+                          ? onConnect(n.savedId)
+                          : onJoin(n.ssid, n.secured)
+                      }
+                    >
+                      Join
+                    </Button>
                   )}
                 </span>
               }
@@ -195,10 +204,74 @@ export function NetworkSettings({
           size="sm"
           variant="ghost"
           className="justify-self-start"
+          disabled={busy}
           onClick={onScan}
         >
           Scan again
         </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="justify-self-start"
+          disabled={disabled || busy || Boolean(pending)}
+          onClick={onManualJoin}
+        >
+          Enter Wi-Fi name…
+        </Button>
+        {interfaceControl}
+        <details>
+          <summary className="min-h-touch cursor-pointer py-3 text-sm">
+            Saved networks
+          </summary>
+          <List aria-label="Saved networks">
+            {saved.length === 0 && (
+              <Description>No saved networks.</Description>
+            )}
+            {saved.map((profile) => (
+              <ListRow
+                key={profile.uuid}
+                title={profile.name}
+                caption={
+                  profile.active
+                    ? 'Connected'
+                    : profile.managed
+                      ? `Saved · ${profile.uuid}`
+                      : 'Managed outside Oxidal'
+                }
+                trailing={
+                  profile.managed &&
+                  !profile.active && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={disabled || busy || Boolean(pending)}
+                        aria-label={`Forget saved ${profile.name} (${profile.uuid})`}
+                        onClick={() => onForget(profile.uuid)}
+                      >
+                        Forget
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={
+                          disabled ||
+                          busy ||
+                          Boolean(pending) ||
+                          !profile.canConnect
+                        }
+                        aria-label={`Connect saved ${profile.name} (${profile.uuid})`}
+                        onClick={() => onConnect(profile.uuid)}
+                      >
+                        Join
+                      </Button>
+                    </>
+                  )
+                }
+              />
+            ))}
+          </List>
+        </details>
       </SettingGroup>
       <SettingGroup title="Hotspot">
         <Description className="mb-1">
@@ -208,76 +281,53 @@ export function NetworkSettings({
         </Description>
         <SettingRow label="Turn the hotspot on" stacked>
           <Select
-            value={hotspot.policy}
+            value={hotspot.policy ?? ''}
+            disabled={disabled || busy || Boolean(pending)}
             onValueChange={(v) => onPolicy(v as HotspotPolicy)}
           >
             <SelectTrigger aria-label="Turn the hotspot on" className="w-full">
-              <SelectValue />
+              <SelectValue placeholder="Appliance default" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="no-wifi">
+              <SelectItem value="no_remembered">
                 When no saved Wi-Fi is in range
               </SelectItem>
               <SelectItem value="always">Always</SelectItem>
-              <SelectItem value="boot">
-                For ten minutes after power-on
+              <SelectItem value="no_ethernet">
+                When Ethernet is disconnected
               </SelectItem>
-              <SelectItem value="button">Only when I turn it on</SelectItem>
+              <SelectItem value="not_at_home">
+                When home Wi-Fi is out of range
+              </SelectItem>
               <SelectItem value="never">Never</SelectItem>
             </SelectContent>
           </Select>
         </SettingRow>
         <SettingRow label="Name and password" caption={hotspot.name}>
-          <Button size="sm" variant="outline" onClick={onChangeName}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={disabled || busy || Boolean(pending)}
+            onClick={onChangeName}
+          >
             Change…
           </Button>
         </SettingRow>
         <SettingRow label="Country and channel" caption={hotspot.radio}>
-          <Button size="sm" variant="outline" onClick={onChangeRadio}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={
+              disabled || busy || Boolean(pending) || !hotspot.canEditRadio
+            }
+            onClick={onChangeRadio}
+          >
             Change…
           </Button>
         </SettingRow>
       </SettingGroup>
-      <DeviceAddresses
-        hostName={hostName}
-        wifiAddress={address}
-        wifiNetwork={current}
-        hotspotAddress={hotspotAddress}
-      />
-      <DeviceCertificate certificate={certificate} hostName={hostName} />
-      <Dialog
-        open={Boolean(joining)}
-        onOpenChange={(o) => !o && setJoining(null)}
-      >
-        <DialogContent>
-          <DialogHeader
-            title={`Join ${joining}`}
-            description="The password stays on the device."
-          />
-          <DialogBody>
-            <label className="grid gap-0.5">
-              <span className="small-caps text-xs text-muted-foreground">
-                Password
-              </span>
-              <input
-                type="password"
-                autoComplete="off"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              />
-            </label>
-          </DialogBody>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setJoining(null)}>
-              Cancel
-            </Button>
-            <Button onClick={() => joining && join(joining, password)}>
-              Join
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {access}
+      {dialogs}
     </div>
   );
 }

@@ -19,6 +19,12 @@ export const JoinAndKeep: StoryObj = {
     await userEvent.click(
       canvas.getByRole('button', { name: 'Join Rehearsal Room' }),
     );
+    const review = within(
+      await page.findByRole('dialog', { name: 'Join Rehearsal Room?' }),
+    );
+    await userEvent.click(
+      review.getByRole('button', { name: 'Apply network change' }),
+    );
     const dialog = within(
       await page.findByRole('dialog', { name: 'Keep Rehearsal Room?' }),
     );
