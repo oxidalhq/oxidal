@@ -46,6 +46,7 @@ export function AppShell({
   destination,
   onNavigate,
   nowPlaying,
+  bottomBar,
   readings,
   resourceState = 'live',
   resourceConnected = resourceState !== 'disconnected',
@@ -57,6 +58,8 @@ export function AppShell({
   destination: Destination;
   onNavigate: (destination: Destination) => void;
   nowPlaying?: React.ReactNode;
+  /** Persistent tools above the phone navigation, using the same reserved area. */
+  bottomBar?: React.ReactNode;
   readings: ResourceReadings;
   resourceState?: ResourceState;
   resourceConnected?: boolean;
@@ -68,8 +71,29 @@ export function AppShell({
 }) {
   // The tool dock draws its buttons here, in the masthead.
   const [tools, setTools] = React.useState<HTMLElement | null>(null);
+  const frame = React.useRef<HTMLDivElement>(null);
+  const bottom = React.useRef<HTMLDivElement>(null);
+  React.useLayoutEffect(() => {
+    const container = bottom.current;
+    const shell = frame.current;
+    if (!container || !shell) return;
+    const measure = () =>
+      shell.style.setProperty(
+        '--app-bottom-height',
+        `${container.getBoundingClientRect().height}px`,
+      );
+    measure();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure);
+      return () => window.removeEventListener('resize', measure);
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
   return (
     <div
+      ref={frame}
       data-slot="app-shell"
       data-destination={destination}
       className={cn(
@@ -162,29 +186,38 @@ export function AppShell({
       </div>
       <main
         data-slot="app-content"
-        className="m-0 w-full max-w-none min-w-0 p-0 pb-[calc(var(--safe-bottom)+4.5rem)] md:pb-page"
+        className="m-0 w-full max-w-none min-w-0 p-0 pb-[calc(var(--app-bottom-height,4.5rem)+var(--spacing-page))]"
       >
         <LauncherSlotContext.Provider value={tools}>
           {children}
         </LauncherSlotContext.Provider>
       </main>
-      <nav
-        aria-label="Instrument navigation"
-        className="fixed inset-x-0 bottom-0 z-strip grid grid-cols-5 border-t border-border bg-raised pb-[var(--safe-bottom)] md:hidden"
+      <div
+        ref={bottom}
+        data-slot="app-bottom"
+        className="fixed inset-x-0 bottom-0 z-strip bg-raised pb-[var(--safe-bottom)]"
       >
-        {DESTINATIONS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            aria-current={destination === item.id ? 'page' : undefined}
-            onClick={() => onNavigate(item.id)}
-            className="grid min-h-touch justify-items-center gap-0.5 py-1.5 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring aria-[current=page]:text-foreground [&_svg]:size-5"
-          >
-            {item.icon}
-            <span className="small-caps text-xs font-medium">{item.label}</span>
-          </button>
-        ))}
-      </nav>
+        {bottomBar}
+        <nav
+          aria-label="Instrument navigation"
+          className="grid grid-cols-5 border-t border-border bg-raised md:hidden"
+        >
+          {DESTINATIONS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              aria-current={destination === item.id ? 'page' : undefined}
+              onClick={() => onNavigate(item.id)}
+              className="grid min-h-touch justify-items-center gap-0.5 py-1.5 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring aria-[current=page]:text-foreground [&_svg]:size-5"
+            >
+              {item.icon}
+              <span className="small-caps text-xs font-medium">
+                {item.label}
+              </span>
+            </button>
+          ))}
+        </nav>
+      </div>
     </div>
   );
 }

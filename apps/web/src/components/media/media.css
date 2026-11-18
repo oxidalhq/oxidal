@@ -158,17 +158,12 @@
   max-width: 20rem;
 }
 
-/* Phone and e-paper bar: fixed above the safe area, never over the masthead
-   (Tuner, Mute and navigation stay reachable); the page scrolls clear of it. */
+/* The shared shell stacks this above navigation and reserves their measured
+   height together. It owns the safe area so neither bar overlaps the other. */
 .now-playing[data-placement='bottom'] {
-  position: fixed;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 30;
   min-height: 3.5rem;
-  padding: 0.375rem max(12px, var(--safe-right))
-    max(0.375rem, var(--safe-bottom)) max(12px, var(--safe-left));
+  padding: 0.375rem max(12px, var(--safe-right)) 0.375rem
+    max(12px, var(--safe-left));
   border-top: 1px solid var(--foreground);
   background: var(--card);
   color: var(--foreground);
@@ -189,15 +184,6 @@
 .now-playing[data-placement='bottom'] .now-playing-line strong,
 .now-playing[data-placement='bottom'] .media-chip {
   color: var(--foreground);
-}
-@media (max-width: 599px) {
-  .app-shell:has(> .now-playing[data-placement='bottom']) {
-    padding-bottom: calc(4.5rem + var(--safe-bottom));
-  }
-}
-:root[data-display='epaper']
-  .app-shell:has(> .now-playing[data-placement='bottom']) {
-  padding-bottom: calc(4.5rem + var(--safe-bottom));
 }
 @media (max-width: 380px) {
   .now-playing[data-placement='bottom'] .media-transport .oxidal-button svg {

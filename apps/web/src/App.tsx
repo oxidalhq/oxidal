@@ -514,6 +514,7 @@ function InstrumentApp() {
       resourceConnected={resource.connected}
       resourceLabel={resource.label}
       status={statusMode}
+      bottomBar={<NowPlaying placement="bottom" />}
     >
       <NowPlaying placement="strip" />
       {tunerOpen && (
@@ -1196,7 +1197,6 @@ function InstrumentApp() {
           </SettingsPage>
         )}
       </div>
-      <NowPlaying placement="bottom" />
       <MediaSheets />
     </AppShell>
   );

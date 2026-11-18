@@ -17,6 +17,69 @@ const fixture =
   '../../crates/oxidal-api/tests/fixtures/media/tone-44k-mono-vbr.mp3';
 const title = 'tone-44k-mono-vbr';
 
+async function expectBottomPlayerClear(page: Page) {
+  const chrome = page.locator('[data-slot=app-bottom]');
+  const player = chrome.getByRole('region', { name: 'Now playing' });
+  if (!(await player.isVisible())) return;
+  await expect
+    .poll(async () =>
+      chrome.evaluate((element) => {
+        const content = document.querySelector('[data-slot=app-content]');
+        return content
+          ? Number.parseFloat(getComputedStyle(content).paddingBottom) -
+              element.getBoundingClientRect().height
+          : -1;
+      }),
+    )
+    .toBeGreaterThanOrEqual(0);
+  const area = (await chrome.boundingBox())!;
+  const bar = (await player.boundingBox())!;
+  const viewport = page.viewportSize()!;
+  const viewportDetails = await page.evaluate(
+    (width) => ({
+      innerWidth,
+      innerHeight,
+      scrollWidth: document.documentElement.scrollWidth,
+      over: [...document.querySelectorAll('body *')]
+        .filter((element) => {
+          const box = element.getBoundingClientRect();
+          return box.width > 0 && box.right > width + 1;
+        })
+        .slice(0, 12)
+        .map((element) => ({
+          tag: element.tagName,
+          slot: element.getAttribute('data-slot'),
+          class: element.className,
+          right: element.getBoundingClientRect().right,
+        })),
+    }),
+    viewport.width,
+  );
+  expect(area.y + area.height, JSON.stringify(viewportDetails)).toBeCloseTo(
+    viewport.height,
+    0,
+  );
+  const navigation = chrome.getByRole('navigation', {
+    name: 'Instrument navigation',
+  });
+  if (await navigation.isVisible()) {
+    const nav = (await navigation.boundingBox())!;
+    expect(bar.y + bar.height).toBeLessThanOrEqual(nav.y + 0.5);
+    const rig = navigation.getByRole('button', { name: 'Rig', exact: true });
+    expect(
+      await rig.evaluate((button) => {
+        const box = button.getBoundingClientRect();
+        return button.contains(
+          document.elementFromPoint(
+            box.x + box.width / 2,
+            box.y + box.height / 2,
+          ),
+        );
+      }),
+    ).toBe(true);
+  }
+}
+
 type Snapshot = {
   state: string;
   track: { id: string } | null;
@@ -93,7 +156,7 @@ test('backing tracks import an MP3 through the device and play needs running aud
 
 test('backing mini-player stays on every page and opens the full player', async ({
   page,
-}) => {
+}, testInfo) => {
   const list = await importFixture(page);
   await list
     .getByRole('listitem', { name: title })
@@ -116,7 +179,27 @@ test('backing mini-player stays on every page and opens the full player', async 
       .click();
     await expect(nowPlaying(page)).toBeVisible();
     await expect(nowPlaying(page)).toContainText(title);
+    await expectBottomPlayerClear(page);
   }
+  for (const mode of ['stage', 'sunlight', 'epaper', 'default'] as const) {
+    await setDisplayMode(page, mode);
+    await expectBottomPlayerClear(page);
+    await page.screenshot({
+      path: testInfo.outputPath(`bottom-player-${mode}.png`),
+    });
+  }
+  const original = page.viewportSize()!;
+  await setDisplayMode(page, 'epaper');
+  await page.setViewportSize({
+    width: original.height,
+    height: original.width,
+  });
+  await expectBottomPlayerClear(page);
+  await page.screenshot({
+    path: testInfo.outputPath('bottom-player-rotated.png'),
+  });
+  await page.setViewportSize(original);
+  await setDisplayMode(page, 'default');
   await page.reload();
   await expect(nowPlaying(page)).toContainText(title);
   const before = page.url();
@@ -314,13 +397,9 @@ test('backing player on e-paper uses the bottom bar, words and step buttons', as
   await setDisplayMode(page, 'epaper');
   const bar = nowPlaying(page);
   await expect(bar).toContainText('Ready');
-  // At every width the e-paper bar sits at the bottom of the screen.
-  const box = await bar.boundingBox();
-  const viewport = page.viewportSize();
-  expect(box && viewport && box.y + box.height).toBeCloseTo(
-    viewport?.height ?? 0,
-    0,
-  );
+  // The shared bottom area keeps the player above phone navigation and clear
+  // of scrollable content; on wide screens it contains just the player.
+  await expectBottomPlayerClear(page);
   await bar.getByRole('button', { name: /Open backing player/ }).click();
   const sheet = page.getByRole('dialog', { name: 'Backing player' });
   await expect(sheet.getByRole('slider')).toHaveCount(0);
