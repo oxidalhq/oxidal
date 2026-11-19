@@ -37,7 +37,7 @@ export type PluginControl = {
   integer?: boolean;
   /** Named values (`lv2:scalePoint`), for a choice. */
   choices?: { value: number; label: string }[];
-  /** The plugin says it matters most (`lv2:displayPriority`): higher shows first. */
+  /** The plugin says it matters most (`pprops:displayPriority`, from LV2 Port Properties): higher shows first. */
   priority?: number;
   /** The plugin asks hosts not to show it (`notOnGUI`). */
   hidden?: boolean;
