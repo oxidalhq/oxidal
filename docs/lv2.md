@@ -369,8 +369,60 @@ Discovery copies each input control's `lv2:scalePoint` names into the catalog
 non-finite, out-of-range, empty and repeated values are dropped). A control
 whose native value equals a scale point shows its name — "Ping-pong" rather
 than "2" — both in the mixed engine's control `display` and in the shared
-browser formatter (`lv2Control`). Other values keep their number. Native unit
-metadata is not exposed yet.
+browser formatter (`lv2Control`). Other values keep their number. Units, groups and
+display order are described under "Display metadata" below.
+
+### Display metadata
+
+Discovery also copies the optional facts a plugin gives for showing its controls. They
+change only how a control is labelled, grouped and ordered. They never change the raw
+value, range, scale points, automation, saved state or the plugin and port identity,
+which stay the plugin URI and the port symbol.
+
+| Field (`ports[]`)  | Read from                                                         | Limit                             |
+| ------------------ | ----------------------------------------------------------------- | --------------------------------- |
+| `name`             | `lv2:name`                                                        | 256 bytes                         |
+| `unit`             | `units:symbol` of the port's `units:unit`, or the standard symbol | 32 bytes                          |
+| `unit_uri`         | the `units:unit` address, when it has one                         | 4096 bytes                        |
+| `group`            | `lv2:name`, `rdfs:label` or `lv2:symbol` of the port's `pg:group` | 256 bytes                         |
+| `group_uri`        | the `pg:group` address, when it has one                           | 4096 bytes                        |
+| `group_symbol`     | `lv2:symbol` of the `pg:group`                                    | 256 bytes                         |
+| `display_priority` | `pprops:displayPriority`                                          | whole number from 0 to 2147483647 |
+| `not_on_gui`       | the `pprops:notOnGUI` port property                               | true or false, default false      |
+| `enumeration`      | the `lv2:enumeration` port property                               | true or false, default false      |
+
+| Field (plugin) | Read from       | Limit                                                                                                              |
+| -------------- | --------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `comment`      | `rdfs:comment`  | 4096 bytes; line breaks and tabs are kept                                                                          |
+| `homepage`     | `doap:homepage` | 4096 bytes; web address (`http` or `https`) with a host, no user name or password, no spaces or control characters |
+
+Rules the host follows:
+
+- The priority property is `pprops:displayPriority` from LV2 Port Properties, not an
+  `lv2:` term. A higher number shows first.
+- A choice control needs the explicit `lv2:enumeration` property. Named scale points
+  alone do not make one.
+- Units are display symbols only. The host never converts a value and never runs a
+  unit's `units:render` text. The standard `units:` names map to `dB`, `Hz`, `kHz`,
+  `MHz`, `ms`, `s`, `min`, `%`, `BPM`, `ct`, `semi` and similar symbols.
+- `group_symbol` is kept next to `group_uri` because two groups written inside a port
+  can share a label. The label is for display only.
+- A value that is empty, too long, has control characters, is the wrong kind (for
+  example text where a number belongs), or is unclear because a port names two units or
+  two groups is left out. Nothing is invented in its place. A port group label that is
+  too long falls back to the group's own symbol.
+- Lilv 0.24 shows only one of several repeated text or number values (comment, priority,
+  unit symbol), so a plugin that repeats those gets that one value. Repeated addresses
+  (two homepages, two units, two groups) are recognised and left out.
+- A plugin or port without any of this still lists every control, labelled from its
+  own `lv2:name` or symbol, with no unit or group.
+- Output, latency and hidden (`not_on_gui`) ports are not offered as editable controls.
+
+The catalog check rejects stored values that discovery would not have kept, and files
+written before these fields existed still load with every new field empty.
+Metadata is read from the plugin's description files without loading its code.
+`crates/oxidal-lv2/tests/fixtures/metadata/` holds the rich, plain, unclear and
+oversized description files used by `crates/oxidal-lv2/tests/metadata.rs`.
 
 Unit/component coverage checks every integer in a 1–200 range with both tapers and
 actual touch-button/keyboard dispatch. The maintained Linux browser scenario enters a

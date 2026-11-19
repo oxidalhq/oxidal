@@ -2406,6 +2406,8 @@ export interface PluginInfo {
    * The LV2 class label, such as "Delay" or "Reverb", when one is declared.
    */
   category?: string | null;
+  comment?: string | null;
+  homepage?: string | null;
   name: string;
   ports: Port[];
   unsupported?: string | null;
@@ -2416,6 +2418,14 @@ export interface Port {
   audio: boolean;
   control: boolean;
   default?: number | null;
+  /**
+   * pprops:displayPriority, not an lv2core property.
+   */
+  display_priority?: number | null;
+  enumeration?: boolean;
+  group?: string | null;
+  group_symbol?: string | null;
+  group_uri?: string | null;
   index: number;
   input: boolean;
   integer: boolean;
@@ -2423,6 +2433,8 @@ export interface Port {
   logarithmic: boolean;
   maximum?: number | null;
   minimum?: number | null;
+  name?: string | null;
+  not_on_gui?: boolean;
   output: boolean;
   /**
    * Named values (`lv2:scalePoint`), sorted by value; empty when none.
@@ -2430,6 +2442,11 @@ export interface Port {
   scale_points?: ScalePoint[];
   symbol: string;
   toggled: boolean;
+  /**
+   * Declared display symbol only; raw values are never converted.
+   */
+  unit?: string | null;
+  unit_uri?: string | null;
 }
 /**
  * One named value of a control, such as a mode or note division, so the

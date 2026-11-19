@@ -100,4 +100,20 @@ fn main() {
     }
     run(&mut fixture);
     println!("cargo:rustc-env=OXIDAL_LV2_FIXTURE={}", bundle.display());
+    // Description-only bundle for display metadata checks. It reuses the fixture binary,
+    // which discovery never loads or runs.
+    let metadata = out.join("metadata.lv2");
+    std::fs::create_dir_all(&metadata).unwrap();
+    for name in ["manifest.ttl", "plugin.ttl"] {
+        std::fs::copy(
+            format!("tests/fixtures/metadata/{name}"),
+            metadata.join(name),
+        )
+        .unwrap();
+    }
+    std::fs::copy(bundle.join("plugin.so"), metadata.join("plugin.so")).unwrap();
+    println!(
+        "cargo:rustc-env=OXIDAL_LV2_METADATA_FIXTURE={}",
+        metadata.display()
+    );
 }

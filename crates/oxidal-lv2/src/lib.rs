@@ -11,10 +11,30 @@ pub use protocol::Binding;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct Port {
     pub index: u32,
     pub symbol: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Declared display symbol only; raw values are never converted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit_uri: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_uri: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_symbol: Option<String>,
+    /// pprops:displayPriority, not an lv2core property.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_priority: Option<i32>,
+    #[serde(default)]
+    pub not_on_gui: bool,
+    #[serde(default)]
+    pub enumeration: bool,
     pub audio: bool,
     pub control: bool,
     #[serde(default)]
@@ -164,7 +184,7 @@ impl Port {
         Ok((lo, hi))
     }
 }
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct PluginInfo {
     pub name: String,
     pub uri: String,
@@ -174,8 +194,67 @@ pub struct PluginInfo {
     /// The declared author or maker, used to group effects by source.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub author: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub homepage: Option<String>,
     pub ports: Vec<Port>,
     pub unsupported: Option<String>,
+}
+
+fn metadata_text(value: Option<String>, limit: usize, multiline: bool) -> Option<String> {
+    value
+        .filter(|text| {
+            !text.trim().is_empty()
+                && text.len() <= limit
+                && !text
+                    .chars()
+                    .any(|c| c.is_control() && !(multiline && matches!(c, '\n' | '\r' | '\t')))
+        })
+        .map(|text| text.trim().to_owned())
+}
+fn metadata_homepage(value: Option<String>) -> Option<String> {
+    value.filter(|text| {
+        if text.is_empty()
+            || text.len() > 4096
+            || text.chars().any(|c| c.is_control() || c.is_whitespace())
+        {
+            return false;
+        }
+        url::Url::parse(text).is_ok_and(|url| {
+            matches!(url.scheme(), "http" | "https")
+                && url.has_host()
+                && url.username().is_empty()
+                && url.password().is_none()
+        })
+    })
+}
+
+/// A stored value is valid only if discovery would have kept it unchanged.
+fn text_kept(value: &Option<String>, limit: usize, multiline: bool) -> bool {
+    value.as_ref().is_none_or(|text| {
+        metadata_text(Some(text.clone()), limit, multiline).as_ref() == Some(text)
+    })
+}
+/// Checks the display-only port fields in a stored catalog against the discovery limits.
+fn port_metadata_valid(port: &Port) -> bool {
+    text_kept(&port.name, 256, false)
+        && text_kept(&port.unit, 32, false)
+        && text_kept(&port.unit_uri, 4096, false)
+        && text_kept(&port.group, 256, false)
+        && text_kept(&port.group_uri, 4096, false)
+        && text_kept(&port.group_symbol, 256, false)
+        // A group label only exists next to the group's URI or symbol.
+        && (port.group.is_none() || port.group_uri.is_some() || port.group_symbol.is_some())
+        && port.display_priority.is_none_or(|priority| priority >= 0)
+}
+/// Checks the plugin comment and homepage in a stored catalog against the discovery limits.
+fn plugin_metadata_valid(plugin: &PluginInfo) -> bool {
+    text_kept(&plugin.comment, 4096, true)
+        && plugin
+            .homepage
+            .as_ref()
+            .is_none_or(|link| metadata_homepage(Some(link.clone())).as_ref() == Some(link))
 }
 
 #[cfg(feature = "native")]
@@ -215,6 +294,7 @@ mod tests {
                         maximum: Some(1.0),
                         default: Some(0.0),
                         scale_points: Vec::new(),
+                        ..Default::default()
                     })
             })
             .collect();
@@ -225,6 +305,7 @@ mod tests {
             author: None,
             ports,
             unsupported: None,
+            ..Default::default()
         };
         assert!(scalar_state_complete(&info));
         info.ports[0].symbol.push_str("-changed");
@@ -255,6 +336,7 @@ mod tests {
             maximum: Some(20000.0),
             default: Some(1000.0),
             scale_points: Vec::new(),
+            ..Default::default()
         };
         let value = p.denormalize(0.5).unwrap();
         assert!((value - (20.0_f32 * 20000.0).sqrt()).abs() < 0.001);
@@ -310,6 +392,7 @@ mod tests {
             maximum: Some(4.0),
             default: Some(0.0),
             scale_points: points,
+            ..Default::default()
         };
         assert_eq!(port.display(2.0), "Ping-pong");
         assert_eq!(port.display(4.0), "4.000");
@@ -326,6 +409,215 @@ mod tests {
                 .get("scale_points")
                 .is_none()
         );
+    }
+
+    #[test]
+    fn older_catalogs_without_display_fields_still_parse() {
+        let json = r#"{"index":0,"symbol":"gain","audio":false,"control":true,"input":true,"output":false,"integer":false,"toggled":false,"logarithmic":false,"latency":false,"minimum":0.0,"maximum":1.0,"default":0.5}"#;
+        let port: Port = serde_json::from_str(json).unwrap();
+        assert!(port.name.is_none() && port.unit.is_none() && port.group.is_none());
+        assert!(port.display_priority.is_none());
+        assert!(!port.not_on_gui && !port.enumeration);
+        // Empty display fields are left out when the catalog is written again.
+        let again = serde_json::to_value(&port).unwrap();
+        for key in [
+            "name",
+            "unit",
+            "unit_uri",
+            "group",
+            "group_uri",
+            "group_symbol",
+            "display_priority",
+        ] {
+            assert!(again.get(key).is_none(), "{key} should be omitted");
+        }
+    }
+
+    #[test]
+    fn text_fields_drop_empty_oversized_and_control_values() {
+        assert_eq!(
+            metadata_text(Some("  Gain ".into()), 256, false).as_deref(),
+            Some("Gain")
+        );
+        assert_eq!(metadata_text(Some("   ".into()), 256, false), None);
+        assert_eq!(metadata_text(Some("x".repeat(33)), 32, false), None);
+        assert_eq!(
+            metadata_text(Some("x".repeat(32)), 32, false).as_deref(),
+            Some(&*"x".repeat(32))
+        );
+        assert_eq!(metadata_text(Some("a\nb".into()), 256, false), None);
+        assert_eq!(metadata_text(Some("a\u{7}b".into()), 4096, true), None);
+        assert_eq!(
+            metadata_text(Some("a\nb\r\tc".into()), 4096, true).as_deref(),
+            Some("a\nb\r\tc")
+        );
+        assert_eq!(metadata_text(None, 256, false), None);
+    }
+
+    #[test]
+    fn homepage_needs_an_absolute_web_address_without_credentials() {
+        let ok = |s: &str| metadata_homepage(Some(s.into())).is_some();
+        assert!(ok("https://example.org/plugin"));
+        assert!(ok("http://example.org"));
+        for bad in [
+            "",
+            "example.org",
+            "/relative",
+            "ftp://example.org",
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "https://user:pass@example.org",
+            "https://user@example.org",
+            "https://example.org/a b",
+            "https://example.org/\u{7}",
+            "https://",
+        ] {
+            assert!(!ok(bad), "{bad:?} should be dropped");
+        }
+        assert!(!ok(&format!("https://example.org/{}", "a".repeat(4096))));
+        assert_eq!(metadata_homepage(None), None);
+    }
+
+    fn catalog_with(port: Port, comment: Option<&str>, homepage: Option<&str>) -> PluginCatalog {
+        PluginCatalog {
+            sample_rate: 48000,
+            plugins: vec![PluginInfo {
+                name: "Plugin".into(),
+                uri: "urn:test:plugin".into(),
+                comment: comment.map(Into::into),
+                homepage: homepage.map(Into::into),
+                ports: vec![port],
+                ..Default::default()
+            }],
+        }
+    }
+    fn control(symbol: &str) -> Port {
+        Port {
+            symbol: symbol.into(),
+            control: true,
+            input: true,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn catalog_accepts_display_fields_within_bounds() {
+        let port = Port {
+            name: Some("Time".into()),
+            unit: Some("ms".into()),
+            unit_uri: Some("http://lv2plug.in/ns/extensions/units#ms".into()),
+            group: Some("Echo".into()),
+            group_uri: Some("urn:test:plugin#echo".into()),
+            group_symbol: Some("echo".into()),
+            display_priority: Some(0),
+            not_on_gui: true,
+            enumeration: true,
+            ..control("time")
+        };
+        assert!(
+            catalog_with(
+                port,
+                Some("Line one\nLine two"),
+                Some("https://example.org")
+            )
+            .validate()
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn catalog_rejects_display_fields_that_discovery_would_have_dropped() {
+        let long = |n| "x".repeat(n);
+        let bad_ports = [
+            Port {
+                name: Some(long(257)),
+                ..control("a")
+            },
+            Port {
+                name: Some("  ".into()),
+                ..control("a")
+            },
+            Port {
+                unit: Some(long(33)),
+                ..control("a")
+            },
+            Port {
+                unit: Some("m\ns".into()),
+                ..control("a")
+            },
+            Port {
+                unit_uri: Some(long(4097)),
+                ..control("a")
+            },
+            Port {
+                group: Some("Echo".into()),
+                ..control("a")
+            },
+            Port {
+                group: Some(long(257)),
+                group_symbol: Some("echo".into()),
+                ..control("a")
+            },
+            Port {
+                group_uri: Some(long(4097)),
+                ..control("a")
+            },
+            Port {
+                group_symbol: Some(long(257)),
+                ..control("a")
+            },
+            Port {
+                display_priority: Some(-1),
+                ..control("a")
+            },
+        ];
+        for port in bad_ports {
+            let label = format!("{port:?}");
+            assert!(
+                catalog_with(port, None, None).validate().is_err(),
+                "{label}"
+            );
+        }
+        for (comment, homepage) in [
+            (Some(long(4097)), None),
+            (Some("tab\u{7}bell".to_owned()), None),
+            (None, Some("javascript:alert(1)".to_owned())),
+            (None, Some("https://user:pw@example.org".to_owned())),
+        ] {
+            assert!(
+                catalog_with(control("a"), comment.as_deref(), homepage.as_deref())
+                    .validate()
+                    .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn two_groups_with_one_label_keep_their_own_symbols() {
+        let one = Port {
+            group: Some("Filter".into()),
+            group_symbol: Some("low".into()),
+            ..control("a")
+        };
+        let two = Port {
+            index: 1,
+            group: Some("Filter".into()),
+            group_symbol: Some("high".into()),
+            ..control("b")
+        };
+        let catalog = PluginCatalog {
+            sample_rate: 48000,
+            plugins: vec![PluginInfo {
+                name: "P".into(),
+                uri: "urn:p".into(),
+                ports: vec![one, two],
+                ..Default::default()
+            }],
+        };
+        catalog.validate().unwrap();
+        let ports = &catalog.plugins[0].ports;
+        assert_eq!(ports[0].group, ports[1].group);
+        assert_ne!(ports[0].group_symbol, ports[1].group_symbol);
     }
 }
 
@@ -358,6 +650,7 @@ impl PluginCatalog {
                 || !uris.insert(&plugin.uri)
                 || plugin.ports.len() > 128
                 || plugin.unsupported.as_ref().is_some_and(|s| s.len() > 4096)
+                || !plugin_metadata_valid(plugin)
             {
                 return Err("Invalid LV2 catalog metadata".into());
             }
@@ -368,6 +661,7 @@ impl PluginCatalog {
                     || port.symbol.len() > 4096
                     || port.symbol.contains(char::is_control)
                     || !symbols.insert(&port.symbol)
+                    || !port_metadata_valid(port)
                     || [port.minimum, port.maximum, port.default]
                         .into_iter()
                         .flatten()

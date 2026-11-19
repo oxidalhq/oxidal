@@ -1,5 +1,5 @@
 mod state;
-use crate::{PluginInfo, Port, ScalePoint};
+use crate::{PluginInfo, Port, ScalePoint, metadata_homepage, metadata_text};
 pub use state::{PluginState, StatePath, StateProperty};
 use std::{
     ffi::{CStr, CString, c_char, c_void},
@@ -19,6 +19,19 @@ unsafe extern "C" {
     fn ox_lv2_author(p: *const c_void) -> *const c_char;
     fn ox_lv2_ports(p: *const c_void) -> u32;
     fn ox_lv2_symbol(p: *const c_void, index: u32) -> *const c_char;
+    fn ox_lv2_port_metadata(
+        w: *mut c_void,
+        p: *const c_void,
+        index: u32,
+        field: u32,
+    ) -> *const c_char;
+    fn ox_lv2_display_priority(
+        w: *mut c_void,
+        p: *const c_void,
+        index: u32,
+        priority: *mut i32,
+    ) -> i32;
+    fn ox_lv2_plugin_metadata(w: *mut c_void, p: *const c_void, field: u32) -> *const c_char;
     fn ox_lv2_port(
         w: *mut c_void,
         p: *const c_void,
@@ -196,12 +209,24 @@ impl World {
             .ok()
             .and_then(|uri| class_label(&uri));
         let author = unsafe { text(ox_lv2_author(p)) }.ok();
+        // SAFETY: plugin borrows this live world; copy each bounded thread-local result immediately.
+        let comment = metadata_text(
+            unsafe { text(ox_lv2_plugin_metadata(self.0.0.as_ptr(), p, 0)) }.ok(),
+            4096,
+            true,
+        );
+        // SAFETY: same live plugin and immediate owned copy; only admitted HTTP(S) links survive.
+        let homepage = metadata_homepage(
+            unsafe { text(ox_lv2_plugin_metadata(self.0.0.as_ptr(), p, 1)) }.ok(),
+        );
         if !(1..=128).contains(&count) {
             return Ok(PluginInfo {
                 name,
                 uri,
                 category,
                 author,
+                comment,
+                homepage,
                 ports: vec![],
                 unsupported: Some("Port count outside 1–128".into()),
             });
@@ -224,9 +249,41 @@ impl World {
                 lo *= rate as f32;
                 hi *= rate as f32;
             }
+            let metadata = |field, limit| {
+                // SAFETY: valid plugin/index while its world is alive; copy before the next FFI call.
+                metadata_text(
+                    unsafe { text(ox_lv2_port_metadata(self.0.0.as_ptr(), p, i, field)) }.ok(),
+                    limit,
+                    false,
+                )
+            };
+            let name = metadata(0, 256);
+            let unit = metadata(1, 32);
+            let unit_uri = metadata(2, 4096);
+            let group_uri = metadata(4, 4096);
+            let group_symbol = metadata(5, 256);
+            let group = if group_uri.is_some() || group_symbol.is_some() {
+                metadata(3, 256).or_else(|| group_symbol.clone())
+            } else {
+                None
+            };
+            let mut priority = 0;
+            // SAFETY: valid metadata index and writable scalar; this query does not instantiate code.
+            let display_priority =
+                (unsafe { ox_lv2_display_priority(self.0.0.as_ptr(), p, i, &mut priority) } != 0)
+                    .then_some(priority);
             let mut port = Port {
                 index: i,
                 symbol,
+                name,
+                unit,
+                unit_uri,
+                group,
+                group_uri,
+                group_symbol,
+                display_priority,
+                enumeration: f & 2048 != 0,
+                not_on_gui: f & 4096 != 0,
                 audio: f & 1 != 0,
                 control: f & 2 != 0,
                 atom: f & 512 != 0,
@@ -293,6 +350,8 @@ impl World {
             uri,
             category,
             author,
+            comment,
+            homepage,
             ports,
             unsupported,
         })

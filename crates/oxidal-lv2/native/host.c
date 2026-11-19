@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #define MAX_PORTS 128
 #define MAX_URIS 256
 #define ATOM_BYTES 16384
@@ -92,6 +93,104 @@ const char* ox_lv2_symbol(const LilvPlugin* p, uint32_t index) {
     const LilvPort* port = lilv_plugin_get_port_by_index(p, index);
     return port ? lilv_node_as_string(lilv_port_get_symbol(p, port)) : NULL;
 }
+// New metadata calls use one thread-local copy. Rust copies it before calling again.
+static _Thread_local char metadata[4097];
+static const char* copy_metadata(const char* text) {
+    if (!text || !*text || strlen(text) >= sizeof(metadata)) return NULL;
+    memcpy(metadata, text, strlen(text) + 1); return metadata;
+}
+static const LilvNode* only_node(const LilvNodes* nodes) {
+    return nodes && lilv_nodes_size(nodes) == 1 ? lilv_nodes_get_first(nodes) : NULL;
+}
+static LilvNodes* port_values(void* world, const LilvPlugin* p, const LilvPort* port, const char* uri) {
+    LilvNode* predicate = lilv_new_uri(world, uri);
+    LilvNodes* values = predicate ? lilv_port_get_value(p, port, predicate) : NULL;
+    lilv_node_free(predicate); return values;
+}
+static LilvNodes* node_values(void* world, const LilvNode* subject, const char* uri) {
+    // Lilv logs an error when asked for properties of plain text, so only resources are asked.
+    if (!subject || !(lilv_node_is_uri(subject) || lilv_node_is_blank(subject))) return NULL;
+    LilvNode* predicate = lilv_new_uri(world, uri);
+    LilvNodes* values = predicate ? lilv_world_find_nodes(world, subject, predicate, NULL) : NULL;
+    lilv_node_free(predicate); return values;
+}
+static const char* node_text(const LilvNode* node) {
+    return node && lilv_node_is_string(node) ? lilv_node_as_string(node) : NULL;
+}
+static const char* standard_unit_symbol(const char* uri) {
+    if (!uri) return NULL;
+    static const char prefix[] = "http://lv2plug.in/ns/extensions/units#";
+    if (strncmp(uri, prefix, sizeof(prefix) - 1)) return NULL;
+    const char* id = uri + sizeof(prefix) - 1;
+    static const char* const units[][2] = {
+        {"bar","bars"},{"beat","beats"},{"bpm","BPM"},{"cent","ct"},
+        {"cm","cm"},{"db","dB"},{"degree","deg"},{"frame","frames"},
+        {"hz","Hz"},{"inch","in"},{"khz","kHz"},{"km","km"},
+        {"m","m"},{"mhz","MHz"},{"midiNote","note"},{"mile","mi"},
+        {"min","min"},{"mm","mm"},{"ms","ms"},{"oct","oct"},
+        {"pc","%"},{"s","s"},{"semitone12TET","semi"}
+    };
+    for (size_t i=0;i<sizeof(units)/sizeof(units[0]);++i) if (!strcmp(id,units[i][0])) return units[i][1];
+    return NULL;
+}
+// field: 0 name, 1 unit symbol, 2 unit URI, 3 group label, 4 group URI, 5 group symbol.
+const char* ox_lv2_port_metadata(void* world, const LilvPlugin* p, uint32_t index, uint32_t field) {
+    const LilvPort* port = lilv_plugin_get_port_by_index(p,index);
+    if (!port) return NULL;
+    if (field == 0) {
+        LilvNode* name = lilv_port_get_name(p,port);
+        const char* result = copy_metadata(node_text(name));
+        lilv_node_free(name); return result;
+    }
+    const char* relation = field <= 2 ? LV2_UNITS__unit : "http://lv2plug.in/ns/ext/port-groups#group";
+    LilvNodes* parents = port_values(world,p,port,relation);
+    const LilvNode* parent = only_node(parents);
+    const char* result = NULL;
+    LilvNodes* values = NULL;
+    if (parent && (field == 2 || field == 4)) {
+        result = copy_metadata(lilv_node_is_uri(parent) ? lilv_node_as_uri(parent) : NULL);
+    } else if (parent && (field == 1 || field == 5)) {
+        values = node_values(world,parent,field == 1 ? LV2_UNITS__symbol : LV2_CORE__symbol);
+        const char* text = node_text(only_node(values));
+        if (!text && field == 1 && lilv_node_is_uri(parent)) text = standard_unit_symbol(lilv_node_as_uri(parent));
+        result = copy_metadata(text);
+    } else if (parent && field == 3) {
+        static const char* const names[] = {LV2_CORE__name,"http://www.w3.org/2000/01/rdf-schema#label",LV2_CORE__symbol};
+        for (size_t i=0;i<sizeof(names)/sizeof(names[0]);++i) {
+            values = node_values(world,parent,names[i]);
+            result = copy_metadata(node_text(only_node(values)));
+            lilv_nodes_free(values); values = NULL;
+            if (result) break;
+        }
+    }
+    lilv_nodes_free(values); lilv_nodes_free(parents); return result;
+}
+int ox_lv2_display_priority(void* world, const LilvPlugin* p, uint32_t index, int32_t* priority) {
+    const LilvPort* port = lilv_plugin_get_port_by_index(p,index);
+    if (!port) return 0;
+    LilvNodes* values = port_values(world,p,port,"http://lv2plug.in/ns/ext/port-props#displayPriority");
+    const LilvNode* value = only_node(values);
+    int found = 0;
+    if (value && lilv_node_is_int(value)) {
+        const char* text = lilv_node_as_string(value); char* end = NULL;
+        errno = 0; long parsed = text ? strtol(text,&end,10) : -1;
+        if (text && end && end != text && !*end && !errno && parsed >= 0 && parsed <= INT32_MAX) { *priority=(int32_t)parsed; found=1; }
+    }
+    lilv_nodes_free(values); return found;
+}
+// field: 0 rdfs:comment, 1 doap:homepage. No web request or plugin execution.
+const char* ox_lv2_plugin_metadata(void* world, const LilvPlugin* p, uint32_t field) {
+    const char* uri = field == 0 ? "http://www.w3.org/2000/01/rdf-schema#comment" : "http://usefulinc.com/ns/doap#homepage";
+    LilvNode* predicate = lilv_new_uri(world,uri);
+    // Lilv 0.24 returns one text value even when a description repeats rdfs:comment,
+    // so only repeated addresses (homepage) can be recognised as unclear.
+    LilvNodes* values = predicate ? lilv_plugin_get_value(p,predicate) : NULL;
+    const LilvNode* value = only_node(values);
+    const char* result = NULL;
+    if (value)
+        result = copy_metadata(field == 0 ? node_text(value) : lilv_node_is_uri(value) ? lilv_node_as_uri(value) : NULL);
+    lilv_nodes_free(values); lilv_node_free(predicate); return result;
+}
 static int is_class(LilvWorld* w, const LilvPlugin* p, const LilvPort* port, const char* uri) {
     LilvNode* node = lilv_new_uri(w, uri);
     int result = lilv_port_is_a(p, port, node); lilv_node_free(node); return result;
@@ -131,7 +230,9 @@ int ox_lv2_port(void* world, const LilvPlugin* p, uint32_t index, float* def, fl
       | (property(w,p,port,LV2_CORE__integer)<<4) | (property(w,p,port,LV2_CORE__toggled)<<5)
       | (property(w,p,port,LV2_CORE__sampleRate)<<6)
       | (property(w,p,port,"http://lv2plug.in/ns/ext/port-props#logarithmic")<<7)
-      | (property(w,p,port,LV2_CORE__reportsLatency)<<8);
+      | (property(w,p,port,LV2_CORE__reportsLatency)<<8)
+      | (property(w,p,port,LV2_CORE__enumeration)<<11)
+      | (property(w,p,port,"http://lv2plug.in/ns/ext/port-props#notOnGUI")<<12);
     LilvNode* designation=lilv_new_uri(w,LV2_CORE__designation);
     LilvNode* value=lilv_port_get(p,port,designation);
     LilvNode* latency=lilv_new_uri(w,LV2_CORE__latency);

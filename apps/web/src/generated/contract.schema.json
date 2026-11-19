@@ -9554,6 +9554,18 @@
             "null"
           ]
         },
+        "comment": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "homepage": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "name": {
           "type": "string"
         },
@@ -9599,6 +9611,36 @@
           ],
           "format": "float"
         },
+        "display_priority": {
+          "description": "pprops:displayPriority, not an lv2core property.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "enumeration": {
+          "type": "boolean",
+          "default": false
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "group_symbol": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "group_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "index": {
           "type": "integer",
           "format": "uint32",
@@ -9630,6 +9672,16 @@
           ],
           "format": "float"
         },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "not_on_gui": {
+          "type": "boolean",
+          "default": false
+        },
         "output": {
           "type": "boolean"
         },
@@ -9645,6 +9697,19 @@
         },
         "toggled": {
           "type": "boolean"
+        },
+        "unit": {
+          "description": "Declared display symbol only; raw values are never converted.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "unit_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
