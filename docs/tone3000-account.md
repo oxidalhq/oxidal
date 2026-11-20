@@ -23,6 +23,10 @@ If Library sent you here, its return action appears after sign-in.
 - Use **Change model** on a supported running block to audition a capture or IR.
 - Save a copy after auditioning if you want to recall the new tone offline.
 
+If TONE3000 supplies a creator profile URL on the tone's user record, Oxidal
+shows it in tone details. Only HTTPS profile links on TONE3000 are accepted.
+Downloaded model metadata keeps the supplied link available offline.
+
 ## Disconnect or move to another device
 
 **Sign out** clears the saved account tokens on this device. Local files

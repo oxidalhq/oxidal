@@ -62,6 +62,21 @@ pub(super) async fn state(State(shared): State<Arc<Shared>>) -> Response {
     dispatch(shared, Command::Packs {}).await
 }
 
+pub(super) async fn copyright(Path(id): Path<String>) -> Response {
+    match oxidal_device::packs::copyright(&id).await {
+        Some(text) => (
+            [
+                (header::CONTENT_TYPE, "text/plain; charset=utf-8"),
+                (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+                (header::CACHE_CONTROL, "no-store"),
+            ],
+            text,
+        )
+            .into_response(),
+        None => (StatusCode::NOT_FOUND, [(header::CACHE_CONTROL, "no-store")]).into_response(),
+    }
+}
+
 pub(super) async fn change(
     State(shared): State<Arc<Shared>>,
     Path((id, action)): Path<(String, String)>,

@@ -1893,6 +1893,7 @@ export interface PackJob {
   phase: string;
 }
 export interface EffectPack {
+  copyright_available?: boolean | null;
   id: string;
   installed: boolean;
   name: string;
@@ -2383,6 +2384,7 @@ export interface Tone {
 }
 export interface Creator {
   display_name?: string | null;
+  profile_url?: string | null;
   username: string;
 }
 export interface LocalModelPage {
@@ -2410,6 +2412,10 @@ export interface PluginInfo {
   comment?: string | null;
   homepage?: string | null;
   name: string;
+  /**
+   * Installed Debian pack owning the bundle manifest selected by Lilv.
+   */
+  pack_id?: string | null;
   ports: Port[];
   unsupported?: string | null;
   uri: string;

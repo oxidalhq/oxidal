@@ -66,7 +66,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         // Metadata only: no plugin instances or audio device are opened.
         let world = World::discover()?;
-        let mut plugins = world.plugins(f64::from(sample_rate))?;
+        let owners = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map(|runtime| runtime.block_on(oxidal_device::packs::ManifestOwners::scan()))
+            .unwrap_or_default();
+        let mut plugins = world.installed_catalog(f64::from(sample_rate), &owners)?;
         plugins.sort_by(|a, b| a.name.cmp(&b.name).then(a.uri.cmp(&b.uri)));
         let catalog = oxidal_lv2::PluginCatalog {
             sample_rate,

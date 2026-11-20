@@ -1026,10 +1026,12 @@ version = "0.1.0"
 dependencies = [
  "oxidal-audio",
  "oxidal-control",
+ "oxidal-device",
  "oxidal-graph",
  "schemars",
  "serde",
  "serde_json",
+ "tokio",
  "url",
 ]
 

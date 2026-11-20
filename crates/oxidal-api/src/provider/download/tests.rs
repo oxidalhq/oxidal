@@ -11,7 +11,14 @@ fn model(headers: axum::http::HeaderMap) -> Json<serde_json::Value> {
 #[tokio::test]
 async fn entitled_download_is_verified_and_recalls_without_account_or_network() {
     let app = Router::new()
-        .route("/api/v1/tones/7", get(|| async { Json(tone()) }))
+        .route(
+            "/api/v1/tones/7",
+            get(|| async {
+                let mut tone = tone();
+                tone["user"]["url"] = json!("https://www.tone3000.com/CreatorCase");
+                Json(tone)
+            }),
+        )
         .route(
             "/api/v1/models/9",
             get(|headers: axum::http::HeaderMap| async move { model(headers) }),
@@ -46,6 +53,11 @@ async fn entitled_download_is_verified_and_recalls_without_account_or_network() 
     assert!(!metadata.contains("http://"));
     assert!(metadata.contains("oxidal-model://"));
     assert!(metadata.contains("creator"));
+    let restored: crate::provider::catalog::Tone = serde_json::from_value(asset.tone).unwrap();
+    assert_eq!(
+        restored.user.profile_url.as_deref(),
+        Some("https://www.tone3000.com/CreatorCase")
+    );
     std::fs::remove_dir_all(root).unwrap();
 }
 #[tokio::test]

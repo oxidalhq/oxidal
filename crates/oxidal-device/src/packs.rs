@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use std::{process::Stdio, time::Duration};
 use tokio::{process::Command, task::JoinHandle};
 
+mod installed;
+pub use installed::{ManifestOwners, copyright};
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum PackAction {
@@ -22,6 +24,8 @@ pub struct EffectPack {
     pub usable_plugins: u16,
     pub installed: bool,
     pub version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copyright_available: Option<bool>,
     pub qualification: String,
 }
 
@@ -164,6 +168,7 @@ pub fn catalog() -> Vec<EffectPack> {
             usable_plugins: spec.usable_plugins,
             installed: false,
             version: None,
+            copyright_available: None,
             qualification: spec.qualification.into(),
         })
         .collect()
@@ -226,6 +231,13 @@ impl Manager {
         for pack in &mut packs {
             pack.version = installed_version(&pack.package).await;
             pack.installed = pack.version.is_some();
+            if pack.installed
+                && installed::package_copyright(pack.package.clone())
+                    .await
+                    .is_some()
+            {
+                pack.copyright_available = Some(true);
+            }
         }
         PackState {
             available,
@@ -269,17 +281,11 @@ impl Manager {
 }
 
 async fn installed_version(package: &str) -> Option<String> {
-    let output = Command::new("/usr/bin/dpkg-query")
-        .args(["-W", "-f=${db:Status-Status} ${Version}", package])
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .await
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let value = String::from_utf8(output.stdout).ok()?;
+    let value = installed::query(
+        &["-W", "-f=${db:Status-Status} ${Version}", "--", package],
+        1024,
+    )
+    .await?;
     value.trim().strip_prefix("installed ").map(str::to_owned)
 }
 

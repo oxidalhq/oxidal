@@ -3874,6 +3874,12 @@
             "null"
           ]
         },
+        "profile_url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "username": {
           "type": "string"
         }
@@ -4638,6 +4644,12 @@
     "EffectPack": {
       "type": "object",
       "properties": {
+        "copyright_available": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "id": {
           "type": "string"
         },
@@ -9583,6 +9595,13 @@
         },
         "name": {
           "type": "string"
+        },
+        "pack_id": {
+          "description": "Installed Debian pack owning the bundle manifest selected by Lilv.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "ports": {
           "type": "array",

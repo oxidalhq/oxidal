@@ -185,11 +185,29 @@ impl World {
             .collect()
     }
     pub fn plugins(&self, rate: f64) -> Result<Vec<PluginInfo>, String> {
+        self.describe_plugins(rate, |_| None)
+    }
+    #[cfg(feature = "worker")]
+    pub fn installed_catalog(
+        &self,
+        rate: f64,
+        owners: &oxidal_device::packs::ManifestOwners,
+    ) -> Result<Vec<PluginInfo>, String> {
+        self.describe_plugins(rate, |plugin| {
+            owners.pack_for(self.bundle_path(plugin)?.as_path())
+        })
+    }
+    fn describe_plugins(
+        &self,
+        rate: f64,
+        owner: impl Fn(*const c_void) -> Option<&'static str>,
+    ) -> Result<Vec<PluginInfo>, String> {
         self.handles()?
             .into_iter()
             .map(|p| {
                 let mut info = self.describe(p, rate)?;
                 info.artwork = self.thumbnail(p).is_some();
+                info.pack_id = owner(p).map(str::to_owned);
                 Ok(info)
             })
             .collect()
@@ -197,8 +215,13 @@ impl World {
     fn thumbnail(&self, p: *const c_void) -> Option<Vec<u8>> {
         // SAFETY: the plugin borrows this world and each result is copied before the next call.
         let path = unsafe { text(ox_lv2_artwork_path(self.0.0.as_ptr(), p, 0)) }.ok()?;
-        let bundle = unsafe { text(ox_lv2_artwork_path(self.0.0.as_ptr(), p, 1)) }.ok()?;
-        crate::artwork::read(Path::new(&bundle), Path::new(&path))
+        crate::artwork::read(&self.bundle_path(p)?, Path::new(&path))
+    }
+    fn bundle_path(&self, p: *const c_void) -> Option<std::path::PathBuf> {
+        // SAFETY: p borrows this world and Rust immediately copies the decoded path.
+        unsafe { text(ox_lv2_artwork_path(self.0.0.as_ptr(), p, 1)) }
+            .ok()
+            .map(Into::into)
     }
     pub fn artwork(&self, uri: &str) -> Result<Option<Vec<u8>>, String> {
         for p in self.handles()? {
@@ -248,6 +271,7 @@ impl World {
                 comment,
                 homepage,
                 artwork: false,
+                pack_id: None,
                 ports: vec![],
                 unsupported: Some("Port count outside 1–128".into()),
             });
@@ -374,6 +398,7 @@ impl World {
             comment,
             homepage,
             artwork: false,
+            pack_id: None,
             ports,
             unsupported,
         })

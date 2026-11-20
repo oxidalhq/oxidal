@@ -202,6 +202,19 @@ One scan can run at a time. Responses are limited to 4 MiB and discovery to ten 
 failed workers are killed/reaped, including after the requesting browser disconnects.
 Unavailable/failed discovery returns an error rather than an empty successful catalog.
 
+### Installed pack and copyright details
+
+When the exact bundle manifest Lilv selected belongs to one installed Debian
+package in the effect-pack allowlist, discovery includes its `pack_id`. The
+worker reads current package file lists within fixed limits on each scan.
+Plugins loaded from an unlisted bundle, including one that shadows an installed
+plugin URI, have no pack ID. The catalog does not expose filesystem paths.
+
+An installed pack can advertise `copyright_available`.
+`GET /api/v1/packs/{id}/copyright` serves its packaged Debian copyright document
+verbatim as uncached plain text. The file must resolve to a regular UTF-8 file
+under `/usr/share/doc` and fit within 64 KiB. Missing or invalid documents return 404. The document may list separate licences for different files.
+
 ### Plugin artwork
 
 The catalog includes `artwork: true` when a plugin has one `modgui:gui` description

@@ -1812,6 +1812,43 @@ async fn effect_pack_catalog_is_curated_even_without_a_privileged_helper() {
 }
 
 #[tokio::test]
+async fn pack_copyright_rejects_unknown_and_path_like_ids() {
+    let (url, task, _) = start(false).await;
+    let client = reqwest::Client::new();
+    for id in ["not-a-pack", "swh%2F..%2Ffomp", "..%2F..%2Fpasswd"] {
+        let response = client
+            .get(format!("{url}/packs/{id}/copyright"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 404, "{id}");
+        assert_eq!(response.headers()["cache-control"], "no-store");
+        assert!(response.bytes().await.unwrap().is_empty());
+    }
+    task.abort();
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+#[ignore = "requires the Debian swh-lv2 package"]
+async fn installed_pack_copyright_is_exact_uncached_plain_text() {
+    let (url, task, _) = start(false).await;
+    let response = reqwest::get(format!("{url}/packs/swh/copyright"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(
+        response.headers()["content-type"],
+        "text/plain; charset=utf-8"
+    );
+    assert_eq!(response.headers()["x-content-type-options"], "nosniff");
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    let packaged = std::fs::read("/usr/share/doc/swh-lv2/copyright").unwrap();
+    assert_eq!(&response.bytes().await.unwrap()[..], &packaged);
+    task.abort();
+}
+
+#[tokio::test]
 async fn storage_lock_is_next_boot_only_and_optional_without_the_root_helper() {
     let (url, task, _) = start(false).await;
     let client = reqwest::Client::new();

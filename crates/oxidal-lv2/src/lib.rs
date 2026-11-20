@@ -201,6 +201,9 @@ pub struct PluginInfo {
     pub homepage: Option<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub artwork: bool,
+    /// Installed Debian pack owning the bundle manifest selected by Lilv.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pack_id: Option<String>,
     pub ports: Vec<Port>,
     pub unsupported: Option<String>,
 }
@@ -439,12 +442,10 @@ mod tests {
         )
         .unwrap();
         assert!(!plugin.artwork);
-        assert!(
-            serde_json::to_value(&plugin)
-                .unwrap()
-                .get("artwork")
-                .is_none()
-        );
+        assert!(plugin.pack_id.is_none());
+        let wire = serde_json::to_value(&plugin).unwrap();
+        assert!(wire.get("artwork").is_none());
+        assert!(wire.get("pack_id").is_none());
     }
 
     #[test]
@@ -664,6 +665,13 @@ impl PluginCatalog {
                 || !uris.insert(&plugin.uri)
                 || plugin.ports.len() > 128
                 || plugin.unsupported.as_ref().is_some_and(|s| s.len() > 4096)
+                || plugin.pack_id.as_ref().is_some_and(|id| {
+                    id.is_empty()
+                        || id.len() > 32
+                        || !id
+                            .bytes()
+                            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+                })
                 || !plugin_metadata_valid(plugin)
             {
                 return Err("Invalid LV2 catalog metadata".into());

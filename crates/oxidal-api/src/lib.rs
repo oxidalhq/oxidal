@@ -553,6 +553,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             get(storage_lock::state).post(storage_lock::change),
         )
         .route("/packs", get(packs::state))
+        .route("/packs/{id}/copyright", get(packs::copyright))
         .route("/packs/{id}/{action}", post(packs::change))
         .route("/audio", get(playback::state).post(playback::command))
         .route("/levels", get(levels::state).post(levels::update))

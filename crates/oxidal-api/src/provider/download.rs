@@ -1,7 +1,7 @@
 //! Fetch an entitled model into a verified audition cache. This does not change audio or save a rig.
 use super::{
     Access, Account,
-    catalog::{Model, Tone, fetch},
+    catalog::{Model, fetch, provider_tone},
 };
 use crate::{Shared, failure};
 use axum::{
@@ -53,7 +53,8 @@ impl Account {
                 .map_err(|_| "TONE3000 requests are queued behind a slow one; retry shortly")?
                 .map_err(|_| "TONE3000 requests stopped")?;
         let access = self.access().await?;
-        let tone: Tone = fetch(&access, &format!("tones/{}", request.tone_id), &[]).await?;
+        let tone =
+            provider_tone(fetch(&access, &format!("tones/{}", request.tone_id), &[]).await?)?;
         let model: DownloadModel =
             fetch(&access, &format!("models/{}", request.model_id), &[]).await?;
         if !tone.valid()

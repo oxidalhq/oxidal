@@ -101,9 +101,18 @@ pub async fn artwork(
 
 async fn discover(worker: PathBuf, sample_rate: u32) -> Result<PluginCatalog, String> {
     let bytes = worker_output(worker, "--catalog", sample_rate.to_string(), CATALOG_LIMIT).await?;
-    let catalog: PluginCatalog =
+    let mut catalog: PluginCatalog =
         serde_json::from_slice(&bytes).map_err(|_| "Invalid LV2 discovery response")?;
     catalog.validate()?;
+    for plugin in &mut catalog.plugins {
+        if plugin
+            .pack_id
+            .as_deref()
+            .is_some_and(|id| !oxidal_device::packs::known(id))
+        {
+            plugin.pack_id = None;
+        }
+    }
     if catalog.sample_rate != sample_rate {
         return Err("LV2 catalog sample rate mismatch".into());
     }

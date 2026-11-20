@@ -11,6 +11,63 @@ static NEXT: AtomicUsize = AtomicUsize::new(0);
 pub(in crate::provider) fn tone() -> serde_json::Value {
     json!({"id": 7,"title":"Fixture amp", "user":{"username":"creator","display_name":null}, "gear":"amp","format":"nam","license":"t3k","images":["https://images.example.test/amp.png"],"url":"https://www.tone3000.com/tones/fixture","models_count":1,"a2_models_count":1})
 }
+#[test]
+fn only_supplied_safe_creator_profiles_survive_provider_and_stored_metadata() {
+    let mut record = tone();
+    record["user"]["profile_url"] = json!("https://tone3000.com/Fabricated");
+    assert!(
+        provider_tone(record.clone())
+            .unwrap()
+            .user
+            .profile_url
+            .is_none()
+    );
+    for valid in [
+        "https://tone3000.com/Scottcorgan",
+        "https://www.tone3000.com:443/Mixed-Case_9/",
+    ] {
+        record["user"]["url"] = json!(valid);
+        let tone = provider_tone(record.clone()).unwrap();
+        assert!(tone.valid());
+        assert_eq!(tone.user.profile_url.as_deref(), Some(valid));
+        let offline: Tone = serde_json::from_value(serde_json::to_value(tone).unwrap()).unwrap();
+        assert_eq!(offline.user.profile_url.as_deref(), Some(valid));
+    }
+    for invalid in [
+        json!(42),
+        json!({}),
+        json!([]),
+        json!("https:///tone3000.com/example"),
+        json!("https://tone3000.com/"),
+        json!("http://tone3000.com/name"),
+        json!("https://tone3000.com.evil.test/name"),
+        json!("https://tone3000.com:8443/name"),
+        json!("https://@tone3000.com/name"),
+        json!("https://a:b@tone3000.com/name"),
+        json!("https://tone3000.com/name?secret"),
+        json!("https://tone3000.com/name#fragment"),
+        json!("https://tone3000.com/a/../name"),
+        json!("https://tone3000.com/%2E%2e/"),
+        json!("https://tone3000.com/%2fname"),
+        json!("https://tone3000.com/name%5cpath"),
+        json!("https://tone3000.com/name%20path"),
+        json!("https://tone3000.com/name path"),
+        json!(format!("https://tone3000.com/{}", "a".repeat(2048))),
+    ] {
+        record["user"]["url"] = invalid;
+        let tone = provider_tone(record.clone()).unwrap();
+        assert!(tone.valid());
+        assert!(tone.user.profile_url.is_none(), "{}", record["user"]["url"]);
+        assert!(
+            serde_json::to_value(tone).unwrap()["user"]
+                .get("profile_url")
+                .is_none()
+        );
+    }
+    let old: Tone = serde_json::from_value(tone()).unwrap();
+    assert!(old.user.profile_url.is_none());
+}
+
 pub(in crate::provider) async fn account(
     app: Router,
 ) -> (Account, tokio::task::JoinHandle<()>, std::path::PathBuf) {

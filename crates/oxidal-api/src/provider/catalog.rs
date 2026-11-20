@@ -118,6 +118,12 @@ pub struct ModelQuery {
 pub struct Creator {
     pub username: String,
     pub display_name: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "creator_profile",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub profile_url: Option<String>,
 }
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct Tone {
@@ -163,6 +169,71 @@ fn https(value: &str) -> bool {
             && u.username().is_empty()
             && u.password().is_none()
     })
+}
+fn creator_profile<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(value
+        .as_str()
+        .filter(|text| valid_creator_profile(text))
+        .map(str::to_owned))
+}
+
+fn valid_creator_profile(text: &str) -> bool {
+    if text.len() > 2048 || text.chars().any(|c| c.is_control() || c.is_whitespace()) {
+        return false;
+    }
+    let Some((scheme, address)) = text.split_once("://") else {
+        return false;
+    };
+    let Some((authority, path)) = address.split_once('/') else {
+        return false;
+    };
+    let profile = path.strip_suffix('/').unwrap_or(path);
+    let profile_lower = profile.to_ascii_lowercase();
+    if !scheme.eq_ignore_ascii_case("https")
+        || !matches!(
+            authority.to_ascii_lowercase().as_str(),
+            "tone3000.com" | "www.tone3000.com" | "tone3000.com:443" | "www.tone3000.com:443"
+        )
+        || profile.is_empty()
+        || profile.contains(['/', '\\'])
+        || matches!(
+            profile_lower.as_str(),
+            "." | ".." | "%2e" | ".%2e" | "%2e." | "%2e%2e"
+        )
+        || !profile.split('%').skip(1).all(|part| {
+            part.get(..2)
+                .filter(|hex| hex.bytes().all(|b| b.is_ascii_hexdigit()))
+                .and_then(|hex| u8::from_str_radix(hex, 16).ok())
+                .is_some_and(|b| b > b' ' && !matches!(b, b'/' | b'\\' | 0x7f))
+        })
+    {
+        return false;
+    }
+    reqwest::Url::parse(text).is_ok_and(|url| {
+        matches!(url.host_str(), Some("tone3000.com" | "www.tone3000.com"))
+            && url.port_or_known_default() == Some(443)
+            && url.query().is_none()
+            && url.fragment().is_none()
+    })
+}
+
+/// The provider calls the creator address `user.url`; our stored metadata
+/// calls it `profile_url`. Read the provider's field only at that boundary.
+pub(super) fn provider_tone(mut value: serde_json::Value) -> Result<Tone, &'static str> {
+    if let Some(user) = value
+        .get_mut("user")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        user.remove("profile_url");
+        if let Some(url) = user.remove("url") {
+            user.insert("profile_url".into(), url);
+        }
+    }
+    serde_json::from_value(value).map_err(|_| "Invalid TONE3000 tone response")
 }
 impl Tone {
     pub(super) fn valid(&self) -> bool {
@@ -239,10 +310,22 @@ impl Account {
         {
             params.push(("gear", gear.value().into()));
         }
-        let mut page: Page<Tone> = self
+        let raw: Page<serde_json::Value> = self
             .catalog(&format!("tones/{}", query.collection.path()), &params)
             .await?;
-        if page.data.len() > 20 || page.page != query.page || !page.data.iter().all(Tone::valid) {
+        if raw.data.len() > 20 || raw.page != query.page {
+            return Err("Invalid TONE3000 library response");
+        }
+        let mut page = Page {
+            data: raw
+                .data
+                .into_iter()
+                .map(provider_tone)
+                .collect::<Result<Vec<_>, _>>()?,
+            page: raw.page,
+            total_pages: raw.total_pages,
+        };
+        if !page.data.iter().all(Tone::valid) {
             return Err("Invalid TONE3000 library response");
         }
         if let Some(gear) = query.gear {
@@ -278,7 +361,7 @@ impl Account {
         if id == 0 {
             return Err("Invalid tone");
         }
-        let tone: Tone = self.catalog(&format!("tones/{id}"), &[]).await?;
+        let tone = provider_tone(self.catalog(&format!("tones/{id}"), &[]).await?)?;
         if tone.id != id || !tone.valid() {
             return Err("Invalid TONE3000 tone response");
         }
