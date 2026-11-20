@@ -121,7 +121,11 @@ function parseChordPro(source: string): Song {
 const SECTION =
   /^\s*(?:\[([^\]]+)\]|(intro|verse(?:\s*\d+)?|pre-?chorus|chorus|bridge|solo|outro|instrumental|tag)\s*:?)\s*$/i;
 
-function parseLines(source: string, format: 'markdown' | 'text'): Song {
+function parseLines(
+  source: string,
+  format: 'markdown' | 'text',
+  suppliedTitle?: string,
+): Song {
   const song: Song = { title: '', format, lines: [] };
   for (const raw of source.split(/\r?\n/)) {
     const line = raw.replace(/\s+$/, '');
@@ -161,6 +165,7 @@ function parseLines(source: string, format: 'markdown' | 'text'): Song {
     if (isChordLine(line)) song.lines.push({ kind: 'chords', text: line });
     else if (
       !song.title &&
+      suppliedTitle === undefined &&
       format === 'text' &&
       song.lines.every((l) => l.kind === 'blank')
     )
@@ -174,9 +179,16 @@ function parseLines(source: string, format: 'markdown' | 'text'): Song {
   return song;
 }
 
-export function parseSong(source: string, format: SongFormat): Song {
+/** A supplied Library title keeps a plain-text sheet's first lyric in its body. */
+export function parseSong(
+  source: string,
+  format: SongFormat,
+  suppliedTitle?: string,
+): Song {
   const song =
-    format === 'chordpro' ? parseChordPro(source) : parseLines(source, format);
+    format === 'chordpro'
+      ? parseChordPro(source)
+      : parseLines(source, format, suppliedTitle);
   // Trim blank lines at both ends and collapse runs of blanks.
   const lines = song.lines.filter(
     (line, i, all) =>
@@ -184,7 +196,11 @@ export function parseSong(source: string, format: SongFormat): Song {
   );
   while (lines[0]?.kind === 'blank') lines.shift();
   while (lines[lines.length - 1]?.kind === 'blank') lines.pop();
-  return { ...song, title: song.title || 'Untitled song', lines };
+  return {
+    ...song,
+    title: suppliedTitle ?? (song.title || 'Untitled song'),
+    lines,
+  };
 }
 
 /** Whether the song carries chords at all (the viewer can hide them). */

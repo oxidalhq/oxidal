@@ -110,10 +110,7 @@ export function Songbook() {
   const entry = songs.find((s) => s.id === open);
   const song = useMemo(
     () =>
-      entry && {
-        ...parseSong(entry.source, entry.format),
-        ...(entry.title && { title: entry.title }),
-      },
+      entry && parseSong(entry.source, entry.format, entry.title || undefined),
     [entry],
   );
   const update = (id: string, change: Partial<SongEntry & { title: string }>) =>

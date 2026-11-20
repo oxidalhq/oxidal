@@ -190,7 +190,7 @@ export function SongbookEditor({
   onSave: () => void;
 }) {
   const song = useMemo(
-    () => ({ ...parseSong(value.source, value.format), title: value.title }),
+    () => parseSong(value.source, value.format, value.title),
     [value],
   );
   return (

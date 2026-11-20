@@ -81,12 +81,14 @@ function readViewer() {
  */
 export function LinkedSheetProvider({
   connected,
+  slow = false,
   children,
 }: {
   connected: boolean;
+  slow?: boolean;
   children: ReactNode;
 }) {
-  const monitor = useMonitorFeed(2000);
+  const monitor = useMonitorFeed(slow ? 5000 : 2000);
   const media = useSessionMedia();
   const preset = monitor.snapshot?.preset;
   const track = media.player?.track?.id;
@@ -214,10 +216,7 @@ export function LinkedSheet({ stage = false }: { stage?: boolean }) {
   const document = shared?.reading?.document;
   const song = useMemo(
     () =>
-      document && {
-        ...parseSong(document.source, document.format),
-        title: document.title,
-      },
+      document && parseSong(document.source, document.format, document.title),
     [document],
   );
   if (!shared) return null;

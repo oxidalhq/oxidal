@@ -58,12 +58,13 @@ export function SheetContent({
         data-side={side}
         style={offset ? { transform: `translateY(${offset}px)` } : undefined}
         className={cn(
-          'group fixed z-sheet grid grid-rows-[auto_auto_minmax(0,1fr)_auto] border-border bg-raised text-foreground shadow-raised transition-transform duration-[var(--duration-base)] ease-[var(--ease-out)] outline-none',
+          'group fixed z-sheet grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden border-border bg-raised text-foreground shadow-raised transition-transform duration-[var(--duration-base)] ease-[var(--ease-out)] outline-none',
           side === 'bottom' &&
             'inset-x-0 bottom-0 max-h-[85dvh] rounded-t-lg border-t pb-[var(--safe-bottom)]',
-          side === 'right' && 'inset-y-0 right-0 w-[min(28rem,100vw)] border-l',
+          side === 'right' &&
+            'inset-y-0 right-0 w-[min(28rem,100vw)] grid-rows-[auto_minmax(0,1fr)_auto] border-l',
           side === 'auto' &&
-            'max-md:inset-x-0 max-md:bottom-0 max-md:max-h-[85dvh] max-md:rounded-t-lg max-md:border-t max-md:pb-[var(--safe-bottom)] md:inset-y-0 md:right-0 md:w-[min(28rem,100vw)] md:border-l',
+            'max-md:inset-x-0 max-md:bottom-0 max-md:max-h-[85dvh] max-md:rounded-t-lg max-md:border-t max-md:pb-[var(--safe-bottom)] md:inset-y-0 md:right-0 md:w-[min(28rem,100vw)] md:grid-rows-[auto_minmax(0,1fr)_auto] md:border-l',
           className,
         )}
         {...props}

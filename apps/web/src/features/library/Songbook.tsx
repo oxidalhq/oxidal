@@ -81,9 +81,7 @@ export function Songbook({ connected }: { connected: boolean }) {
   const shown = book.shown;
   const song = useMemo(
     () =>
-      shown
-        ? { ...parseSong(shown.source, shown.format), title: shown.title }
-        : undefined,
+      shown ? parseSong(shown.source, shown.format, shown.title) : undefined,
     [shown],
   );
   const ownLinks =

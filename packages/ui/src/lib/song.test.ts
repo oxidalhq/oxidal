@@ -2,6 +2,22 @@ import { expect, it } from 'vitest';
 
 import { formatOf, hasChords, isChordLine, parseSong } from './song';
 
+it('keeps every plain-text lyric when the Library supplies the title', () => {
+  const song = parseSong(
+    'My retained words\r\nSecond line',
+    'text',
+    'Saved title',
+  );
+  expect(song.title).toBe('Saved title');
+  expect(song.lines).toEqual([
+    { kind: 'text', text: 'My retained words' },
+    { kind: 'text', text: 'Second line' },
+  ]);
+  expect(parseSong('Imported title\nFirst verse', 'text').title).toBe(
+    'Imported title',
+  );
+});
+
 it('reads ChordPro directives, sections, comments and inline chords', () => {
   const song = parseSong(
     [
