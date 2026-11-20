@@ -16,6 +16,51 @@ impl Session {
             .values()
             .any(|owner| owner.measurement_pending())
     }
+    pub fn settle_authoring(&mut self) -> Result<bool, String> {
+        let mut settled = true;
+        let mut changed = false;
+        for (node, history) in &mut self.authoring_histories {
+            settled &= history.history_settled()?;
+            let Some(receipt) = history.working_receipt() else {
+                continue;
+            };
+            let working = self
+                .state
+                .working
+                .iter_mut()
+                .find(|entry| entry.node == *node);
+            match working {
+                Some(entry) if entry.receipt == receipt => continue,
+                Some(entry) => entry.receipt = receipt.to_owned(),
+                None => self.state.working.push(NodeWorking {
+                    node: node.clone(),
+                    receipt: receipt.to_owned(),
+                }),
+            }
+            if let Some(authoring) = self
+                .state
+                .authoring
+                .iter_mut()
+                .find(|entry| entry.node == *node)
+            {
+                authoring.status.working = Some(receipt.to_owned());
+            }
+            self.state.models.retain(|entry| entry.node != *node);
+            changed = true;
+        }
+        if changed {
+            self.state.revision = self
+                .state
+                .revision
+                .checked_add(1)
+                .ok_or("Rig revision exhausted")?;
+            if !self.reply_fits()? {
+                return Err("Authored native state exceeds IPC budget".into());
+            }
+        }
+        Ok(settled)
+    }
+
     pub fn authoring_command(
         &mut self,
         command: AuthoringCommand,

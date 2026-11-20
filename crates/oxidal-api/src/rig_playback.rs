@@ -1,5 +1,8 @@
 //! Actor-owned mixed worker. Accepted operations outlive the requesting HTTP connection.
 use crate::audio_boot::{Choice, Policy, Role};
+use crate::audio_change::{
+    AudioChangeOwner, AudioChangePhase, Change, OwnerContext, OwnerMessage, OwnerRequest,
+};
 use crate::{Config, Shared, failure, rig_recovery::Recovery};
 use axum::{
     Json,
@@ -24,15 +27,12 @@ type Reply = Result<RigAudioState, String>;
 #[derive(Debug)]
 pub(super) struct RigPlayback {
     boot: Arc<Policy>,
+    change: Arc<Change>,
     library_access: Arc<tokio::sync::RwLock<()>>,
     forget: mpsc::Sender<crate::library_removal::Forget>,
     protection: mpsc::Sender<crate::protect::Update>,
     pub(super) finished: watch::Receiver<bool>,
-    commands: mpsc::Sender<(
-        RigAudioCommand,
-        oneshot::Sender<Reply>,
-        tokio::sync::OwnedRwLockReadGuard<()>,
-    )>,
+    commands: mpsc::Sender<OwnerMessage<RigAudioCommand, RigAudioState>>,
     state: watch::Receiver<RigAudioState>,
 }
 struct Worker {
@@ -104,6 +104,7 @@ struct Export {
     source: String,
 }
 struct Owner {
+    change: Arc<Change>,
     protect: Arc<crate::protect::Protect>,
     levels: Arc<crate::levels::Levels>,
     midi_map: Arc<oxidal_presets::MidiMapStore>,
@@ -223,10 +224,10 @@ impl Owner {
         if self.recovery_due.is_none() {
             return;
         }
-        let Some(settings) = self.confirmed.clone() else {
+        if self.confirmed.is_none() {
             return;
-        };
-        match Recovery::new(settings).write(&self.recovery_path) {
+        }
+        match self.persist_trial(false) {
             Ok(()) => {
                 self.recovery_due = None;
                 if self.state.recovery_error.take().is_some() {
@@ -243,6 +244,59 @@ impl Owner {
             }
         }
     }
+    fn persist_trial(&self, candidate: bool) -> Result<(), String> {
+        let mut settings = self.confirmed.clone().ok_or("No Mixed audio recovery")?;
+        if !candidate {
+            self.change
+                .previous(AudioChangeOwner::Mixed, &mut settings.stream);
+        }
+        Recovery::new(settings).write(&self.recovery_path)
+    }
+
+    fn keep_previous_stream(&mut self) {
+        for settings in [&mut self.state.configured, &mut self.confirmed]
+            .into_iter()
+            .flatten()
+        {
+            self.change
+                .previous(AudioChangeOwner::Mixed, &mut settings.stream);
+        }
+    }
+
+    async fn flush_trial_history(&mut self) -> Result<(), String> {
+        if self.state.phase == AudioPhase::Running
+            && self
+                .state
+                .control
+                .as_ref()
+                .is_some_and(|state| !state.authoring.is_empty())
+        {
+            let reply = self.exchange(&WorkerRequest::SettleAuthoring).await?;
+            if let Some(error) = reply.error.clone() {
+                return Err(error);
+            }
+            self.readback(reply)?;
+        }
+        Ok(())
+    }
+
+    fn check_trial_admission(&self) -> Result<(), String> {
+        if self.model_pending()
+            || self.export.is_some()
+            || self.state.control.as_ref().is_some_and(|control| {
+                control
+                    .authoring
+                    .iter()
+                    .any(|part| part.status.gesture.is_some() || part.status.tools.measuring())
+            })
+        {
+            return Err(
+                "Finish the current Mixed edit or Save before changing audio settings".into(),
+            );
+        }
+        Ok(())
+    }
+
     fn publish(&mut self) {
         self.state.device_owned = self.worker.is_some();
         self.updates.send_replace(self.state.clone());
@@ -408,21 +462,23 @@ impl Owner {
         let root = std::fs::canonicalize(&self.root).map_err(|e| e.to_string())?;
         let runtime = self.runtime.join("playback");
         std::fs::create_dir_all(&runtime).map_err(|e| e.to_string())?;
-        let mut child = tokio::process::Command::new(executable)
-            .envs(self.media_dir.iter().map(|dir| ("OXIDAL_MEDIA_DIR", dir)))
-            .env("OXIDAL_PROTECT", if self.protect.on() { "1" } else { "0" })
-            .env("OXIDAL_BUNDLE_STORE", &root)
-            .env(
-                "OXIDAL_PRESET_DIR",
-                root.parent().ok_or("Missing model store parent")?,
-            )
-            .env("OXIDAL_QUALIFICATION_DATA", runtime)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .kill_on_drop(true)
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        let mut child = self.change.spawn_worker(AudioChangeOwner::Mixed, || {
+            tokio::process::Command::new(executable)
+                .envs(self.media_dir.iter().map(|dir| ("OXIDAL_MEDIA_DIR", dir)))
+                .env("OXIDAL_PROTECT", if self.protect.on() { "1" } else { "0" })
+                .env("OXIDAL_BUNDLE_STORE", &root)
+                .env(
+                    "OXIDAL_PRESET_DIR",
+                    root.parent().ok_or("Missing model store parent")?,
+                )
+                .env("OXIDAL_QUALIFICATION_DATA", runtime)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::inherit())
+                .kill_on_drop(true)
+                .spawn()
+                .map_err(|e| e.to_string())
+        })?;
         let mut input = child.stdin.take().ok_or("Mixed stdin unavailable")?;
         let mut output = BufReader::new(child.stdout.take().ok_or("Mixed stdout unavailable")?);
         let task = tokio::spawn(async move {
@@ -550,11 +606,15 @@ impl Owner {
         }
         Ok(())
     }
-    async fn reconfigure(&mut self, stream: oxidal_audio::StreamConfig) -> Result<(), String> {
+    async fn reconfigure(
+        &mut self,
+        stream: oxidal_audio::StreamConfig,
+        restoring: bool,
+    ) -> Result<(), String> {
         if self.model_pending() {
             return Err("Finish model preparation before applying Audio settings".into());
         }
-        if !matches!(self.state.phase, AudioPhase::Running | AudioPhase::Stopped) {
+        if !restoring && !matches!(self.state.phase, AudioPhase::Running | AudioPhase::Stopped) {
             return Err("Wait for mixed audio to finish preparing before changing settings".into());
         }
         let previous = self
@@ -566,6 +626,9 @@ impl Owner {
         next.stream = stream;
         // Invalid declarations cannot interrupt the current stream.
         next.validate()?;
+        if restoring {
+            self.keep_previous_stream();
+        }
         self.phase(AudioPhase::Stopping, None);
         let reserved = match self.release_reserved().await {
             Ok(permit) => permit,
@@ -574,7 +637,7 @@ impl Owner {
                 return Err(error);
             }
         };
-        self.rollback = Some(previous);
+        self.rollback = if restoring { None } else { Some(previous) };
         self.restored_error = None;
         if let Err(error) = self.start_reserved(next, reserved).await {
             self.preparation_failed(error).await;
@@ -844,10 +907,144 @@ impl Owner {
         // Export progress does not change audio command authority.
         self.publish();
     }
-    async fn command(&mut self, command: RigAudioCommand) -> Reply {
-        if let Some(reason) = self
-            .protect
-            .refuse(crate::protect::rig(&command.action, self.state.phase))
+    async fn request(&mut self, request: OwnerRequest<RigAudioCommand>) -> Reply {
+        match request {
+            OwnerRequest::Action(command) => {
+                let stop = matches!(&command.action, RigAudioAction::Stop);
+                if stop
+                    && (self.state.session != command.session
+                        || self.state.revision != command.expected_revision)
+                {
+                    return Err("Audio state conflict; refresh before stopping".into());
+                }
+                let utility = match &command.action {
+                    RigAudioAction::HostUtility { command } => Some(command),
+                    _ => None,
+                };
+                let safety_stop = self.change.admits(AudioChangeOwner::Mixed, stop, utility)?;
+                if safety_stop {
+                    self.keep_previous_stream();
+                }
+                self.command(command, safety_stop, false).await
+            }
+            OwnerRequest::Stop { id } => {
+                self.change.check_stop(AudioChangeOwner::Mixed, &id)?;
+                self.keep_previous_stream();
+                let command = RigAudioCommand {
+                    session: self.state.session.clone(),
+                    expected_revision: self.state.revision,
+                    action: RigAudioAction::Stop,
+                };
+                self.command(command, true, false).await
+            }
+            OwnerRequest::Apply {
+                id,
+                action: mut command,
+            } => {
+                self.change
+                    .check(AudioChangeOwner::Mixed, &id, AudioChangePhase::Restarting)?;
+                if let Some(reason) = self.protect.refuse(false) {
+                    return Err(reason.into());
+                }
+                if self.state.phase != AudioPhase::Running
+                    || self.state.session != command.session
+                    || self.state.revision != command.expected_revision
+                {
+                    return Err("The audio session changed before settings were applied".into());
+                }
+                self.check_trial_admission()?;
+                self.follow_preparation = None;
+                self.flush_trial_history().await?;
+                command.expected_revision = self.state.revision;
+                self.persist_trial(false)?;
+                self.change.marker(
+                    self.recovery_path
+                        .parent()
+                        .ok_or("Missing mixed recovery directory")?,
+                    AudioChangeOwner::Mixed,
+                    &id,
+                )?;
+                self.command(command, false, false).await
+            }
+            OwnerRequest::Restore {
+                id,
+                action: mut command,
+            } => {
+                self.change
+                    .check(AudioChangeOwner::Mixed, &id, AudioChangePhase::Reverting)?;
+                if self.state.phase == AudioPhase::Running {
+                    self.poll().await;
+                }
+                if let Err(error) = self.flush_trial_history().await {
+                    self.keep_previous_stream();
+                    let release = self.release().await;
+                    self.phase(AudioPhase::Failed, Some(error.clone()));
+                    release?;
+                    return Err(error);
+                }
+                command.session.clone_from(&self.state.session);
+                command.expected_revision = self.state.revision;
+                self.command(command, true, true).await
+            }
+            OwnerRequest::SealRollback { id } => {
+                self.persist_trial(false)?;
+                self.change.seal_rollback(
+                    self.recovery_path
+                        .parent()
+                        .ok_or("Missing mixed recovery directory")?,
+                    AudioChangeOwner::Mixed,
+                    &id,
+                )?;
+                Ok(self.state.clone())
+            }
+            OwnerRequest::Commit { id } => {
+                if let Some(reason) = self.protect.refuse(false) {
+                    return Err(reason.into());
+                }
+                if self.state.phase == AudioPhase::Running {
+                    self.poll().await;
+                }
+                self.flush_trial_history().await?;
+                let current = self
+                    .state
+                    .configured
+                    .as_ref()
+                    .ok_or("No candidate audio stream")?;
+                let worker = self
+                    .worker
+                    .as_mut()
+                    .ok_or("The candidate audio worker is gone")?;
+                if self.state.phase != AudioPhase::Running
+                    || worker
+                        .child
+                        .try_wait()
+                        .map_err(|error| error.to_string())?
+                        .is_some()
+                {
+                    return Err("The candidate audio worker is no longer running".into());
+                }
+                self.change
+                    .check_keep(AudioChangeOwner::Mixed, &id, &current.stream)?;
+                self.persist_trial(true)?;
+                if let Err(error) = self.change.commit(
+                    self.recovery_path
+                        .parent()
+                        .ok_or("Missing mixed recovery directory")?,
+                    &id,
+                ) {
+                    self.persist_trial(false)?;
+                    return Err(error);
+                }
+                Ok(self.state.clone())
+            }
+        }
+    }
+
+    async fn command(&mut self, command: RigAudioCommand, safety: bool, restoring: bool) -> Reply {
+        if !safety
+            && let Some(reason) = self
+                .protect
+                .refuse(crate::protect::rig(&command.action, self.state.phase))
         {
             return Err(reason.into());
         }
@@ -893,7 +1090,7 @@ impl Owner {
         // Any owner command supersedes automatic resume.
         self.cancel_wait();
         let recall = matches!(command.action, RigAudioAction::Switch { .. });
-        self.run_action(command.action).await?;
+        self.run_action(command.action, restoring).await?;
         if recall && self.state.phase == AudioPhase::Running {
             self.follow_confirmed();
         }
@@ -911,7 +1108,7 @@ impl Owner {
             self.publish();
         }
     }
-    async fn run_action(&mut self, action: RigAudioAction) -> Result<(), String> {
+    async fn run_action(&mut self, action: RigAudioAction, restoring: bool) -> Result<(), String> {
         match action {
             RigAudioAction::Start { settings } => {
                 let revision = settings.revision.clone();
@@ -920,7 +1117,7 @@ impl Owner {
                 self.rollback = None;
                 self.restored_error = None;
             }
-            RigAudioAction::Reconfigure { stream } => self.reconfigure(stream).await?,
+            RigAudioAction::Reconfigure { stream } => self.reconfigure(stream, restoring).await?,
             RigAudioAction::Stop => {
                 self.checkpoint();
                 if let Some(previous) = self.rollback.take() {
@@ -1337,7 +1534,9 @@ impl Owner {
         }
     }
     async fn poll(&mut self) {
-        self.resume_after_fault().await;
+        if !self.change.active() {
+            self.resume_after_fault().await;
+        }
         if self.worker.is_some() {
             if self.state.phase == AudioPhase::Failed {
                 if self.release().await.is_ok() {
@@ -1417,10 +1616,16 @@ impl RigPlayback {
         policy: Arc<Policy>,
         protect: Arc<crate::protect::Protect>,
         levels: Arc<crate::levels::Levels>,
-        library_access: Arc<tokio::sync::RwLock<()>>,
+        context: OwnerContext,
         midi_map: Arc<oxidal_presets::MidiMapStore>,
         midi_events: mpsc::Sender<crate::midi_recall::Event>,
     ) -> Result<Self, String> {
+        let OwnerContext {
+            library_access,
+            change,
+            protect: _,
+        } = context;
+
         if config
             .rig_worker
             .as_ref()
@@ -1460,14 +1665,12 @@ impl RigPlayback {
             save: None,
         };
         let (updates, state) = watch::channel(initial.clone());
-        let (commands, mut receiver) = mpsc::channel::<(
-            RigAudioCommand,
-            oneshot::Sender<Reply>,
-            tokio::sync::OwnedRwLockReadGuard<()>,
-        )>(1);
+        let (commands, mut receiver) =
+            mpsc::channel::<OwnerMessage<RigAudioCommand, RigAudioState>>(1);
         let (forget, mut forgotten) = mpsc::channel::<crate::library_removal::Forget>(1);
         let (protection, mut protection_updates) = mpsc::channel::<crate::protect::Update>(1);
         let mut owner = Owner {
+            change: change.clone(),
             protect,
             levels,
             midi_map,
@@ -1520,8 +1723,8 @@ impl RigPlayback {
                     _=async{match shutdown.as_mut(){Some(s)=>{if !*s.borrow(){let _=s.changed().await;}},None=>std::future::pending::<()>().await}}=>break,
                     request = forgotten.recv() => match request { Some((entry, reply)) => { let _ = reply.send(owner.forget(&entry)); }, None => break },
                     update = protection_updates.recv() => match update { Some((on, reply)) => { let _ = reply.send(owner.set_protect(on).await); }, None => break },
-                    item=receiver.recv()=>match item{Some((command,response,_access))=>{let _=response.send(owner.command(command).await);},None=>break},
-                    _=interval.tick()=>{if let Ok(_access) = owner_access.clone().try_read_owned() { owner.poll().await; }},
+                    item=receiver.recv()=>match item{Some((command,response,_access))=>{let _=response.send(owner.request(command).await);},None=>break},
+                    _=interval.tick()=>{if let Ok(_access) = owner_access.clone().try_read_owned() { owner.poll().await; } else if owner.change.active() && owner.state.phase == AudioPhase::Starting { owner.poll_preparing().await; }},
                 }
             }
             drop(receiver);
@@ -1538,6 +1741,7 @@ impl RigPlayback {
             done.send_replace(true);
         });
         Ok(Self {
+            change,
             boot: policy,
             library_access,
             forget,
@@ -1575,14 +1779,55 @@ impl RigPlayback {
         state
     }
     pub(crate) async fn dispatch(&self, command: RigAudioCommand) -> Reply {
-        let access = self.library_access.clone().read_owned().await;
+        let access = if matches!(command.action, RigAudioAction::Stop)
+            && self.change.allows_stop(AudioChangeOwner::Mixed)
+        {
+            None
+        } else {
+            Some(self.library_access.clone().read_owned().await)
+        };
+        self.send(OwnerRequest::Action(command), access).await
+    }
+
+    pub(super) async fn dispatch_change(&self, request: OwnerRequest<RigAudioCommand>) -> Reply {
+        // A timed rollback never waits behind an unrelated Library download.
+        let access = match request {
+            OwnerRequest::Restore { .. }
+            | OwnerRequest::SealRollback { .. }
+            | OwnerRequest::Stop { .. } => None,
+            _ => Some(
+                self.library_access
+                    .clone()
+                    .try_read_owned()
+                    .map_err(|_| "A Library operation is in progress")?,
+            ),
+        };
+        self.send(request, access).await
+    }
+
+    async fn send(
+        &self,
+        request: OwnerRequest<RigAudioCommand>,
+        access: Option<tokio::sync::OwnedRwLockReadGuard<()>>,
+    ) -> Reply {
         let (response, received) = oneshot::channel();
-        self.commands
-            .try_send((command, response, access))
-            .map_err(|_| "rig_audio_busy")?;
-        let mut state = received
-            .await
-            .map_err(|_| "Mixed owner stopped".to_owned())??;
+        let message = (request, response, access);
+        if matches!(
+            message.0,
+            OwnerRequest::Restore { .. }
+                | OwnerRequest::SealRollback { .. }
+                | OwnerRequest::Stop { .. }
+        ) {
+            self.commands
+                .send(message)
+                .await
+                .map_err(|_| "Audio owner stopped")?;
+        } else {
+            self.commands
+                .try_send(message)
+                .map_err(|_| "Audio owner is busy")?;
+        }
+        let mut state = received.await.map_err(|_| "Audio owner stopped")??;
         state.start_on_boot = self.boot.enabled(Role::Mixed);
         Ok(state)
     }
@@ -1597,10 +1842,14 @@ pub(super) async fn command(
     let Ok(Json(mut command)) = body else {
         return failure(StatusCode::BAD_REQUEST, "invalid_rig_audio_command");
     };
-    if let Some(reason) = shared.protect.refuse(crate::protect::rig(
-        &command.action,
-        shared.rig_playback.snapshot().phase,
-    )) {
+    let safety_stop = matches!(command.action, RigAudioAction::Stop)
+        && shared.audio_change.allows_stop(AudioChangeOwner::Mixed);
+    if !safety_stop
+        && let Some(reason) = shared.protect.refuse(crate::protect::rig(
+            &command.action,
+            shared.rig_playback.snapshot().phase,
+        ))
+    {
         return crate::protect::locked(reason);
     }
     crate::blends::apply(&shared, &mut command).await;
@@ -1676,7 +1925,11 @@ mod tests {
                 policy.clone(),
                 Arc::new(crate::protect::Protect::new(root.join("protect.json"))),
                 Arc::new(crate::levels::Levels::load(root.join("levels.json"))),
-                Arc::new(tokio::sync::RwLock::new(())),
+                OwnerContext {
+                    library_access: Arc::new(tokio::sync::RwLock::new(())),
+                    change: Arc::new(Change::default()),
+                    protect: Arc::new(crate::protect::Protect::new(root.join("protect.json"))),
+                },
                 Arc::new(oxidal_presets::MidiMapStore::new(root.join("presets"))),
                 mpsc::channel(1).0,
             )
@@ -1804,7 +2057,11 @@ mod tests {
             Arc::new(crate::levels::Levels::load(
                 root.join("presets/unit-levels.json"),
             )),
-            library_access.clone(),
+            OwnerContext {
+                library_access: library_access.clone(),
+                change: Arc::new(Change::default()),
+                protect: Arc::new(crate::protect::Protect::new(root.join("protect.json"))),
+            },
             Arc::new(oxidal_presets::MidiMapStore::new(root.join("presets"))),
             mpsc::channel(1).0,
         )

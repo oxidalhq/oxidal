@@ -124,7 +124,29 @@ pub(super) async fn command(
     body: Result<Json<Command>, JsonRejection>,
 ) -> Response {
     match body {
-        Ok(Json(command)) => dispatch(shared, command).await,
+        Ok(Json(command)) if matches!(command, Command::Status {} | Command::Scan {}) => {
+            dispatch(shared, command).await
+        }
+        Ok(Json(command)) => {
+            let result = tokio::spawn(async move {
+                let Ok(_operation) = shared.audio_change.operation() else {
+                    return failure(StatusCode::CONFLICT, crate::audio_change::BUSY);
+                };
+                let power = matches!(
+                    command,
+                    Command::Power { .. } | Command::RestartStorage { .. }
+                );
+                let response = dispatch(shared.clone(), command).await;
+                if power && response.status().is_success() {
+                    shared.audio_change.power_queued();
+                }
+                response
+            })
+            .await;
+            result.unwrap_or_else(|_| {
+                failure(StatusCode::SERVICE_UNAVAILABLE, "Device operation stopped")
+            })
+        }
         Err(_) => failure(StatusCode::BAD_REQUEST, "Invalid network command"),
     }
 }

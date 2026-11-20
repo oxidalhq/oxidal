@@ -1,5 +1,8 @@
 //! One actor owns playback and the ALSA permit, independently of HTTP request lifetimes.
 use crate::audio_boot::{Choice, Policy, Role};
+use crate::audio_change::{
+    AudioChangeOwner, AudioChangePhase, Change, OwnerContext, OwnerMessage, OwnerRequest,
+};
 use crate::playback_recovery::Recovery;
 use crate::{Config, Shared, failure};
 use axum::{
@@ -27,15 +30,12 @@ type Reply = Result<AudioState, String>;
 #[derive(Debug)]
 pub(super) struct Playback {
     boot: Arc<Policy>,
+    change: Arc<Change>,
     library_access: Arc<tokio::sync::RwLock<()>>,
     forget: mpsc::Sender<crate::library_removal::Forget>,
     protection: mpsc::Sender<crate::protect::Update>,
     pub(super) finished: watch::Receiver<bool>,
-    commands: mpsc::Sender<(
-        AudioCommand,
-        oneshot::Sender<Reply>,
-        tokio::sync::OwnedRwLockReadGuard<()>,
-    )>,
+    commands: mpsc::Sender<OwnerMessage<AudioCommand, AudioState>>,
     state: watch::Receiver<AudioState>,
     meters: watch::Receiver<Option<(oxidal_audio::meter::Snapshot, std::time::Instant)>>,
 }
@@ -46,7 +46,7 @@ struct Worker {
     output: Option<BufReader<tokio::process::ChildStdout>>,
     meter_reader: Option<tokio::task::JoinHandle<()>>,
     control_replies: Option<mpsc::Receiver<PlaybackEvent>>,
-    _permit: tokio::sync::SemaphorePermit<'static>,
+    _permit: Option<tokio::sync::SemaphorePermit<'static>>,
 }
 impl Drop for Worker {
     fn drop(&mut self) {
@@ -63,6 +63,7 @@ type NativeStart = (
     Option<Vec<BlockEqState>>,
 );
 struct Owner {
+    change: Arc<Change>,
     protect: Arc<crate::protect::Protect>,
     last_tool_poll: std::time::Instant,
     levels: Arc<crate::levels::Levels>,
@@ -171,20 +172,7 @@ impl Owner {
         if self.recovery_due.is_none() {
             return;
         }
-        let Some(settings) = self.state.configured.clone() else {
-            return;
-        };
-        let recovery = Recovery::new(
-            settings.clone(),
-            self.resume_controls.clone(),
-            self.state.models.clone(),
-            self.resume_eq.clone(),
-        );
-        // Recall restores the per-preset copy, so keep it as current as the session
-        // file: edits since the last preset switch then survive restart or power loss.
-        let result = recovery
-            .write(&self.preset_dir.join("last-audio-session.json"))
-            .and_then(|()| recovery.write(&self.rig_session_path(&settings)));
+        let result = self.persist_trial(false);
         match result {
             Ok(()) => {
                 self.recovery_due = None;
@@ -206,6 +194,50 @@ impl Owner {
             }
         }
     }
+    fn persist_trial(&self, candidate: bool) -> Result<(), String> {
+        let mut settings = self
+            .state
+            .configured
+            .clone()
+            .ok_or("No Native audio recovery")?;
+        if !candidate {
+            self.change
+                .previous(AudioChangeOwner::Native, &mut settings.stream);
+        }
+        let recovery = Recovery::new(
+            settings.clone(),
+            self.resume_controls.clone(),
+            self.state.models.clone(),
+            self.resume_eq.clone(),
+        );
+        recovery.write(&self.preset_dir.join("last-audio-session.json"))?;
+        if !candidate {
+            recovery.write(&self.rig_session_path(&settings))?;
+        }
+        Ok(())
+    }
+
+    fn keep_previous_stream(&mut self) {
+        if let Some(settings) = self.state.configured.as_mut() {
+            self.change
+                .previous(AudioChangeOwner::Native, &mut settings.stream);
+        }
+    }
+
+    fn check_trial_admission(&self) -> Result<(), String> {
+        if self.model_pending()
+            || self.state.copy_on_edit.is_some()
+            || self
+                .state
+                .authoring
+                .as_ref()
+                .is_some_and(|status| status.gesture.is_some() || status.tools.measuring())
+        {
+            return Err("Finish the current Native edit before changing audio settings".into());
+        }
+        Ok(())
+    }
+
     /// Working copy of one preset's edits, restored when that preset is recalled.
     fn rig_session_path(&self, settings: &StartAudio) -> std::path::PathBuf {
         self.preset_dir.join("rig-sessions").join(format!(
@@ -214,8 +246,13 @@ impl Owner {
         ))
     }
     async fn release(&mut self) -> Result<(), String> {
+        self.release_reserved().await.map(drop)
+    }
+    async fn release_reserved(
+        &mut self,
+    ) -> Result<Option<tokio::sync::SemaphorePermit<'static>>, String> {
         let Some(worker) = self.worker.as_mut() else {
-            return Ok(());
+            return Ok(None);
         };
         worker.input.take(); // EOF asks the owner thread to stop and release both PCM handles.
         match tokio::time::timeout(Duration::from_secs(2), worker.child.wait()).await {
@@ -231,15 +268,27 @@ impl Owner {
                     .map_err(|e| e.to_string())?;
             }
         }
-        self.worker = None; // Only reaping releases the shared device permit.
-        Ok(())
+        let reserved = worker._permit.take();
+        self.worker = None;
+        Ok(reserved)
     }
     async fn start(
+        &mut self,
+        settings: StartAudio,
+        controls: Option<Vec<LiveControl>>,
+        models: Vec<ModelAssignment>,
+        eq: Option<Vec<BlockEqState>>,
+    ) -> Result<(), String> {
+        self.start_reserved(settings, controls, models, eq, &mut None)
+            .await
+    }
+    async fn start_reserved(
         &mut self,
         mut settings: StartAudio,
         controls: Option<Vec<LiveControl>>,
         models: Vec<ModelAssignment>,
         eq: Option<Vec<BlockEqState>>,
+        reserved: &mut Option<tokio::sync::SemaphorePermit<'static>>,
     ) -> Result<(), String> {
         // Unit levels follow the player, not the preset or the recovered session.
         settings.stream.levels = self.levels.current();
@@ -263,24 +312,30 @@ impl Owner {
         if self.worker.is_some() {
             return Err("Stop audio before changing playback settings".into());
         }
-        let permit = crate::audio::PROBE
-            .try_acquire()
-            .map_err(|_| "Audio device operation already in progress")?;
+        if reserved.is_none() {
+            *reserved = Some(
+                crate::audio::PROBE
+                    .try_acquire()
+                    .map_err(|_| "Audio device operation already in progress")?,
+            );
+        }
         std::fs::create_dir_all(&self.preset_dir).map_err(|e| e.to_string())?;
         let root = std::fs::canonicalize(&self.preset_dir).map_err(|e| e.to_string())?;
         let data = root.join("audio-runtime");
         std::fs::create_dir_all(&data).map_err(|e| e.to_string())?;
-        let mut child = tokio::process::Command::new(executable)
-            .envs(self.media_dir.iter().map(|dir| ("OXIDAL_MEDIA_DIR", dir)))
-            .env("OXIDAL_PRESET_DIR", &root)
-            .env("OXIDAL_PROTECT", if self.protect.on() { "1" } else { "0" })
-            .env("OXIDAL_QUALIFICATION_DATA", &data)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .kill_on_drop(true)
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        let mut child = self.change.spawn_worker(AudioChangeOwner::Native, || {
+            tokio::process::Command::new(executable)
+                .envs(self.media_dir.iter().map(|dir| ("OXIDAL_MEDIA_DIR", dir)))
+                .env("OXIDAL_PRESET_DIR", &root)
+                .env("OXIDAL_PROTECT", if self.protect.on() { "1" } else { "0" })
+                .env("OXIDAL_QUALIFICATION_DATA", &data)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::inherit())
+                .kill_on_drop(true)
+                .spawn()
+                .map_err(|e| e.to_string())
+        })?;
         let output = child.stdout.take().ok_or("audio worker stdout")?;
         let input = child.stdin.take().ok_or("audio worker stdin")?;
         self.worker = Some(Worker {
@@ -289,98 +344,106 @@ impl Owner {
             output: Some(BufReader::new(output)),
             meter_reader: None,
             control_replies: None,
-            _permit: permit,
+            _permit: reserved.take(),
         });
         let previous_settings = self.state.configured.replace(settings.clone());
         let previous_controls = std::mem::replace(&mut self.resume_controls, controls.clone());
         let previous_eq = std::mem::replace(&mut self.resume_eq, eq.clone());
         let previous_models = std::mem::replace(&mut self.state.models, models.clone());
         self.publish(AudioPhase::Starting, None);
-        let startup = tokio::time::timeout(Duration::from_secs(25), async {
-            let mut bytes = serde_json::to_vec(&PlaybackStart {
-                settings,
-                controls,
-                models,
-                eq,
-            })
-            .map_err(|e| e.to_string())?;
-            if bytes.len() >= PLAYBACK_FRAME_BYTES {
-                return Err("Audio settings too large".into());
-            }
-            bytes.push(b'\n');
-            self.worker
-                .as_mut()
-                .unwrap()
-                .input
-                .as_mut()
-                .unwrap()
-                .write_all(&bytes)
-                .await
+        let change = self.change.clone();
+        let startup = async {
+            tokio::time::timeout(Duration::from_secs(25), async {
+                let mut bytes = serde_json::to_vec(&PlaybackStart {
+                    settings,
+                    controls,
+                    models,
+                    eq,
+                })
                 .map_err(|e| e.to_string())?;
-            let mut response = vec![];
-            self.worker
-                .as_mut()
-                .unwrap()
-                .output
-                .as_mut()
-                .unwrap()
-                .take((PLAYBACK_FRAME_BYTES + 1) as u64)
-                .read_until(b'\n', &mut response)
-                .await
-                .map_err(|e| e.to_string())?;
-            if response.len() > PLAYBACK_FRAME_BYTES || response.last() != Some(&b'\n') {
-                return Err(
+                if bytes.len() >= PLAYBACK_FRAME_BYTES {
+                    return Err("Audio settings too large".into());
+                }
+                bytes.push(b'\n');
+                self.worker
+                    .as_mut()
+                    .unwrap()
+                    .input
+                    .as_mut()
+                    .unwrap()
+                    .write_all(&bytes)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                let mut response = vec![];
+                self.worker
+                    .as_mut()
+                    .unwrap()
+                    .output
+                    .as_mut()
+                    .unwrap()
+                    .take((PLAYBACK_FRAME_BYTES + 1) as u64)
+                    .read_until(b'\n', &mut response)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                if response.len() > PLAYBACK_FRAME_BYTES || response.last() != Some(&b'\n') {
+                    return Err(
                     "Audio worker could not start; check device/settings/preset and service log"
                         .into(),
                 );
-            }
-            let event: PlaybackEvent =
-                serde_json::from_slice(&response).map_err(|_| "Invalid native startup reply")?;
-            let PlaybackEvent::Ready {
-                preset_name,
-                authoring,
-                controls,
-                slots,
-                eq,
-            } = event
-            else {
-                return Err("Expected native readiness".into());
-            };
-            if preset_name.is_empty()
-                || preset_name.len() > 1024
-                || !valid_controls(&controls)
-                || !valid_slots(&slots)
-                || !valid_snapshot(&eq)
-            {
-                return Err("Invalid native controls".into());
-            }
-            if authoring.as_ref().is_some_and(|s| !s.valid()) {
-                return Err("Invalid authoring readback".into());
-            }
-            self.state.authoring = authoring;
-            self.state.preset_name = Some(preset_name);
-            self.state.controls = controls;
-            self.state.slots = slots;
-            self.state.eq = eq;
-            self.resume_eq = Some(self.state.eq.clone());
-            self.state.modified = self
-                .state
-                .configured
-                .as_ref()
-                .is_some_and(|s| s.draft || s.working.is_some())
-                || self.resume_controls.is_some()
-                || !self.state.models.is_empty();
-            Ok(())
-        })
-        .await
-        .map_err(|_| "Audio startup timed out".to_owned())
-        .and_then(|r| r);
+                }
+                let event: PlaybackEvent = serde_json::from_slice(&response)
+                    .map_err(|_| "Invalid native startup reply")?;
+                let PlaybackEvent::Ready {
+                    preset_name,
+                    authoring,
+                    controls,
+                    slots,
+                    eq,
+                } = event
+                else {
+                    return Err("Expected native readiness".into());
+                };
+                if preset_name.is_empty()
+                    || preset_name.len() > 1024
+                    || !valid_controls(&controls)
+                    || !valid_slots(&slots)
+                    || !valid_snapshot(&eq)
+                {
+                    return Err("Invalid native controls".into());
+                }
+                if authoring.as_ref().is_some_and(|s| !s.valid()) {
+                    return Err("Invalid authoring readback".into());
+                }
+                self.state.authoring = authoring;
+                self.state.preset_name = Some(preset_name);
+                self.state.controls = controls;
+                self.state.slots = slots;
+                self.state.eq = eq;
+                self.resume_eq = Some(self.state.eq.clone());
+                self.state.modified = self
+                    .state
+                    .configured
+                    .as_ref()
+                    .is_some_and(|s| s.draft || s.working.is_some())
+                    || self.resume_controls.is_some()
+                    || !self.state.models.is_empty();
+                Ok(())
+            })
+            .await
+            .map_err(|_| "Audio startup timed out".to_owned())
+            .and_then(|r| r)
+        };
+        let startup = tokio::select! {
+            biased;
+            error = change.wait_stopping(AudioChangeOwner::Native) => Err(error),
+            result = startup => result,
+        };
         if let Err(error) = startup {
             self.state.configured = previous_settings;
             self.resume_controls = previous_controls;
             self.resume_eq = previous_eq;
             self.state.models = previous_models;
-            self.release().await?;
+            *reserved = self.release_reserved().await?;
             return Err(error);
         }
         self.schedule_recovery();
@@ -539,6 +602,16 @@ impl Owner {
         }
     }
     async fn authoring_command(&mut self, action: AuthoringAction) -> Reply {
+        self.authoring_request(action, false).await
+    }
+    async fn flush_trial_history(&mut self) -> Result<(), String> {
+        if self.state.phase == AudioPhase::Running && self.state.authoring.is_some() {
+            self.authoring_request(AuthoringAction::Inspect, true)
+                .await?;
+        }
+        Ok(())
+    }
+    async fn authoring_request(&mut self, action: AuthoringAction, settle_history: bool) -> Reply {
         if self.state.phase != AudioPhase::Running || self.model_pending() {
             return Err(
                 "Start audio and finish model preparation before authoring the chain".into(),
@@ -558,6 +631,7 @@ impl Owner {
             .ok_or("Audio revision exhausted")?;
         let mut bytes = serde_json::to_vec(&AuthoringRequest {
             serial,
+            settle_history,
             authoring: action,
         })
         .map_err(|e| e.to_string())?;
@@ -1569,7 +1643,7 @@ impl Owner {
         self.publish(AudioPhase::Running, None);
         Ok(())
     }
-    async fn reconfigure(&mut self, stream: oxidal_audio::StreamConfig) -> Reply {
+    async fn reconfigure(&mut self, stream: oxidal_audio::StreamConfig, restoring: bool) -> Reply {
         // Validate before releasing audio. Device support is established by worker readiness.
         stream.validate()?;
         let previous = self
@@ -1583,16 +1657,26 @@ impl Owner {
         let was_running = self.state.phase == AudioPhase::Running;
         self.checkpoint();
         self.publish(AudioPhase::Stopping, None);
-        if let Err(error) = self.release().await {
-            self.publish(AudioPhase::Failed, Some(error.clone()));
-            return Err(error);
+        let mut reserved = match self.release_reserved().await {
+            Ok(reserved) => reserved,
+            Err(error) => {
+                if restoring {
+                    self.state.configured = Some(proposed);
+                }
+                self.publish(AudioPhase::Failed, Some(error.clone()));
+                return Err(error);
+            }
+        };
+        if restoring {
+            self.state.configured = Some(proposed.clone());
         }
         match self
-            .start(
+            .start_reserved(
                 proposed,
                 controls.clone(),
                 self.state.models.clone(),
                 self.resume_eq.clone(),
+                &mut reserved,
             )
             .await
         {
@@ -1600,13 +1684,14 @@ impl Owner {
             Err(error) => {
                 // start restores the last confirmed configuration on failure. Roll back
                 // only a previously running stream; a stopped session stays stopped.
-                let message = if was_running {
+                let message = if was_running && !restoring {
                     match self
-                        .start(
+                        .start_reserved(
                             previous,
                             controls,
                             self.state.models.clone(),
                             self.resume_eq.clone(),
+                            &mut reserved,
                         )
                         .await
                     {
@@ -1631,10 +1716,134 @@ impl Owner {
             }
         }
     }
-    async fn command(&mut self, command: AudioCommand) -> Reply {
-        if let Some(reason) = self
-            .protect
-            .refuse(crate::protect::native(&command.action, self.state.phase))
+    async fn request(&mut self, request: OwnerRequest<AudioCommand>) -> Reply {
+        match request {
+            OwnerRequest::Action(command) => {
+                let stop = matches!(&command.action, AudioAction::Stop);
+                if stop
+                    && (self.state.session != command.session
+                        || self.state.revision != command.expected_revision)
+                {
+                    return Err("Audio state conflict; refresh before stopping".into());
+                }
+                let utility = match &command.action {
+                    AudioAction::HostUtility { command } => Some(command),
+                    _ => None,
+                };
+                let safety_stop = self
+                    .change
+                    .admits(AudioChangeOwner::Native, stop, utility)?;
+                if safety_stop {
+                    self.keep_previous_stream();
+                }
+                self.command(command, safety_stop, false).await
+            }
+            OwnerRequest::Stop { id } => {
+                self.change.check_stop(AudioChangeOwner::Native, &id)?;
+                self.keep_previous_stream();
+                let command = AudioCommand {
+                    session: self.state.session.clone(),
+                    expected_revision: self.state.revision,
+                    action: AudioAction::Stop,
+                };
+                self.command(command, true, false).await
+            }
+            OwnerRequest::Apply {
+                id,
+                action: mut command,
+            } => {
+                self.change
+                    .check(AudioChangeOwner::Native, &id, AudioChangePhase::Restarting)?;
+                if let Some(reason) = self.protect.refuse(false) {
+                    return Err(reason.into());
+                }
+                if self.state.phase != AudioPhase::Running
+                    || self.state.session != command.session
+                    || self.state.revision != command.expected_revision
+                {
+                    return Err("The audio session changed before settings were applied".into());
+                }
+                self.check_trial_admission()?;
+                self.flush_trial_history().await?;
+                command.expected_revision = self.state.revision;
+                self.persist_trial(false)?;
+                self.change
+                    .marker(&self.preset_dir, AudioChangeOwner::Native, &id)?;
+                self.command(command, false, false).await
+            }
+            OwnerRequest::Restore {
+                id,
+                action: mut command,
+            } => {
+                self.change
+                    .check(AudioChangeOwner::Native, &id, AudioChangePhase::Reverting)?;
+                if let Err(error) = self.flush_trial_history().await {
+                    self.keep_previous_stream();
+                    let release = self.release().await;
+                    self.publish(AudioPhase::Failed, Some(error.clone()));
+                    release?;
+                    return Err(error);
+                }
+                command.session.clone_from(&self.state.session);
+                command.expected_revision = self.state.revision;
+                self.command(command, true, true).await
+            }
+            OwnerRequest::SealRollback { id } => {
+                self.persist_trial(false)?;
+                self.change
+                    .seal_rollback(&self.preset_dir, AudioChangeOwner::Native, &id)?;
+                Ok(self.state.clone())
+            }
+            OwnerRequest::Commit { id } => {
+                if let Some(reason) = self.protect.refuse(false) {
+                    return Err(reason.into());
+                }
+                if self.state.phase == AudioPhase::Running
+                    && self
+                        .state
+                        .configured
+                        .as_ref()
+                        .is_some_and(|settings| settings.midi.is_some())
+                {
+                    self.midi(oxidal_audio::lifecycle::MidiOperation::Poll)
+                        .await?;
+                }
+                self.flush_trial_history().await?;
+                let current = self
+                    .state
+                    .configured
+                    .as_ref()
+                    .ok_or("No candidate audio stream")?;
+                let worker = self
+                    .worker
+                    .as_mut()
+                    .ok_or("The candidate audio worker is gone")?;
+                if self.state.phase != AudioPhase::Running
+                    || worker
+                        .child
+                        .try_wait()
+                        .map_err(|error| error.to_string())?
+                        .is_some()
+                {
+                    return Err("The candidate audio worker is no longer running".into());
+                }
+                self.change
+                    .check_keep(AudioChangeOwner::Native, &id, &current.stream)?;
+                self.persist_trial(true)?;
+                if let Err(error) = self.change.commit(&self.preset_dir, &id) {
+                    self.persist_trial(false)?;
+                    return Err(error);
+                }
+                Ok(self.state.clone())
+            }
+        }
+    }
+
+    async fn command(&mut self, command: AudioCommand, safety: bool, restoring: bool) -> Reply {
+        if !safety
+            && let Some(reason) = self
+                .protect
+                .refuse(crate::protect::native(&command.action, self.state.phase))
         {
             return Err(reason.into());
         }
@@ -1830,7 +2039,9 @@ impl Owner {
                 }
                 return Ok(self.state.clone());
             }
-            AudioAction::Reconfigure { stream } => return self.reconfigure(stream).await,
+            AudioAction::Reconfigure { stream } => {
+                return self.reconfigure(stream, restoring).await;
+            }
             AudioAction::SetEq { block_id, edit } => {
                 if self.state.phase != AudioPhase::Running {
                     return Err("Start audio before adjusting EQ".into());
@@ -2047,10 +2258,16 @@ impl Playback {
         policy: Arc<Policy>,
         protect: Arc<crate::protect::Protect>,
         levels: Arc<crate::levels::Levels>,
-        library_access: Arc<tokio::sync::RwLock<()>>,
+        context: OwnerContext,
         midi_map: Arc<oxidal_presets::MidiMapStore>,
         midi_events: mpsc::Sender<crate::midi_recall::Event>,
     ) -> Result<Self, String> {
+        let OwnerContext {
+            library_access,
+            change,
+            protect: _,
+        } = context;
+
         if let Some(path) = &config.audio_worker
             && (!path.is_absolute() || !path.is_file())
         {
@@ -2099,14 +2316,11 @@ impl Playback {
         };
         let (updates, state) = watch::channel(initial.clone());
         let (meters, meter_state) = watch::channel(None);
-        let (commands, mut receiver) = mpsc::channel::<(
-            AudioCommand,
-            oneshot::Sender<Reply>,
-            tokio::sync::OwnedRwLockReadGuard<()>,
-        )>(1);
+        let (commands, mut receiver) = mpsc::channel::<OwnerMessage<AudioCommand, AudioState>>(1);
         let (forget, mut forgotten) = mpsc::channel::<crate::library_removal::Forget>(1);
         let (protection, mut protection_updates) = mpsc::channel::<crate::protect::Update>(1);
         let mut owner = Owner {
+            change: change.clone(),
             protect,
             last_tool_poll: std::time::Instant::now(),
             levels,
@@ -2169,13 +2383,13 @@ impl Playback {
                     request = forgotten.recv() => match request { Some((entry, reply)) => { let _ = reply.send(owner.forget(&entry)); }, None => break },
                     update = protection_updates.recv() => match update { Some((on, reply)) => { let _ = reply.send(owner.set_protect(on).await); }, None => break },
                     item = receiver.recv() => match item {
-                        Some((command, response, _access)) => { let _ = response.send(owner.command(command).await); },
+                        Some((command, response, _access)) => { let _ = response.send(owner.request(command).await); },
                         None => break,
                     },
                     _ = interval.tick() => {
                         let Ok(_access) = owner_access.clone().try_read_owned() else { continue; };
                         owner.check_exit();
-                        owner.retry_device().await;
+                        if !owner.change.active() { owner.retry_device().await; }
                         owner.advance_model().await;
                         owner.poll_tools().await;
                         owner.poll_midi().await;
@@ -2198,6 +2412,7 @@ impl Playback {
             done.send_replace(true);
         });
         Ok(Self {
+            change,
             boot: policy,
             library_access,
             forget,
@@ -2240,16 +2455,55 @@ impl Playback {
         state
     }
     pub(crate) async fn dispatch(&self, command: AudioCommand) -> Reply {
-        let access = self.library_access.clone().read_owned().await;
+        let access = if matches!(command.action, AudioAction::Stop)
+            && self.change.allows_stop(AudioChangeOwner::Native)
+        {
+            None
+        } else {
+            Some(self.library_access.clone().read_owned().await)
+        };
+        self.send(OwnerRequest::Action(command), access).await
+    }
+
+    pub(super) async fn dispatch_change(&self, request: OwnerRequest<AudioCommand>) -> Reply {
+        // A timed rollback never waits behind an unrelated Library download.
+        let access = match request {
+            OwnerRequest::Restore { .. }
+            | OwnerRequest::SealRollback { .. }
+            | OwnerRequest::Stop { .. } => None,
+            _ => Some(
+                self.library_access
+                    .clone()
+                    .try_read_owned()
+                    .map_err(|_| "A Library operation is in progress")?,
+            ),
+        };
+        self.send(request, access).await
+    }
+
+    async fn send(
+        &self,
+        request: OwnerRequest<AudioCommand>,
+        access: Option<tokio::sync::OwnedRwLockReadGuard<()>>,
+    ) -> Reply {
         let (response, received) = oneshot::channel();
-        self.commands
-            .try_send((command, response, access))
-            .map_err(|_| "audio_busy")?;
-        // The owner retains its command even when this client disconnects.
-        let mut state = received
-            .await
-            .map_err(|_| "Audio owner stopped".to_owned())??;
-        state.boot_error = self.boot.error();
+        let message = (request, response, access);
+        if matches!(
+            message.0,
+            OwnerRequest::Restore { .. }
+                | OwnerRequest::SealRollback { .. }
+                | OwnerRequest::Stop { .. }
+        ) {
+            self.commands
+                .send(message)
+                .await
+                .map_err(|_| "Audio owner stopped")?;
+        } else {
+            self.commands
+                .try_send(message)
+                .map_err(|_| "Audio owner is busy")?;
+        }
+        let mut state = received.await.map_err(|_| "Audio owner stopped")??;
         state.start_on_boot = self.boot.enabled(Role::Native);
         Ok(state)
     }
@@ -2264,10 +2518,14 @@ pub(super) async fn command(
     let Ok(Json(command)) = body else {
         return failure(StatusCode::BAD_REQUEST, "invalid_audio_command");
     };
-    if let Some(reason) = shared.protect.refuse(crate::protect::native(
-        &command.action,
-        shared.playback.snapshot().phase,
-    )) {
+    let safety_stop = matches!(command.action, AudioAction::Stop)
+        && shared.audio_change.allows_stop(AudioChangeOwner::Native);
+    if !safety_stop
+        && let Some(reason) = shared.protect.refuse(crate::protect::native(
+            &command.action,
+            shared.playback.snapshot().phase,
+        ))
+    {
         return crate::protect::locked(reason);
     }
     let result = shared.playback.dispatch(command).await;

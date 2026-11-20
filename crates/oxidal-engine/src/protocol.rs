@@ -346,6 +346,7 @@ pub enum WorkerRequest {
         command: AuthoringCommand,
     },
     Status,
+    SettleAuthoring,
     Control {
         command: ControlCommand,
     },

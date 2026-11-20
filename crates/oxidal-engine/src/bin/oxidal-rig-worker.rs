@@ -337,6 +337,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 WorkerRequest::Protect { .. } => "protect",
                 WorkerRequest::HostUtility { .. } => "host utility",
                 WorkerRequest::Status => "status",
+                WorkerRequest::SettleAuthoring => "settle authoring",
                 WorkerRequest::Authoring { .. } => "authoring",
                 WorkerRequest::Midi { .. } => "midi settings",
                 WorkerRequest::MidiTest { .. } => "midi test",
@@ -363,6 +364,21 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     None
                 }
                 WorkerRequest::Status => None,
+                WorkerRequest::SettleAuthoring => {
+                    let deadline = Instant::now() + Duration::from_secs(2);
+                    loop {
+                        match rig.active_mut().settle_authoring() {
+                            Ok(true) => break None,
+                            Ok(false) if Instant::now() < deadline => {
+                                drop(rig);
+                                std::thread::sleep(Duration::from_millis(2));
+                                rig = shared.lock("settle authoring");
+                            }
+                            Ok(false) => break Some("Mixed history is still being saved".into()),
+                            Err(error) => break Some(error),
+                        }
+                    }
+                }
                 WorkerRequest::Authoring { command } => match model_root.as_deref() {
                     Some(root) => rig.active_mut().authoring_command(command, root).err(),
                     None => Some("Native working store unavailable".into()),

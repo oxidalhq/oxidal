@@ -270,6 +270,11 @@ async fn start(
     kind: CaptureKind,
     reamp: Option<ReampRequest>,
 ) -> Result<CaptureState, Refusal> {
+    let _operation = shared
+        .audio_change
+        .operation()
+        .map_err(|error| (StatusCode::CONFLICT, error.to_owned()))?;
+
     if let Some(reason) = shared.protect.refuse(false) {
         return Err((StatusCode::LOCKED, reason.into()));
     }

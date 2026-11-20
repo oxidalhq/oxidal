@@ -441,6 +441,18 @@ impl Authoring {
             }
         }
     }
+    /// Collect confirmed history without blocking a thread that shares the DSP lock.
+    pub fn history_settled(&mut self) -> Result<bool, String> {
+        self.collect_receipts();
+        if let Some(error) = &self.history_error {
+            return Err(error.clone());
+        }
+        Ok(self
+            .writer
+            .as_ref()
+            .is_none_or(|writer| writer.in_flight == 0))
+    }
+
     /// Wait for background checkpoints before a synchronous one, so an older
     /// receipt can never replace a newer one. Also lets callers that need the
     /// current receipt (qualification, shutdown) read it deterministically.

@@ -142,6 +142,12 @@ pub struct Venues {
     path: PathBuf,
 }
 
+impl Venues {
+    pub(super) async fn preview_pending(&self) -> bool {
+        self.inner.lock().await.preview.is_some()
+    }
+}
+
 /// Starting points to tune by ear, not measured corrections.
 pub(crate) fn builtins() -> Vec<VenueProfile> {
     let base = VenueSettings::default();
@@ -368,6 +374,9 @@ pub(crate) async fn command(
     }
     let Ok(Json(request)) = body else {
         return failure(StatusCode::BAD_REQUEST, "Send a venue command");
+    };
+    let Ok(_operation) = shared.audio_change.operation() else {
+        return failure(StatusCode::CONFLICT, crate::audio_change::BUSY);
     };
     let venues = &shared.venues;
     let mut inner = venues.inner.lock().await;

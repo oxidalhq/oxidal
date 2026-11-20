@@ -333,7 +333,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // Adopt background checkpoints first: their receipts are not this request's edit.
                         authoring.collect_receipts();
                         let before_working = authoring.working_receipt().map(str::to_owned);
-                        let result = if quiet_poll && let Some(status) = last_status.clone() {
+                        let history = if request.settle_history {
+                            if !matches!(request.authoring, AuthoringAction::Inspect) {
+                                Err("History readback requires inspection".into())
+                            } else {
+                                let deadline = std::time::Instant::now() + Duration::from_secs(2);
+                                loop {
+                                    match authoring.history_settled() {
+                                        Ok(true) => break Ok(()),
+                                        Ok(false) if std::time::Instant::now() < deadline => {
+                                            // This owner serves messages; PCM renders separately.
+                                            std::thread::sleep(Duration::from_millis(2));
+                                        }
+                                        Ok(false) => {
+                                            break Err("Native history is still being saved".into());
+                                        }
+                                        Err(error) => break Err(error),
+                                    }
+                                }
+                            }
+                        } else {
+                            Ok(())
+                        };
+                        let result = if let Err(error) = history {
+                            Err(error)
+                        } else if quiet_poll && let Some(status) = last_status.clone() {
                             Ok(status)
                         } else if models.pending() {
                             Err("Finish model preparation before changing the chain".into())
@@ -666,6 +690,10 @@ fn request_kind(request: &oxidal_audio::lifecycle::WorkerRequest) -> &'static st
 
 #[cfg(target_os = "linux")]
 #[derive(Debug)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Telemetry crosses the bounded audio channel by value to avoid callback allocations."
+)]
 enum AudioNote {
     /// The playback queue is full: the owner announces Ready.
     Primed,

@@ -1,5 +1,8 @@
 //! Actor-owned graph worker. HTTP lifetimes never own PCM or in-flight commands.
 use crate::audio_boot::{Choice, Policy, Role};
+use crate::audio_change::{
+    AudioChangeOwner, AudioChangePhase, Change, OwnerContext, OwnerMessage, OwnerRequest,
+};
 use crate::{Config, Shared, failure};
 use axum::{
     Json,
@@ -19,14 +22,11 @@ type Reply = Result<GraphAudioState, String>;
 #[derive(Debug)]
 pub(super) struct GraphPlayback {
     boot: Arc<Policy>,
+    change: Arc<Change>,
     library_access: Arc<tokio::sync::RwLock<()>>,
     forget: mpsc::Sender<crate::library_removal::Forget>,
     pub(super) finished: watch::Receiver<bool>,
-    commands: mpsc::Sender<(
-        GraphAudioCommand,
-        oneshot::Sender<Reply>,
-        tokio::sync::OwnedRwLockReadGuard<()>,
-    )>,
+    commands: mpsc::Sender<OwnerMessage<GraphAudioCommand, GraphAudioState>>,
     state: watch::Receiver<GraphAudioState>,
 }
 struct Worker {
@@ -63,6 +63,8 @@ impl Worker {
     }
 }
 struct Owner {
+    protect: Arc<crate::protect::Protect>,
+    change: Arc<Change>,
     levels: Arc<crate::levels::Levels>,
     boot: Arc<Policy>,
     midi_enabled: bool,
@@ -75,6 +77,8 @@ struct Owner {
     updates: watch::Sender<GraphAudioState>,
     /// Startup playback waiting for its interface (device_wait).
     wait: Option<crate::device_wait::Wait<StartGraph>>,
+    recovery_due: bool,
+    recovery_root: PathBuf,
 }
 impl Owner {
     fn cancel_wait(&mut self) {
@@ -136,6 +140,50 @@ impl Owner {
         }
         Ok(())
     }
+    fn persist_trial(&self, candidate: bool) -> Result<(), String> {
+        let mut settings = self
+            .state
+            .configured
+            .clone()
+            .ok_or("No Effects audio recovery")?;
+        if !candidate {
+            self.change
+                .previous(AudioChangeOwner::Effects, &mut settings.stream);
+        }
+        crate::audio_change::recovery::write_graph(&self.recovery_root, &settings)
+    }
+
+    fn keep_previous_stream(&mut self) {
+        if let Some(settings) = self.state.configured.as_mut() {
+            self.change
+                .previous(AudioChangeOwner::Effects, &mut settings.stream);
+        }
+    }
+
+    fn check_trial_admission(&self) -> Result<(), String> {
+        if self
+            .state
+            .control
+            .as_ref()
+            .is_none_or(|control| control.edit.is_some())
+        {
+            return Err(
+                "Finish the current Effects adjustment before changing audio settings".into(),
+            );
+        }
+        Ok(())
+    }
+
+    fn checkpoint(&mut self) {
+        if self.recovery_due && self.state.phase == AudioPhase::Running {
+            self.recovery_due = false;
+            if let Err(error) = self.persist_trial(false) {
+                self.state.error = Some(format!("Effects recovery could not be saved: {error}"));
+                self.publish();
+            }
+        }
+    }
+
     fn publish(&mut self) {
         self.state.device_owned = self.worker.is_some();
         self.updates.send_replace(self.state.clone());
@@ -152,6 +200,7 @@ impl Owner {
         }) {
             self.state.revision += 1;
             self.state.saved_copy = None;
+            self.recovery_due = true;
         }
         // Retain only settled adjustments; an abandoned gesture must not become
         // the restart value. Running DSP owns the preview until commit/cancel.
@@ -236,14 +285,16 @@ impl Owner {
                     .map_err(|_| "Audio device operation already in progress")?,
             );
         }
-        let mut child = tokio::process::Command::new(executable)
-            .envs(self.media_dir.iter().map(|dir| ("OXIDAL_MEDIA_DIR", dir)))
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .kill_on_drop(true)
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        let mut child = self.change.spawn_worker(AudioChangeOwner::Effects, || {
+            tokio::process::Command::new(executable)
+                .envs(self.media_dir.iter().map(|dir| ("OXIDAL_MEDIA_DIR", dir)))
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::inherit())
+                .kill_on_drop(true)
+                .spawn()
+                .map_err(|e| e.to_string())
+        })?;
         let input = child.stdin.take().ok_or("Graph stdin unavailable")?;
         let output = BufReader::new(child.stdout.take().ok_or("Graph stdout unavailable")?);
         self.worker = Some(Worker {
@@ -258,14 +309,22 @@ impl Owner {
         self.state.processed_frames = 0;
         self.state.telemetry = None;
         self.phase(AudioPhase::Starting, None);
-        let result = tokio::time::timeout(Duration::from_secs(15), async {
-            let worker = self.worker.as_mut().unwrap();
-            worker.write(&settings).await?;
-            worker.read().await
-        })
-        .await
-        .map_err(|_| "Graph startup timed out".to_owned())
-        .and_then(|r| r);
+        let change = self.change.clone();
+        let startup = async {
+            tokio::time::timeout(Duration::from_secs(15), async {
+                let worker = self.worker.as_mut().unwrap();
+                worker.write(&settings).await?;
+                worker.read().await
+            })
+            .await
+            .map_err(|_| "Graph startup timed out".to_owned())
+            .and_then(|r| r)
+        };
+        let result = tokio::select! {
+            biased;
+            error = change.wait_stopping(AudioChangeOwner::Effects) => Err(error),
+            result = startup => result,
+        };
         let result = match result {
             Ok(reply) if reply.error.is_none() && reply.processed_frames > 0 => {
                 self.worker.as_mut().unwrap()._permit = reserved.take();
@@ -285,7 +344,122 @@ impl Owner {
         }
         result
     }
-    async fn command(&mut self, command: GraphAudioCommand) -> Reply {
+    async fn request(&mut self, request: OwnerRequest<GraphAudioCommand>) -> Reply {
+        match request {
+            OwnerRequest::Action(command) => {
+                let stop = matches!(&command.action, GraphAudioAction::Stop);
+                if stop
+                    && (self.state.session != command.session
+                        || self.state.revision != command.expected_revision)
+                {
+                    return Err("Audio state conflict; refresh before stopping".into());
+                }
+                let utility = match &command.action {
+                    GraphAudioAction::HostUtility { command } => Some(command),
+                    _ => None,
+                };
+                let safety_stop = self
+                    .change
+                    .admits(AudioChangeOwner::Effects, stop, utility)?;
+                if safety_stop {
+                    self.keep_previous_stream();
+                }
+                self.command(command, safety_stop, false).await
+            }
+            OwnerRequest::Stop { id } => {
+                self.change.check_stop(AudioChangeOwner::Effects, &id)?;
+                self.keep_previous_stream();
+                let command = GraphAudioCommand {
+                    session: self.state.session.clone(),
+                    expected_revision: self.state.revision,
+                    action: GraphAudioAction::Stop,
+                };
+                self.command(command, true, false).await
+            }
+            OwnerRequest::Apply {
+                id,
+                action: command,
+            } => {
+                self.change
+                    .check(AudioChangeOwner::Effects, &id, AudioChangePhase::Restarting)?;
+                if let Some(reason) = self.protect.refuse(false) {
+                    return Err(reason.into());
+                }
+                if self.state.phase != AudioPhase::Running
+                    || self.state.session != command.session
+                    || self.state.revision != command.expected_revision
+                {
+                    return Err("The audio session changed before settings were applied".into());
+                }
+                self.check_trial_admission()?;
+                self.persist_trial(false)?;
+                self.change
+                    .marker(&self.recovery_root, AudioChangeOwner::Effects, &id)?;
+                self.command(command, false, false).await
+            }
+            OwnerRequest::Restore {
+                id,
+                action: mut command,
+            } => {
+                self.change
+                    .check(AudioChangeOwner::Effects, &id, AudioChangePhase::Reverting)?;
+                command.session.clone_from(&self.state.session);
+                command.expected_revision = self.state.revision;
+                self.command(command, true, true).await
+            }
+            OwnerRequest::SealRollback { id } => {
+                self.persist_trial(false)?;
+                self.change
+                    .seal_rollback(&self.recovery_root, AudioChangeOwner::Effects, &id)?;
+                Ok(self.state.clone())
+            }
+            OwnerRequest::Commit { id } => {
+                if let Some(reason) = self.protect.refuse(false) {
+                    return Err(reason.into());
+                }
+                let current = self
+                    .state
+                    .configured
+                    .as_ref()
+                    .ok_or("No candidate audio stream")?;
+                let worker = self
+                    .worker
+                    .as_mut()
+                    .ok_or("The candidate audio worker is gone")?;
+                if self.state.phase != AudioPhase::Running
+                    || worker
+                        .child
+                        .try_wait()
+                        .map_err(|error| error.to_string())?
+                        .is_some()
+                {
+                    return Err("The candidate audio worker is no longer running".into());
+                }
+                self.change
+                    .check_keep(AudioChangeOwner::Effects, &id, &current.stream)?;
+                self.persist_trial(true)?;
+                if let Err(error) = self.change.commit(&self.recovery_root, &id) {
+                    self.persist_trial(false)?;
+                    return Err(error);
+                }
+                Ok(self.state.clone())
+            }
+        }
+    }
+
+    async fn command(
+        &mut self,
+        command: GraphAudioCommand,
+        safety: bool,
+        restoring: bool,
+    ) -> Reply {
+        if !safety
+            && let Some(reason) = self
+                .protect
+                .refuse(crate::protect::graph(&command.action, self.state.phase))
+        {
+            return Err(reason.into());
+        }
         if command.session != self.state.session || command.expected_revision != self.state.revision
         {
             return Err("graph_audio_state_conflict; refresh status".into());
@@ -369,7 +543,7 @@ impl Owner {
                 candidate.stream = stream;
                 candidate.validate()?;
                 if self.worker.is_some() {
-                    if self.state.phase != AudioPhase::Running {
+                    if !restoring && self.state.phase != AudioPhase::Running {
                         return Err(
                             "Wait for effects audio to settle before applying settings".into()
                         );
@@ -382,12 +556,22 @@ impl Owner {
                     {
                         return Err("Finish the current adjustment first".into());
                     }
+                    if restoring {
+                        self.keep_previous_stream();
+                    }
                     self.phase(AudioPhase::Stopping, None);
                     let mut reserved = match self.release_reserved().await {
                         Ok(permit) => permit,
                         Err(error) => return Err(self.fault(error).await),
                     };
+                    if restoring {
+                        self.state.configured = Some(candidate.clone());
+                    }
                     if let Err(error) = self.start_reserved(candidate, &mut reserved).await {
+                        if restoring {
+                            self.phase(AudioPhase::Failed, Some(error.clone()));
+                            return Err(error);
+                        }
                         let restored = self.start_reserved(previous.clone(), &mut reserved).await;
                         if restored.is_err() {
                             self.state.configured = Some(previous);
@@ -406,10 +590,17 @@ impl Owner {
                         self.publish();
                         return Err(message);
                     }
-                } else if let Err(error) = self.start(candidate).await {
-                    self.state.configured = Some(previous);
-                    self.phase(AudioPhase::Failed, Some(error.clone()));
-                    return Err(error);
+                } else {
+                    if restoring {
+                        self.state.configured = Some(candidate.clone());
+                    }
+                    if let Err(error) = self.start(candidate).await {
+                        if !restoring {
+                            self.state.configured = Some(previous);
+                        }
+                        self.phase(AudioPhase::Failed, Some(error.clone()));
+                        return Err(error);
+                    }
                 }
             }
             GraphAudioAction::Configure { stream } => {
@@ -457,6 +648,7 @@ impl Owner {
                 self.start(*settings).await?;
             }
             GraphAudioAction::Stop => {
+                self.checkpoint();
                 self.phase(AudioPhase::Stopping, None);
                 if let Err(e) = self.release().await {
                     self.phase(AudioPhase::Failed, Some(e.clone()));
@@ -587,14 +779,23 @@ impl GraphPlayback {
         config: &Config,
         policy: Arc<Policy>,
         levels: Arc<crate::levels::Levels>,
-        library_access: Arc<tokio::sync::RwLock<()>>,
+        context: OwnerContext,
     ) -> Result<Self, String> {
+        let OwnerContext {
+            library_access,
+            change,
+            protect: trial_protect,
+        } = context;
+
         if let Some(p) = &config.graph_worker
             && (!p.is_absolute() || !p.is_file())
         {
             return Err("Graph worker must be a configured absolute executable".into());
         }
         let boot = policy.snapshot();
+        let recovery = crate::audio_change::recovery::read_graph(&config.preset_dir);
+        let recovery_error = recovery.as_ref().err().cloned();
+        let recovered = recovery.ok().flatten();
         let initial = GraphAudioState {
             start_on_boot: policy.enabled(Role::Effects),
             waiting_for_device: false,
@@ -613,23 +814,22 @@ impl GraphPlayback {
             } else {
                 AudioPhase::Unavailable
             },
-            configured: None,
+            configured: recovered,
             control: None,
             native_values: vec![],
             processed_frames: 0,
             device_owned: false,
-            error: None,
+            error: recovery_error,
             experimental: true,
             saved_copy: None,
         };
         let (updates, state) = watch::channel(initial.clone());
-        let (commands, mut receiver) = mpsc::channel::<(
-            GraphAudioCommand,
-            oneshot::Sender<Reply>,
-            tokio::sync::OwnedRwLockReadGuard<()>,
-        )>(1);
+        let (commands, mut receiver) =
+            mpsc::channel::<OwnerMessage<GraphAudioCommand, GraphAudioState>>(1);
         let (forget, mut forgotten) = mpsc::channel::<crate::library_removal::Forget>(1);
         let mut owner = Owner {
+            protect: trial_protect,
+            change: change.clone(),
             levels,
             boot: policy.clone(),
             midi_enabled: config.simulator,
@@ -640,6 +840,8 @@ impl GraphPlayback {
             state: initial,
             updates,
             wait: None,
+            recovery_due: false,
+            recovery_root: config.preset_dir.clone(),
         };
         let mut shutdown = config.shutdown.clone();
         let (done, finished) = watch::channel(false);
@@ -673,13 +875,14 @@ impl GraphPlayback {
                     biased;
                     _=async {match shutdown.as_mut(){Some(s)=>{if !*s.borrow(){let _=s.changed().await;}},None=>std::future::pending::<()>().await}}=>break,
                     request = forgotten.recv() => match request { Some((entry, reply)) => { let _ = reply.send(owner.forget(&entry)); }, None => break },
-                    item=receiver.recv()=>match item {Some((command,response,_access))=>{let _=response.send(owner.command(command).await);},None=>break},
-                    _=interval.tick()=>{if let Ok(_access) = owner_access.clone().try_read_owned() { owner.retry_device().await; owner.poll().await; }},
+                    item=receiver.recv()=>match item {Some((command,response,_access))=>{let _=response.send(owner.request(command).await);},None=>break},
+                    _=interval.tick()=>{if let Ok(_access) = owner_access.clone().try_read_owned() { if !owner.change.active() { owner.retry_device().await; } owner.poll().await; owner.checkpoint(); }},
                 }
             }
             drop(receiver);
             drop(forgotten);
             let _shutdown_access = owner_access.clone().read_owned().await;
+            owner.checkpoint();
             while owner.worker.is_some() {
                 if owner.release().await.is_err() {
                     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -688,6 +891,7 @@ impl GraphPlayback {
             done.send_replace(true);
         });
         Ok(Self {
+            change,
             boot: policy,
             library_access,
             forget,
@@ -715,14 +919,55 @@ impl GraphPlayback {
         state
     }
     pub(crate) async fn dispatch(&self, command: GraphAudioCommand) -> Reply {
-        let access = self.library_access.clone().read_owned().await;
+        let access = if matches!(command.action, GraphAudioAction::Stop)
+            && self.change.allows_stop(AudioChangeOwner::Effects)
+        {
+            None
+        } else {
+            Some(self.library_access.clone().read_owned().await)
+        };
+        self.send(OwnerRequest::Action(command), access).await
+    }
+
+    pub(super) async fn dispatch_change(&self, request: OwnerRequest<GraphAudioCommand>) -> Reply {
+        // A timed rollback never waits behind an unrelated Library download.
+        let access = match request {
+            OwnerRequest::Restore { .. }
+            | OwnerRequest::SealRollback { .. }
+            | OwnerRequest::Stop { .. } => None,
+            _ => Some(
+                self.library_access
+                    .clone()
+                    .try_read_owned()
+                    .map_err(|_| "A Library operation is in progress")?,
+            ),
+        };
+        self.send(request, access).await
+    }
+
+    async fn send(
+        &self,
+        request: OwnerRequest<GraphAudioCommand>,
+        access: Option<tokio::sync::OwnedRwLockReadGuard<()>>,
+    ) -> Reply {
         let (response, received) = oneshot::channel();
-        self.commands
-            .try_send((command, response, access))
-            .map_err(|_| "graph_audio_busy")?;
-        let mut state = received
-            .await
-            .map_err(|_| "Graph owner stopped".to_owned())??;
+        let message = (request, response, access);
+        if matches!(
+            message.0,
+            OwnerRequest::Restore { .. }
+                | OwnerRequest::SealRollback { .. }
+                | OwnerRequest::Stop { .. }
+        ) {
+            self.commands
+                .send(message)
+                .await
+                .map_err(|_| "Audio owner stopped")?;
+        } else {
+            self.commands
+                .try_send(message)
+                .map_err(|_| "Audio owner is busy")?;
+        }
+        let mut state = received.await.map_err(|_| "Audio owner stopped")??;
         state.start_on_boot = self.boot.enabled(Role::Effects);
         Ok(state)
     }
@@ -737,10 +982,14 @@ pub(super) async fn command(
     let Ok(Json(command)) = body else {
         return failure(StatusCode::BAD_REQUEST, "invalid_graph_audio_command");
     };
-    if let Some(reason) = shared.protect.refuse(crate::protect::graph(
-        &command.action,
-        shared.graph_playback.snapshot().phase,
-    )) {
+    let safety_stop = matches!(command.action, GraphAudioAction::Stop)
+        && shared.audio_change.allows_stop(AudioChangeOwner::Effects);
+    if !safety_stop
+        && let Some(reason) = shared.protect.refuse(crate::protect::graph(
+            &command.action,
+            shared.graph_playback.snapshot().phase,
+        ))
+    {
         return crate::protect::locked(reason);
     }
     match shared.graph_playback.dispatch(command).await {

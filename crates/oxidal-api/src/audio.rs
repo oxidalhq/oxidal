@@ -25,6 +25,16 @@ pub async fn devices() -> Response {
     }
 }
 
+pub(super) async fn probe_admitted(
+    State(shared): State<Arc<Shared>>,
+    payload: Result<Json<AudioProbe>, JsonRejection>,
+) -> Response {
+    let Ok(_operation) = shared.audio_change.operation() else {
+        return failure(StatusCode::CONFLICT, crate::audio_change::BUSY);
+    };
+    probe(payload).await
+}
+
 pub async fn probe(payload: Result<Json<AudioProbe>, JsonRejection>) -> Response {
     let Ok(Json(request)) = payload else {
         return failure(StatusCode::BAD_REQUEST, "invalid_audio_probe");

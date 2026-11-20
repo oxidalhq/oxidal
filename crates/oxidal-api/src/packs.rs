@@ -84,6 +84,9 @@ pub(super) async fn change(
     if let Some(reason) = shared.protect.refuse(false) {
         return crate::protect::locked(reason).into_response();
     }
+    let Ok(_operation) = shared.audio_change.operation() else {
+        return failure(StatusCode::CONFLICT, crate::audio_change::BUSY);
+    };
     let action = match action.as_str() {
         "install" => PackAction::Install,
         "remove" => PackAction::Remove,
@@ -95,5 +98,5 @@ pub(super) async fn change(
             "Stop audio before changing installed effect packs",
         );
     }
-    dispatch(shared, Command::Pack { id, action }).await
+    dispatch(shared.clone(), Command::Pack { id, action }).await
 }

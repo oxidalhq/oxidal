@@ -12,6 +12,41 @@ export type AccountAction =
       kind: "disconnect";
     };
 export type AccountPhase = "disconnected" | "requesting" | "waiting" | "connected" | "reconnecting" | "error";
+export type AudioChangeRequest =
+  | {
+      expected_revision: number;
+      input: AudioProbe;
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
+      input_map: [number, number];
+      kind: "apply";
+      output: AudioProbe;
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
+      output_map: [number, number];
+      owner: AudioChangeOwner;
+      session: string;
+    }
+  | {
+      id: string;
+      kind: "keep";
+    }
+  | {
+      id: string;
+      kind: "revert";
+    }
+  | {
+      id: string;
+      kind: "stop";
+    };
+export type Direction = "capture" | "playback";
+export type SampleFormat = "s16" | "s24" | "s24_packed" | "s32" | "float";
+export type AudioChangeOwner = "native" | "mixed" | "effects";
+export type AudioChangePhase = "idle" | "restarting" | "proving" | "reverting" | "kept" | "reverted" | "failed";
 export type AudioAction =
   | {
       command: HostUtility;
@@ -251,8 +286,6 @@ export type Message =
       kind: "control";
       value: number;
     };
-export type Direction = "capture" | "playback";
-export type SampleFormat = "s16" | "s24" | "s24_packed" | "s32" | "float";
 /**
  * One immediate, revision-owned edit; UI cancellation sends its original value.
  */
@@ -1060,6 +1093,8 @@ export interface Contract {
   account_command: AccountCommand;
   account_state: AccountState;
   artwork: AssetArtwork[];
+  audio_change_request: AudioChangeRequest;
+  audio_change_state: AudioChangeState;
   audio_command: AudioCommand;
   audio_devices: AudioDevices;
   audio_probe: AudioProbe;
@@ -1211,6 +1246,45 @@ export interface AssetArtwork {
    */
   key?: string | null;
   title: string;
+}
+export interface AudioProbe {
+  channels: number;
+  direction: Direction;
+  endpoint: string;
+  format: SampleFormat;
+  period_frames: number;
+  periods: number;
+  sample_rate: number;
+}
+export interface AudioChangeState {
+  candidate?: AudioChangeHardware | null;
+  id?: string | null;
+  message?: string | null;
+  observed?: AudioChangeObservation | null;
+  owner?: AudioChangeOwner | null;
+  phase: AudioChangePhase;
+  previous?: AudioChangeHardware | null;
+  remaining_ms?: number | null;
+}
+export interface AudioChangeHardware {
+  input: AudioProbe;
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  input_map: [number, number];
+  output: AudioProbe;
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  output_map: [number, number];
+}
+export interface AudioChangeObservation {
+  deadline_misses?: number | null;
+  frames: number;
+  invalid_samples?: number | null;
+  xruns?: number | null;
 }
 export interface AudioCommand {
   action: AudioAction;
@@ -1385,15 +1459,6 @@ export interface StreamConfig {
    * at every start, like the levels.
    */
   venue?: VenueApplied | null;
-}
-export interface AudioProbe {
-  channels: number;
-  direction: Direction;
-  endpoint: string;
-  format: SampleFormat;
-  period_frames: number;
-  periods: number;
-  sample_rate: number;
 }
 /**
  * Unit-wide gain staging around every rig: guitar input trim before the rig,

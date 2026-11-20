@@ -1,6 +1,7 @@
 mod artwork;
 mod audio;
 mod audio_boot;
+mod audio_change;
 mod audit;
 mod background;
 mod backup;
@@ -233,6 +234,8 @@ pub struct Contract {
     pub graph_audio_state: oxidal_lv2::protocol::GraphAudioState,
     pub graph_audio_command: oxidal_lv2::protocol::GraphAudioCommand,
     pub audio_command: oxidal_audio::lifecycle::AudioCommand,
+    pub audio_change_state: audio_change::AudioChangeState,
+    pub audio_change_request: audio_change::AudioChangeRequest,
     pub audio_devices: oxidal_audio::AudioDevices,
     pub unit_levels: oxidal_audio::tools::HostLevels,
     pub guitars: guitars::Guitars,
@@ -295,6 +298,7 @@ pub struct Config {
 #[derive(Debug)]
 struct Shared {
     boot: Arc<audio_boot::Policy>,
+    audio_change: Arc<audio_change::Change>,
     account: provider::Account,
     artwork_work: Arc<tokio::sync::Semaphore>,
     bundle_work: Arc<tokio::sync::Semaphore>,
@@ -395,6 +399,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .recover()
         .map_err(|e| format!("Cannot recover interrupted preset removal: {e}"))?;
     let library_access = Arc::new(tokio::sync::RwLock::new(()));
+    let audio_change = Arc::new(audio_change::Change::new(&config.preset_dir)?);
     let boot = Arc::new(audio_boot::Policy::new(
         config.preset_dir.join("boot-audio.json"),
     ));
@@ -409,6 +414,11 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
     let protect = Arc::new(protect::Protect::new(
         config.preset_dir.join("protect.json"),
     ));
+    let audio_context = || audio_change::OwnerContext {
+        library_access: library_access.clone(),
+        change: audio_change.clone(),
+        protect: protect.clone(),
+    };
     // Media trouble never stops the daemon: its routes report it instead.
     let media = match &config.media_dir {
         None => Err("no media directory is configured".to_owned()),
@@ -459,7 +469,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             boot.clone(),
             protect.clone(),
             levels.clone(),
-            library_access.clone(),
+            audio_context(),
             midi_map.clone(),
             midi_events.clone(),
         )?,
@@ -467,17 +477,18 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             &config,
             boot.clone(),
             levels.clone(),
-            library_access.clone(),
+            audio_context(),
         )?,
         rig_playback: rig_playback::RigPlayback::new(
             &config,
             boot,
             protect.clone(),
             levels.clone(),
-            library_access.clone(),
+            audio_context(),
             midi_map.clone(),
             midi_events,
         )?,
+        audio_change,
         levels,
         midi_map,
         midi_action: Default::default(),
@@ -571,6 +582,12 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/packs/{id}/copyright", get(packs::copyright))
         .route("/packs/{id}/{action}", post(packs::change))
         .route("/audio", get(playback::state).post(playback::command))
+        .route(
+            "/audio/change",
+            get(audio_change::state)
+                .post(audio_change::command)
+                .layer(DefaultBodyLimit::max(audio_change::REQUEST_BYTES)),
+        )
         .route("/levels", get(levels::state).post(levels::update))
         .route("/protect", get(protect::state).post(protect::update))
         .route(
@@ -635,7 +652,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/midi/navigate", post(midi_map::navigate))
         .route("/midi/position", get(midi_map::position))
         .route("/midi/mute", post(midi_map::mute))
-        .route("/audio/probe", post(audio::probe))
+        .route("/audio/probe", post(audio::probe_admitted))
         .route(
             "/native",
             get(native_editor::state).post(native_editor::command),

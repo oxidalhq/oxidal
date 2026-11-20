@@ -16,6 +16,12 @@
         "$ref": "#/$defs/AssetArtwork"
       }
     },
+    "audio_change_request": {
+      "$ref": "#/$defs/AudioChangeRequest"
+    },
+    "audio_change_state": {
+      "$ref": "#/$defs/AudioChangeState"
+    },
     "audio_command": {
       "$ref": "#/$defs/AudioCommand"
     },
@@ -481,6 +487,8 @@
     "graph_audio_state",
     "graph_audio_command",
     "audio_command",
+    "audio_change_state",
+    "audio_change_request",
     "audio_devices",
     "unit_levels",
     "guitars",
@@ -1261,6 +1269,284 @@
             "action"
           ]
         }
+      ]
+    },
+    "AudioChangeHardware": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "$ref": "#/$defs/AudioProbe"
+        },
+        "input_map": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "maxItems": 2,
+          "minItems": 2
+        },
+        "output": {
+          "$ref": "#/$defs/AudioProbe"
+        },
+        "output_map": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "maxItems": 2,
+          "minItems": 2
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "input",
+        "output",
+        "input_map",
+        "output_map"
+      ]
+    },
+    "AudioChangeObservation": {
+      "type": "object",
+      "properties": {
+        "deadline_misses": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "frames": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "invalid_samples": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "xruns": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "frames"
+      ]
+    },
+    "AudioChangeOwner": {
+      "type": "string",
+      "enum": [
+        "native",
+        "mixed",
+        "effects"
+      ]
+    },
+    "AudioChangePhase": {
+      "type": "string",
+      "enum": [
+        "idle",
+        "restarting",
+        "proving",
+        "reverting",
+        "kept",
+        "reverted",
+        "failed"
+      ]
+    },
+    "AudioChangeRequest": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "expected_revision": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "input": {
+              "$ref": "#/$defs/AudioProbe"
+            },
+            "input_map": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "kind": {
+              "type": "string",
+              "const": "apply"
+            },
+            "output": {
+              "$ref": "#/$defs/AudioProbe"
+            },
+            "output_map": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "owner": {
+              "$ref": "#/$defs/AudioChangeOwner"
+            },
+            "session": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "owner",
+            "session",
+            "expected_revision",
+            "input",
+            "output",
+            "input_map",
+            "output_map"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "keep"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "revert"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "stop"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "id"
+          ]
+        }
+      ]
+    },
+    "AudioChangeState": {
+      "type": "object",
+      "properties": {
+        "candidate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AudioChangeHardware"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "observed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AudioChangeObservation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "owner": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AudioChangeOwner"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "phase": {
+          "$ref": "#/$defs/AudioChangePhase"
+        },
+        "previous": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AudioChangeHardware"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "remaining_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "phase"
       ]
     },
     "AudioCommand": {

@@ -23,9 +23,31 @@ direction is useful, but actual duplex playback is the next test.
 
 ## Apply device settings to the current tone
 
-Use **Apply** in Audio settings to try a new configuration. Supported live
-sessions retain confirmed controls through the change and attempt to restore the
-previous configuration if preparation fails.
+Use **Apply** in Audio settings to try a new input, output, rate, buffer or
+channel map in a running Native, Mixed or Effects session. Audio restarts with
+the current tone and confirmed controls. Once the worker has processed audio
+with the new settings, you have 15 seconds to choose **Keep** or **Go back now**.
+Oxidal reverts on the device when time runs out, even if the browser closes or
+loses its connection. If the previous interface cannot restart, the error
+explains that audio stopped and the original configuration is available for
+Resume.
+
+Only one change can be pending. Finish recording, rendering a reamp, preparing
+a sound, adjusting Venue EQ, or changing network settings or effect packs before
+applying. Protect blocks Apply and Keep. You can still revert or stop audio.
+**Stop** in the confirmation dialog cancels that preview and releases the
+audio device. The previous settings are available for explicit Resume.
+
+The session remembers a kept configuration after the daemon restarts. An
+interrupted preview restores the previous configuration, and does not enable
+startup playback or replace the selected startup preset. Effects **Resume**
+uses its last confirmed configuration independently of startup playback.
+
+The settings dialog distinguishes calculated buffer times from measurements.
+The one-way buffer time is period frames multiplied by periods and divided by
+sample rate. It does not include converter or transport delay. Recovered xruns,
+processing deadline misses and invalid samples describe the current worker
+during the trial when measurements are available.
 
 ## Live NAM audition and offline copies
 

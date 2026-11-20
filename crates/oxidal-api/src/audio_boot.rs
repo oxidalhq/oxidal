@@ -494,6 +494,11 @@ pub(super) async fn set_startup(
         );
     };
     let result = tokio::spawn(async move {
+        let _operation = shared
+            .audio_change
+            .operation()
+            .map_err(|error| (axum::http::StatusCode::CONFLICT, error.into()))?;
+
         let _access = shared.library_access.clone().write_owned().await;
         if let Some(reason) = shared.protect.refuse(false) {
             return Err((axum::http::StatusCode::LOCKED, reason.to_owned()));
