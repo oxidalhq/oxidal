@@ -59,7 +59,7 @@ for (const part of wanted)
 
 const work = join(root, '.local/deploy-local');
 const splitterDir = join(root, 'thirdparty/oxidal-splitter');
-const image = 'oxidal-pi-build:rust-1.95-bookworm';
+const image = 'oxidal-pi-build:rust-1.95-bookworm-native-v3';
 const helper = '/usr/local/sbin/oxidal-development-deploy';
 const features = [
   'oxidal-api/alsa',
@@ -134,7 +134,9 @@ function dockerImage() {
     input: [
       'FROM rust:1.95-bookworm',
       'RUN apt-get update && apt-get install -y --no-install-recommends \\',
-      '  libasound2-dev pkg-config liblilv-dev lv2-dev cmake clang \\',
+      '  libasound2-dev pkg-config liblilv-dev lv2-dev cmake clang python3 \\',
+      '  libfreetype6-dev libfontconfig1-dev libx11-dev libxrandr-dev \\',
+      '  libxinerama-dev libxcursor-dev libxcomposite-dev libxi-dev libgl1-mesa-dev \\',
       '  && rm -rf /var/lib/apt/lists/*',
       '',
     ].join('\n'),
@@ -154,6 +156,10 @@ function docker(args, env = {}) {
     `${join(work, 'target')}:/target`,
     '-v',
     'oxidal-pi-cargo-registry:/usr/local/cargo/registry',
+    // The release image already contains this compiler. A workspace override
+    // would download editor and lint components into every disposable build.
+    '-e',
+    'RUSTUP_TOOLCHAIN=1.95.0-aarch64-unknown-linux-gnu',
     ...Object.entries(env).flatMap(([key, value]) => ['-e', `${key}=${value}`]),
     '-w',
     '/src',
@@ -395,15 +401,12 @@ if (wanted.has('splitter')) {
 
 if (wanted.has('bins')) {
   dockerImage();
-  step('Fetching the Pi native adapter library for linking');
+  step('Building and checking the pinned Linux ARM64 native adapter');
   const tone = join(work, 'tone3000');
   mkdirSync(tone, { recursive: true });
-  if (!buildOnly || !existsSync(join(tone, 'liboxidal_tone3000.so')))
-    run('scp', [
-      '-q',
-      `${host}:/opt/oxidal/lib/liboxidal_tone3000.so`,
-      `${tone}/`,
-    ]);
+  docker(['python3', 'native/tone3000/build.py'], {
+    OXIDAL_TONE3000_LIB_DIR: '/src/.local/deploy-local/tone3000',
+  });
   step('Building Linux ARM64 binaries (all workers, appliance features)');
   docker(
     [
@@ -428,6 +431,10 @@ if (wanted.has('bins')) {
   mkdirSync(stage);
   for (const name of binaries)
     copyFileSync(join(work, 'target/bins/release', name), join(stage, name));
+  copyFileSync(
+    join(tone, 'liboxidal_tone3000.so'),
+    join(stage, 'liboxidal_tone3000.so'),
+  );
   pack(stage, join(work, 'oxidal-bins.tgz'));
   install('bins', join(work, 'oxidal-bins.tgz'));
 }

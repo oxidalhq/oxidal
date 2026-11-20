@@ -193,8 +193,14 @@ restores them if the daemon fails to start.
 From a Mac or Linux checkout with Docker and SSH access, `pnpm deploy:local`
 builds the Linux ARM64 binaries (all workers, appliance features) and the
 splitter runner in `rust:1.95-bookworm`, builds the UI, and installs the
-splitter runtime, binaries and UI in that order. Name parts to deploy fewer,
-for example `pnpm deploy:local ui`, and add `--build-only` to stop before the
+splitter runtime, binaries and UI in that order.
+The `bins` part builds the hash-checked native adapter from the checkout's
+pinned dependencies, runs its convolution check, links every worker against
+that adapter and installs them together. It never fetches a linking library
+from the Pi. `bins --build-only` needs Docker and the pinned sources, with no
+device connection.
+
+Name parts to deploy fewer, for example `pnpm deploy:local ui`, and add `--build-only` to stop before the
 Pi. `pnpm deploy:local lv2` builds and installs the effect bundles; it is not part
 of the default set. `OXIDAL_PI` sets the SSH target (default `oxidal-admin@oxidal.local`) and
 `OXIDAL_SPLITTER_MODELS` the folder holding the four model files pinned in

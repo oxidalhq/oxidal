@@ -14,6 +14,101 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
+test('binary build-only packages its rebuilt adapter with every worker without contacting a device', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'oxidal-binary-build-only-'));
+  try {
+    mkdirSync(join(directory, 'scripts'));
+    mkdirSync(join(directory, 'bin'));
+    for (const name of ['deploy-local.mjs', 'process.mjs'])
+      copyFileSync(
+        new URL(name, import.meta.url),
+        join(directory, 'scripts', name),
+      );
+    const calls = join(directory, 'docker-calls');
+    writeFileSync(
+      join(directory, 'bin/docker'),
+      `#!/usr/bin/env node
+const fs = require('node:fs');
+const path = require('node:path');
+const args = process.argv.slice(2);
+fs.appendFileSync(process.env.OXIDAL_TEST_DOCKER_CALLS, JSON.stringify(args) + '\\n');
+if (args.includes('native/tone3000/build.py')) {
+  const output = path.join(process.cwd(), '.local/deploy-local/tone3000');
+  fs.mkdirSync(output, {recursive:true});
+  fs.writeFileSync(path.join(output, 'liboxidal_tone3000.so'), 'new checked adapter');
+}
+if (args.includes('--workspace')) {
+  const output = path.join(process.cwd(), '.local/deploy-local/target/bins/release');
+  fs.mkdirSync(output, {recursive:true});
+  for (const name of ['oxidald', 'oxidal-audio-worker', 'oxidal-graph-worker', 'oxidal-rig-worker', 'oxidal-native-worker']) fs.writeFileSync(path.join(output, name), name);
+}
+`,
+      { mode: 0o755 },
+    );
+    for (const name of ['ssh', 'scp'])
+      writeFileSync(join(directory, 'bin', name), '#!/bin/sh\nexit 81\n', {
+        mode: 0o755,
+      });
+    const result = spawnSync(
+      process.execPath,
+      [join(directory, 'scripts/deploy-local.mjs'), 'bins', '--build-only'],
+      {
+        env: {
+          ...process.env,
+          PATH: `${join(directory, 'bin')}:${process.env.PATH}`,
+          OXIDAL_TEST_DOCKER_CALLS: calls,
+        },
+        encoding: 'utf8',
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    const commands = readFileSync(calls, 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    const prepare = commands.findIndex((args) =>
+      args.includes('native/tone3000/build.py'),
+    );
+    const workers = commands.findIndex((args) => args.includes('--workspace'));
+    assert.ok(
+      prepare >= 0 && workers > prepare,
+      'Build the adapter before linking its workers',
+    );
+    assert.ok(
+      commands[workers].includes(
+        'OXIDAL_TONE3000_LIB_DIR=/src/.local/deploy-local/tone3000',
+      ),
+    );
+    const archive = join(directory, '.local/deploy-local/oxidal-bins.tgz');
+    const listed = spawnSync('tar', ['-tzf', archive], { encoding: 'utf8' });
+    assert.equal(listed.status, 0, listed.stderr);
+    assert.deepEqual(
+      listed.stdout
+        .trim()
+        .split('\n')
+        .filter((name) => !name.endsWith('/'))
+        .sort(),
+      [
+        './liboxidal_tone3000.so',
+        './oxidal-audio-worker',
+        './oxidal-graph-worker',
+        './oxidal-native-worker',
+        './oxidal-rig-worker',
+        './oxidald',
+      ],
+    );
+    assert.equal(
+      readFileSync(
+        join(directory, '.local/deploy-local/bins/liboxidal_tone3000.so'),
+        'utf8',
+      ),
+      'new checked adapter',
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 /** Build-only must never install a privileged helper on the device.
  * @see docs/development.md
  */
