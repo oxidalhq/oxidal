@@ -571,6 +571,13 @@ pub fn qualify_scenes(world: &World, current: &[u8], root: &Path) -> Result<(), 
         serde_json::to_vec(&value)?,
         BTreeMap::from([("current".into(), current.to_vec())]),
     )?;
+    super::capture_scenes::qualify(
+        bundle.clone(),
+        world,
+        root,
+        &[("tone", "outputGain"), ("tone2", "outputGain")],
+        true,
+    )?;
     let store = BundleStore::new(root.join("worker-rigs"));
     let revision = store.save(&bundle)?;
     std::fs::write(root.join("scene-preset-revision"), &revision)?;

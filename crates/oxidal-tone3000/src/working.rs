@@ -596,7 +596,17 @@ impl Authoring {
         engine: &mut Engine,
         action: AuthoringAction,
     ) -> Result<AuthoringStatus, String> {
-        self.execute(engine, action, false)
+        self.command_retaining(engine, action, &[])
+    }
+    /// Reject and roll back edits whose resulting control catalog drops a
+    /// required scene target before publishing the new working receipt.
+    pub fn command_retaining(
+        &mut self,
+        engine: &mut Engine,
+        action: AuthoringAction,
+        required_controls: &[&str],
+    ) -> Result<AuthoringStatus, String> {
+        self.execute(engine, action, false, required_controls)
     }
     /// Isolated, non-PCM preparation only. The supervisor admits this receipt by
     /// rebuilding the stream and retains the old session if that admission fails.
@@ -610,6 +620,7 @@ impl Authoring {
             engine,
             AuthoringAction::Parameter { parameter, value },
             true,
+            &[],
         )
     }
     fn execute(
@@ -617,6 +628,7 @@ impl Authoring {
         engine: &mut Engine,
         action: AuthoringAction,
         reprepare: bool,
+        required_controls: &[&str],
     ) -> Result<AuthoringStatus, String> {
         if matches!(action, AuthoringAction::Parameter { .. }) && !reprepare {
             return Err("This setting requires isolated audio preparation".into());
@@ -798,7 +810,13 @@ impl Authoring {
             if !reprepare && engine.latency_samples().map_err(|e| e.to_string())? != latency {
                 return Err("Edit changes audio latency; fresh audio preparation required".into());
             }
-            engine.live_controls().map_err(|e| e.to_string())?;
+            let controls = engine.live_controls().map_err(|e| e.to_string())?;
+            if required_controls
+                .iter()
+                .any(|id| !controls.iter().any(|c| c.target == *id))
+            {
+                return Err("Edit would remove a capture scene control".into());
+            }
             engine.eq_snapshot().map_err(|e| e.to_string())?;
             engine.slots().map_err(|e| e.to_string())?;
             self.snapshot(engine)?;

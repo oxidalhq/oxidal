@@ -10,3 +10,8 @@
 <urn:oxidal:test:metadata-invalid> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .
 <urn:oxidal:test:metadata-credentials> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .
 <urn:oxidal:test:metadata-plugin-two> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .
+<urn:oxidal:test:artwork-escape> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .
+<urn:oxidal:test:artwork-text> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .
+<urn:oxidal:test:artwork-remote> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .
+<urn:oxidal:test:artwork-two-guis> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .
+<urn:oxidal:test:artwork-two-thumbnails> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .

@@ -42,7 +42,7 @@ fn bundle(bytes: &[u8], amp: &str, cab: &str, input: &str, gain: f64) -> Result<
         BTreeMap::from([("source".into(), bytes.to_vec())]),
     )?)
 }
-fn stream() -> oxidal_audio::StreamConfig {
+pub(super) fn stream() -> oxidal_audio::StreamConfig {
     let input = oxidal_audio::AudioProbe {
         endpoint: "hw:CARD=Qualification,DEV=0".into(),
         direction: oxidal_audio::Direction::Capture,
@@ -77,7 +77,7 @@ fn change(s: &mut Session, node: &str, parameter: &str, value: f64) -> Result<()
     })?;
     Ok(())
 }
-pub fn qualify(world: &World, root: &Path) -> Result<()> {
+pub fn qualify(world: &World, root: &Path, capture_only: bool) -> Result<()> {
     let bytes = std::fs::read(root.join("split-source.t3kpreset"))?;
     let mut whole = Engine::new(48000.0, 128)?;
     whole.load_preset(&bytes)?;
@@ -91,6 +91,16 @@ pub fn qualify(world: &World, root: &Path) -> Result<()> {
         .collect();
     let amp = tones[0]["blockId"].as_str().unwrap();
     let cab = tones[1]["blockId"].as_str().unwrap();
+    super::capture_scenes::qualify(
+        bundle(&bytes, amp, cab, "left", 0.0)?,
+        world,
+        root,
+        &[("amp", "inputGain"), ("cab", "outputGain"), ("cab", "mix")],
+        false,
+    )?;
+    if capture_only {
+        return Ok(());
+    }
     for input in ["left", "right"] {
         let candidate = bundle(&bytes, amp, cab, input, 0.0)?;
         for rate in [44100.0, 96000.0] {

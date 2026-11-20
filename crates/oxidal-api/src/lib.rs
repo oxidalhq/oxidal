@@ -591,6 +591,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
                 )),
         )
         .route("/plugins/lv2", get(plugins::catalog))
+        .route("/plugins/lv2/artwork", get(plugins::artwork))
         .route("/presets/rig-sources", get(rig_library::native_sources))
         .route("/presets/graphs", get(presets::graphs))
         .route(

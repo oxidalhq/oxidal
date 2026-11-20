@@ -49,6 +49,108 @@ fn impulse(
         assert_eq!(samples[delay], value);
     }
 }
+
+#[test]
+fn scene_bypass_keeps_latency_aligned_and_recalls_the_confirmed_endpoint() {
+    use oxidal_engine::protocol::SceneCommand;
+    use oxidal_presets::manifest::SCENES_BYPASS_EXTENSION;
+
+    let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();
+    let mut value = serde_json::to_value(bundle(137, 0, false).manifest()).unwrap();
+    value["extensions"][SCENES_BYPASS_EXTENSION] = json!({"fade_ms":4,"scenes":[
+        {"id":"wet","name":"Wet","gains":[],"bypass":[{"node":"fx","value":false}]},
+        {"id":"dry","name":"Dry","gains":[],"bypass":[{"node":"fx","value":true}]}
+    ]});
+    value["requiredExtensions"] = json!([SCENES_BYPASS_EXTENSION]);
+    let fixture = Bundle::from_parts(serde_json::to_vec(&value).unwrap(), BTreeMap::new()).unwrap();
+    let mut session = Session::new(fixture.clone(), &world, 48000.0, 64, 1 << 20).unwrap();
+    let initial = session.snapshot();
+    assert_eq!(initial.latency_frames, 137);
+    assert!(initial.buffer_bytes > 64 * size_of::<f32>());
+    let needed = initial.buffer_bytes;
+    assert!(
+        PreparedPorts::from_bundle(&fixture, &world, 48000.0, 64, needed - 1)
+            .unwrap_err()
+            .contains("Scene bypass exceeds host buffer budget")
+    );
+    session
+        .select_scene(SceneCommand {
+            session: initial.session,
+            expected_revision: initial.revision,
+            scene: "dry".into(),
+            release_ms: None,
+        })
+        .unwrap();
+    let selected = session.snapshot();
+    assert_eq!(selected.scene.as_deref(), Some("dry"));
+    assert!(selected.scene_transitioning);
+    impulse(|i, o| session.process(i, o), 137); // impulse arrives during the fade
+
+    let recall = selected.recall(); // target confirmed even during the fade
+    let mut recovered = Session::new(fixture.clone(), &world, 48000.0, 64, 1 << 20).unwrap();
+    recovered.restore(&recall).unwrap();
+    assert_eq!(recovered.snapshot().scene.as_deref(), Some("dry"));
+    assert!(!recovered.snapshot().scene_transitioning);
+    impulse(|i, o| recovered.process(i, o), 137);
+
+    let root =
+        std::env::temp_dir().join(format!("oxidal-scene-bypass-save-{}", std::process::id()));
+    let store = BundleStore::new(root.clone());
+    let revision = store.save(&fixture).unwrap();
+    let input = oxidal_audio::AudioProbe {
+        endpoint: "hw:CARD=Qualification,DEV=0".into(),
+        direction: oxidal_audio::Direction::Capture,
+        sample_rate: 48000,
+        channels: 2,
+        format: oxidal_audio::SampleFormat::S16,
+        period_frames: 64,
+        periods: 3,
+    };
+    let mut output = input.clone();
+    output.direction = oxidal_audio::Direction::Playback;
+    let saved = oxidal_engine::save_revision(
+        &store,
+        &world,
+        SaveRequest {
+            settings: StartRig {
+                midi: None,
+                prepared: Vec::new(),
+                revision: revision.clone(),
+                stream: oxidal_audio::StreamConfig {
+                    levels: Default::default(),
+                    hear_yourself: true,
+                    input,
+                    output,
+                    input_map: [0, 1],
+                    output_map: [0, 1],
+                    venue: None,
+                },
+                recall: None,
+            },
+            recall,
+            name: "Saved scene bypass".into(),
+        },
+    )
+    .unwrap();
+    let saved = store.read(&saved).unwrap();
+    assert_eq!(
+        saved.manifest().scenes().unwrap(),
+        fixture.manifest().scenes().unwrap()
+    );
+    assert_eq!(
+        saved.manifest().required_extensions,
+        [SCENES_BYPASS_EXTENSION]
+    );
+    assert_eq!(
+        store.read(&revision).unwrap().manifest(),
+        fixture.manifest()
+    );
+    let mut reopened = Session::new(saved, &world, 48000.0, 64, 1 << 20).unwrap();
+    assert_eq!(reopened.snapshot().scene.as_deref(), Some("dry"));
+    impulse(|i, o| reopened.process(i, o), 137);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 #[test]
 fn portable_lv2_latency_aligns_parallel_paths_bypass_and_offline_recall() {
     let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();

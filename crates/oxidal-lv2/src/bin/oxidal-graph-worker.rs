@@ -48,9 +48,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
     }
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if let [mode, uri] = args.as_slice()
+        && mode == "--artwork"
+    {
+        if let Some(bytes) = World::discover()?.artwork(uri)? {
+            std::io::stdout().lock().write_all(&bytes)?;
+        }
+        return Ok(());
+    }
     if !args.is_empty() {
         if args.len() != 2 || args[0] != "--catalog" {
-            return Err("Expected --catalog <sample-rate>".into());
+            return Err("Expected --catalog <sample-rate> or --artwork <plugin-uri>".into());
         }
         let sample_rate: u32 = args[1].parse()?;
         if !(8000..=192000).contains(&sample_rate) {

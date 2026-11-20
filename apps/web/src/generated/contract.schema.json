@@ -4104,6 +4104,12 @@
       "description": "A scene drafted with Save as new scene.",
       "type": "object",
       "properties": {
+        "bypass": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SceneBypass"
+          }
+        },
         "controls": {
           "description": "Plugin control values the new scene sets (see the preset's scenes).",
           "type": "array",
@@ -4122,6 +4128,12 @@
         },
         "name": {
           "type": "string"
+        },
+        "native_controls": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SceneNativeControl"
+          }
         }
       },
       "additionalProperties": false,
@@ -9540,6 +9552,9 @@
     "PluginInfo": {
       "type": "object",
       "properties": {
+        "artwork": {
+          "type": "boolean"
+        },
         "author": {
           "description": "The declared author or maker, used to group effects by source.",
           "type": [
@@ -11624,6 +11639,12 @@
     "Scene": {
       "type": "object",
       "properties": {
+        "bypass": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SceneBypass"
+          }
+        },
         "controls": {
           "description": "Plugin control values this scene sets (none for branches). Continuous\ncontrols ramp over `fade_ms`; stepped ones switch while silent.",
           "type": "array",
@@ -11642,6 +11663,12 @@
         },
         "name": {
           "type": "string"
+        },
+        "native_controls": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SceneNativeControl"
+          }
         }
       },
       "additionalProperties": false,
@@ -11649,6 +11676,22 @@
         "id",
         "name",
         "gains"
+      ]
+    },
+    "SceneBypass": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "node",
+        "value"
       ]
     },
     "SceneCommand": {
@@ -11715,6 +11758,15 @@
             "$ref": "#/$defs/DraftScene"
           }
         },
+        "bypass": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SceneBypass"
+            }
+          }
+        },
         "controls": {
           "description": "Plugin control values changed with Update scene, by scene id.",
           "type": "object",
@@ -11731,6 +11783,15 @@
             "type": "array",
             "items": {
               "$ref": "#/$defs/SceneGain2"
+            }
+          }
+        },
+        "native_controls": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SceneNativeControl"
             }
           }
         },
@@ -11782,6 +11843,15 @@
               "type": "null"
             }
           ]
+        },
+        "expected_revision": {
+          "description": "Required when the current or submitted draft has bypass or capture edits.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
         }
       },
       "additionalProperties": false
@@ -11834,6 +11904,27 @@
         "value"
       ]
     },
+    "SceneNativeControl": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "parameter": {
+          "type": "string"
+        },
+        "value": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "node",
+        "parameter",
+        "value"
+      ]
+    },
     "Scenes": {
       "type": "object",
       "properties": {
@@ -11847,6 +11938,12 @@
           "type": "integer",
           "format": "uint32",
           "minimum": 0
+        },
+        "initial_scene": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "scenes": {
           "type": "array",
@@ -12172,6 +12269,13 @@
           "type": "integer",
           "format": "uint",
           "minimum": 0
+        },
+        "capture_defaults": {
+          "description": "Capture control defaults from the immutable saved bundle.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SceneNativeControl"
+          }
         },
         "controls": {
           "type": "array",

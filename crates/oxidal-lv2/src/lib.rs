@@ -6,6 +6,7 @@
 mod host;
 #[cfg(feature = "native")]
 pub use host::{AtomEvent, ControlError, Plugin, PluginState, StatePath, StateProperty, World};
+pub mod artwork;
 pub mod protocol;
 pub use protocol::Binding;
 use schemars::JsonSchema;
@@ -198,6 +199,8 @@ pub struct PluginInfo {
     pub comment: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub homepage: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub artwork: bool,
     pub ports: Vec<Port>,
     pub unsupported: Option<String>,
 }
@@ -431,6 +434,17 @@ mod tests {
         ] {
             assert!(again.get(key).is_none(), "{key} should be omitted");
         }
+        let plugin: PluginInfo = serde_json::from_str(
+            r#"{"name":"Fixture","uri":"urn:plain","ports":[],"unsupported":null}"#,
+        )
+        .unwrap();
+        assert!(!plugin.artwork);
+        assert!(
+            serde_json::to_value(&plugin)
+                .unwrap()
+                .get("artwork")
+                .is_none()
+        );
     }
 
     #[test]

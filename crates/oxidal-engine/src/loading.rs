@@ -3,7 +3,7 @@ use crate::{PreparedPorts, Processor};
 use oxidal_lv2::{Plugin, PluginInfo, World};
 use oxidal_presets::{
     Bundle,
-    manifest::{Lv2Instance, NodeKind, ProcessingRole},
+    manifest::{Lv2Instance, NodeKind, ProcessingRole, SceneNativeControl},
 };
 use oxidal_tone3000::{Engine, InputMode};
 
@@ -29,6 +29,28 @@ impl PreparedPorts {
         buffer_budget: usize,
         working: Option<(&std::path::Path, &[crate::protocol::NodeWorking])>,
     ) -> Result<Self, String> {
+        Self::load_bundle(bundle, world, rate, frames, buffer_budget, working, false)
+            .map(|(graph, _)| graph)
+    }
+    pub(crate) fn load_for_session(
+        bundle: &Bundle,
+        world: &World,
+        rate: f64,
+        frames: usize,
+        buffer_budget: usize,
+        working: Option<(&std::path::Path, &[crate::protocol::NodeWorking])>,
+    ) -> Result<(Self, Option<Vec<SceneNativeControl>>), String> {
+        Self::load_bundle(bundle, world, rate, frames, buffer_budget, working, true)
+    }
+    fn load_bundle(
+        bundle: &Bundle,
+        world: &World,
+        rate: f64,
+        frames: usize,
+        buffer_budget: usize,
+        working: Option<(&std::path::Path, &[crate::protocol::NodeWorking])>,
+        collect_defaults: bool,
+    ) -> Result<(Self, Option<Vec<SceneNativeControl>>), String> {
         let manifest = bundle.manifest();
         manifest.validate().map_err(|e| e.to_string())?;
         manifest
@@ -122,6 +144,7 @@ impl PreparedPorts {
             }
         }
         let mut processors = crate::partition::prepare(bundle, rate, frames)?;
+        let mut saved = collect_defaults.then(Vec::new);
         for native in &manifest.tone3000.instances {
             if native.partition.is_some() {
                 continue;
@@ -172,6 +195,9 @@ impl PreparedPorts {
                     .find(|n| n.instance.as_ref() == Some(&native.id))
                     .ok_or("Missing native node")?;
                 if let Some(row) = rows.iter().find(|r| r.node == node.id) {
+                    if let Some(defaults) = saved.take() {
+                        saved = saved_before_working(&mut engine, &node.id, defaults);
+                    }
                     let state = oxidal_tone3000::working::read(
                         root,
                         &row.receipt,
@@ -189,8 +215,30 @@ impl PreparedPorts {
                 Processor::Lv2(Plugin::new_ports(world, &plugin.plugin_uri, rate, frames)?),
             );
         }
-        Self::new(bundle, processors, rate, frames, buffer_budget)
+        let graph = Self::new(bundle, processors, rate, frames, buffer_budget)?;
+        Ok((graph, saved))
     }
+}
+
+fn saved_before_working(
+    engine: &mut Engine,
+    node: &str,
+    mut saved: Vec<SceneNativeControl>,
+) -> Option<Vec<SceneNativeControl>> {
+    for row in engine.block_controls().ok()? {
+        let value = SceneNativeControl {
+            node: node.into(),
+            parameter: row.id,
+            value: f64::from(row.value as f32),
+        };
+        if !row.staged && value.capture_parameter().is_some() {
+            saved.push(value);
+            if saved.len() > crate::session::MAX_CAPTURE_DEFAULTS {
+                return None;
+            }
+        }
+    }
+    Some(saved)
 }
 
 pub(crate) fn control_values(

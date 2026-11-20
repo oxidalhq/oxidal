@@ -60,6 +60,38 @@ input and confirm the amp-head stage before adding effects between the two.
   silent**, and a scene keeps up to 32 control values. To rename, reorder,
   duplicate, delete or copy scenes, see [scene management](library.md#scene-management).
 
+Version 3 scenes can also bypass nodes in a serial chain or a split. They
+name the same native or LV2 processor nodes in every scene, up to 128 nodes.
+The bypass transition blends each processor's output with its latency-aligned
+input over the preset's scene fade. The processor keeps running so its history
+is ready when the next scene switches it back on. Selecting another scene
+during the fade starts from the blend already reached. A bypassed processor
+still uses CPU. Direct bypass edits to the same nodes use that fade too.
+
+The mixed worker confirms the target bypass values in its normal controls as
+soon as it accepts the scene. Save retains the scene definitions and writes the
+confirmed bypass values as the new preset defaults. Resume also restores those
+confirmed targets. An in-flight blend and DSP history end with the session.
+
+The shared `/api/v1/scene-draft` response includes a revision. When a draft
+contains bypass or native capture edits, updating or clearing it requires that revision as
+`expected_revision` in the PUT body. A stale revision returns HTTP 409 and
+leaves the draft intact. Scene draft changes stay in the daemon until saved
+to a preset.
+
+Version 4 scenes also set the input gain, output gain and mix of specific NAM
+and IR captures. The mixed worker validates the outer processor node and
+the capture's stable native ID, then writes the confirmed targets in one
+owner-thread operation. The native 50 ms smoothers continue from their current
+audio values. The preset's merge and bypass fades have their own timing.
+Working recovery restores confirmed targets, and Save keeps the capture IDs
+in the embedded tone or the derived amp/cab recipe.
+
+The worker reports `capture_defaults` from the immutable saved bundle when it
+can report the complete list. Working changes and the startup scene can
+change the current controls without changing those saved defaults. A version 4
+preset can name its startup scene, which the worker applies before audio starts.
+
 ## Whole-native authoring and portable instance settings
 
 Whole-native blocks support live control and EQ edits, NAM and IR audition, and

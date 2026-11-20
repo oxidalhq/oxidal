@@ -4,7 +4,11 @@ use oxidal_lv2::{ControlError, World};
 use oxidal_presets::{Bundle, manifest::NodeKind};
 use std::collections::BTreeSet;
 pub(crate) mod authoring;
+mod capture_scenes;
 mod models;
+
+pub(crate) const MAX_CAPTURE_DEFAULTS: usize = 512;
+const MAX_CAPTURE_DEFAULT_BYTES: usize = 128 * 1024;
 
 #[derive(Debug)]
 pub struct Session {
@@ -21,6 +25,7 @@ pub struct Session {
     rate: f64,
     /// Scene control ramps started; read the plugins back once they end.
     scene_readback: bool,
+    capture_fade_remaining: usize,
     authoring_histories: std::collections::BTreeMap<String, oxidal_tone3000::working::Authoring>,
 }
 impl Session {
@@ -41,8 +46,8 @@ impl Session {
         budget: usize,
         working: Option<(&std::path::Path, &[NodeWorking])>,
     ) -> Result<Self, String> {
-        let mut graph =
-            PreparedPorts::from_bundle_working(&bundle, world, rate, frames, budget, working)?;
+        let (mut graph, saved_before_working) =
+            PreparedPorts::load_for_session(&bundle, world, rate, frames, budget, working)?;
         let host = bundle
             .manifest()
             .oxidal
@@ -160,6 +165,15 @@ impl Session {
                 }));
             }
         }
+        let scenes = bundle.manifest().scenes().map_err(|e| e.to_string())?;
+        if let Some(scenes) = &scenes {
+            capture_scenes::check_targets(&controls, &scenes.scenes[0].native_controls)?;
+        }
+        let capture_defaults = capture_scenes::saved_defaults(
+            &controls,
+            working.map_or(&[], |(_, rows)| rows),
+            saved_before_working,
+        );
         let state = Snapshot {
             modified: false,
             session: format!(
@@ -182,13 +196,14 @@ impl Session {
             authoring,
             slots,
             model_change: None,
-            scenes: bundle.manifest().scenes().map_err(|e| e.to_string())?,
+            scenes,
+            capture_defaults,
             scene: None,
             scene_transitioning: false,
             branches: Vec::new(),
             midi: Default::default(),
         };
-        let result = Self {
+        let mut result = Self {
             graph,
             bundle,
             initial: controls,
@@ -202,21 +217,64 @@ impl Session {
             authoring_histories,
             rate,
             scene_readback: false,
+            capture_fade_remaining: 0,
         };
-        if serde_json::to_vec(&result.snapshot())
-            .map_err(|e| e.to_string())?
-            .len()
-            + 65536
-            > REPLY_LIMIT
-        {
+        result.apply_initial_scene()?;
+        if !result.reply_fits()? {
             return Err("Rig controls exceed IPC byte budget".into());
         }
         Ok(result)
     }
+    fn apply_initial_scene(&mut self) -> Result<(), String> {
+        let Some(scene) = self
+            .state
+            .scenes
+            .as_ref()
+            .and_then(|s| s.initial_scene.clone())
+        else {
+            return Ok(());
+        };
+        self.select_scene(SceneCommand {
+            session: self.state.session.clone(),
+            expected_revision: self.state.revision,
+            scene,
+            release_ms: None,
+        })?;
+        for index in 0..self.state.controls.len() {
+            let control = &self.state.controls[index];
+            if matches!(control.target, Target::Lv2 { .. })
+                && self.initial[index].value != control.value
+            {
+                self.set(index, control.value).map_err(|e| e.to_string())?;
+            }
+        }
+        self.graph.finish_preparation()?;
+        self.capture_fade_remaining = 0;
+        self.scene_readback = false;
+        self.state.revision = 0;
+        self.initial.clone_from(&self.state.controls);
+        Ok(())
+    }
+    fn reply_fits(&mut self) -> Result<bool, String> {
+        let fits = |session: &Session| {
+            serde_json::to_vec(&session.snapshot())
+                .map(|bytes| bytes.len() + 65536 <= REPLY_LIMIT)
+                .map_err(|e| e.to_string())
+        };
+        if fits(self)? {
+            return Ok(true);
+        }
+        if self.state.capture_defaults.is_empty() {
+            return Ok(false);
+        }
+        self.state.capture_defaults.clear();
+        fits(self)
+    }
     pub fn snapshot(&self) -> Snapshot {
         let mut state = self.state.clone();
         state.modified = self.is_modified();
-        state.scene_transitioning = self.graph.scene_transitioning();
+        state.scene_transitioning =
+            self.graph.scene_transitioning() || self.capture_fade_remaining > 0;
         if let Some(scenes) = &state.scenes {
             let matches = |scene: &&oxidal_presets::manifest::Scene| {
                 scene.gains.iter().all(|gain| {
@@ -233,6 +291,16 @@ impl Session {
                         matches!(&c.target, Target::Lv2 { node, symbol }
                             if *node == control.node && *symbol == control.symbol)
                             && c.value == f64::from(control.value as f32)
+                    })
+                }) && scene.bypass.iter().all(|bypass| {
+                    state.controls.iter().any(|c| {
+                        matches!(&c.target, Target::Bypass { node } if *node == bypass.node)
+                            && c.value == f64::from(u8::from(bypass.value))
+                    })
+                }) && scene.native_controls.iter().all(|value| {
+                    state.controls.iter().any(|c| {
+                        capture_scenes::matches_control(c, value)
+                            && c.value == f64::from(value.value as f32)
                     })
                 })
             };
@@ -319,6 +387,10 @@ impl Session {
         let result = self.graph.process(input, output);
         if result.is_err() {
             self.failed = true;
+        } else {
+            self.capture_fade_remaining = self
+                .capture_fade_remaining
+                .saturating_sub(self.graph.frames());
         }
         result
     }
@@ -409,8 +481,8 @@ impl Session {
         self.state.revision = revision;
         Ok(())
     }
-    /// Select only a validated mix of already running branches. All merge
-    /// targets are admitted before the first gain changes; shared FX keep state.
+    /// Select a validated scene on the already running graph. All targets are
+    /// admitted before the first gain, control or bypass ramp starts.
     pub fn select_scene(&mut self, command: SceneCommand) -> Result<(), String> {
         if self.failed || self.model_pending() {
             return Err("Rig is not ready for scene selection".into());
@@ -432,14 +504,38 @@ impl Session {
             .ok_or("Unknown rig scene")?;
         let gains = scene.gains.clone();
         let controls = scene.controls.clone();
+        let capture_controls = scene.native_controls.clone();
+        if !capture_controls.is_empty() && (self.gesture_pending() || self.measurement_pending()) {
+            return Err(
+                "Finish the active native adjustment before selecting a capture scene".into(),
+            );
+        }
+        let bypass = scene.bypass.clone();
         let fade_ms = scenes.fade_ms;
         // A blend keeps the outgoing scene sounding while it fades out.
         let release_ms = command.release_ms.unwrap_or(fade_ms).max(fade_ms);
         // Every control target is checked before the first gain moves, so a
         // refused scene leaves the mix and every plugin as they were.
         self.graph.check_scene_controls(&controls)?;
+        self.graph.check_scene_bypass(&bypass)?;
+        self.check_capture_scene(&capture_controls)?;
         self.apply_mix(&gains, fade_ms, release_ms)?;
         self.apply_scene_controls(&controls, fade_ms)?;
+        if let Err(error) = self.apply_capture_scene(&capture_controls) {
+            self.failed = true;
+            return Err(error);
+        }
+        self.graph.scene_bypass(&bypass, self.fade_frames(fade_ms));
+        for bypass in bypass {
+            let control = self
+                .state
+                .controls
+                .iter_mut()
+                .find(|c| matches!(&c.target, Target::Bypass { node } if *node == bypass.node))
+                .unwrap();
+            control.value = f64::from(u8::from(bypass.value));
+            control.display = if bypass.value { "On" } else { "Off" }.into();
+        }
         self.state.scene = Some(command.scene);
         Ok(())
     }
@@ -534,6 +630,9 @@ impl Session {
         }
         Ok(false)
     }
+    fn fade_frames(&self, ms: u32) -> u32 {
+        (self.rate * f64::from(ms) / 1000.0).round().max(1.0) as u32
+    }
     fn apply_mix(
         &mut self,
         gains: &[oxidal_presets::manifest::SceneGain],
@@ -545,9 +644,11 @@ impl Session {
             .revision
             .checked_add(1)
             .ok_or("Rig revision exhausted")?;
-        let frames_for = |ms: u32| (self.rate * f64::from(ms) / 1000.0).round().max(1.0) as u32;
-        self.graph
-            .scene_gains(gains, frames_for(fade_ms), frames_for(release_ms))?;
+        self.graph.scene_gains(
+            gains,
+            self.fade_frames(fade_ms),
+            self.fade_frames(release_ms),
+        )?;
         for gain in gains {
             let target = Target::Merge {
                 node: gain.node.clone(),
@@ -575,7 +676,7 @@ impl Session {
         if controls.is_empty() {
             return Ok(());
         }
-        let frames = (self.rate * f64::from(fade_ms) / 1000.0).round().max(1.0) as u32;
+        let frames = self.fade_frames(fade_ms);
         if let Err(error) = self.graph.scene_controls(controls, frames) {
             // Targets were admitted; a refusal now means the DSP state is unknown.
             self.failed = true;
@@ -734,6 +835,11 @@ impl Session {
             }
             return Ok(());
         }
+        let bypass_frames = self
+            .state
+            .scenes
+            .as_ref()
+            .map_or(0, |s| self.fade_frames(s.fade_ms));
         let c = &mut self.state.controls[index];
         match &c.target {
             Target::Native { .. } => unreachable!("handled above"),
@@ -755,7 +861,7 @@ impl Session {
                 c.display = p.info().ports[port as usize].display(actual);
             }
             Target::Bypass { .. } | Target::Merge { .. } => {
-                self.graph.host_value(&c.target, value)?;
+                self.graph.host_value(&c.target, value, bypass_frames)?;
                 c.value = f64::from(value as f32);
                 c.display = if c.toggle {
                     if c.value == 1.0 {
@@ -934,6 +1040,7 @@ fn native_controls(
 #[cfg(all(test, feature = "qualification"))]
 mod scene_control_tests {
     use super::*;
+    use oxidal_presets::manifest::SCENES_BYPASS_EXTENSION;
     use serde_json::json;
 
     /// Two paths into a merge, then an effect whose gain both scenes set,
@@ -963,19 +1070,29 @@ mod scene_control_tests {
                 "assets":[],"requiredFeatures":[]}],"recall":{"tails":"cut"}}})
     }
     fn prepare(key: &str) -> Result<Session, String> {
-        let value = scene_rig(key);
+        let mut value = scene_rig(key);
+        if key == SCENES_BYPASS_EXTENSION {
+            for (i, bypassed) in [false, true].into_iter().enumerate() {
+                value["extensions"][key]["scenes"][i]["bypass"] =
+                    json!([{"node":"fx","value":bypassed}]);
+            }
+        }
         let bundle = Bundle::from_parts(serde_json::to_vec(&value).unwrap(), Default::default())
             .map_err(|e| e.to_string())?;
         let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();
         Session::new(bundle, &world, 48000.0, 64, 1 << 20)
     }
     #[test]
-    fn scenes_with_controls_prepare_from_either_version_and_an_unknown_one_is_unsupported() {
+    fn scenes_with_controls_prepare_from_known_versions_and_refuse_an_unknown_one() {
         use oxidal_presets::manifest::{
             SCENES_CONTROLS_EXTENSION, SCENES_EXTENSION, UNSUPPORTED_SCENES,
         };
         // Version 1 with controls: presets saved before version 2 still play.
-        for key in [SCENES_EXTENSION, SCENES_CONTROLS_EXTENSION] {
+        for key in [
+            SCENES_EXTENSION,
+            SCENES_CONTROLS_EXTENSION,
+            SCENES_BYPASS_EXTENSION,
+        ] {
             let mut session = prepare(key).unwrap();
             let before = session.snapshot();
             session
@@ -988,10 +1105,33 @@ mod scene_control_tests {
                 .unwrap();
             assert_eq!(session.snapshot().scene.as_deref(), Some("b"), "{key}");
         }
-        match prepare("urn:oxidal:scenes:3") {
+        match prepare("urn:oxidal:scenes:5") {
             Err(error) => assert_eq!(error, UNSUPPORTED_SCENES),
             Ok(_) => panic!("an unknown scenes version prepared"),
         }
+    }
+    #[test]
+    fn a_refused_scene_bypass_leaves_mix_controls_and_revision_unchanged() {
+        let mut session = prepare(SCENES_BYPASS_EXTENSION).unwrap();
+        let before = session.snapshot();
+        session.state.scenes.as_mut().unwrap().scenes[1].bypass[0].node = "gone".into();
+        let error = session
+            .select_scene(SceneCommand {
+                session: before.session.clone(),
+                expected_revision: before.revision,
+                scene: "b".into(),
+                release_ms: None,
+            })
+            .unwrap_err();
+        assert_eq!(error, "Invalid scene bypass target");
+        let after = session.snapshot();
+        assert_eq!(after.scene.as_deref(), Some("a"));
+        assert_eq!(after.revision, before.revision);
+        assert!(!after.scene_transitioning);
+        assert_eq!(
+            serde_json::to_value(after.controls).unwrap(),
+            serde_json::to_value(before.controls).unwrap()
+        );
     }
     #[test]
     fn a_refused_scene_control_leaves_the_mix_plugins_and_scene_unchanged() {

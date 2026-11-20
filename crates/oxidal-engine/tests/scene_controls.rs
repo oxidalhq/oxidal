@@ -103,6 +103,95 @@ fn largest_step(samples: &[f32]) -> f32 {
         .fold(0.0, f32::max)
 }
 
+fn bypass_only(feedback: f64, bypassed: bool) -> Bundle {
+    use oxidal_presets::manifest::SCENES_BYPASS_EXTENSION;
+    let edge = |a, b, port| edge(a, port, b, port);
+    let value = json!({"format":"oxidal.preset","formatVersion":1,
+        "id":"0b8f8d4e-9a39-4a43-a0f2-3c8f3b6d9a11","name":"Scene bypass",
+        "tone3000":{"instances":[]},"resources":[],
+        "requiredExtensions":[SCENES_BYPASS_EXTENSION],
+        "extensions":{SCENES_BYPASS_EXTENSION:{"fade_ms":4,"scenes":[
+            {"id":"wet","name":"Wet","gains":[],"bypass":[{"node":"fx","value":false}]},
+            {"id":"dry","name":"Dry","gains":[],"bypass":[{"node":"fx","value":true}]}
+        ]}},
+        "oxidal":{"graph":{"nodes":[
+            {"id":"in","kind":"input","audioInputs":0,"audioOutputs":2},
+            {"id":"fx","kind":"lv2","audioInputs":2,"audioOutputs":2,"instance":"fx","bypassed":bypassed},
+            {"id":"out","kind":"output","audioInputs":2,"audioOutputs":0}
+        ],"edges":[edge("in","fx",0),edge("in","fx",1),edge("fx","out",0),edge("fx","out",1)]},
+        "lv2":[{"id":"fx","pluginUri":"urn:oxidal:test:contract","controls":{"gain":0.5,"feedback":feedback},
+            "assets":[],"requiredFeatures":[]}],"recall":{"tails":"cut"}}});
+    Bundle::from_parts(serde_json::to_vec(&value).unwrap(), BTreeMap::new()).unwrap()
+}
+
+fn bypass_readback(snapshot: &Snapshot) -> f64 {
+    snapshot
+        .controls
+        .iter()
+        .find(|c| matches!(&c.target, Target::Bypass { node } if node == "fx"))
+        .unwrap()
+        .value
+}
+
+#[test]
+fn bypass_ramps_both_channels_per_frame_retargets_and_keeps_the_processor_warm() {
+    let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();
+    let fixture = bypass_only(0.0, false);
+    let mut session = Session::new(fixture, &world, RATE, FRAMES, 1 << 20).unwrap();
+    let render = |s: &mut Session, left, right| {
+        let (mut l, mut r) = ([0.0; FRAMES], [0.0; FRAMES]);
+        s.process(&[&[left; FRAMES], &[right; FRAMES]], &mut [&mut l, &mut r])
+            .unwrap();
+        (l, r)
+    };
+    assert_eq!(render(&mut session, 1.0, -0.5).0, [0.5; FRAMES]);
+    select(&mut session, "dry").unwrap();
+    let selected = session.snapshot();
+    assert_eq!(selected.scene.as_deref(), Some("dry"));
+    assert_eq!(bypass_readback(&selected), 1.0);
+    assert!(selected.scene_transitioning);
+    // 4 ms = 192 frames. Both channels share the same per-frame blend.
+    let (left, right) = render(&mut session, 1.0, -0.5);
+    for (frame, (l, r)) in left.into_iter().zip(right).enumerate() {
+        let expected = 0.5 + 0.5 * (frame + 1) as f32 / 192.0;
+        assert!((l - expected).abs() < 1e-6);
+        assert_eq!(r, -0.5 * l);
+    }
+    select(&mut session, "wet").unwrap();
+    let (reverse, _) = render(&mut session, 1.0, -0.5);
+    let from = left[FRAMES - 1];
+    assert!((reverse[0] - (from + (0.5 - from) / 192.0)).abs() < 1e-6);
+    render(&mut session, 1.0, -0.5);
+    assert_eq!(render(&mut session, 1.0, -0.5).0[FRAMES - 1], 0.5);
+    assert!(!session.snapshot().scene_transitioning);
+    let cursor = session.snapshot();
+    session
+        .apply(ControlCommand {
+            session: cursor.session,
+            expected_revision: cursor.revision,
+            target: Target::Bypass { node: "fx".into() },
+            value: 1.0,
+        })
+        .unwrap();
+    assert!(session.snapshot().scene_transitioning);
+    assert_eq!(bypass_readback(&session.snapshot()), 1.0);
+    let (direct, _) = render(&mut session, 1.0, -0.5);
+    assert!((direct[0] - (0.5 + 0.5 / 192.0)).abs() < 1e-6);
+
+    let mut warm = Session::new(bypass_only(0.5, true), &world, RATE, FRAMES, 1 << 20).unwrap();
+    assert_eq!(warm.snapshot().scene.as_deref(), Some("dry"));
+    assert_eq!(
+        render(&mut warm, 1.0, -0.5),
+        ([1.0; FRAMES], [-0.5; FRAMES])
+    );
+    select(&mut warm, "wet").unwrap();
+    // The fixture's prior block feeds into this silent input at 50% feedback.
+    // A bypassed processor that stopped running would have no wet history.
+    let (left, right) = render(&mut warm, 0.0, 0.0);
+    assert!((left[0] - 0.25 / 192.0).abs() < 1e-7);
+    assert_eq!(right[0], -0.5 * left[0]);
+}
+
 #[test]
 fn a_continuous_scene_control_ramps_per_block_within_bound_and_lands_exactly() {
     let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();

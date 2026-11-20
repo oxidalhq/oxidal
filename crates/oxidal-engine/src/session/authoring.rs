@@ -1,5 +1,6 @@
 //! Whole-native node authoring; host topology and guarded extracted roles stay separate.
 use super::*;
+use oxidal_audio::structure::{AuthoringAction, StructureEdit};
 use std::path::Path;
 pub(crate) fn origin(revision: &str, node: &str) -> String {
     format!("mixed:{revision}:{node}")
@@ -26,6 +27,18 @@ impl Session {
             || !root.is_absolute()
         {
             return Err("Native authoring state conflict or model pending".into());
+        }
+        let orphaned = match &command.action {
+            AuthoringAction::Remove { block_id } => {
+                self.protects_capture_target(&command.node, Some(block_id))
+            }
+            AuthoringAction::Edit {
+                edit: StructureEdit::Reset,
+            } => self.protects_capture_target(&command.node, None),
+            _ => false,
+        };
+        if orphaned {
+            return Err("Edit would remove a capture scene control".into());
         }
         let source = origin(self.source_revision(), &command.node);
         let receipt = self
@@ -74,7 +87,15 @@ impl Session {
                 command: oxidal_audio::tools::Command::Poll
             }
         );
-        let result = owner.command(engine, command.action);
+        let required_controls = self.state.scenes.as_ref().map_or_else(Vec::new, |scenes| {
+            scenes.scenes[0]
+                .native_controls
+                .iter()
+                .filter(|c| c.node == command.node)
+                .map(|c| c.parameter.as_str())
+                .collect()
+        });
+        let result = owner.command_retaining(engine, command.action, &required_controls);
         if owner.failed() {
             self.failed = true;
         }
@@ -120,12 +141,7 @@ impl Session {
                 .checked_add(1)
                 .ok_or("Rig revision exhausted")?;
         }
-        if serde_json::to_vec(&self.snapshot())
-            .map_err(|e| e.to_string())?
-            .len()
-            + 65536
-            > REPLY_LIMIT
-        {
+        if !self.reply_fits()? {
             self.failed = true;
             return Err("Authored native state exceeds IPC budget".into());
         }

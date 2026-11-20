@@ -161,6 +161,9 @@ pub struct Snapshot {
     pub model_change: Option<NodeModelChange>,
     #[serde(default)]
     pub scenes: Option<oxidal_presets::manifest::Scenes>,
+    /// Capture control defaults from the immutable saved bundle.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub capture_defaults: Vec<oxidal_presets::manifest::SceneNativeControl>,
     #[serde(default)]
     pub scene: Option<String>,
     #[serde(default)]

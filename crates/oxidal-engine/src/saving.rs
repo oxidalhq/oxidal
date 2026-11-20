@@ -4,7 +4,7 @@ use crate::{Processor, Session, protocol::*};
 use oxidal_lv2::World;
 use oxidal_presets::{
     Bundle, BundleStore, LibraryOrigin,
-    manifest::{Manifest, Origin, Resource, ResourceKind},
+    manifest::{Manifest, Origin, Resource, ResourceKind, SCENES_NATIVE_EXTENSION},
 };
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -109,6 +109,16 @@ fn save_with_assets(
     let confirmed = session.snapshot();
     let mut manifest = original.manifest().clone();
     manifest.name = request.name.clone();
+    if let Some(extension) = manifest.extensions.get_mut(SCENES_NATIVE_EXTENSION) {
+        if let Some(scene) = &confirmed.scene {
+            extension.insert(
+                "initial_scene".into(),
+                serde_json::Value::String(scene.clone()),
+            );
+        } else {
+            extension.remove("initial_scene");
+        }
+    }
     let mut identity_seed = request.settings.revision.as_bytes().to_vec();
     identity_seed.extend(serde_json::to_vec(&request.recall).map_err(|e| e.to_string())?);
     make_owned(&mut manifest, &identity_seed)?;

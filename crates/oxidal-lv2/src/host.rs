@@ -17,6 +17,7 @@ unsafe extern "C" {
     fn ox_lv2_name(p: *const c_void) -> *const c_char;
     fn ox_lv2_class(w: *mut c_void, p: *const c_void) -> *const c_char;
     fn ox_lv2_author(p: *const c_void) -> *const c_char;
+    fn ox_lv2_artwork_path(w: *mut c_void, p: *const c_void, bundle: i32) -> *const c_char;
     fn ox_lv2_ports(p: *const c_void) -> u32;
     fn ox_lv2_symbol(p: *const c_void, index: u32) -> *const c_char;
     fn ox_lv2_port_metadata(
@@ -186,8 +187,27 @@ impl World {
     pub fn plugins(&self, rate: f64) -> Result<Vec<PluginInfo>, String> {
         self.handles()?
             .into_iter()
-            .map(|p| self.describe(p, rate))
+            .map(|p| {
+                let mut info = self.describe(p, rate)?;
+                info.artwork = self.thumbnail(p).is_some();
+                Ok(info)
+            })
             .collect()
+    }
+    fn thumbnail(&self, p: *const c_void) -> Option<Vec<u8>> {
+        // SAFETY: the plugin borrows this world and each result is copied before the next call.
+        let path = unsafe { text(ox_lv2_artwork_path(self.0.0.as_ptr(), p, 0)) }.ok()?;
+        let bundle = unsafe { text(ox_lv2_artwork_path(self.0.0.as_ptr(), p, 1)) }.ok()?;
+        crate::artwork::read(Path::new(&bundle), Path::new(&path))
+    }
+    pub fn artwork(&self, uri: &str) -> Result<Option<Vec<u8>>, String> {
+        for p in self.handles()? {
+            // SAFETY: this handle borrows the live plugin collection.
+            if unsafe { text(ox_lv2_uri(p)) }? == uri {
+                return Ok(self.thumbnail(p));
+            }
+        }
+        Ok(None)
     }
     fn describe(&self, p: *const c_void, rate: f64) -> Result<PluginInfo, String> {
         if !rate.is_finite() || !(8000.0..=192000.0).contains(&rate) {
@@ -227,6 +247,7 @@ impl World {
                 author,
                 comment,
                 homepage,
+                artwork: false,
                 ports: vec![],
                 unsupported: Some("Port count outside 1–128".into()),
             });
@@ -352,6 +373,7 @@ impl World {
             author,
             comment,
             homepage,
+            artwork: false,
             ports,
             unsupported,
         })
@@ -392,7 +414,7 @@ pub struct AtomEvent {
 pub struct Plugin {
     left: Instance,
     right: Option<Instance>,
-    info: PluginInfo,
+    info: Box<PluginInfo>,
     frames: usize,
     rate: f64,
     failed: bool,
@@ -547,7 +569,7 @@ impl Plugin {
                 } else {
                     None
                 },
-                info,
+                info: Box::new(info),
                 frames,
                 rate,
                 failed: false,

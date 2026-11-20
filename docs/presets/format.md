@@ -67,14 +67,14 @@ An unpacked directory with the same contents is permitted for local storage/deve
 
 The [JSON Schema](manifest.schema.json) defines field shapes, bounds, enum values and unknown-field rejection. The semantic rules below are equally mandatory. A schema-valid manifest is not a valid preset or an export authorization.
 
-| Field                              | Contract                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `format`, `formatVersion`          | Exactly `oxidal.preset` and integer `1`. Unsupported versions fail without rewriting.                                                                                                                                                                                                                                                                                                                                          |
-| `id`, `name`                       | Oxidal UUID identity and display name. Name is not a path. A modified import/new copy has a new Oxidal identity, independent of the source TONE3000 ID.                                                                                                                                                                                                                                                                        |
-| `tone3000.instances`               | Zero or more native tone instances, each with a stable local ID, current `.t3kpreset` resource, compatibility profile, optional host processing role and original import provenance. An empty list requires an explicit host graph. Multiple instances make a rig Oxidal-only.                                                                                                                                                 |
-| `oxidal`                           | `null` for the canonical pure-native tone, otherwise the host graph, LV2 instances and recall policy. It is the only place v1 host processing/routing is described.                                                                                                                                                                                                                                                            |
-| `resources`                        | Complete resource catalog: local ID, bundle-relative path, kind, lowercase SHA-256 and exact uncompressed byte count. References use IDs, not external filesystem paths.                                                                                                                                                                                                                                                       |
-| `extensions`, `requiredExtensions` | URI-keyed extension objects and required extension identifiers. Required extensions MUST exist in `extensions`; an unknown required extension blocks load/edit/export. The mixed host supports the explicitly required `urn:oxidal:scenes:1` extension, and `urn:oxidal:scenes:2` when a scene sets effect settings (`controls`); an unknown scenes version is refused as unsupported. See [mixed engine](../mixed-engine.md). |
+| Field                              | Contract                                                                                                                                                                                                                                                                       |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `format`, `formatVersion`          | Exactly `oxidal.preset` and integer `1`. Unsupported versions fail without rewriting.                                                                                                                                                                                          |
+| `id`, `name`                       | Oxidal UUID identity and display name. Name is not a path. A modified import/new copy has a new Oxidal identity, independent of the source TONE3000 ID.                                                                                                                        |
+| `tone3000.instances`               | Zero or more native tone instances, each with a stable local ID, current `.t3kpreset` resource, compatibility profile, optional host processing role and original import provenance. An empty list requires an explicit host graph. Multiple instances make a rig Oxidal-only. |
+| `oxidal`                           | `null` for the canonical pure-native tone, otherwise the host graph, LV2 instances and recall policy. It is the only place v1 host processing/routing is described.                                                                                                            |
+| `resources`                        | Complete resource catalog: local ID, bundle-relative path, kind, lowercase SHA-256 and exact uncompressed byte count. References use IDs, not external filesystem paths.                                                                                                       |
+| `extensions`, `requiredExtensions` | URI-keyed extension objects and required extension identifiers. Required extensions MUST exist in `extensions`; an unknown required extension blocks load/edit/export. The mixed host supports scenes versions 1–4. See [mixed engine](../mixed-engine.md).                    |
 
 Top-level metadata is intentionally small. Accounts, credentials, machine paths, device identifiers, live CPU/meter readings, authentication/session tokens and export-eligibility flags MUST NOT be serialized. Format extensions require an explicit capability/version contract, not arbitrary unknown top-level fields. Unknown optional extensions may be preserved as opaque metadata but MUST NOT silently affect sound. Any unrecognized extension blocks TONE3000 export until explicitly removed in a separate copy or qualified as non-sonic.
 
@@ -152,6 +152,37 @@ V1 graph nodes are logical `input`, `output`, `tone3000`, `lv2`, `split`, `merge
 
 V1 contains one committed base rig. MIDI/controller mappings, device calibration and audio I/O setup stay in their own device/global documents; scene banks, setlists, alternate NAM backends, automation and snapshot overrides are outside this draft's v1 payload. They require a subsequent explicit schema/extension rather than partially serializing unsupported features. This is a deliberate first format slice, not a redefinition of the broader product requirements.
 
+### Scene bypass extension
+
+The required `urn:oxidal:scenes:3` extension adds optional `bypass` arrays to
+scene definitions. Each entry has a processor node ID in `node` and a boolean
+`value` that is true for dry bypass. Every scene uses the same set of at most
+128 native or LV2 processor nodes. Each target occurs once per scene; branch
+definitions have empty bypass. A serial rig can use an empty `gains` array
+when the scene sets bypass and has no routing gain targets. Versions 1 and 2
+reject the bypass field, and readers predating version 3 must refuse that
+required extension.
+
+The graph's `bypassed` flags give the starting values on reopen. A scene
+selection ramps to its targets over `fade_ms`, with latency-aligned dry and
+wet signals while the processors continue to run.
+
+### Native capture scene extension
+
+The required `urn:oxidal:scenes:4` extension preserves version 3 and adds
+`native_controls` entries with a `node`, `parameter` and normalized `value`
+from 0 to 1. `node` identifies the outer Tone3000 processor. `parameter` is
+the native control ID, such as `block:8da9b1:inputGain`. The host resolves the
+inner capture ID against that processor before playback. The qualified
+capture parameters are `inputGain`, `outputGain` and `mix`. Each scene carries
+the same target set, with a combined maximum of 32 LV2 and native controls.
+Branches have empty controls. A native-only scene can use empty `gains`.
+
+An optional `initial_scene` names an existing scene and applies its values
+before PCM begins. Independent Save records the current scene when its
+confirmed targets still match, and a custom mix reopens through its confirmed
+saved values. Versions 1–3 reject `native_controls` and `initial_scene`.
+
 ## Validation, ownership and lifecycle
 
 Readers MUST reject duplicate JSON keys; numbers must be finite; manifest/schema resolution is local and does not fetch remote schemas. Apply these stages before mutating the active rig:
@@ -212,9 +243,10 @@ and a 100-native-instance document. This is document validation, not DSP capacit
 
 `manifest::Manifest::parse` preserves unknown optional extension objects and
 validates document declarations. `check_required_extensions` separately rejects
-unknown required capabilities; the mixed host currently supports only `urn:oxidal:scenes:1` and
-`urn:oxidal:scenes:2` (scenes that also set effect settings). Parsing neither
-reads resource files nor loads plugins. Native profile, role/state fidelity,
+unknown required capabilities. The mixed host reads `urn:oxidal:scenes:1`,
+`urn:oxidal:scenes:2` (effect settings), `urn:oxidal:scenes:3` (processor
+bypass) and `urn:oxidal:scenes:4` (native capture settings). Parsing neither reads
+resource files nor loads plugins. Native profile, role/state fidelity,
 installed plugin ports/features, scalar ranges and requested tail policy still
 require backend qualification before preparation. A valid document is not a
 playable rig or authorization to export it.

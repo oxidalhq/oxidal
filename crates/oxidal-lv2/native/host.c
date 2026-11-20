@@ -114,6 +114,28 @@ static LilvNodes* node_values(void* world, const LilvNode* subject, const char* 
     LilvNodes* values = predicate ? lilv_world_find_nodes(world, subject, predicate, NULL) : NULL;
     lilv_node_free(predicate); return values;
 }
+// Copy decoded local paths before freeing the Lilv nodes and URI storage.
+const char* ox_lv2_artwork_path(void* world, const LilvPlugin* p, int bundle) {
+    LilvNodes* guis = NULL;
+    LilvNodes* thumbnails = NULL;
+    const LilvNode* file = NULL;
+    if (bundle) {
+        file = lilv_plugin_get_bundle_uri(p);
+    } else {
+        LilvNode* relation = lilv_new_uri(world, "http://moddevices.com/ns/modgui#gui");
+        guis = relation ? lilv_plugin_get_value(p, relation) : NULL;
+        lilv_node_free(relation);
+        thumbnails = node_values(world, only_node(guis), "http://moddevices.com/ns/modgui#thumbnail");
+        file = only_node(thumbnails);
+    }
+    const char* uri = file && lilv_node_is_uri(file) ? lilv_node_as_uri(file) : NULL;
+    char* host = NULL;
+    char* path = uri && !strncmp(uri, "file://", 7) ? lilv_file_uri_parse(uri, &host) : NULL;
+    const char* result = (!host || !*host) ? copy_metadata(path) : NULL;
+    lilv_free(path); lilv_free(host);
+    lilv_nodes_free(thumbnails); lilv_nodes_free(guis);
+    return result;
+}
 static const char* node_text(const LilvNode* node) {
     return node && lilv_node_is_string(node) ? lilv_node_as_string(node) : NULL;
 }

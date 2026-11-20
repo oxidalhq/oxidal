@@ -25,6 +25,34 @@ fn port<'a>(info: &'a PluginInfo, symbol: &str) -> &'a Port {
 const UNITS: &str = "http://lv2plug.in/ns/extensions/units#";
 
 #[test]
+fn catalog_and_lookup_only_admit_unambiguous_bundle_pngs() {
+    let world = World::bundle(Path::new(env!("OXIDAL_LV2_METADATA_FIXTURE"))).unwrap();
+    let plugins = catalog();
+    for name in [
+        "metadata-rich",
+        "metadata-poor",
+        "artwork-escape",
+        "artwork-text",
+        "artwork-remote",
+        "artwork-two-guis",
+        "artwork-two-thumbnails",
+    ] {
+        let uri = format!("urn:oxidal:test:{name}");
+        let plugin = plugins.iter().find(|p| p.uri == uri).unwrap();
+        let expected = (name == "metadata-rich")
+            .then_some(&include_bytes!("fixtures/metadata/thumbnail.png")[..]);
+        assert_eq!(plugin.artwork, expected.is_some(), "{}", plugin.uri);
+        assert_eq!(
+            world.artwork(&plugin.uri).unwrap().as_deref(),
+            expected,
+            "{}",
+            plugin.uri
+        );
+    }
+    assert!(world.artwork("urn:oxidal:test:unknown").unwrap().is_none());
+}
+
+#[test]
 fn rich_plugin_reports_names_units_groups_priority_and_flags() {
     let info = plugin("metadata-rich");
     assert_eq!(

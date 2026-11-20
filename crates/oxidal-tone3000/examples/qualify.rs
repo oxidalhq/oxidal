@@ -375,6 +375,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         let root = std::path::PathBuf::from(std::env::var("OXIDAL_QUALIFICATION_DATA")?);
         return qualify_factory_voice(&root);
     }
+    if arguments.as_slice() == ["--factory-partition"] {
+        return qualify_factories();
+    }
     if arguments.as_slice() == ["--utilities"] {
         return qualify_utilities();
     }

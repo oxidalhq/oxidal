@@ -4,6 +4,10 @@ use oxidal_presets::BundleStore;
 use reqwest::Client;
 use serde_json::{Value, json};
 use std::{path::Path, time::Duration};
+
+// The lifecycle test counts all rig worker children of this test executable.
+static WORKER_TEST: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 async fn get(c: &Client, url: &str, path: &str) -> Value {
     let r = c.get(format!("{url}/{path}")).send().await.unwrap();
     assert!(r.status().is_success());
@@ -83,9 +87,138 @@ fn pids(executable: &Path) -> Vec<u32> {
     }
     ids
 }
+
+#[tokio::test]
+#[ignore = "pnpm native:check supplies the actual Linux mixed worker and ALSA null"]
+async fn scene_bypass_survives_mixed_worker_restart_and_independent_save() {
+    use oxidal_presets::{Bundle, manifest::SCENES_BYPASS_EXTENSION};
+    let _worker_test = WORKER_TEST.lock().await;
+    let executable = std::path::PathBuf::from(std::env::var_os("OXIDAL_TEST_RIG_WORKER").unwrap());
+    assert_eq!(std::env::var("OXIDAL_RIG_QUALIFY_NULL").unwrap(), "1");
+    let root =
+        std::env::temp_dir().join(format!("oxidal-scene-bypass-http-{}", std::process::id()));
+    let store = BundleStore::new(root.join("presets/bundles"));
+    let edge = |a, ap, b, bp| json!({"from":{"node":a,"port":ap},"to":{"node":b,"port":bp}});
+    let manifest = json!({
+        "format":"oxidal.preset","formatVersion":1,"id":"9496ae91-9955-477a-ad67-5f0ffa6a049a",
+        "name":"Scene bypass","tone3000":{"instances":[]},"resources":[],
+        "requiredExtensions":[SCENES_BYPASS_EXTENSION],
+        "extensions":{SCENES_BYPASS_EXTENSION:{"fade_ms":40,"scenes":[
+            {"id":"wet","name":"Wet","gains":[],"bypass":[{"node":"amp","value":false}]},
+            {"id":"dry","name":"Dry","gains":[],"bypass":[{"node":"amp","value":true}]}
+        ]}},
+        "oxidal":{"graph":{"nodes":[
+            {"id":"in","kind":"input","audioInputs":0,"audioOutputs":2},
+            {"id":"amp","kind":"lv2","audioInputs":1,"audioOutputs":1,"instance":"amp","bypassed":false},
+            {"id":"out","kind":"output","audioInputs":2,"audioOutputs":0}],
+            "edges":[edge("in",0,"amp",0),edge("amp",0,"out",0),edge("in",1,"out",1)]},
+            "lv2":[{"id":"amp","pluginUri":"http://plugin.org.uk/swh-plugins/amp",
+                "controls":{"gain":-6},"assets":[],"requiredFeatures":[]}],
+            "recall":{"tails":"cut"}}
+    });
+    let bundle =
+        Bundle::from_parts(serde_json::to_vec(&manifest).unwrap(), Default::default()).unwrap();
+    let revision = store.save(&bundle).unwrap();
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let (app, stopped) = router_with_shutdown(Config {
+        debug_socket: None,
+        device_socket: None,
+        simulator: false,
+        native_worker: None,
+        audio_worker: None,
+        graph_worker: None,
+        rig_worker: Some(executable),
+        mapping_path: root.join("mapping.json"),
+        preset_dir: root.join("presets"),
+        media_dir: None,
+        ui_dir: root.join("ui"),
+        shutdown: Some(signal),
+    })
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let client = Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap();
+    let running = apply(
+        &client,
+        &url,
+        json!({"kind":"start","settings":{
+            "revision":revision,"stream":stream(),"recall":null
+        }}),
+    )
+    .await;
+    let bypass = json!({"kind":"bypass","node":"amp"});
+    assert_eq!(control(&running, &bypass), 0.0);
+    assert_eq!(running["control"]["scene"], "wet");
+    let wet_session = running["control"]["session"].clone();
+    let selected = apply(
+        &client,
+        &url,
+        json!({"kind":"scene","command":{
+            "session":wet_session,"expected_revision":running["control"]["revision"],"scene":"dry"
+        }}),
+    )
+    .await;
+    assert_eq!(selected["control"]["session"], wet_session);
+    assert_eq!(selected["control"]["scene"], "dry");
+    assert_eq!(control(&selected, &bypass), 1.0);
+    let restarted = apply(&client, &url, json!({"kind":"restart"})).await;
+    assert_ne!(restarted["control"]["session"], wet_session);
+    assert_eq!(restarted["control"]["scene"], "dry");
+    assert_eq!(control(&restarted, &bypass), 1.0);
+
+    apply(
+        &client,
+        &url,
+        json!({"kind":"save","name":"Saved scene bypass"}),
+    )
+    .await;
+    let mut saved = None;
+    for _ in 0..200 {
+        let receipt = get(&client, &url, "rig-audio").await;
+        if receipt["save"]["running"] == false {
+            saved = Some(
+                receipt["save"]["saved_revision"]
+                    .as_str()
+                    .expect("save failed")
+                    .to_owned(),
+            );
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    let saved = saved.expect("save timed out");
+    assert_eq!(
+        store.read(&saved).unwrap().manifest().scenes().unwrap(),
+        bundle.manifest().scenes().unwrap()
+    );
+    apply(&client, &url, json!({"kind":"stop"})).await;
+    let reopened = apply(
+        &client,
+        &url,
+        json!({"kind":"start","settings":{
+            "revision":saved,"stream":stream(),"recall":null
+        }}),
+    )
+    .await;
+    assert_eq!(reopened["control"]["scene"], "dry");
+    assert_eq!(control(&reopened, &bypass), 1.0);
+    shutdown.send(true).unwrap();
+    tokio::time::timeout(Duration::from_secs(5), stopped.wait())
+        .await
+        .unwrap()
+        .unwrap();
+    server.abort();
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 #[tokio::test]
 #[ignore = "pnpm native:check supplies the actual Linux mixed worker and embedded fixture"]
 async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
+    let _worker_test = WORKER_TEST.lock().await;
     let executable = std::path::PathBuf::from(std::env::var_os("OXIDAL_TEST_RIG_WORKER").unwrap());
     assert_eq!(std::env::var("OXIDAL_RIG_QUALIFY_NULL").unwrap(), "1");
     let source = BundleStore::new(std::env::var_os("OXIDAL_TEST_BUNDLE_ROOT").unwrap().into());

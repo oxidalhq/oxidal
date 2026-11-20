@@ -4,8 +4,10 @@
 @prefix pg: <http://lv2plug.in/ns/ext/port-groups#> .
 @prefix pprops: <http://lv2plug.in/ns/ext/port-props#> .
 @prefix units: <http://lv2plug.in/ns/extensions/units#> .
+@prefix modgui: <http://moddevices.com/ns/modgui#> .
 <urn:oxidal:test:group:echo> a pg:Group ; lv2:symbol "echo" ; lv2:name "Echo" .
 <urn:oxidal:test:metadata-rich> a lv2:Plugin ; doap:name "Metadata rich fixture" ;
+ modgui:gui [ modgui:thumbnail <thumbnail.png> ] ;
  rdfs:comment """Line one.
 Line two	after a tab.""" ; doap:homepage <https://example.org/oxidal/rich> ;
  lv2:port [ a lv2:InputPort, lv2:AudioPort ; lv2:index 0 ; lv2:symbol "in" ; lv2:name "Input" ],
@@ -21,6 +23,17 @@ Line two	after a tab.""" ; doap:homepage <https://example.org/oxidal/rich> ;
  [ a lv2:InputPort, lv2:ControlPort ; lv2:index 10 ; lv2:symbol "mix" ; lv2:name "Mix" ; lv2:default 0 ; lv2:minimum 0 ; lv2:maximum 4 ; units:unit units:pc ],
  [ a lv2:InputPort, lv2:ControlPort ; lv2:index 11 ; lv2:symbol "pitch" ; lv2:name "Pitch" ; lv2:default 0 ; lv2:minimum 0 ; lv2:maximum 4 ; units:unit units:semitone12TET ],
  [ a lv2:InputPort, lv2:ControlPort ; lv2:index 12 ; lv2:symbol "speed" ; lv2:name "Speed" ; lv2:default 0 ; lv2:minimum 0 ; lv2:maximum 4 ; units:unit units:bpm ] .
+
+<urn:oxidal:test:artwork-escape> a lv2:Plugin ; doap:name "Escaping artwork fixture" ;
+ modgui:gui [ modgui:thumbnail <../outside.png> ] .
+<urn:oxidal:test:artwork-text> a lv2:Plugin ; doap:name "Non-PNG artwork fixture" ;
+ modgui:gui [ modgui:thumbnail <plugin.ttl> ] .
+<urn:oxidal:test:artwork-remote> a lv2:Plugin ; doap:name "Remote artwork fixture" ;
+ modgui:gui [ modgui:thumbnail <https://example.org/thumbnail.png> ] .
+<urn:oxidal:test:artwork-two-guis> a lv2:Plugin ; doap:name "Ambiguous GUI fixture" ;
+ modgui:gui [ modgui:thumbnail <thumbnail.png> ], [ modgui:thumbnail <missing.png> ] .
+<urn:oxidal:test:artwork-two-thumbnails> a lv2:Plugin ; doap:name "Ambiguous thumbnail fixture" ;
+ modgui:gui [ modgui:thumbnail <thumbnail.png>, <missing.png> ] .
 
 <urn:oxidal:test:metadata-poor> a lv2:Plugin ; doap:name "Metadata poor fixture" ;
  lv2:port [ a lv2:InputPort, lv2:AudioPort ; lv2:index 0 ; lv2:symbol "in" ; lv2:name "Input" ],

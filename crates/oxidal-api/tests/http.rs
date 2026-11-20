@@ -218,6 +218,93 @@ async fn scene_draft_is_shared_by_every_client_until_cleared() {
 }
 
 #[tokio::test]
+async fn scene_bypass_draft_requires_the_current_revision_and_rejects_duplicates() {
+    let (url, task, mapping) = start(true).await;
+    let client = reqwest::Client::new();
+    let endpoint = format!("{url}/scene-draft");
+    let draft = json!({
+        "session": "s1",
+        "gains": {},
+        "bypass": { "a": [{"node": "capture", "value": true}] },
+        "added": [{"id": "new", "name": "Lead", "gains": [],
+                   "bypass": [{"node": "capture", "value": false}]}]
+    });
+    assert_eq!(
+        client
+            .put(&endpoint)
+            .json(&json!({"draft": draft}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        409
+    );
+    let stored = client
+        .put(&endpoint)
+        .json(&json!({"expected_revision": 0, "draft": draft}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(stored.status(), 200);
+    assert_eq!(
+        stored.json::<Value>().await.unwrap(),
+        json!({"revision": 1, "draft": draft})
+    );
+    let mut duplicates = draft.clone();
+    duplicates["bypass"]["a"] = json!([
+        {"node": "capture", "value": true},
+        {"node": "capture", "value": false}
+    ]);
+    assert_eq!(
+        client
+            .put(&endpoint)
+            .json(&json!({"expected_revision": 1, "draft": duplicates}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        422
+    );
+    for stale_clear in [
+        json!({"draft": null}),
+        json!({"expected_revision": 0, "draft": null}),
+    ] {
+        assert_eq!(
+            client
+                .put(&endpoint)
+                .json(&stale_clear)
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            409
+        );
+    }
+    let seen: Value = client
+        .get(&endpoint)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(seen, json!({"revision": 1, "draft": draft}));
+    let cleared = client
+        .put(&endpoint)
+        .json(&json!({"expected_revision": 1, "draft": null}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(cleared.status(), 200);
+    assert_eq!(
+        cleared.json::<Value>().await.unwrap(),
+        json!({"revision": 2, "draft": null})
+    );
+    task.abort();
+    let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));
+}
+
+#[tokio::test]
 async fn midi_map_starts_disabled_and_is_never_cached() {
     let (url, task, mapping) = start(true).await;
     let response = reqwest::get(format!("{url}/midi/map")).await.unwrap();

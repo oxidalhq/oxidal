@@ -2398,6 +2398,7 @@ export interface PluginCatalog {
   sample_rate: number;
 }
 export interface PluginInfo {
+  artwork?: boolean;
   /**
    * The declared author or maker, used to group effects by source.
    */
@@ -3301,6 +3302,10 @@ export interface Snapshot3 {
   authoring?: NodeAuthoring[];
   branches?: BranchState[];
   buffer_bytes: number;
+  /**
+   * Capture control defaults from the immutable saved bundle.
+   */
+  capture_defaults?: SceneNativeControl[];
   controls: Control[];
   eq?: NodeEq[];
   /**
@@ -3333,6 +3338,11 @@ export interface BranchState {
   id: string;
   name: string;
   partial: boolean;
+}
+export interface SceneNativeControl {
+  node: string;
+  parameter: string;
+  value: number;
 }
 export interface Control {
   display: string;
@@ -3391,9 +3401,11 @@ export interface PreparedStatus {
 export interface Scenes {
   branches?: Scene[];
   fade_ms: number;
+  initial_scene?: string | null;
   scenes: Scene[];
 }
 export interface Scene {
+  bypass?: SceneBypass[];
   /**
    * Plugin control values this scene sets (none for branches). Continuous
    * controls ramp over `fade_ms`; stepped ones switch while silent.
@@ -3402,6 +3414,11 @@ export interface Scene {
   gains: SceneGain[];
   id: string;
   name: string;
+  native_controls?: SceneNativeControl[];
+}
+export interface SceneBypass {
+  node: string;
+  value: boolean;
 }
 /**
  * One LV2 input control value of a scene, in the plugin's native units.
@@ -3594,6 +3611,9 @@ export interface SceneDraftState {
  */
 export interface SceneDraft {
   added?: DraftScene[];
+  bypass?: {
+    [k: string]: SceneBypass[];
+  };
   /**
    * Plugin control values changed with Update scene, by scene id.
    */
@@ -3603,12 +3623,16 @@ export interface SceneDraft {
   gains: {
     [k: string]: SceneGain2[];
   };
+  native_controls?: {
+    [k: string]: SceneNativeControl[];
+  };
   session: string;
 }
 /**
  * A scene drafted with Save as new scene.
  */
 export interface DraftScene {
+  bypass?: SceneBypass[];
   /**
    * Plugin control values the new scene sets (see the preset's scenes).
    */
@@ -3616,6 +3640,7 @@ export interface DraftScene {
   gains: SceneGain2[];
   id: string;
   name: string;
+  native_controls?: SceneNativeControl[];
 }
 /**
  * One merge input level kept for a scene.
@@ -3630,6 +3655,10 @@ export interface SceneGain2 {
  */
 export interface SceneDraftUpdate {
   draft?: SceneDraft | null;
+  /**
+   * Required when the current or submitted draft has bypass or capture edits.
+   */
+  expected_revision?: number | null;
 }
 /**
  * The one split running on this device, wherever it was started.

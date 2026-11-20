@@ -468,7 +468,7 @@ fn scenes_read_both_versions_and_refuse_an_unknown_one_as_unsupported() {
     current.check_required_extensions().unwrap();
     assert_eq!(current.scenes().unwrap(), legacy.scenes().unwrap());
     // A version this reader does not know is unsupported, not invalid.
-    let future = scenes_as(scene_controls_manifest(), "urn:oxidal:scenes:3");
+    let future = scenes_as(scene_controls_manifest(), "urn:oxidal:scenes:5");
     assert_eq!(parse(&future).unwrap_err().to_string(), UNSUPPORTED_SCENES);
     // Even when only the required list names it.
     let mut named = scene_controls_manifest();
@@ -484,4 +484,139 @@ fn scenes_read_both_versions_and_refuse_an_unknown_one_as_unsupported() {
     let mut optional = scenes_as(scene_controls_manifest(), SCENES_CONTROLS_EXTENSION);
     optional["requiredExtensions"] = json!([]);
     assert!(parse(&optional).is_err());
+}
+
+#[test]
+fn scene_bypass_requires_version_three_and_a_complete_processor_target_set() {
+    let parse = |value: &Value| Manifest::parse(&serde_json::to_vec(value).unwrap());
+    let key = SCENES_BYPASS_EXTENSION;
+    let mut value = scenes_as(scene_controls_manifest(), key);
+    for (scene, bypassed) in [false, true].into_iter().enumerate() {
+        value["extensions"][key]["scenes"][scene]["bypass"] =
+            json!([{"node":"fx","value":bypassed}]);
+    }
+    let admitted = parse(&value).unwrap();
+    admitted.check_required_extensions().unwrap();
+    let roundtrip = Manifest::parse(&admitted.encode().unwrap()).unwrap();
+    assert_eq!(roundtrip.scenes().unwrap(), admitted.scenes().unwrap());
+    assert_eq!(
+        roundtrip.scenes().unwrap().unwrap().scenes[1].bypass,
+        vec![SceneBypass {
+            node: "fx".into(),
+            value: true
+        }]
+    );
+
+    let mut only_bypass = value.clone();
+    for scene in only_bypass["extensions"][key]["scenes"]
+        .as_array_mut()
+        .unwrap()
+    {
+        scene["gains"] = json!([]);
+        scene["controls"] = json!([]);
+    }
+    assert!(parse(&only_bypass).is_ok());
+
+    for old in [SCENES_EXTENSION, SCENES_CONTROLS_EXTENSION] {
+        let mut rejected = scenes_as(scene_controls_manifest(), old);
+        rejected["extensions"][old]["scenes"][1]["bypass"] = json!([]);
+        assert!(parse(&rejected).is_err());
+        rejected["extensions"][old]["scenes"][1]["bypass"] = json!([{"node":"fx","value":true}]);
+        assert!(parse(&rejected).is_err());
+    }
+    for bad in [
+        json!([]),
+        json!([{"node":"missing","value":true}]),
+        json!([{"node":"merge","value":true}]),
+        json!([{"node":"fx","value":1}]),
+        json!([{"node":"fx","value":true},{"node":"fx","value":false}]),
+        json!(vec![
+            json!({"node":"fx","value":true});
+            MAX_SCENE_BYPASS + 1
+        ]),
+    ] {
+        let mut rejected = value.clone();
+        rejected["extensions"][key]["scenes"][1]["bypass"] = bad;
+        assert!(parse(&rejected).is_err());
+    }
+    let mut branches = value.clone();
+    branches["extensions"][key]["branches"] = json!([
+       {"id":"a","name":"A","gains":[{"node":"merge","port":0,"value":1.0}]},
+       {"id":"b","name":"B","gains":[{"node":"merge","port":1,"value":1.0}]}
+    ]);
+    assert!(parse(&branches).is_ok());
+    branches["extensions"][key]["branches"][0]["bypass"] = json!([{"node":"fx","value":true}]);
+    assert!(parse(&branches).is_err());
+    value["requiredExtensions"] = json!([]);
+    assert!(parse(&value).is_err());
+}
+
+#[test]
+fn native_capture_scenes_require_version_four_and_complete_exact_targets() {
+    let version = SCENES_NATIVE_EXTENSION;
+    let mut base = fixture("mixed-delay");
+    base["requiredExtensions"] = json!([version]);
+    base["extensions"] = json!({version:{"fade_ms":20,"initial_scene":"lead","scenes":[
+        {"id":"clean","name":"Clean","gains":[],"native_controls":[
+            {"node":"tone3000Node","parameter":"block:amp:inputGain","value":0.5}]},
+        {"id":"lead","name":"Lead","gains":[],"native_controls":[
+            {"node":"tone3000Node","parameter":"block:amp:inputGain","value":0.7}]}
+    ]}});
+    let manifest = parse(&base).unwrap();
+    manifest.check_required_extensions().unwrap();
+    assert_eq!(
+        Manifest::parse(&manifest.encode().unwrap())
+            .unwrap()
+            .scenes()
+            .unwrap()
+            .unwrap()
+            .initial_scene
+            .as_deref(),
+        Some("lead")
+    );
+    for malformed in [
+        json!([]),
+        json!([{"node":"echo","parameter":"block:amp:inputGain","value":0.7}]),
+        json!([{"node":"tone3000Node","parameter":"inputLevel","value":0.7}]),
+        json!([{"node":"tone3000Node","parameter":"block:amp:normalize","value":1}]),
+        json!([{"node":"tone3000Node","parameter":"block:other:inputGain","value":0.7}]),
+        json!([{"node":"tone3000Node","parameter":"block:amp:inputGain","value":1.001}]),
+        json!(vec![base["extensions"][version]["scenes"][0]["native_controls"][0].clone(); 2]),
+    ] {
+        let mut bad = base.clone();
+        bad["extensions"][version]["scenes"][1]["native_controls"] = malformed;
+        assert!(parse(&bad).is_err());
+    }
+    let mut over = base.clone();
+    for scene in over["extensions"][version]["scenes"]
+        .as_array_mut()
+        .unwrap()
+    {
+        scene["controls"] = json!(
+            (0..MAX_SCENE_CONTROLS)
+                .map(|i| json!({"node":"echo","symbol":format!("p{i}"),"value":0.5}))
+                .collect::<Vec<_>>()
+        );
+    }
+    assert!(parse(&over).is_err());
+    for old in [
+        SCENES_EXTENSION,
+        SCENES_CONTROLS_EXTENSION,
+        SCENES_BYPASS_EXTENSION,
+    ] {
+        let mut older = scenes_as(scene_controls_manifest(), old);
+        older["extensions"][old]["scenes"][0]["native_controls"] = json!([]);
+        assert!(parse(&older).is_err());
+        older["extensions"][old]["scenes"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("native_controls");
+        older["extensions"][old]["initial_scene"] = json!("clean");
+        assert!(parse(&older).is_err());
+    }
+    for starting in [json!("missing"), json!(null)] {
+        let mut bad = base.clone();
+        bad["extensions"][version]["initial_scene"] = starting;
+        assert!(parse(&bad).is_err());
+    }
 }

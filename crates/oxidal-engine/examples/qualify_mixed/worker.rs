@@ -147,6 +147,56 @@ fn replies(
     Ok(received)
 }
 
+pub(super) fn qualify_capture_scenes(bundle: &Bundle, root: &Path) -> Result<()> {
+    let path = root.join("rigs");
+    let revision = BundleStore::new(path.clone()).save(bundle)?;
+    let start = StartRig {
+        midi: None,
+        prepared: Vec::new(),
+        revision,
+        stream: stream(),
+        recall: None,
+    };
+    let mut child = spawn(&path, &root.join("worker"), false)?;
+    let received = replies(&mut child)?;
+    send(&mut child, &start)?;
+    let ready = received.recv_timeout(Duration::from_secs(15))??;
+    assert_eq!(ready.error, None);
+    assert_eq!(ready.control.scene.as_deref(), Some("shifted"));
+    send(
+        &mut child,
+        &WorkerRequest::Scene {
+            command: SceneCommand {
+                session: ready.control.session,
+                expected_revision: ready.control.revision,
+                scene: "base".into(),
+                release_ms: None,
+            },
+        },
+    )?;
+    let selected = received.recv_timeout(Duration::from_secs(5))??;
+    assert_eq!(selected.error, None);
+    assert_eq!(selected.control.scene.as_deref(), Some("base"));
+    assert!(selected.processed_frames >= ready.processed_frames);
+    let scenes = selected.control.scenes.as_ref().unwrap();
+    for control in &scenes.scenes[0].native_controls {
+        assert_eq!(
+            value(
+                &selected.control,
+                &Target::Native {
+                    node: control.node.clone(),
+                    parameter: control.parameter.clone(),
+                }
+            ),
+            f64::from(control.value as f32)
+        );
+    }
+    drop(child.0.stdin.take());
+    wait(&mut child, 5)?;
+    println!("capture scenes: actual mixed worker and ALSA-null confirmed native targets");
+    Ok(())
+}
+
 pub fn qualify_partition(bundle: &Bundle, root: &Path) -> Result<()> {
     let path = root.join("partition-worker-rigs");
     let store = BundleStore::new(path.clone());

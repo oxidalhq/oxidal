@@ -3,8 +3,9 @@
 //! @see docs/presets/format.md
 mod scenes;
 pub use scenes::{
-    MAX_SCENE_CONTROLS, SCENES_CONTROLS_EXTENSION, SCENES_EXTENSION, Scene, SceneControl,
-    SceneGain, Scenes, UNSUPPORTED_SCENES,
+    MAX_SCENE_BYPASS, MAX_SCENE_CONTROLS, SCENES_BYPASS_EXTENSION, SCENES_CONTROLS_EXTENSION,
+    SCENES_EXTENSION, SCENES_NATIVE_EXTENSION, Scene, SceneBypass, SceneControl, SceneGain,
+    SceneNativeControl, Scenes, UNSUPPORTED_SCENES,
 };
 mod strict;
 #[cfg(test)]
@@ -107,6 +108,8 @@ impl Manifest {
         if self.required_extensions.iter().any(|key| {
             key != SCENES_EXTENSION
                 && key != SCENES_CONTROLS_EXTENSION
+                && key != SCENES_BYPASS_EXTENSION
+                && key != SCENES_NATIVE_EXTENSION
                 && key != NATIVE_SETTINGS_EXTENSION
                 && key != GAIN_EXTENSION
         }) {

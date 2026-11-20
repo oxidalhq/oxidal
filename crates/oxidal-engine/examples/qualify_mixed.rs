@@ -1,4 +1,6 @@
 //! Actual native A2 + installed LV2 composition, part of the Linux native gate.
+#[path = "qualify_mixed/capture_scenes.rs"]
+mod capture_scenes;
 #[path = "qualify_mixed/partition.rs"]
 mod partition;
 #[path = "qualify_mixed/portable.rs"]
@@ -61,11 +63,14 @@ fn rig(serial: bool) -> Rig {
 }
 fn main() -> Result<(), Box<dyn Error>> {
     let root = std::env::var("OXIDAL_QUALIFICATION_DATA")?;
-    let bytes = std::fs::read(Path::new(&root).join("a2-preset.t3kpreset"))?;
     let bundles =
         std::env::var("OXIDAL_LV2_EXTERNAL_DIR").unwrap_or_else(|_| "/usr/lib/lv2".into());
     let world = World::bundle(&Path::new(&bundles).join("amp-swh.lv2"))?;
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args == ["--capture-partition"] {
+        return partition::qualify(&world, Path::new(&root), true);
+    }
+    let bytes = std::fs::read(Path::new(&root).join("a2-preset.t3kpreset"))?;
     if args == ["--models"] {
         return portable::qualify_models(&world, &bytes, Path::new(&root));
     }
@@ -79,7 +84,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         return Err("Unknown mixed qualification selection".into());
     }
     qualify_admission_and_failure(&world)?;
-    partition::qualify(&world, Path::new(&root))?;
+    partition::qualify(&world, Path::new(&root), false)?;
     portable::qualify(&world, &bytes, Path::new(&root))?;
     portable::qualify_authoring(&world, &bytes, Path::new(&root))?;
     let frames = 128;

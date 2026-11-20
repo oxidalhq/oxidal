@@ -202,6 +202,26 @@ One scan can run at a time. Responses are limited to 4 MiB and discovery to ten 
 failed workers are killed/reaped, including after the requesting browser disconnects.
 Unavailable/failed discovery returns an error rather than an empty successful catalog.
 
+### Plugin artwork
+
+The catalog includes `artwork: true` when a plugin has one `modgui:gui` description
+with one local `modgui:thumbnail` file. Older catalogs and plugins without an
+admitted thumbnail default to false. No image bytes or paths appear in the catalog.
+
+The host follows links and admits only regular files inside the plugin's own
+bundle. It rejects parent-directory paths and links that resolve outside that
+bundle. The file must be at most 256 KiB and begin with a PNG signature and
+`IHDR` declaring both dimensions from 1 to 1024 pixels. Remote URLs, other image
+formats and MOD GUI code are outside this feature.
+
+`GET /api/v1/plugins/lv2/artwork?uri=<URL-encoded plugin URI>` starts the
+disposable graph worker with `--artwork <plugin-uri>`. It shares discovery's
+one-worker permit, ten-second deadline and kill/reap handling. The worker repeats
+the file checks, and the API checks the size and PNG header before replying with
+`image/png`, `X-Content-Type-Options: nosniff` and a one-day private cache. A
+missing or inadmissible image returns 404. The panel uses its block glyph when
+the image is unavailable. The worker does not instantiate plugins or open PCM.
+
 Settings → Effects exposes only the ten Debian collections with at least
 one successful ARM64 audio-harness result. `GET /api/v1/packs` reports their
 installed versions, approximate size, usable count and current helper-owned job;

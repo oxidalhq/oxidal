@@ -3,7 +3,7 @@
 use crate::Processor;
 use oxidal_presets::{
     Bundle,
-    manifest::{NodeKind, ProcessingRole},
+    manifest::{Host, NodeKind, ProcessingRole, SceneBypass, Scenes},
 };
 use oxidal_tone3000::ProcessingRole as NativeRole;
 use std::collections::{BTreeMap, VecDeque};
@@ -21,6 +21,7 @@ struct PortNode {
     /// Render-thread handle for a native processor, created on first render.
     port: Option<oxidal_tone3000::AudioPort>,
     bypassed: bool,
+    scene_bypass: Option<WarmBypass>,
     gains: Vec<Gain>,
 }
 // Ramp state belongs to each already prepared merge input. No processing-time
@@ -63,6 +64,51 @@ impl Gain {
             };
         }
         self.current
+    }
+}
+
+#[derive(Debug)]
+struct WarmBypass {
+    mix: Gain,
+    dry: Vec<f32>,
+    scene_target: bool,
+}
+impl WarmBypass {
+    fn new(
+        bypassed: bool,
+        scene_target: bool,
+        samples: usize,
+        used: &mut usize,
+        budget: usize,
+    ) -> Result<Self, String> {
+        *used = samples
+            .checked_mul(size_of::<f32>())
+            .and_then(|bytes| bytes.checked_add(size_of::<Gain>()))
+            .and_then(|bytes| used.checked_add(bytes))
+            .filter(|bytes| *bytes <= budget)
+            .ok_or("Scene bypass exceeds host buffer budget")?;
+        let mut dry = Vec::new();
+        dry.try_reserve_exact(samples)
+            .map_err(|_| "Scene bypass buffer unavailable")?;
+        dry.resize(samples, 0.0);
+        Ok(Self {
+            mix: Gain::new(f32::from(u8::from(bypassed))),
+            dry,
+            scene_target,
+        })
+    }
+    fn retarget(&mut self, bypassed: bool, frames: u32) {
+        let target = f32::from(u8::from(bypassed));
+        if self.mix.target != target {
+            self.mix.set(
+                target,
+                if self.mix.current == target {
+                    0
+                } else {
+                    frames
+                },
+            );
+        }
     }
 }
 /// A plugin control that scenes set. Slots are made when the rig is prepared,
@@ -216,19 +262,15 @@ pub struct PreparedPorts {
 /// input control, and every scene's value is in range (and whole for integer,
 /// an end for toggle ports). Anything else refuses to prepare the rig.
 fn scene_ramps(
-    bundle: &Bundle,
+    scenes: Option<&Scenes>,
+    host: &Host,
     nodes: &[PortNode],
     buffer_bytes: &mut usize,
     buffer_budget: usize,
 ) -> Result<Vec<ControlRamp>, String> {
-    let Some(scenes) = bundle.manifest().scenes().map_err(|e| e.to_string())? else {
+    let Some(scenes) = scenes else {
         return Ok(Vec::new());
     };
-    let host = bundle
-        .manifest()
-        .oxidal
-        .as_ref()
-        .ok_or("Explicit host graph required")?;
     let bad = || String::from("Invalid scene control target");
     let mut ramps: Vec<ControlRamp> = Vec::new();
     // The manifest requires every scene to set the same controls.
@@ -365,6 +407,7 @@ impl PreparedPorts {
             .oxidal
             .as_ref()
             .ok_or("Explicit host graph required")?;
+        let scenes = manifest.scenes().map_err(|e| e.to_string())?;
         if host.lv2.iter().any(|p| !p.required_features.is_empty()) {
             return Err("Unsupported declared LV2 features".into());
         }
@@ -472,6 +515,7 @@ impl PreparedPorts {
                 processor,
                 port: None,
                 bypassed: declaration.bypassed.unwrap_or(false),
+                scene_bypass: None,
                 gains: declaration.input_gains.as_ref().map_or_else(Vec::new, |g| {
                     g.iter().map(|v| Gain::new(*v as f32)).collect()
                 }),
@@ -549,7 +593,34 @@ impl PreparedPorts {
                 }
             }
         }
-        let ramps = scene_ramps(bundle, &nodes, &mut buffer_bytes, buffer_budget)?;
+        if let Some(scenes) = &scenes {
+            let first = &scenes.scenes[0];
+            for node in &mut nodes {
+                let scene_target = first.bypass.iter().any(|target| target.node == node.id);
+                if !scene_target
+                    && !first
+                        .native_controls
+                        .iter()
+                        .any(|target| target.node == node.id)
+                {
+                    continue;
+                }
+                node.scene_bypass = Some(WarmBypass::new(
+                    node.bypassed,
+                    scene_target,
+                    node.channels * frames,
+                    &mut buffer_bytes,
+                    buffer_budget,
+                )?);
+            }
+        }
+        let ramps = scene_ramps(
+            scenes.as_ref(),
+            host,
+            &nodes,
+            &mut buffer_bytes,
+            buffer_budget,
+        )?;
         let mut samples = Vec::new();
         samples
             .try_reserve_exact(sample_count)
@@ -651,6 +722,12 @@ impl PreparedPorts {
     /// stream origin after model/control replay, before any real input arrives.
     pub(crate) fn finish_preparation(&mut self) -> Result<(), String> {
         for node in &mut self.nodes {
+            for gain in &mut node.gains {
+                gain.set(gain.target, 0);
+            }
+            if let Some(bypass) = &mut node.scene_bypass {
+                bypass.mix.set(bypass.mix.target, 0);
+            }
             if let Some(Processor::Native(engine)) = &mut node.processor {
                 engine.prepare_stream().map_err(|e| e.to_string())?;
                 if engine.latency_samples().map_err(|e| e.to_string())? != node.latency {
@@ -691,6 +768,7 @@ impl PreparedPorts {
         &mut self,
         target: &crate::protocol::Target,
         value: f64,
+        bypass_frames: u32,
     ) -> Result<(), String> {
         if self.failed {
             return Err("Failed port graph".into());
@@ -707,6 +785,9 @@ impl PreparedPorts {
                     return Err("Invalid bypass".into());
                 }
                 n.bypassed = value == 1.0;
+                if let Some(bypass) = &mut n.scene_bypass {
+                    bypass.retarget(n.bypassed, bypass_frames);
+                }
             }
             Target::Merge { node, port } => {
                 let n = self
@@ -762,10 +843,43 @@ impl PreparedPorts {
         Ok(())
     }
     pub(crate) fn scene_transitioning(&self) -> bool {
-        self.nodes
-            .iter()
-            .any(|n| n.gains.iter().any(|g| g.remaining != 0))
-            || self.ramps.iter().any(ControlRamp::active)
+        self.nodes.iter().any(|n| {
+            n.gains.iter().any(|g| g.remaining != 0)
+                || n.scene_bypass
+                    .as_ref()
+                    .is_some_and(|b| b.mix.remaining != 0)
+        }) || self.ramps.iter().any(ControlRamp::active)
+    }
+    pub(crate) fn check_scene_bypass(&self, values: &[SceneBypass]) -> Result<(), String> {
+        if self.failed
+            || values.len()
+                != self
+                    .nodes
+                    .iter()
+                    .filter(|n| n.scene_bypass.as_ref().is_some_and(|b| b.scene_target))
+                    .count()
+            || values.iter().enumerate().any(|(i, value)| {
+                values[..i].iter().any(|v| v.node == value.node)
+                    || !self.nodes.iter().any(|n| {
+                        n.id == value.node
+                            && n.scene_bypass.as_ref().is_some_and(|b| b.scene_target)
+                    })
+            })
+        {
+            return Err("Invalid scene bypass target".into());
+        }
+        Ok(())
+    }
+    /// Apply bypass targets already checked by `check_scene_bypass`.
+    pub(crate) fn scene_bypass(&mut self, values: &[SceneBypass], frames: u32) {
+        for value in values {
+            let node = self.nodes.iter_mut().find(|n| n.id == value.node).unwrap();
+            node.bypassed = value.value;
+            node.scene_bypass
+                .as_mut()
+                .unwrap()
+                .retarget(value.value, frames);
+        }
     }
     /// Checks every scene control target before any changes, then starts all
     /// ramps at the same block. A continuous control ramps over `frames` from
@@ -927,7 +1041,7 @@ impl PreparedPorts {
             let index = self.order[position];
             self.feed(index, check_latency)?;
             self.process_node(index)?;
-            self.check(index)?;
+            self.finish_node(index)?;
             position += 1;
         }
         Ok(())
@@ -958,13 +1072,20 @@ impl PreparedPorts {
             }
         }
         let data = &mut self.samples[node.offset..node.offset + node.channels * self.frames];
-        // Keep dry history current even while wet. Bypass preserves the same
-        // declared path delay and never changes a downstream alignment plan.
+        // Keep dry history current even while wet. Warm bypass also needs a
+        // dry block for the blend, leaving the processor's input unchanged.
         for (port, delay) in node.dry.iter_mut().enumerate() {
+            let block = port * self.frames..(port + 1) * self.frames;
+            if let Some(bypass) = &mut node.scene_bypass {
+                for (dry, &sample) in bypass.dry[block.clone()].iter_mut().zip(&data[block]) {
+                    *dry = delay.next(sample);
+                }
+                continue;
+            }
             if delay.samples.is_empty() {
                 continue;
             }
-            for sample in &mut data[port * self.frames..(port + 1) * self.frames] {
+            for sample in &mut data[block] {
                 let dry = delay.next(*sample);
                 if node.bypassed {
                     *sample = dry;
@@ -993,7 +1114,7 @@ impl PreparedPorts {
                     data[frame] = value;
                 }
             }
-            NodeKind::Tone3000 | NodeKind::Lv2 if !node.bypassed => {
+            NodeKind::Tone3000 | NodeKind::Lv2 if !node.bypassed || node.scene_bypass.is_some() => {
                 match node.processor.as_mut().ok_or("Missing processor")? {
                     Processor::Native(p) => {
                         let (left, right) = data.split_at_mut(self.frames);
@@ -1017,11 +1138,34 @@ impl PreparedPorts {
         }
         Ok(())
     }
-    fn check(&self, index: usize) -> Result<(), String> {
-        let node = &self.nodes[index];
-        let data = &self.samples[node.offset..node.offset + node.channels * self.frames];
+    fn finish_node(&mut self, index: usize) -> Result<(), String> {
+        let node = &mut self.nodes[index];
+        let data = &mut self.samples[node.offset..node.offset + node.channels * self.frames];
         if data.iter().any(|v| !v.is_finite()) {
             return Err("Non-finite port graph output".into());
+        }
+        if let Some(bypass) = &mut node.scene_bypass {
+            if bypass.mix.remaining == 0 {
+                if bypass.mix.target == 1.0 {
+                    data.copy_from_slice(&bypass.dry);
+                }
+                return Ok(());
+            }
+            for frame in 0..self.frames {
+                let mix = bypass.mix.next().clamp(0.0, 1.0);
+                bypass.mix.current = mix;
+                if mix == 0.0 {
+                    continue;
+                }
+                for port in 0..node.channels {
+                    let at = port * self.frames + frame;
+                    data[at] = if mix == 1.0 {
+                        bypass.dry[at]
+                    } else {
+                        data[at] * (1.0 - mix) + bypass.dry[at] * mix
+                    };
+                }
+            }
         }
         Ok(())
     }
@@ -1047,7 +1191,7 @@ impl PreparedPorts {
             let Some(Processor::Native(p)) = node.processor.as_mut() else {
                 continue;
             };
-            if node.bypassed {
+            if node.bypassed && node.scene_bypass.is_none() {
                 continue;
             }
             let port = node
@@ -1075,7 +1219,7 @@ impl PreparedPorts {
         result?;
         joined?;
         for k in position..position + wave {
-            self.check(self.order[k])?;
+            self.finish_node(self.order[k])?;
         }
         Ok(())
     }
