@@ -197,7 +197,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     WorkerRequest::Status => None,
                     WorkerRequest::Control { command } => graph.apply(*command, true).err(),
+                    WorkerRequest::RestorePluginDefaults { command } => {
+                        graph.restore_plugin_defaults(command).err()
+                    }
                 };
+                if !graph.healthy() {
+                    return Err(error
+                        .unwrap_or_else(|| "Effects graph failed".into())
+                        .into());
+                }
                 responses.try_send(reply(&graph, processed, stream.telemetry(), error)?)?;
             }
         }

@@ -387,7 +387,11 @@ impl Owner {
         Ok(self.worker.take().map(|worker| worker._permit))
     }
     async fn fault(&mut self, error: String) -> String {
-        if self.state.phase == AudioPhase::Running
+        self.release_after_fault(error, true).await
+    }
+    async fn release_after_fault(&mut self, error: String, watch_reconnect: bool) -> String {
+        if watch_reconnect
+            && self.state.phase == AudioPhase::Running
             && self.confirmed.is_some()
             && self.resume.is_none()
         {
@@ -1180,6 +1184,31 @@ impl Owner {
                 }
                 if let Some(e) = error {
                     return Err(e);
+                }
+            }
+            RigAudioAction::RestorePluginDefaults { command } => {
+                if self.export.is_some() {
+                    return Err("Finish saving before restoring plugin defaults".into());
+                }
+                if self.state.phase != AudioPhase::Running {
+                    return Err("Mixed audio is not running".into());
+                }
+                let reply = match self
+                    .exchange(&WorkerRequest::RestorePluginDefaults { command })
+                    .await
+                {
+                    Ok(reply) => reply,
+                    Err(error) => {
+                        let error = format!("Plugin defaults could not be confirmed: {error}");
+                        return Err(self.release_after_fault(error, false).await);
+                    }
+                };
+                let error = reply.error.clone();
+                if let Err(error) = self.readback(reply) {
+                    return Err(self.release_after_fault(error, false).await);
+                }
+                if let Some(error) = error {
+                    return Err(error);
                 }
             }
             RigAudioAction::Control { command } => {

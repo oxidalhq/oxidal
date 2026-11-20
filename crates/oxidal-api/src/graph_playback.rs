@@ -731,6 +731,26 @@ impl Owner {
                 self.state.revision += 1;
                 self.publish();
             }
+            GraphAudioAction::RestorePluginDefaults { command } => {
+                if self.state.phase != AudioPhase::Running {
+                    return Err("Effects audio is not running".into());
+                }
+                let reply = match self
+                    .exchange(&WorkerRequest::RestorePluginDefaults { command })
+                    .await
+                {
+                    Ok(reply) => reply,
+                    Err(error) => {
+                        let error = format!("Plugin defaults could not be confirmed: {error}");
+                        return Err(self.fault(error).await);
+                    }
+                };
+                let error = reply.error.clone();
+                self.readback(reply);
+                if let Some(error) = error {
+                    return Err(error);
+                }
+            }
             GraphAudioAction::Control { command } => {
                 if !self.midi_enabled
                     && matches!(command.action, oxidal_control::Action::Midi { .. })

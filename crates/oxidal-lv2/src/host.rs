@@ -111,6 +111,7 @@ fn error() -> String {
 #[derive(Debug)]
 pub enum ControlError {
     LatencyRestored,
+    ReadbackRestored,
     Failed(String),
 }
 impl From<String> for ControlError {
@@ -128,6 +129,9 @@ impl std::fmt::Display for ControlError {
         match self {
             Self::LatencyRestored => {
                 f.write_str("This control changes latency; prepare a new graph")
+            }
+            Self::ReadbackRestored => {
+                f.write_str("LV2 control readback differed; previous values restored")
             }
             Self::Failed(reason) => f.write_str(reason),
         }
@@ -434,6 +438,16 @@ pub struct AtomEvent {
     pub body: Vec<u8>,
 }
 
+/// A complete factory-default set read from one prepared plugin.
+#[derive(Debug)]
+pub struct PluginDefaults(Vec<(u32, f32)>);
+
+impl PluginDefaults {
+    pub fn values(&self) -> &[(u32, f32)] {
+        &self.0
+    }
+}
+
 /// Prepared stereo processor. Mono effects use two independent instances, preserving stereo history.
 #[derive(Debug)]
 pub struct Plugin {
@@ -611,8 +625,11 @@ impl Plugin {
         if self.failed {
             return Err("Failed plugin must be recreated".into());
         }
-        if self.latency_port.is_some() {
-            self.refresh_outputs()?;
+        if self.latency_port.is_some()
+            && let Err(error) = self.refresh_outputs()
+        {
+            self.failed = true;
+            return Err(error);
         }
         let frames = self.latency_frames()?;
         if self.prepared_latency.is_some_and(|old| old != frames) {
@@ -635,7 +652,6 @@ impl Plugin {
         // SAFETY: live activated instance, all buffers connected, serialized owner.
         // Latent plugins must tolerate the core run(0) special case.
         if unsafe { ox_lv2_refresh_outputs(self.left.ptr.as_ptr()) } != 0 {
-            self.failed = true;
             return Err(error());
         }
         Ok(())
@@ -653,47 +669,159 @@ impl Plugin {
         self.set_control(index, value).map_err(|e| e.to_string())
     }
     pub fn set_control(&mut self, index: u32, value: f32) -> Result<f32, ControlError> {
+        self.write_controls(&[(index, value)], &mut [[0.0; 2]], false)?;
+        Ok(value)
+    }
+
+    /// Defaults for the complete set of controls shown for this live instance.
+    pub fn factory_defaults(&self) -> Result<PluginDefaults, String> {
         if self.failed {
             return Err("Failed plugin must be recreated".into());
         }
-        let p = self.info.ports.get(index as usize).ok_or("Unknown port")?;
-        p.normalize(value)?;
-        if (p.integer && value.fract() != 0.0)
-            || (p.toggled && Some(value) != p.minimum && Some(value) != p.maximum)
+        let defaults = self
+            .info
+            .ports
+            .iter()
+            .filter(|port| {
+                port.control && port.input && !port.output && !port.latency && !port.not_on_gui
+            })
+            .map(|port| {
+                if self
+                    .info
+                    .ports
+                    .iter()
+                    .any(|other| other.index != port.index && other.symbol == port.symbol)
+                {
+                    return Err("Duplicate LV2 control identity".into());
+                }
+                let value = port.default.ok_or("Missing LV2 factory default")?;
+                Self::validate_value(port, value, true)?;
+                Ok((port.index, value))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        if defaults.is_empty() || defaults.len() > 128 {
+            return Err("No complete set of visible LV2 defaults".into());
+        }
+        Ok(PluginDefaults(defaults))
+    }
+
+    /// The processor owner stages and confirms all ports before publishing.
+    /// Both mono instances are included when this is a dual-mono processor.
+    pub fn write_defaults(&mut self, defaults: &PluginDefaults) -> Result<(), ControlError> {
+        let values = defaults.values();
+        let mut previous = [[0.0; 2]; 128];
+        let prior = previous
+            .get_mut(..values.len())
+            .ok_or("Too many LV2 defaults")?;
+        self.write_controls(values, prior, true)
+    }
+
+    pub fn healthy(&self) -> bool {
+        !self.failed
+    }
+
+    fn validate_value(port: &crate::Port, value: f32, exact_enum: bool) -> Result<(), String> {
+        port.normalize(value)?;
+        if (port.integer && value.fract() != 0.0)
+            || (port.toggled && Some(value) != port.minimum && Some(value) != port.maximum)
+            || (exact_enum
+                && port.enumeration
+                && !port.scale_points.iter().any(|p| p.value == value))
         {
             return Err("Expected discrete native value".into());
         }
-        let previous = self.value(index)?;
-        // SAFETY: index identifies a connected input control; finite range checked. Exclusive mutable owner.
-        unsafe {
-            ox_lv2_set(self.left.ptr.as_ptr(), index, value);
-            if let Some(r) = &self.right {
-                ox_lv2_set(r.ptr.as_ptr(), index, value);
-            }
-        }
-        if self.latency_port.is_some() && self.prepared_latency.is_some() {
-            self.refresh_outputs()?;
-            if self.check_latency().is_err() {
-                // Reject this scalar transaction before publishing its readback.
-                // No audio was consumed; restore the previous control immediately.
-                // SAFETY: the same connected input port and exclusive instance as above.
-                unsafe {
-                    ox_lv2_set(self.left.ptr.as_ptr(), index, previous);
-                }
-                self.refresh_outputs()?;
-                if self.check_latency().is_err() {
-                    self.failed = true;
-                    return Err("LV2 latency rollback failed; recreate the graph".into());
-                }
-                if self.value(index)? != previous {
-                    self.failed = true;
-                    return Err("LV2 control rollback failed; recreate the graph".into());
-                }
-                return Err(ControlError::LatencyRestored);
-            }
-        }
-        self.value(index).map_err(ControlError::from)
+        Ok(())
     }
+
+    fn write_controls(
+        &mut self,
+        values: &[(u32, f32)],
+        previous: &mut [[f32; 2]],
+        exact_enum: bool,
+    ) -> Result<(), ControlError> {
+        if self.failed {
+            return Err("Failed plugin must be recreated".into());
+        }
+        if values.is_empty() {
+            return Err("No LV2 controls to write".into());
+        }
+        for (i, (&(index, value), prior)) in values.iter().zip(previous.iter_mut()).enumerate() {
+            let port = self.info.ports.get(index as usize).ok_or("Unknown port")?;
+            if port.index != index || values[..i].iter().any(|(other, _)| *other == index) {
+                return Err("Invalid or duplicate LV2 control port".into());
+            }
+            Self::validate_value(port, value, exact_enum)?;
+            *prior = self.channel_values(index)?;
+        }
+
+        for &(index, value) in values {
+            self.write_channels(index, [value; 2]);
+        }
+        let validation =
+            self.verify_control_write(values.iter().map(|&(index, value)| (index, [value; 2])));
+        if let Err(reason) = validation {
+            for (&(index, _), &prior) in values.iter().zip(previous.iter()) {
+                self.write_channels(index, prior);
+            }
+            if self
+                .verify_control_write(
+                    values
+                        .iter()
+                        .zip(previous.iter())
+                        .map(|(&(index, _), &prior)| (index, prior)),
+                )
+                .is_err()
+            {
+                self.failed = true;
+                return Err(
+                    "LV2 control rollback could not be verified; recreate the graph".into(),
+                );
+            }
+            return Err(reason);
+        }
+        Ok(())
+    }
+
+    fn verify_control_write(
+        &mut self,
+        values: impl Iterator<Item = (u32, [f32; 2])>,
+    ) -> Result<(), ControlError> {
+        if self.latency_port.is_some()
+            && self.prepared_latency.is_some()
+            && (self.refresh_outputs().is_err() || self.check_latency().is_err())
+        {
+            return Err(ControlError::LatencyRestored);
+        }
+        for (port, value) in values {
+            if self.channel_values(port).ok() != Some(value) {
+                return Err(ControlError::ReadbackRestored);
+            }
+        }
+        Ok(())
+    }
+
+    fn write_channels(&mut self, index: u32, [left, right]: [f32; 2]) {
+        // SAFETY: the owner validated an exact connected input port on both instances.
+        unsafe {
+            ox_lv2_set(self.left.ptr.as_ptr(), index, left);
+            if let Some(instance) = &self.right {
+                ox_lv2_set(instance.ptr.as_ptr(), index, right);
+            }
+        }
+    }
+
+    fn channel_values(&self, index: u32) -> Result<[f32; 2], String> {
+        let left = self.value(index)?;
+        // SAFETY: value checked the same connected port layout shared by both instances.
+        let right = self.right.as_ref().map_or(left, |instance| unsafe {
+            ox_lv2_get(instance.ptr.as_ptr(), index)
+        });
+        if !right.is_finite() {
+            return Err("Nonfinite control output".into());
+        }
+        Ok([left, right])
+    }
+
     pub fn value(&self, index: u32) -> Result<f32, String> {
         if !self
             .info
@@ -704,9 +832,9 @@ impl Plugin {
             return Err("Not a control port".into());
         }
         // SAFETY: valid connected scalar port, instance live on owner thread.
-        let v = unsafe { ox_lv2_get(self.left.ptr.as_ptr(), index) };
-        if v.is_finite() {
-            Ok(v)
+        let value = unsafe { ox_lv2_get(self.left.ptr.as_ptr(), index) };
+        if value.is_finite() {
+            Ok(value)
         } else {
             Err("Nonfinite control output".into())
         }

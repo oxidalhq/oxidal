@@ -5,7 +5,9 @@
 #[allow(unsafe_code)]
 mod host;
 #[cfg(feature = "native")]
-pub use host::{AtomEvent, ControlError, Plugin, PluginState, StatePath, StateProperty, World};
+pub use host::{
+    AtomEvent, ControlError, Plugin, PluginDefaults, PluginState, StatePath, StateProperty, World,
+};
 pub mod artwork;
 pub mod protocol;
 pub use protocol::Binding;

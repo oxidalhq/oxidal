@@ -558,6 +558,10 @@ export type Command2 =
 export type PackAction = "install" | "remove";
 export type GraphAudioAction =
   | {
+      command: PluginDefaultsCommand;
+      kind: "restore_plugin_defaults";
+    }
+  | {
       command: HostUtility;
       kind: "host_utility";
     }
@@ -880,6 +884,10 @@ export type PlayerState = ("empty" | "ready" | "playing" | "paused" | "ended") |
  */
 export type StemRole = "vocals" | "drums" | "bass" | "other" | "guitar" | "piano";
 export type RigAudioAction =
+  | {
+      command: PluginDefaultsCommand;
+      kind: "restore_plugin_defaults";
+    }
   | {
       command: HostUtility;
       kind: "host_utility";
@@ -2010,6 +2018,14 @@ export interface GraphAudioCommand {
   expected_revision: number;
   session: string;
 }
+/**
+ * The selected instance in the current worker snapshot.
+ */
+export interface PluginDefaultsCommand {
+  expected_revision: number;
+  node: string;
+  session: string;
+}
 export interface StartGraph {
   bindings: Binding[];
   /**
@@ -2895,6 +2911,10 @@ export interface Monitoring {
   error?: string | null;
   graph_phase: string;
   host: Host;
+  /**
+   * Actual saved source of the running owner; absent for unsaved drafts.
+   */
+  preset?: LibraryReference | null;
   rig_phase: string;
   sequence: number;
   source?: string | null;

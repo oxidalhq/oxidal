@@ -228,6 +228,59 @@ impl PreparedGraph {
         self.control = candidate;
         Ok(result)
     }
+    pub fn restore_plugin_defaults(
+        &mut self,
+        command: crate::protocol::PluginDefaultsCommand,
+    ) -> Result<(), String> {
+        if self.failed {
+            return Err("Failed graph must be recreated".into());
+        }
+        let current = self.control.snapshot();
+        if current.session != command.session
+            || u64::from(current.revision) != command.expected_revision
+        {
+            return Err("graph_control_conflict; refresh status".into());
+        }
+        let index = current
+            .rig
+            .nodes
+            .iter()
+            .position(|node| node.id == command.node)
+            .ok_or("Unknown Effects node")?;
+        let plugin = self.nodes[index]
+            .plugin
+            .as_mut()
+            .ok_or("Defaults require a running LV2 node")?;
+        let defaults = plugin.factory_defaults()?;
+        let normalized = defaults
+            .values()
+            .iter()
+            .map(|&(port, value)| {
+                let binding = self
+                    .ports
+                    .iter()
+                    .find(|binding| binding.node == index && binding.port.index == port)
+                    .ok_or("Missing Effects control binding")?;
+                Ok((
+                    binding.target.clone(),
+                    f64::from(binding.port.normalize(value)?),
+                ))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        let mut candidate = self.control.clone();
+        candidate.set_prepared_parameters(&normalized)?;
+        if let Err(error) = plugin.write_defaults(&defaults) {
+            self.failed = !plugin.healthy();
+            return Err(error.to_string());
+        }
+        self.control = candidate;
+        Ok(())
+    }
+
+    pub fn healthy(&self) -> bool {
+        !self.failed
+    }
+
     pub fn expire_edit(&mut self, now: Instant) -> Result<Option<Snapshot>, String> {
         if self.failed {
             return Err("Failed graph must be recreated".into());
@@ -267,6 +320,11 @@ impl PreparedGraph {
                         .as_ref()
                         .expect("bound plugin")
                         .value(b.port.index)
+                } else if let Some(default) = b.port.default
+                    && b.port.normalize(default) == Ok(value as f32)
+                {
+                    // Preserve the raw factory value across normalized graph recall.
+                    Ok(default)
                 } else {
                     b.port.denormalize(value as f32)
                 }

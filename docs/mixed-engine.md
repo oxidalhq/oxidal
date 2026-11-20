@@ -9,6 +9,16 @@ Oxidal prepares the graph before playback and runs it in a supervised worker.
 | Split amp and cab | An effect between the amp and cabinet stages of a compatible tone. |
 | Scenes            | Preloaded branches with a shared output chain.                     |
 
+## Restore one LV2 block's defaults
+
+The running rig exposes **Restore plugin defaults** for a selected LV2 block.
+It uses the worker's exact node and control revision, and refuses while the rig
+is preparing, switching, or fading a scene. The worker applies one
+[verified control update](lv2.md#restore-controls-to-factory-defaults). The
+finished update appears in the rig's confirmed controls and is included in the
+next explicit Save. The saved preset and any stored scene settings keep their
+values until explicitly edited and saved.
+
 ## The rig canvas
 
 Rig draws every topology with one renderer: a straight chain, any routing tree

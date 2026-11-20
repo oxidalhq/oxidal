@@ -343,6 +343,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 WorkerRequest::MidiTest { .. } => "midi test",
                 WorkerRequest::MidiLearn { .. } => "midi learn",
                 WorkerRequest::Control { .. } => "control",
+                WorkerRequest::RestorePluginDefaults { .. } => "restore plugin defaults",
                 WorkerRequest::Scene { .. } => "scene",
                 WorkerRequest::Branch { .. } => "branch",
                 WorkerRequest::Eq { .. } => "eq",
@@ -405,6 +406,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     })
                     .err(),
                 WorkerRequest::Control { command } => rig.active_mut().apply(command).err(),
+                WorkerRequest::RestorePluginDefaults { command } => {
+                    if rig.switching() {
+                        Some("Wait for the prepared preset switch to finish".into())
+                    } else {
+                        rig.active_mut().restore_plugin_defaults(command).err()
+                    }
+                }
+
                 WorkerRequest::Scene { command } => rig.active_mut().select_scene(command).err(),
                 WorkerRequest::Branch { command } => rig.active_mut().set_branch(command).err(),
                 WorkerRequest::Eq { command } => rig.active_mut().apply_eq(command).err(),

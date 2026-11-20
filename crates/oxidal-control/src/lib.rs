@@ -292,6 +292,27 @@ impl Control {
         *self = candidate;
         Ok(snapshot)
     }
+    /// Stage a single owner transaction for several prepared instance controls.
+    /// The caller only installs this candidate after confirming processor readback.
+    pub fn set_prepared_parameters(&mut self, values: &[(String, f64)]) -> Result<(), String> {
+        if self.active_edit.is_some() {
+            return Err("edit_busy".into());
+        }
+        let revision = self
+            .state
+            .revision
+            .checked_add(1)
+            .ok_or("revision_exhausted")?;
+        self.confirm_parameters(values)?;
+        for (id, _) in values {
+            self.reset_pickup(id);
+        }
+        self.state.revision = revision;
+        self.state.origin = "web".into();
+        self.state.request_id.clear();
+        Ok(())
+    }
+
     /// Current confirmed state for HTTP/SSE clients and transport adapters.
     /// @see docs/architecture.md
     pub fn snapshot(&self) -> Snapshot {

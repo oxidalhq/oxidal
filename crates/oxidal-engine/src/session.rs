@@ -473,10 +473,67 @@ impl Session {
         // Native errors after admission may have changed DSP; never retain a
         // supposedly confirmed state or continue playback after an ambiguous result.
         if let Err(reason) = result {
-            if !matches!(reason, ControlError::LatencyRestored) {
+            if !matches!(
+                reason,
+                ControlError::LatencyRestored | ControlError::ReadbackRestored
+            ) {
                 self.failed = true;
             }
             return Err(reason.to_string());
+        }
+        self.state.revision = revision;
+        Ok(())
+    }
+    pub fn restore_plugin_defaults(
+        &mut self,
+        command: oxidal_lv2::protocol::PluginDefaultsCommand,
+    ) -> Result<(), String> {
+        if !self.matches_cursor(&command.session, command.expected_revision) {
+            return Err("rig_control_conflict; refresh status".into());
+        }
+        if self.failed
+            || self.model_pending()
+            || self.gesture_pending()
+            || self.measurement_pending()
+            || self.graph.scene_transitioning()
+            || self.capture_fade_remaining > 0
+        {
+            return Err("Finish the current rig transition or edit first".into());
+        }
+        let revision = self
+            .state
+            .revision
+            .checked_add(1)
+            .ok_or("Rig revision exhausted")?;
+        let Some(Processor::Lv2(plugin)) = self.graph.processor_mut(&command.node) else {
+            return Err("Defaults require a running LV2 node".into());
+        };
+        let defaults = plugin.factory_defaults()?;
+        let confirmed = defaults
+            .values()
+            .iter()
+            .map(|&(index, value)| {
+                let port = &plugin.info().ports[index as usize];
+                let target = Target::Lv2 {
+                    node: command.node.clone(),
+                    symbol: port.symbol.clone(),
+                };
+                let control = self
+                    .state
+                    .controls
+                    .iter()
+                    .position(|c| c.target == target && c.accepts(f64::from(value)))
+                    .ok_or("Missing or invalid rig control binding")?;
+                Ok((control, f64::from(value), port.display(value)))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        if let Err(error) = plugin.write_defaults(&defaults) {
+            self.failed = !plugin.healthy();
+            return Err(error.to_string());
+        }
+        for (index, value, display) in confirmed {
+            self.state.controls[index].value = value;
+            self.state.controls[index].display = display;
         }
         self.state.revision = revision;
         Ok(())

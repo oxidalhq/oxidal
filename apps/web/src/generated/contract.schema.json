@@ -5333,6 +5333,23 @@
           "type": "object",
           "properties": {
             "command": {
+              "$ref": "#/$defs/PluginDefaultsCommand"
+            },
+            "kind": {
+              "type": "string",
+              "const": "restore_plugin_defaults"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "command": {
               "$ref": "#/$defs/HostUtility"
             },
             "kind": {
@@ -8447,6 +8464,17 @@
         "host": {
           "$ref": "#/$defs/Host"
         },
+        "preset": {
+          "description": "Actual saved source of the running owner; absent for unsaved drafts.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LibraryReference"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "rig_phase": {
           "type": "string"
         },
@@ -9895,6 +9923,29 @@
         "plugins"
       ]
     },
+    "PluginDefaultsCommand": {
+      "description": "The selected instance in the current worker snapshot.",
+      "type": "object",
+      "properties": {
+        "expected_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "node": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "expected_revision",
+        "node"
+      ]
+    },
     "PluginInfo": {
       "type": "object",
       "properties": {
@@ -11243,6 +11294,23 @@
     },
     "RigAudioAction": {
       "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "command": {
+              "$ref": "#/$defs/PluginDefaultsCommand"
+            },
+            "kind": {
+              "type": "string",
+              "const": "restore_plugin_defaults"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "command"
+          ]
+        },
         {
           "type": "object",
           "properties": {

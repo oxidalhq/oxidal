@@ -47,6 +47,13 @@ fn independent_external_mono_amp_and_delay_preserve_stereo() {
     amp.process(&mut left, &mut right).unwrap();
     assert!(left.iter().all(|v| (*v - 0.25).abs() < 1e-5));
     assert!(right.iter().all(|v| (*v + 0.125).abs() < 1e-5));
+    let defaults = amp.factory_defaults().unwrap();
+    assert_eq!(defaults.values(), [(0, 0.0)]);
+    amp.write_defaults(&defaults).unwrap();
+    let (mut left, mut right) = ([0.5; 64], [-0.25; 64]);
+    amp.process(&mut left, &mut right).unwrap();
+    assert_eq!(left, [0.5; 64]);
+    assert_eq!(right, [-0.25; 64]);
     let world = World::bundle(&Path::new(&root).join("delay-swh.lv2")).unwrap();
     let mut delay = Plugin::new(
         &world,
@@ -196,6 +203,70 @@ fn reported_latency_prepares_without_audio_and_rejects_invalid_or_changing_value
         p.set(4, mode as f32).unwrap();
         assert!(p.prepare_latency().is_err());
     }
+}
+
+#[test]
+fn plugin_defaults_validate_combined_latency_and_leave_hidden_state_and_history_intact() {
+    let world = World::bundle(Path::new(env!("OXIDAL_LV2_FIXTURE"))).unwrap();
+    let mut latency = Plugin::new_ports(&world, "urn:oxidal:test:latency", 48000.0, 64).unwrap();
+    latency.set(3, 12.0).unwrap();
+    latency.set(4, 7.0).unwrap();
+    assert_eq!(latency.prepare_latency().unwrap(), 13);
+    // Neither scalar can be set alone without changing the reported delay.
+    assert!(latency.set(3, 13.0).is_err());
+    assert!(latency.set(4, 0.0).is_err());
+    let defaults = latency.factory_defaults().unwrap();
+    assert_eq!(defaults.values(), [(3, 13.0), (4, 0.0)]);
+    latency.write_defaults(&defaults).unwrap();
+    assert_eq!(latency.latency_frames().unwrap(), 13);
+    assert_eq!(latency.value(3).unwrap(), 13.0);
+    assert_eq!(latency.value(4).unwrap(), 0.0);
+
+    // Authored fixture overwrites the proposed mode on the final zero-frame query.
+    assert!(matches!(
+        latency.set_control(4, 8.0),
+        Err(oxidal_lv2::ControlError::ReadbackRestored)
+    ));
+    assert!(latency.healthy());
+    assert_eq!(latency.value(4).unwrap(), 0.0);
+    latency.set(4, 6.0).unwrap_err(); // persistent invalid reply survives rollback
+    assert!(!latency.healthy());
+
+    let mut latent = Plugin::new_ports(&world, "urn:oxidal:test:latency", 48000.0, 64).unwrap();
+    latent.set(3, 136.0).unwrap();
+    latent.set(4, 7.0).unwrap();
+    assert_eq!(latent.prepare_latency().unwrap(), 137);
+    let defaults = latent.factory_defaults().unwrap();
+    assert!(matches!(
+        latent.write_defaults(&defaults),
+        Err(oxidal_lv2::ControlError::LatencyRestored)
+    ));
+    assert_eq!(latent.value(3).unwrap(), 136.0);
+    assert_eq!(latent.value(4).unwrap(), 7.0);
+    assert_eq!(latent.latency_frames().unwrap(), 137);
+
+    let mut stereo = Plugin::new(&world, URI, 48000.0, 64).unwrap();
+    stereo.set(4, 0.5).unwrap();
+    stereo.set(5, 0.5).unwrap();
+    stereo.process(&mut [1.0; 64], &mut [-0.5; 64]).unwrap();
+    let defaults = stereo.factory_defaults().unwrap();
+    assert_eq!(defaults.values(), [(4, 1.0)]);
+    stereo.write_defaults(&defaults).unwrap();
+    assert_eq!(stereo.value(5).unwrap(), 0.5);
+    let (mut left, mut right) = ([0.0; 64], [0.0; 64]);
+    stereo.process(&mut left, &mut right).unwrap();
+    assert_eq!(left, [0.25; 64]);
+    assert_eq!(right, [-0.125; 64]);
+}
+
+#[test]
+fn plugin_defaults_preserve_failed_preparation_latch() {
+    let world = World::bundle(Path::new(env!("OXIDAL_LV2_FIXTURE"))).unwrap();
+    let mut plugin = Plugin::new_ports(&world, "urn:oxidal:test:atoms", 48000.0, 64).unwrap();
+    plugin.set(4, 9.0).unwrap();
+    assert!(plugin.prepare_latency().is_err()); // malformed output from run(0)
+    assert!(!plugin.healthy());
+    assert!(plugin.set_control(4, 0.0).is_err());
 }
 
 #[test]
@@ -612,4 +683,46 @@ fn external_resource_plugin_state_restores_after_asset_relocation() {
     assert!(error < 1e-5, "state recall render error {error}");
     drop(restored);
     std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+#[ignore = "requires the actual built stereo Moment LV2 bundle"]
+fn plugin_defaults_keep_moments_recorded_audio() {
+    let bundle = std::env::var_os("OXIDAL_MOMENT_LV2_BUNDLE").expect("Moment test bundle");
+    let world = World::bundle(Path::new(&bundle)).unwrap();
+    let uri = "urn:oxidal:plugin:moment#stereo";
+    let (mut recorded, mut empty) = (
+        Plugin::new(&world, uri, 48000.0, 128).unwrap(),
+        Plugin::new(&world, uri, 48000.0, 128).unwrap(),
+    );
+    // Caught Moments' Listen route, width and Time.
+    recorded.set(3, 0.0).unwrap();
+    recorded.set(14, 35.0).unwrap();
+    recorded.set(22, 40.0).unwrap();
+    for block in 0..2000 {
+        let mut left =
+            std::array::from_fn::<_, 128, _>(|i| ((block * 128 + i) as f32 * 0.031).sin() * 0.4);
+        let mut right = left.map(|v| -v * 0.5);
+        recorded.process(&mut left, &mut right).unwrap();
+    }
+    let defaults = recorded.factory_defaults().unwrap();
+    assert_eq!(defaults.values().len(), 24);
+    recorded.write_defaults(&defaults).unwrap();
+    assert_eq!(recorded.value(3).unwrap(), 1.0);
+    assert_eq!(recorded.value(14).unwrap(), 50.0);
+    assert_eq!(recorded.value(22).unwrap(), 0.0);
+    let audition = |plugin: &mut Plugin| {
+        plugin.set(3, 2.0).unwrap(); // loop only
+        plugin.set(5, 1.0).unwrap(); // catch the recorded phrase
+        plugin.set(12, 0.0).unwrap(); // no wet effect
+        let mut peak = 0.0_f32;
+        for _ in 0..100 {
+            let (mut left, mut right) = ([0.0; 128], [0.0; 128]);
+            plugin.process(&mut left, &mut right).unwrap();
+            peak = left.iter().chain(&right).fold(peak, |p, v| p.max(v.abs()));
+        }
+        peak
+    };
+    assert!(audition(&mut recorded) > 0.05);
+    assert_eq!(audition(&mut empty), 0.0);
 }

@@ -48,15 +48,17 @@ static const LV2_Descriptor descriptor={"urn:oxidal:test:contract",create,connec
 static const LV2_Descriptor quantized={"urn:oxidal:test:quantized",create,connect,NULL,run,NULL,cleanup,NULL};
 // Deliberately reports only from run(), including the core run(0) query.
 // Mode selects malformed or spontaneously changing latency for host rejection tests.
-typedef struct {float* p[7];float history[2][1024];uint32_t position;int stuck, stereo;} Latent;
+typedef struct {float* p[7];float history[2][1024];uint32_t position;int stuck, stereo, poison_default;} Latent;
 static LV2_Handle latent_create(const LV2_Descriptor* d,double rate,const char* path,const LV2_Feature*const* features) {
     (void)rate;(void)path;(void)features;Latent* t=calloc(1,sizeof(Latent));if(t)t->stereo=!strcmp(d->URI,"urn:oxidal:test:latency-stereo");return t;
 }
 static void latent_connect(LV2_Handle h,uint32_t p,void* data){if(p<7)((Latent*)h)->p[p]=data;}
 static void latent_run(LV2_Handle h,uint32_t n) {
     Latent* t=h;uint32_t channels=t->stereo?2:1, offset=t->stereo?2:0;float delay=*t->p[3+offset];int mode=(int)*t->p[4+offset];
-    if(mode==6)t->stuck=1;
-    *t->p[2+offset]=t->stuck?NAN:mode==1?-1.0f:mode==2?NAN:mode==3?delay+0.5f:mode==4?4294967296.0f:delay;
+    if(mode==9)t->poison_default=1;
+    if(mode==6 || (mode==0 && t->poison_default))t->stuck=1;
+    *t->p[2+offset]=t->stuck?NAN:mode==1?-1.0f:mode==2?NAN:mode==3?delay+0.5f:mode==4?4294967296.0f:mode==7?delay+1.0f:delay;
+    if(!n && mode==8) *t->p[4+offset]=0.0f;
     if(n && mode==5) *t->p[2+offset]=delay+1.0f;
     uint32_t frames=(uint32_t)delay;
     for(uint32_t i=0;i<n;i++) {
@@ -184,6 +186,10 @@ static void atoms_run(LV2_Handle h,uint32_t n) {
     Atoms* a=h;*a->latency=0;assert(a->input->atom.type==a->sequence);assert(a->input->body.unit==0 && a->input->body.pad==0);
     assert(a->output->atom.size+sizeof(LV2_Atom)>=a->input->atom.size+sizeof(LV2_Atom));
     memcpy(a->output,a->input,a->input->atom.size+sizeof(LV2_Atom));a->output->body.unit=a->frame_unit;
+    if(!n && *a->mode==9.0f) {
+        a->output->atom.size=UINT32_MAX;
+        return;
+    }
     LV2_Atom_Event* event=lv2_atom_sequence_begin(&a->input->body);
     for(uint32_t frame=0;frame<n;frame++) {
         while(!lv2_atom_sequence_is_end(&a->input->body,a->input->atom.size,event) && event->time.frames==frame) {

@@ -38,6 +38,25 @@ Latency semantics follow the official [latency designation](https://lv2plug.in/n
 
 Oxidal builds its own LV2 effects in `native/`. [Oxidal Pitch](native-pitch.md) is the TONE3000 pitch engine as a standalone mono or stereo effect; [Oxidal Hold](native-hold.md) is an original spectral sustain; [Oxidal Swell](native-swell.md) is an original attack-triggered volume swell with no latency. The newer effects are Rust crates listed in [Oxidal's own effects](native-effects.md), among them [Oxidal Moment](native-moment.md), a micro-looper and texture effect.
 
+## Restore controls to factory defaults
+
+While an LV2 block is running, **Restore plugin defaults** applies the full set
+of shown scalar input defaults for that block from its installed plugin metadata
+at the running sample rate. The request identifies the current player and worker
+revisions and the actual block ID. It checks for Protect and in-flight audio
+changes or adjustments before writing. Stopped and offline sessions refuse this
+operation.
+
+The worker writes and verifies the controls together, including both instances
+if a mono plugin is used in stereo. A change that alters prepared latency or
+fails readback is refused with the prior values verified. When verification of the
+rollback fails, audio stops and reports a failure.
+
+This changes the working controls. Use Save to keep them. The plugin instance
+and its internal history stay in place, and ports hidden by the plugin keep their
+values. Saved Discard uses the settings stored in the selected preset version.
+Restore plugin defaults has no separate Undo entry.
+
 ## Atom Sequence transport
 
 The declared-port host connects frame-timed Atom Sequence ports with fixed 16 KiB

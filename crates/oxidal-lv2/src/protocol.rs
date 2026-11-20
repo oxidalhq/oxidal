@@ -148,9 +148,21 @@ impl GraphRecall {
         Ok(())
     }
 }
+/// The selected instance in the current worker snapshot.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PluginDefaultsCommand {
+    pub session: String,
+    pub expected_revision: u64,
+    pub node: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkerRequest {
+    RestorePluginDefaults {
+        command: PluginDefaultsCommand,
+    },
     HostUtility {
         command: oxidal_audio::tools::HostUtility,
     },
@@ -198,6 +210,9 @@ pub struct GraphAudioState {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum GraphAudioAction {
+    RestorePluginDefaults {
+        command: PluginDefaultsCommand,
+    },
     HostUtility {
         command: oxidal_audio::tools::HostUtility,
     },

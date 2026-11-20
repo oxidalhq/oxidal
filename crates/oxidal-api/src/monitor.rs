@@ -10,6 +10,7 @@ use axum::{
     },
 };
 use oxidal_audio::{StreamConfig, lifecycle::AudioPhase, meter::Snapshot};
+use oxidal_presets::{LibraryKind, LibraryReference};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -38,12 +39,25 @@ pub struct Monitoring {
     pub graph_phase: String,
     pub rig_phase: String,
     pub source: Option<String>,
+    /// Actual saved source of the running owner; absent for unsaved drafts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preset: Option<LibraryReference>,
     pub stream: Option<StreamConfig>,
     pub audio: Option<Snapshot>,
     pub audio_age_ms: Option<u64>,
     /// Recovered overruns/underruns for the current worker; unavailable with older workers.
     pub xruns: Option<u64>,
     pub error: Option<String>,
+}
+fn native_reference(settings: &oxidal_audio::lifecycle::StartAudio) -> Option<LibraryReference> {
+    (!settings.draft).then(|| LibraryReference {
+        kind: if settings.owned {
+            LibraryKind::Owned
+        } else {
+            LibraryKind::Original
+        },
+        id: settings.preset_id.clone(),
+    })
 }
 fn text(path: &str) -> Option<String> {
     let mut s = String::new();
@@ -177,13 +191,14 @@ pub(super) fn start(shared: Weak<Shared>, updates: watch::Sender<Monitoring>) {
             let native = shared.playback.snapshot();
             let graph = shared.graph_playback.snapshot();
             let rig = shared.rig_playback.snapshot();
-            let (source, stream, audio, age) = if native.phase == AudioPhase::Running {
+            let (source, stream, audio, age, preset) = if native.phase == AudioPhase::Running {
                 let meter = shared.playback.telemetry();
                 (
                     Some("Saved preset".into()),
                     native.configured.as_ref().map(|s| s.stream.clone()),
                     meter.map(|s| s.0),
                     meter.map(|s| s.1.elapsed().as_millis() as u64),
+                    native.configured.as_ref().and_then(native_reference),
                 )
             } else if graph.phase == AudioPhase::Running {
                 let identity = (graph.session.clone(), graph.telemetry.map(|s| s.frames));
@@ -196,6 +211,12 @@ pub(super) fn start(shared: Weak<Shared>, updates: watch::Sender<Monitoring>) {
                     graph.configured.as_ref().map(|s| s.stream.clone()),
                     graph.telemetry,
                     Some(graph_time.elapsed().as_millis() as u64),
+                    graph.configured.as_ref().and_then(|s| {
+                        s.library_id.as_ref().map(|id| LibraryReference {
+                            kind: LibraryKind::Graph,
+                            id: id.clone(),
+                        })
+                    }),
                 )
             } else if rig.phase == AudioPhase::Running {
                 let identity = (rig.session.clone(), rig.telemetry.map(|s| s.frames));
@@ -208,10 +229,14 @@ pub(super) fn start(shared: Weak<Shared>, updates: watch::Sender<Monitoring>) {
                     rig.configured.as_ref().map(|s| s.stream.clone()),
                     rig.telemetry,
                     Some(graph_time.elapsed().as_millis() as u64),
+                    rig.configured.as_ref().map(|s| LibraryReference {
+                        kind: LibraryKind::Rig,
+                        id: s.revision.clone(),
+                    }),
                 )
             } else {
                 graph_frames = None;
-                (None, None, None, None)
+                (None, None, None, None, None)
             };
             updates.send_replace(Monitoring {
                 sequence,
@@ -220,6 +245,7 @@ pub(super) fn start(shared: Weak<Shared>, updates: watch::Sender<Monitoring>) {
                 graph_phase: phase(graph.phase),
                 rig_phase: phase(rig.phase),
                 source,
+                preset,
                 stream,
                 audio,
                 audio_age_ms: age,
@@ -275,6 +301,21 @@ pub(super) async fn events(State(shared): State<Arc<Shared>>) -> impl IntoRespon
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn saved_identity_is_optional_and_survives_monitor_round_trip() {
+        let original = Monitoring::default();
+        let mut encoded = serde_json::to_value(&original).unwrap();
+        assert!(encoded.get("preset").is_none());
+        encoded["preset"] = serde_json::json!({"kind": "owned", "id": "a".repeat(64)});
+        let updated: Monitoring = serde_json::from_value(encoded).unwrap();
+        assert_eq!(
+            updated.preset,
+            Some(LibraryReference {
+                kind: LibraryKind::Owned,
+                id: "a".repeat(64)
+            })
+        );
+    }
     #[test]
     fn linux_counters_exclude_guest_and_handle_missing_metrics() {
         assert_eq!(cpu("cpu 10 20 30 40 5 6 7 8 100 200\n"), Some((126, 45)));

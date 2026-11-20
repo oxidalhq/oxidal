@@ -14,6 +14,12 @@ and to review recorded history.
 Processing time covers DSP work. Use a physical loopback to measure total
 round-trip latency. See [audio setup](audio.md#physical-round-trip-latency).
 
+The shared monitor also reports the actual saved preset identity of the
+running audio owner. Unsaved drafts and stopped owners have no saved identity.
+Stage and chord-sheet tools use this typed reference instead of guessing from
+a display name or retaining a page's previous selection. Reading monitoring
+never loads a preset or changes playback.
+
 ## Recorded device history
 
 Use recorded history to look back at device load and audio health. Freeze pauses

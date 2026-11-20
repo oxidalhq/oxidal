@@ -237,6 +237,8 @@ pub fn valid_receipt(id: &str) -> bool {
 #[serde(deny_unknown_fields)]
 pub struct AuthoringRequest {
     pub serial: u64,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub settle_history: bool,
     pub authoring: AuthoringAction,
 }
 

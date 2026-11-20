@@ -427,6 +427,9 @@ async fn audio_change_keep_revert_timeout_and_resume_use_real_workers() {
             "{owner} lost working state on Apply"
         );
         let mut refused = vec![scalar_action(owner, &live, false)];
+        if owner != "native" {
+            refused.push(plugin_defaults(&live, "amp"));
+        }
         if let Some(edit) = &edit {
             refused.push(undo_action(owner, &live, json!({"kind":"undo"})));
             refused.push(undo_action(owner, &live, edit.clone()));
@@ -800,5 +803,447 @@ async fn audio_change_keep_revert_timeout_and_resume_use_real_workers() {
             .unwrap()
             .unwrap();
     }
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+fn plugin_defaults(state: &Value, node: &str) -> Value {
+    json!({"kind":"restore_plugin_defaults","command":{
+        "session":state["control"]["session"],"expected_revision":state["control"]["revision"],"node":node}})
+}
+
+fn moment_and_amp_settings(owner: &str, root: &Path) -> Value {
+    let uri = "urn:oxidal:plugin:moment#stereo";
+    let amp = "http://plugin.org.uk/swh-plugins/amp";
+    // Moment's opening Listen controls in Caught Moments (OX-43).
+    let values = json!({"catch":0,"route":0,"loopmode":0,"move":71,"wetmode":0,"clock":100,
+        "grit":0,"direct":0,"length":100,"time":35,"shape":60,"tone":65,"balance":50,"width":40,
+        "freeze":0,"mix":50,"steps":1,"overdub":0,"fade":100,"wet":1,"chance":100,
+        "link":0,"bpm":120,"division":2});
+    if owner == "effects" {
+        let vectors = [
+            ("route", 0.0),
+            ("time", 0.35),
+            ("shape", 0.60),
+            ("tone", 0.65),
+            ("width", 0.40),
+            ("amp.gain", 0.6),
+        ];
+        let recall: Vec<_> = vectors
+            .iter()
+            .map(|(key, normalized)| {
+                json!({
+                    "target":if key.contains('.') {key.to_string()} else {format!("moment.{key}")},
+                    "normalized":normalized,
+                })
+            })
+            .collect();
+        return json!({"stream":stream(128),"bindings":[{"node":"moment","uri":uri},{"node":"amp","uri":amp}],
+            "rig":{"nodes":[
+                {"id":"in","kind":"input","level":1.0},
+                {"id":"moment","kind":"lv2","level":1.0},
+                {"id":"amp","kind":"lv2","level":1.0},
+                {"id":"out","kind":"output","level":1.0}],
+                "edges":[{"from":"in","to":"moment"},{"from":"moment","to":"amp"},{"from":"amp","to":"out"}]},
+            "recall":{"bypassed":false,"values":recall,"mappings":{"version":1,"mappings":[]}}});
+    }
+    let extension = oxidal_presets::manifest::SCENES_BYPASS_EXTENSION;
+    let edge = |from, a, to, b| json!({"from":{"node":from,"port":a},"to":{"node":to,"port":b}});
+    let manifest = json!({
+        "format":"oxidal.preset","formatVersion":1,"id":"777bee33-09db-4d82-8ed1-ac41390c495b",
+        "name":"Caught Moments","tone3000":{"instances":[]},"resources":[],
+        "requiredExtensions":[extension],
+        "extensions":{extension:{"fade_ms":400,"scenes":[
+            {"id":"listen","name":"Listen","gains":[],"bypass":[{"node":"moment","value":false}],"controls":[{"node":"moment","symbol":"time","value":35}]},
+            {"id":"lead","name":"Lead","gains":[],"bypass":[{"node":"moment","value":false}],"controls":[{"node":"moment","symbol":"time","value":52}]}
+        ]}},
+        "oxidal":{"graph":{"nodes":[
+            {"id":"in","kind":"input","audioInputs":0,"audioOutputs":2},
+            {"id":"moment","kind":"lv2","audioInputs":2,"audioOutputs":2,"instance":"moment","bypassed":false},
+            {"id":"amp","kind":"lv2","audioInputs":1,"audioOutputs":1,"instance":"amp","bypassed":false},
+            {"id":"out","kind":"output","audioInputs":2,"audioOutputs":0}],
+            "edges":[edge("in",0,"moment",0),edge("in",1,"moment",1),edge("moment",0,"amp",0),
+                edge("amp",0,"out",0),edge("moment",1,"out",1)]},
+            "lv2":[{"id":"moment","pluginUri":uri,"controls":values,"assets":[],"requiredFeatures":[]},
+                   {"id":"amp","pluginUri":amp,"controls":{"gain":-6},"assets":[],"requiredFeatures":[]}],
+            "recall":{"tails":"cut"}}
+    });
+    let bundle = oxidal_presets::Bundle::from_parts(
+        serde_json::to_vec(&manifest).unwrap(),
+        Default::default(),
+    )
+    .unwrap();
+    let revision = oxidal_presets::BundleStore::new(root.join("presets/bundles"))
+        .save(&bundle)
+        .unwrap();
+    json!({"stream":stream(128),"revision":revision})
+}
+
+fn plugin_values(
+    owner: &str,
+    state: &Value,
+    node: &str,
+) -> std::collections::BTreeMap<String, f32> {
+    if owner == "effects" {
+        let prefix = format!("{node}.");
+        state["native_values"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|row| {
+                let symbol = row["target"].as_str()?.strip_prefix(&prefix)?;
+                Some((symbol.to_owned(), row["value"].as_f64()? as f32))
+            })
+            .collect()
+    } else {
+        state["control"]["controls"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|row| {
+                let target = &row["target"];
+                if target["kind"] != "lv2" || target["node"] != node {
+                    return None;
+                }
+                Some((
+                    target["symbol"].as_str()?.to_owned(),
+                    row["value"].as_f64()? as f32,
+                ))
+            })
+            .collect()
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires the actual Mixed and Effects workers, Moment LV2 and ALSA null"]
+async fn plugin_defaults_restore_one_instance_through_worker_save_and_reopen() {
+    let root = std::env::temp_dir().join(format!("oxidal-plugin-defaults-{}", std::process::id()));
+    for (owner, path, variable) in [
+        ("mixed", "rig-audio", "OXIDAL_TEST_RIG_WORKER"),
+        ("effects", "graph-audio", "OXIDAL_TEST_GRAPH_WORKER"),
+    ] {
+        let dir = root.join(owner);
+        let mut settings = moment_and_amp_settings(owner, &dir);
+        let executable = PathBuf::from(std::env::var_os(variable).expect(variable));
+        let (shutdown, signal) = watch::channel(false);
+        let (app, stopped) = router_with_shutdown(Config {
+            debug_socket: None,
+            device_socket: None,
+            native_worker: None,
+            audio_worker: None,
+            simulator: false,
+            media_dir: None,
+            rig_worker: (owner == "mixed").then(|| executable.clone()),
+            graph_worker: (owner == "effects").then_some(executable),
+            mapping_path: dir.join("mappings.json"),
+            preset_dir: dir.join("presets"),
+            ui_dir: dir.join("ui"),
+            shutdown: Some(signal),
+        })
+        .unwrap();
+        let cold = get(&app, path).await;
+        let mut attempted = plugin_defaults(&cold, "moment");
+        attempted["command"]["session"] = json!("offline");
+        attempted["command"]["expected_revision"] = json!(0);
+        command(&app, path, attempted, 409).await;
+        assert_eq!(get(&app, path).await["revision"], cold["revision"]);
+        assert_eq!(get(&app, path).await["device_owned"], false);
+
+        if owner == "effects" {
+            // Legacy Effects recall requires the complete worker control set.
+            // Start an unedited instance to obtain the exact rate-qualified targets.
+            let mut factory = settings.clone();
+            factory["recall"] = Value::Null;
+            command(&app, path, json!({"kind":"start","settings":factory}), 200).await;
+            let worker = phase(&app, path, "running").await;
+            let overrides = settings["recall"]["values"].as_array().unwrap();
+            let values: Vec<_> = worker["control"]["parameters"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|port| {
+                    overrides
+                        .iter()
+                        .find(|value| value["target"] == port["id"])
+                        .cloned()
+                        .unwrap_or_else(|| json!({"target":port["id"],"normalized":port["value"]}))
+                })
+                .collect();
+            settings["recall"]["values"] = json!(values);
+            let saved = oxidal_presets::GraphStore::new(dir.join("presets/graphs")).save(
+                serde_json::from_value(json!({
+                    "version":1,"name":"Caught Moments","sample_rate":48000,"rig":settings["rig"],
+                    "bindings":settings["bindings"],"recall":settings["recall"],
+                })).unwrap()
+            ).unwrap();
+            settings["library_id"] = json!(saved.id);
+            settings["name"] = json!(saved.preset.name);
+            command(&app, path, json!({"kind":"stop"}), 200).await;
+        }
+        command(
+            &app,
+            path,
+            json!({"kind":"start","settings":settings.clone()}),
+            200,
+        )
+        .await;
+        let opening = phase(&app, path, "running").await;
+        let opening_values = plugin_values(owner, &opening, "moment");
+        assert_eq!(opening_values["route"], 0.0);
+        assert_eq!(opening_values["time"], 35.0);
+        assert_eq!(opening_values["width"], 40.0);
+        assert_eq!(
+            opening["control"]["modified"],
+            if owner == "mixed" {
+                json!(false)
+            } else {
+                Value::Null
+            }
+        );
+        let amp = plugin_values(owner, &opening, "amp");
+        let request_body = plugin_defaults(&opening, "moment");
+        let stale_outer = json!({"session":opening["session"],"expected_revision":0,"action":request_body.clone()});
+        assert_eq!(
+            request(&app, "POST", path, Some(stale_outer))
+                .await
+                .status(),
+            409
+        );
+        let mut stale_worker = request_body.clone();
+        stale_worker["command"]["session"] = json!("former-worker");
+        command(&app, path, stale_worker, 409).await;
+        command(
+            &app,
+            path,
+            plugin_defaults(&opening, "Oxidal Moment (Stereo)"),
+            409,
+        )
+        .await;
+        command(&app, path, plugin_defaults(&opening, "out"), 409).await;
+        assert_eq!(get(&app, path).await["revision"], opening["revision"]);
+
+        assert_eq!(
+            request(&app, "POST", "protect", Some(json!({"on":true})))
+                .await
+                .status(),
+            200
+        );
+        command(&app, path, request_body.clone(), 423).await;
+        assert_eq!(
+            request(&app, "POST", "protect", Some(json!({"on":false})))
+                .await
+                .status(),
+            200
+        );
+        if owner == "mixed" {
+            let active = get(&app, path).await;
+            let fading = command(&app, path, json!({"kind":"scene","command":{
+                "session":active["control"]["session"],"expected_revision":active["control"]["revision"],
+                "scene":"lead"}}), 200).await;
+            assert_eq!(fading["control"]["scene_transitioning"], true);
+            command(&app, path, plugin_defaults(&fading, "moment"), 409).await;
+            tokio::time::timeout(Duration::from_secs(3), async {
+                while get(&app, path).await["control"]["scene_transitioning"] != false {
+                    tokio::time::sleep(Duration::from_millis(20)).await;
+                }
+            })
+            .await
+            .expect("Moment scene ramp settled");
+        } else {
+            let gesture = graph_action(
+                &opening,
+                "prepare-effect-edit",
+                json!({
+                    "type":"edit","edit":{"phase":"begin","owner":"fixture","token":"knob","target":"moment.time"}
+                }),
+            );
+            let editing = command(&app, path, gesture, 200).await;
+            command(&app, path, plugin_defaults(&editing, "moment"), 409).await;
+            let cancel = graph_action(
+                &editing,
+                "cancel-effect-edit",
+                json!({
+                    "type":"edit","edit":{"phase":"cancel","owner":"fixture","token":"knob"}
+                }),
+            );
+            command(&app, path, cancel, 200).await;
+        }
+        let active = get(&app, path).await;
+        let restored = command(&app, path, plugin_defaults(&active, "moment"), 200).await;
+        assert_eq!(
+            restored["revision"].as_u64(),
+            active["revision"].as_u64().map(|n| n + 1)
+        );
+        assert_eq!(
+            restored["control"]["revision"].as_u64(),
+            active["control"]["revision"].as_u64().map(|n| n + 1)
+        );
+        assert_eq!(restored["control"]["session"], active["control"]["session"]);
+        assert_eq!(plugin_values(owner, &restored, "amp"), amp);
+        let expected = [
+            ("clock", 100.),
+            ("steps", 1.),
+            ("grit", 0.),
+            ("route", 1.),
+            ("balance", 50.),
+            ("catch", 0.),
+            ("loopmode", 0.),
+            ("length", 100.),
+            ("move", 71.),
+            ("overdub", 0.),
+            ("fade", 100.),
+            ("direct", 0.),
+            ("wet", 1.),
+            ("wetmode", 0.),
+            ("time", 50.),
+            ("shape", 50.),
+            ("tone", 70.),
+            ("chance", 100.),
+            ("freeze", 0.),
+            ("link", 0.),
+            ("bpm", 120.),
+            ("division", 2.),
+            ("width", 0.),
+            ("mix", 50.),
+        ]
+        .into_iter()
+        .map(|(key, value)| (key.to_owned(), value))
+        .collect();
+        assert_eq!(plugin_values(owner, &restored, "moment"), expected);
+        command(&app, path, plugin_defaults(&active, "moment"), 409).await;
+        let mut saved_settings = settings.clone();
+        if owner == "mixed" {
+            assert_eq!(restored["control"]["modified"], true);
+            command(
+                &app,
+                path,
+                json!({"kind":"save","name":"Moment factory defaults"}),
+                200,
+            )
+            .await;
+            for _ in 0..200 {
+                let state = get(&app, path).await;
+                if state["save"]["running"] == false {
+                    saved_settings["revision"] = state["save"]["saved_revision"].clone();
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(25)).await;
+            }
+            assert_ne!(saved_settings["revision"], settings["revision"]);
+            assert!(saved_settings["revision"].is_string());
+        } else {
+            let saved = command(
+                &app,
+                path,
+                json!({"kind":"save_copy","name":"Moment factory defaults"}),
+                200,
+            )
+            .await;
+            let entry = oxidal_presets::GraphStore::new(dir.join("presets/graphs"))
+                .read(saved["saved_copy"].as_str().unwrap())
+                .unwrap();
+            saved_settings["name"] = json!(entry.preset.name);
+            saved_settings["library_id"] = json!(entry.id);
+            saved_settings["recall"] = json!(entry.preset.recall);
+        }
+        command(&app, path, json!({"kind":"stop"}), 200).await;
+        command(
+            &app,
+            path,
+            json!({"kind":"start","settings":saved_settings}),
+            200,
+        )
+        .await;
+        let reopened = phase(&app, path, "running").await;
+        assert_eq!(plugin_values(owner, &reopened, "moment"), expected);
+        if owner == "mixed" {
+            assert_eq!(reopened["control"]["modified"], false);
+        }
+        command(&app, path, json!({"kind":"stop"}), 200).await;
+        command(&app, path, json!({"kind":"start","settings":settings}), 200).await;
+        let original = phase(&app, path, "running").await;
+        assert_eq!(plugin_values(owner, &original, "moment"), opening_values);
+        shutdown.send_replace(true);
+        tokio::time::timeout(Duration::from_secs(8), stopped.wait())
+            .await
+            .unwrap()
+            .unwrap();
+    }
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires the actual Mixed worker, ALSA null and the authored LV2 latency fixture"]
+async fn plugin_defaults_unverified_rollback_releases_the_worker() {
+    let root = std::env::temp_dir().join(format!(
+        "oxidal-plugin-defaults-fault-{}",
+        std::process::id()
+    ));
+    let executable = PathBuf::from(std::env::var_os("OXIDAL_TEST_RIG_WORKER").unwrap());
+    let store = oxidal_presets::BundleStore::new(root.join("presets/bundles"));
+    let edge = |from, a, to, b| json!({"from":{"node":from,"port":a},"to":{"node":to,"port":b}});
+    let manifest = json!({
+        "format":"oxidal.preset","formatVersion":1,"id":"777bee33-09db-4d82-8ed1-ac41390c495b",
+        "name":"Rollback fault fixture","tone3000":{"instances":[]},"resources":[],
+        "requiredExtensions":[],"extensions":{},
+        "oxidal":{"graph":{"nodes":[
+            {"id":"in","kind":"input","audioInputs":0,"audioOutputs":2},
+            {"id":"latent","kind":"lv2","audioInputs":1,"audioOutputs":1,"instance":"latent","bypassed":false},
+            {"id":"out","kind":"output","audioInputs":2,"audioOutputs":0}],
+            "edges":[edge("in",0,"latent",0),edge("latent",0,"out",0),edge("in",1,"out",1)]},
+            "lv2":[{"id":"latent","pluginUri":"urn:oxidal:test:latency","controls":{"delay":13,"mode":9},
+                    "assets":[],"requiredFeatures":[]}],"recall":{"tails":"cut"}}
+    });
+    let bundle = oxidal_presets::Bundle::from_parts(
+        serde_json::to_vec(&manifest).unwrap(),
+        Default::default(),
+    )
+    .unwrap();
+    let revision = store.save(&bundle).unwrap();
+    let (shutdown, signal) = watch::channel(false);
+    let (app, stopped) = router_with_shutdown(Config {
+        debug_socket: None,
+        device_socket: None,
+        native_worker: None,
+        audio_worker: None,
+        simulator: false,
+        media_dir: None,
+        rig_worker: Some(executable),
+        graph_worker: None,
+        mapping_path: root.join("mappings.json"),
+        preset_dir: root.join("presets"),
+        ui_dir: root.join("ui"),
+        shutdown: Some(signal),
+    })
+    .unwrap();
+    let path = "rig-audio";
+    command(
+        &app,
+        path,
+        json!({"kind":"start","settings":{"revision":revision,"stream":stream(128)}}),
+        200,
+    )
+    .await;
+    let running = phase(&app, path, "running").await;
+    let error = command(&app, path, plugin_defaults(&running, "latent"), 409).await;
+    assert!(
+        error["error"]
+            .as_str()
+            .unwrap()
+            .contains("could not be confirmed")
+    );
+    let failed = phase(&app, path, "failed").await;
+    assert_eq!(failed["device_owned"], false);
+    assert_eq!(failed["waiting_for_device"], false);
+    assert_eq!(
+        failed["control"]["revision"],
+        running["control"]["revision"]
+    );
+    assert_eq!(failed["control"]["modified"], false);
+    assert_eq!(plugin_values("mixed", &failed, "latent")["mode"], 9.0);
+    shutdown.send_replace(true);
+    tokio::time::timeout(Duration::from_secs(8), stopped.wait())
+        .await
+        .unwrap()
+        .unwrap();
     std::fs::remove_dir_all(root).unwrap();
 }

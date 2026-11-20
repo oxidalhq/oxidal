@@ -1,5 +1,6 @@
 //! Portable IPC types. Native libraries remain in the child process.
 use oxidal_audio::StreamConfig;
+use oxidal_lv2::protocol::PluginDefaultsCommand;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -336,6 +337,9 @@ pub fn valid_revision(s: &str) -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkerRequest {
+    RestorePluginDefaults {
+        command: PluginDefaultsCommand,
+    },
     Protect {
         on: bool,
     },
@@ -445,6 +449,9 @@ pub struct RigAudioState {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum RigAudioAction {
+    RestorePluginDefaults {
+        command: PluginDefaultsCommand,
+    },
     HostUtility {
         command: oxidal_audio::tools::HostUtility,
     },
