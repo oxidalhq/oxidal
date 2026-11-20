@@ -28,6 +28,7 @@ export function Combobox({
   filter = defaultFilter,
   className,
   id,
+  disabled = false,
 }: {
   options: ComboboxOption[];
   value: string | null;
@@ -38,6 +39,7 @@ export function Combobox({
   filter?: (option: ComboboxOption, query: string) => boolean;
   className?: string;
   id?: string;
+  disabled?: boolean;
 }) {
   const reactId = React.useId();
   const listId = `${id ?? reactId}-list`;
@@ -51,13 +53,14 @@ export function Combobox({
   );
 
   const pick = (option: ComboboxOption) => {
-    if (option.disabled) return;
+    if (disabled || option.disabled) return;
     onChange(option.value);
     setQuery('');
     setOpen(false);
   };
 
   const keys = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (disabled) return;
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       setOpen(true);
@@ -77,7 +80,7 @@ export function Combobox({
   };
 
   return (
-    <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+    <PopoverPrimitive.Root open={open && !disabled} onOpenChange={setOpen}>
       <PopoverPrimitive.Anchor asChild>
         <div
           data-slot="combobox"
@@ -88,14 +91,17 @@ export function Combobox({
         >
           <MagnifyingGlass aria-hidden="true" className="size-4 shrink-0" />
           <input
+            disabled={disabled}
             id={id}
             role="combobox"
             aria-label={label}
-            aria-expanded={open}
+            aria-expanded={open && !disabled}
             aria-controls={listId}
             aria-autocomplete="list"
             aria-activedescendant={
-              open && matches[active] ? `${listId}-${active}` : undefined
+              open && !disabled && matches[active]
+                ? `${listId}-${active}`
+                : undefined
             }
             autoComplete="off"
             className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
@@ -112,6 +118,7 @@ export function Combobox({
           {(query || selected) && (
             <button
               type="button"
+              disabled={disabled}
               aria-label="Clear"
               className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
               onClick={() => {

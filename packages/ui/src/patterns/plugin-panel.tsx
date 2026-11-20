@@ -147,7 +147,7 @@ export function PluginPanel({
     );
     if (c.kind === 'range' && renderRange)
       return (
-        <div key={c.symbol} className="grid gap-1">
+        <div key={c.symbol} className="grid min-w-0 gap-1">
           {heading}
           {renderRange(c)}
         </div>
@@ -169,7 +169,10 @@ export function PluginPanel({
       );
     if (c.kind === 'choice' && c.choices?.length)
       return (
-        <div key={c.symbol} className="grid gap-1">
+        <div
+          key={c.symbol}
+          className="col-span-2 grid min-w-0 gap-1 sm:col-span-3"
+        >
           {heading}
           {c.choices.length <= 3 ? (
             <SegmentedControl
@@ -181,7 +184,11 @@ export function PluginPanel({
               className="w-full"
             >
               {c.choices.map((p) => (
-                <Segment key={p.value} value={String(p.value)}>
+                <Segment
+                  key={p.value}
+                  value={String(p.value)}
+                  className="min-h-touch px-2 py-1 [overflow-wrap:anywhere] whitespace-normal [[data-size=sm]_&]:h-auto"
+                >
                   {p.label}
                 </Segment>
               ))}

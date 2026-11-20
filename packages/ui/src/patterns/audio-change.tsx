@@ -10,6 +10,13 @@ import {
   DialogHeader,
 } from '../components/ui/dialog';
 import { Segment, SegmentedControl } from '../components/ui/segmented';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
 import { Progress } from '../components/ui/states';
 import { Caption } from '../components/ui/text';
 import { ConfirmChange } from './confirm-change';
@@ -20,7 +27,7 @@ const ms = (frames: number, periods: number, rate: number) =>
   ((frames * periods * 2) / rate) * 1000;
 
 export type AudioSetting = { rate: number; frames: number; periods: number };
-export type AudioChangePhase = 'idle' | 'restarting' | 'proving';
+export type AudioChangePhase = 'idle' | 'restarting' | 'proving' | 'reverting';
 export type BufferTrial = { frames: number; periods: number; xruns: number };
 export type BufferFinderRun = {
   /** Sizes tried so far, in order. */
@@ -45,27 +52,98 @@ export function AudioChange({
   finder,
   onApply,
   onSettle,
+  choices,
+  disabled = false,
+  additionalChanges = false,
+  details,
+  currentBufferMs,
+  confirmation,
+  canKeep = true,
+  confirmationDisabled,
+  canApply = true,
+  onReset,
+  value,
+  onChange,
+  waiting,
+  recovery,
 }: {
   current: AudioSetting;
   phase: AudioChangePhase;
   /** While proving: seconds until it goes back on its own. */
   secondsLeft: number;
-  finder: BufferFinderRun;
+  finder?: BufferFinderRun;
+  choices?: { rates: number[]; frames: number[]; periods: number[] };
+  disabled?: boolean;
+  additionalChanges?: boolean;
+  details?: React.ReactNode;
+  currentBufferMs?: number;
+  confirmation?: React.ReactNode;
+  canKeep?: boolean;
+  confirmationDisabled?: boolean;
+  canApply?: boolean;
+  onReset?: () => void;
+  value?: AudioSetting;
+  onChange?: (value: AudioSetting) => void;
+  waiting?: string;
+  recovery?: React.ReactNode;
   onApply: (setting: AudioSetting) => void;
   /** Keep the new setting (true) or go back now (false). */
   onSettle: (keep: boolean) => void;
 }) {
-  const [draft, setDraft] = React.useState(current);
+  const [localDraft, setLocalDraft] = React.useState(current);
+  const draft = value ?? localDraft;
+  const setDraft = (next: AudioSetting) =>
+    onChange ? onChange(next) : setLocalDraft(next);
   const [finding, setFinding] = React.useState(false);
-  const [seen, setSeen] = React.useState(current);
-  if (seen !== current) {
-    setSeen(current);
-    setDraft(current);
+  const currentKey = JSON.stringify(current);
+  const [seen, setSeen] = React.useState(currentKey);
+  if (seen !== currentKey) {
+    setSeen(currentKey);
+    setLocalDraft(current);
   }
   const apply = (next: AudioSetting) => onApply(next);
   const settle = onSettle;
   const left = secondsLeft;
-  const changed = JSON.stringify(draft) !== JSON.stringify(current);
+  const changed = JSON.stringify(draft) !== currentKey || additionalChanges;
+  const locked = disabled || phase !== 'idle';
+  const field = (
+    key: keyof AudioSetting,
+    label: string,
+    values: number[],
+    format: (value: number) => string = String,
+  ) =>
+    choices !== undefined || values.length > 5 ? (
+      <Select
+        value={String(draft[key])}
+        disabled={locked}
+        onValueChange={(value) => setDraft({ ...draft, [key]: Number(value) })}
+      >
+        <SelectTrigger aria-label={label}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {values.map((value) => (
+            <SelectItem key={value} value={String(value)}>
+              {format(value)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    ) : (
+      <SegmentedControl
+        size="sm"
+        value={String(draft[key])}
+        disabled={locked}
+        onValueChange={(value) => setDraft({ ...draft, [key]: Number(value) })}
+        aria-label={label}
+      >
+        {values.map((value) => (
+          <Segment key={value} value={String(value)}>
+            {format(value)}
+          </Segment>
+        ))}
+      </SegmentedControl>
+    );
 
   return (
     <section
@@ -76,8 +154,10 @@ export function AudioChange({
         <span className="text-md font-semibold">Adjust current session</span>
         <span className="font-mono text-sm tabular-nums">
           {current.frames} × {current.periods} · {current.rate / 1000} kHz ·{' '}
-          {ms(current.frames, current.periods, current.rate).toFixed(1)} ms
-          calculated buffer time
+          {(
+            currentBufferMs ?? ms(current.frames, current.periods, current.rate)
+          ).toFixed(1)}{' '}
+          ms calculated buffer time
         </span>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
@@ -85,64 +165,74 @@ export function AudioChange({
           <span className="small-caps text-xs text-muted-foreground">
             Sample rate
           </span>
-          <SegmentedControl
-            size="sm"
-            value={String(draft.rate)}
-            onValueChange={(v) => setDraft({ ...draft, rate: Number(v) })}
-            aria-label="Session sample rate"
-          >
-            {RATES.map((r) => (
-              <Segment key={r} value={r}>{`${Number(r) / 1000} kHz`}</Segment>
-            ))}
-          </SegmentedControl>
+          {field(
+            'rate',
+            'Session sample rate',
+            choices?.rates ?? RATES.map(Number),
+            (value) => `${value / 1000} kHz`,
+          )}
         </div>
         <div className="grid gap-1">
           <span className="small-caps text-xs text-muted-foreground">
             Buffer
           </span>
-          <SegmentedControl
-            size="sm"
-            value={String(draft.frames)}
-            onValueChange={(v) => setDraft({ ...draft, frames: Number(v) })}
-            aria-label="Session buffer"
-          >
-            {FRAMES.map((f) => (
-              <Segment key={f} value={f}>
-                {f}
-              </Segment>
-            ))}
-          </SegmentedControl>
+          {field(
+            'frames',
+            'Session buffer',
+            choices?.frames ?? FRAMES.map(Number),
+          )}
         </div>
         <div className="grid gap-1">
           <span className="small-caps text-xs text-muted-foreground">
             Periods
           </span>
-          <SegmentedControl
-            size="sm"
-            value={String(draft.periods)}
-            onValueChange={(v) => setDraft({ ...draft, periods: Number(v) })}
-            aria-label="Session buffer periods"
-          >
-            {['2', '3', '4'].map((p) => (
-              <Segment key={p} value={p}>
-                {p}
-              </Segment>
-            ))}
-          </SegmentedControl>
+          {field(
+            'periods',
+            'Session buffer periods',
+            choices?.periods ?? [2, 3, 4],
+          )}
         </div>
       </div>
+      {details && (
+        <fieldset disabled={locked} className="grid min-w-0 gap-3">
+          {details}
+        </fieldset>
+      )}
       {phase === 'idle' && (
         <div className="flex flex-wrap items-center gap-2">
-          <Button disabled={!changed} onClick={() => apply(draft)}>
+          <Button
+            disabled={!changed || disabled || !canApply}
+            onClick={() => apply(draft)}
+          >
             Apply and restart audio
           </Button>
-          <Button variant="outline" onClick={() => setFinding(true)}>
-            Find the smallest safe buffer…
-          </Button>
+          {finder && (
+            <Button
+              variant="outline"
+              disabled={disabled}
+              onClick={() => setFinding(true)}
+            >
+              Find the smallest safe buffer…
+            </Button>
+          )}
+          {changed && (
+            <Button
+              variant="outline"
+              disabled={disabled}
+              onClick={() => {
+                setDraft(current);
+                onReset?.();
+              }}
+            >
+              Reset changes
+            </Button>
+          )}
           {changed && (
             <Caption as="span" className="text-xs">
               {ms(draft.frames, draft.periods, draft.rate).toFixed(1)} ms
-              calculated buffer time. Your tone stays as it is.
+              calculated buffer time; one period{' '}
+              {((1000 * draft.frames) / draft.rate).toFixed(2)} ms. Your tone
+              stays as it is.
             </Caption>
           )}
         </div>
@@ -150,12 +240,24 @@ export function AudioChange({
       <ConfirmChange
         open={phase !== 'idle'}
         title="Keep this audio setting?"
-        applying={phase === 'restarting' ? 'Restarting audio…' : undefined}
+        applying={
+          waiting ??
+          (phase === 'restarting'
+            ? 'Restarting audio…'
+            : phase === 'reverting'
+              ? 'Restoring previous audio settings…'
+              : undefined)
+        }
+        recovery={recovery}
+        disabled={confirmationDisabled ?? disabled}
+        keepDisabled={!canKeep}
+        canGoBackWhileApplying={phase === 'restarting'}
         body={
           <>
             Audio is back at {current.frames} × {current.periods},{' '}
             {current.rate / 1000} kHz. Check the sound and reported dropouts
             before keeping it.
+            {confirmation}
           </>
         }
         secondsLeft={left}
@@ -164,13 +266,15 @@ export function AudioChange({
         onKeep={() => settle(true)}
         onGoBack={() => settle(false)}
       />
-      <BufferFinder
-        {...finder}
-        open={finding}
-        onOpenChange={setFinding}
-        rate={current.rate}
-        onUse={(s) => apply({ ...s, rate: current.rate })}
-      />
+      {finder && (
+        <BufferFinder
+          {...finder}
+          open={finding}
+          onOpenChange={setFinding}
+          rate={current.rate}
+          onUse={(s) => apply({ ...s, rate: current.rate })}
+        />
+      )}
     </section>
   );
 }

@@ -1,4 +1,12 @@
-import { Minus, Pause, Play, Plus, TextAa } from '@phosphor-icons/react';
+import {
+  ArrowDown,
+  ArrowUp,
+  Minus,
+  Pause,
+  Play,
+  Plus,
+  TextAa,
+} from '@phosphor-icons/react';
 import * as React from 'react';
 
 import { Badge } from '../components/ui/badge';
@@ -12,6 +20,7 @@ import {
   type Song,
   type SongLine,
 } from '../lib/song';
+import { useMotion } from '../lib/use-media';
 
 /** Text sizes the player steps through with A− and A+, in rem. */
 const SHEET_SIZES = [0.875, 1, 1.125, 1.25, 1.5, 1.75, 2, 2.5, 3] as const;
@@ -105,10 +114,16 @@ export function SheetViewer({
   const scroller = React.useRef<HTMLDivElement>(null);
   const [scrolling, setScrolling] = React.useState(false);
   const [showChords, setShowChords] = React.useState(true);
+  const motion = useMotion();
+  const [previousMotion, setPreviousMotion] = React.useState(motion);
+  if (previousMotion !== motion) {
+    setPreviousMotion(motion);
+    if (!motion) setScrolling(false);
+  }
   const chords = hasChords(song);
 
   React.useEffect(() => {
-    if (!scrolling) return;
+    if (!motion || !scrolling) return;
     let frame = 0;
     let last = performance.now();
     let carry = 0;
@@ -133,7 +148,20 @@ export function SheetViewer({
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [scrolling, speed]);
+  }, [motion, scrolling, speed]);
+
+  const stepPage = (direction: number) => {
+    const element = scroller.current;
+    if (!element) return;
+    const overlap = Math.max(1, Math.floor(element.clientHeight * 0.9));
+    element.scrollTop = Math.max(
+      0,
+      Math.min(
+        element.scrollHeight - element.clientHeight,
+        element.scrollTop + direction * overlap,
+      ),
+    );
+  };
 
   const facts = [
     song.key && `Key ${song.key}`,
@@ -190,10 +218,10 @@ export function SheetViewer({
         tabIndex={0}
         role="document"
         aria-label={`${song.title} words${chords && showChords ? ' and chords' : ''}`}
-        onClick={() => setScrolling((on) => !on)}
+        onClick={() => motion && setScrolling((on) => !on)}
         onWheel={() => scrolling && setScrolling(false)}
         onTouchStart={() => scrolling && setScrolling(false)}
-        className="min-h-0 cursor-default overflow-y-auto px-4 py-4 leading-[1.45] outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+        className="min-h-0 cursor-default overflow-y-auto px-4 py-4 leading-[1.45] [overflow-wrap:anywhere] outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
         style={{ fontSize: `${SHEET_SIZES[size] ?? 1.25}rem` }}
       >
         <div className="grid max-w-[60ch] gap-[0.15em] pb-[40vh]">
@@ -239,46 +267,61 @@ export function SheetViewer({
             Chords
           </Toggle>
         )}
-        <div
-          role="group"
-          aria-label="Auto-scroll"
-          className="flex items-center gap-1"
-        >
-          <Button
-            size="icon"
-            variant="outline"
-            aria-label="Scroll slower"
-            disabled={!onSpeed || speed <= 1}
-            onClick={() => setSpeed(speed - 1)}
+        {!motion ? (
+          <div
+            role="group"
+            aria-label="Page stepping"
+            className="flex items-center gap-1"
           >
-            <Minus />
-          </Button>
-          <Button
-            size="icon"
-            variant={scrolling ? 'default' : 'outline'}
-            aria-label={scrolling ? 'Pause scrolling' : 'Start scrolling'}
-            aria-pressed={scrolling}
-            onClick={() => setScrolling((on) => !on)}
+            <Button size="sm" variant="outline" onClick={() => stepPage(-1)}>
+              <ArrowUp /> Previous page
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => stepPage(1)}>
+              <ArrowDown /> Next page
+            </Button>
+          </div>
+        ) : (
+          <div
+            role="group"
+            aria-label="Auto-scroll"
+            className="flex items-center gap-1"
           >
-            {scrolling ? <Pause weight="fill" /> : <Play weight="fill" />}
-          </Button>
-          <Readout
-            size="sm"
-            className="w-8 text-center"
-            aria-label={`Scroll speed ${speed} of 10`}
-          >
-            {speed}
-          </Readout>
-          <Button
-            size="icon"
-            variant="outline"
-            aria-label="Scroll faster"
-            disabled={!onSpeed || speed >= 10}
-            onClick={() => setSpeed(speed + 1)}
-          >
-            <Plus />
-          </Button>
-        </div>
+            <Button
+              size="icon"
+              variant="outline"
+              aria-label="Scroll slower"
+              disabled={!onSpeed || speed <= 1}
+              onClick={() => setSpeed(speed - 1)}
+            >
+              <Minus />
+            </Button>
+            <Button
+              size="icon"
+              variant={scrolling ? 'default' : 'outline'}
+              aria-label={scrolling ? 'Pause scrolling' : 'Start scrolling'}
+              aria-pressed={scrolling}
+              onClick={() => setScrolling((on) => !on)}
+            >
+              {scrolling ? <Pause weight="fill" /> : <Play weight="fill" />}
+            </Button>
+            <Readout
+              size="sm"
+              className="w-8 text-center"
+              aria-label={`Scroll speed ${speed} of 10`}
+            >
+              {speed}
+            </Readout>
+            <Button
+              size="icon"
+              variant="outline"
+              aria-label="Scroll faster"
+              disabled={!onSpeed || speed >= 10}
+              onClick={() => setSpeed(speed + 1)}
+            >
+              <Plus />
+            </Button>
+          </div>
+        )}
       </footer>
     </section>
   );

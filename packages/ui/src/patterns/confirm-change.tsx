@@ -27,6 +27,7 @@ export function ConfirmChange({
   totalSeconds,
   keepLabel,
   disabled = false,
+  keepDisabled = false,
   canGoBackWhileApplying = false,
   recovery,
   onKeep,
@@ -42,6 +43,7 @@ export function ConfirmChange({
   totalSeconds: number;
   keepLabel: string;
   disabled?: boolean;
+  keepDisabled?: boolean;
   /** Network rollback remains available while activation is in progress. */
   canGoBackWhileApplying?: boolean;
   recovery?: React.ReactNode;
@@ -88,7 +90,10 @@ export function ConfirmChange({
           >
             Go back now
           </Button>
-          <Button onClick={onKeep} disabled={disabled || Boolean(applying)}>
+          <Button
+            onClick={onKeep}
+            disabled={disabled || keepDisabled || Boolean(applying)}
+          >
             {keepLabel}
           </Button>
         </DialogFooter>
