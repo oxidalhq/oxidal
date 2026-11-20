@@ -35,7 +35,7 @@ export type Pack = {
 export type BuiltInEffect = { name: string; caption: string };
 
 /**
- * Effects that come with Oxidal. Oxidal's own four are original Rust; the
+ * Effects that come with Oxidal. Oxidal's own five are original Rust; the
  * TONE3000 engine's are part of that engine and named as such. Plugin
  * packs (LV2, made by others and installed by the player) have their own
  * page, because installing is a different job.

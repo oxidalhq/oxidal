@@ -1,6 +1,7 @@
 import type { BlockSource } from '../widgets/block-source';
 import { SOURCES } from '../widgets/block-source.data';
 import type { EffectChoice } from './block-chooser';
+import { moment } from './moment.fixture';
 import { delay, drive, gate, mod, reverb } from './rig.fixtures';
 
 const named =
@@ -11,6 +12,13 @@ const named =
   });
 
 const LIST: EffectChoice[] = [
+  {
+    id: 'moment',
+    label: 'Moment',
+    kind: 'Micro-looper',
+    from: 'oxidal',
+    make: moment,
+  },
   {
     id: 'bloom',
     label: 'Bloom reverb',

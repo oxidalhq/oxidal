@@ -42,6 +42,7 @@ export const OWN_EFFECTS: BuiltInEffect[] = [
   'Bloom reverb',
   'Echo delay',
   'Motion',
+  'Moment',
   'Sustain',
 ].map((name) => ({ name, caption: "Oxidal's own · Rust · built in" }));
 export const ENGINE_EFFECTS: BuiltInEffect[] = [

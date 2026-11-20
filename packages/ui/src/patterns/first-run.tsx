@@ -1,34 +1,36 @@
-import { CheckCircle } from '@phosphor-icons/react';
-import * as React from 'react';
-
 import { Button } from '../components/ui/button';
 import { Caption, Eyebrow, Title } from '../components/ui/text';
 
 const STEPS = [
   {
     title: 'Put Oxidal on your Wi-Fi',
-    why: 'So it is at oxidal.local after every restart. Until then you reach it on its own hotspot.',
+    why: 'Choose how to reach this device. Network settings show its current addresses, hotspot and certificate setup.',
     where: 'Settings › Network',
+    route: 'settings/connections',
   },
   {
     title: 'Connect your audio interface',
     why: 'Choose the interface and let Oxidal find a buffer that plays without dropouts.',
     where: 'Settings › Audio',
+    route: 'settings/audio',
   },
   {
     title: 'Set your input level',
-    why: 'Play your loudest chord once; Oxidal sets the trim for that guitar.',
+    why: 'Choose your guitar, then check its input level while playing your loudest chord.',
     where: 'Guitars › Input level',
+    route: 'guitars',
   },
   {
     title: 'Pair your foot controller',
     why: 'Press each switch so Oxidal learns it. Skip this if you have none.',
     where: 'Settings › MIDI',
+    route: 'settings/midi',
   },
   {
     title: 'Get a tone',
     why: 'Try a finished Oxidal sound, or get a capture from TONE3000.',
     where: 'Library › Oxidal sounds or TONE3000',
+    route: 'library/oxidal',
   },
 ] as const;
 
@@ -38,15 +40,16 @@ const STEPS = [
  * it the device is only reachable on its own hotspot after a restart. Every
  * step can be skipped.
  */
+export type FirstRunRoute = (typeof STEPS)[number]['route'];
+
 export function FirstRun({
   onDone,
   onStep,
 }: {
   onDone?: () => void;
   /** A step's "Do it": where to take the player, such as "Settings › MIDI". */
-  onStep?: (where: string) => void;
+  onStep?: (route: FirstRunRoute) => void;
 }) {
-  const [done, setDone] = React.useState<Set<number>>(new Set());
   return (
     <div className="mx-auto grid max-w-2xl gap-5 px-page py-8">
       <div className="grid gap-3">
@@ -71,20 +74,12 @@ export function FirstRun({
               key={step.title}
               className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5"
             >
-              {done.has(i) ? (
-                <CheckCircle
-                  weight="fill"
-                  aria-label="Done"
-                  className="size-7"
-                />
-              ) : (
-                <span
-                  aria-hidden="true"
-                  className="grid size-7 place-items-center rounded-full border border-foreground font-mono text-sm font-semibold"
-                >
-                  {i + 1}
-                </span>
-              )}
+              <span
+                aria-hidden="true"
+                className="grid size-7 place-items-center rounded-full border border-foreground font-mono text-sm font-semibold"
+              >
+                {i + 1}
+              </span>
               <span className="grid gap-0.5">
                 <span className="text-sm font-semibold">{step.title}</span>
                 <Caption as="span" className="text-xs">
@@ -96,21 +91,18 @@ export function FirstRun({
               </span>
               <Button
                 size="sm"
-                variant={done.has(i) ? 'ghost' : 'outline'}
-                aria-label={`${done.has(i) ? 'Done' : 'Do it'}: ${step.title}`}
-                onClick={() => {
-                  setDone((d) => new Set(d).add(i));
-                  onStep?.(step.where);
-                }}
+                variant="outline"
+                aria-label={`Open: ${step.title}`}
+                onClick={() => onStep?.(step.route)}
               >
-                {done.has(i) ? 'Done' : 'Do it'}
+                Open
               </Button>
             </li>
           ))}
         </ol>
       </section>
       <Button className="justify-self-end" onClick={onDone}>
-        {done.size === STEPS.length ? 'Start playing' : 'Skip to the rig'}
+        Go to Rig
       </Button>
     </div>
   );

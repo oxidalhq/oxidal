@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 
 import { blocksOf, insertStep, type ListPath } from '../lib/route';
+import { applyScene } from '../lib/scene';
 import type { BlockModel } from '../widgets/block-editor';
+import type { SceneModel } from '../widgets/scene-editor';
 import type { PresetVersion } from '../widgets/versions';
 import { NEW_BLOCK, SCENES } from './rig.fixtures';
 import type { RigRoute } from './rig-surface';
@@ -22,7 +24,7 @@ const SIMULATED_GAIN: Record<string, number> = {
  * the saved version, versions, scenes, held-out block and a meter
  * simulation that follows the route (a held or bypassed block drops out).
  */
-export function useRigDemo(initial: RigRoute) {
+export function useRigDemo(initial: RigRoute, initialScenes?: SceneModel[]) {
   const [versions, setVersions] = useState<PresetVersion[]>([
     {
       id: 'default',
@@ -44,17 +46,25 @@ export function useRigDemo(initial: RigRoute) {
   const saved = savedBy[current] ?? initial;
   const [route, setRoute] = useState<RigRoute>(initial);
   const [scene, setScene] = useState<string | null>(SCENES[1]!.id);
+  const [settings, setSettings] = useState(initialScenes);
+  const [savedScenes, setSavedScenes] = useState<
+    Record<string, SceneModel[] | undefined>
+  >({});
   const [held, setHeld] = useState<string | null>(null);
   const [levels, setLevels] = useState<Record<string, number>>({});
   const [input, setInput] = useState(-24);
 
   useEffect(() => {
+    const sounding = applyScene(
+      route,
+      settings?.find((s) => s.id === scene),
+    );
     const timer = setInterval(() => {
       const base = -26 + Math.random() * 8;
       setInput(base);
       let level = base;
       const next: Record<string, number> = {};
-      for (const block of blocksOf<BlockModel>(route)) {
+      for (const block of blocksOf<BlockModel>(sounding)) {
         if (block.on && block.id !== held)
           level = Math.min(
             2,
@@ -67,11 +77,14 @@ export function useRigDemo(initial: RigRoute) {
       setLevels(next);
     }, 180);
     return () => clearInterval(timer);
-  }, [route, held]);
+  }, [route, held, settings, scene]);
 
   return {
     route,
     saved,
+    settings,
+    setSettings,
+    savedSettings: savedScenes[current] ?? initialScenes,
     versions,
     current,
     scene,
@@ -86,13 +99,18 @@ export function useRigDemo(initial: RigRoute) {
     onRoute: setRoute,
     onVersion: (id: string) => {
       setCurrent(id);
+      setSettings(savedScenes[id] ?? initialScenes);
       setRoute(savedBy[id] ?? initial);
     },
-    onSaveVersion: () => setSavedBy((all) => ({ ...all, [current]: route })),
+    onSaveVersion: () => {
+      setSavedBy((all) => ({ ...all, [current]: route }));
+      setSavedScenes((all) => ({ ...all, [current]: settings }));
+    },
     onSaveVersionAs: (name: string) => {
       const id = `v-${Date.now()}`;
       setVersions((all) => [...all, { id, name, note: 'Saved just now' }]);
       setSavedBy((all) => ({ ...all, [id]: route }));
+      setSavedScenes((all) => ({ ...all, [id]: settings }));
       setCurrent(id);
     },
     onMakeDefault: (id: string) =>

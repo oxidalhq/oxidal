@@ -34,7 +34,7 @@ export type BufferFinderRun = {
 
 /**
  * Change the running session's rate or buffer without touching the tone:
- * pick, see the round-trip latency it gives, apply. Audio restarts for a
+ * pick, see its calculated buffer time, apply. Audio restarts for a
  * moment, then the new setting has fifteen seconds to prove itself: Keep
  * it, or it goes back on its own.
  */
@@ -77,7 +77,7 @@ export function AudioChange({
         <span className="font-mono text-sm tabular-nums">
           {current.frames} × {current.periods} · {current.rate / 1000} kHz ·{' '}
           {ms(current.frames, current.periods, current.rate).toFixed(1)} ms
-          round trip
+          calculated buffer time
         </span>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
@@ -141,8 +141,8 @@ export function AudioChange({
           </Button>
           {changed && (
             <Caption as="span" className="text-xs">
-              {ms(draft.frames, draft.periods, draft.rate).toFixed(1)} ms round
-              trip. Your tone stays as it is.
+              {ms(draft.frames, draft.periods, draft.rate).toFixed(1)} ms
+              calculated buffer time. Your tone stays as it is.
             </Caption>
           )}
         </div>
@@ -154,8 +154,8 @@ export function AudioChange({
         body={
           <>
             Audio is back at {current.frames} × {current.periods},{' '}
-            {current.rate / 1000} kHz, with no dropouts. If it sounds right,
-            keep it.
+            {current.rate / 1000} kHz. Check the sound and reported dropouts
+            before keeping it.
           </>
         }
         secondsLeft={left}
@@ -245,7 +245,8 @@ export function BufferFinder({
           {done && best && (
             <p role="status" className="m-0 text-sm font-semibold">
               Smallest clean setting: {best.frames} × {best.periods},{' '}
-              {ms(best.frames, best.periods, rate).toFixed(1)} ms round trip.
+              {ms(best.frames, best.periods, rate).toFixed(1)} ms calculated
+              buffer time.
             </p>
           )}
         </DialogBody>

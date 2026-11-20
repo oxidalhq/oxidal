@@ -33,6 +33,7 @@ import { StemWorkspaceDemo } from '../patterns/stem-workspace.demo';
 import { useModelDownloads } from '../patterns/swap.demo';
 import { MODELS } from '../patterns/swap.fixtures';
 import { Workspace } from '../patterns/workspace';
+import { CaptureSceneSheet } from './capture-scene-sheet';
 import {
   DI,
   PRESETS,
@@ -45,6 +46,7 @@ import {
 import { LIBRARY_SECTIONS } from './library.sections';
 import { SetListSection } from './set-list-section';
 import { Songbook } from './songbook';
+import { useCaptureScenes } from './use-capture-scenes';
 
 /** Library › TONE3000: the same search the rig's Change sheet uses. */
 function Tone3000Section() {
@@ -70,6 +72,8 @@ function Tone3000Section() {
  * people come for; everything else sits in the details beside the list.
  */
 export function Library({ section: initial = 'mine' }: { section?: string }) {
+  const editor = useCaptureScenes();
+  const [scene, selectScene] = useState<string | null>('b');
   const [section, setSection] = useState(initial);
   const [query, setQuery] = useState('');
   const [view, setView] = useState<'list' | 'artwork'>('list');
@@ -106,6 +110,11 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
     filter === 'all' ? items : items.filter((i) => i.kind === filter);
   return (
     <>
+      <CaptureSceneSheet
+        editor={editor}
+        active={scene}
+        onSelect={selectScene}
+      />
       <PageHeading
         eyebrow="Library"
         title={
@@ -126,6 +135,16 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
           <LibraryList
             {...common}
             items={use(PRESETS)}
+            detail={(item) =>
+              item.id === 'p1' && (
+                <Button
+                  variant="outline"
+                  onClick={() => editor.onOpenChange(true)}
+                >
+                  Edit scenes
+                </Button>
+              )
+            }
             view={view}
             onView={setView}
             noun={['preset', 'presets']}

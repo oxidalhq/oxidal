@@ -46,6 +46,7 @@ export function ChainBlock({
   onSelect,
   onPointerDown,
   className,
+  ...buttonProps
 }: {
   block: ChainBlockModel;
   selected?: boolean;
@@ -61,7 +62,7 @@ export function ChainBlock({
   onSelect: (id: string) => void;
   onPointerDown?: (event: React.PointerEvent<HTMLButtonElement>) => void;
   className?: string;
-}) {
+} & Omit<React.ComponentProps<'button'>, 'onSelect' | 'onClick' | 'children'>) {
   return (
     <button
       type="button"
@@ -87,14 +88,18 @@ export function ChainBlock({
       onClick={() => onSelect(block.id)}
       onPointerDown={onPointerDown}
       data-in-scene={tint ? true : undefined}
-      style={
-        tint && !selected
-          ? {
-              backgroundColor: `color-mix(in oklab, ${tint} 12%, var(--card))`,
-              borderColor: `color-mix(in oklab, ${tint} 45%, var(--input))`,
-            }
-          : undefined
-      }
+      {...buttonProps}
+      style={{
+        ...(tint && selected
+          ? { boxShadow: `inset 0 -3px ${tint}` }
+          : tint
+            ? {
+                backgroundColor: `color-mix(in oklab, ${tint} 12%, var(--card))`,
+                borderColor: `color-mix(in oklab, ${tint} 45%, var(--input))`,
+              }
+            : {}),
+        ...buttonProps.style,
+      }}
       className={cn(
         'group/block relative grid shrink-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2.5 rounded-pad border border-input bg-card text-left transition-[background-color,transform,box-shadow] duration-[var(--duration-fast)] select-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-40',
         size === 'md'
@@ -111,7 +116,7 @@ export function ChainBlock({
       <span
         aria-hidden="true"
         className={cn(
-          'relative grid size-9 place-items-center rounded-lg border [&_svg]:size-5',
+          'relative grid size-9 place-items-center rounded-lg border [&_img]:size-full [&_img]:rounded-md [&_img]:object-cover [&_svg]:size-5',
           selected
             ? 'border-background/40 bg-background/10'
             : 'border-border bg-background',

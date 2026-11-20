@@ -2,6 +2,7 @@ import type { LibraryItem } from '../patterns/library-list';
 import { SOURCES } from '../widgets/block-source.data';
 import type { BlockKind } from '../widgets/chain';
 import type { ResourceReadings } from '../widgets/resource-strip';
+import { CAPTURE_ROUTE } from './four-captures.fixtures';
 
 /** Realistic data for the screen stories; names from the product's showcase recipes. */
 export const READINGS: ResourceReadings = {
@@ -36,12 +37,12 @@ export const PRESETS: LibraryItem[] = [
   {
     id: 'p1',
     title: 'Rhythm section',
-    caption: 'Plexi 50 · 6 blocks · 4 scenes',
-    about: 'Tight crunch for verses, with a boost and an echo on its scenes.',
+    caption: '4 full-rig NAM captures · 4 scenes',
+    about: 'One full-rig capture per scene, with TS9 drive on Lead and Dirt.',
     badge: { text: 'Playing', tone: 'live' },
-    chain: CRUNCH,
+    chain: CAPTURE_ROUTE,
     facts: [
-      ['Scenes', 'Clean, Crunch, Lead, Ambient'],
+      ['Scenes', 'Clean, Crunch, Lead, Dirt'],
       ['Versions', 'Default, Friday gig'],
       ['Set lists', 'Friday set'],
       ['Saved', '14 Nov'],

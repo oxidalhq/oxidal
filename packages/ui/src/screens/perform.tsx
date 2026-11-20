@@ -48,9 +48,11 @@ import { SheetViewer } from '../widgets/sheet-viewer';
 import { TapTempo } from '../widgets/tap-tempo';
 import { Transport } from '../widgets/transport';
 import { TunerFace } from '../widgets/tuner-face';
+import { CaptureSceneSheet } from './capture-scene-sheet';
 import { FRIDAY_SET } from './perform.data';
 import { PlayerSheet } from './sheets';
 import { SONGS } from './songs.data';
+import { useCaptureScenes } from './use-capture-scenes';
 
 /**
  * The stage. Built for a screen a metre or two away — on the floor, on a
@@ -78,12 +80,34 @@ export function Perform({
   /** Start with the full player open. */
   player?: boolean;
 }) {
+  const editor = useCaptureScenes();
   const [index, setIndex] = useState(0);
   const [scene, setScene] = useState<string | null>('a');
-  const [blocks, setBlocks] = useState<StageState['blocks']>({
-    ts9: { label: 'TS9', on: true },
-    echo: { label: 'Echo', on: false },
-  });
+  const [blockOverrides, setBlockOverrides] = useState<Record<string, boolean>>(
+    {},
+  );
+  const blocks: StageState['blocks'] = {
+    ts9: {
+      label: 'TS9',
+      on:
+        blockOverrides.ts9 ??
+        (index === 0
+          ? (editor.scenes.find((s) => s.id === scene)?.on.ts9 ?? true)
+          : true),
+    },
+    echo: {
+      label: 'Echo',
+      on:
+        blockOverrides.echo ??
+        (index === 0
+          ? (editor.scenes.find((s) => s.id === scene)?.on.echo ?? false)
+          : false),
+    },
+  };
+  const selectScene = (id: string) => {
+    setBlockOverrides({});
+    setScene(id);
+  };
   const [boost, setBoost] = useState(false);
   const [tuner, setTuner] = useState(false);
   const [playing, setPlaying] = useState(true);
@@ -103,7 +127,8 @@ export function Perform({
   const next = FRIDAY_SET[index + 1];
   const profile =
     CONTROLLERS.find((c) => c.id === controller) ?? CONTROLLERS[0]!;
-  const sceneName = SCENES.find((s) => s.id === scene)?.name;
+  const scenes = index === 0 ? editor.scenes : SCENES;
+  const sceneName = scenes.find((s) => s.id === scene)?.name;
   const song = useMemo(() => {
     const found = entry.song
       ? SONGS.find((s) => s.id === entry.song)
@@ -117,22 +142,22 @@ export function Perform({
   const go = (to: number) => {
     const at = Math.max(0, Math.min(FRIDAY_SET.length - 1, to));
     setIndex(at);
-    setScene('a');
+    selectScene('a');
     setBpm(FRIDAY_SET[at]!.bpm ?? bpm);
   };
 
   const act = (action: SwitchAction) => {
     switch (action.kind) {
       case 'scene':
-        return setScene(action.scene);
+        return selectScene(action.scene);
       case 'previous':
         return go(index - 1);
       case 'next':
         return go(index + 1);
       case 'block':
-        return setBlocks((all) => ({
+        return setBlockOverrides((all) => ({
           ...all,
-          [action.block]: { ...all[action.block]!, on: !all[action.block]?.on },
+          [action.block]: !blocks[action.block]?.on,
         }));
       case 'tuner':
         return setTuner((on) => !on);
@@ -158,7 +183,7 @@ export function Perform({
 
   const state: StageState = {
     scene,
-    scenes: SCENES,
+    scenes,
     blocks,
     boost,
     tuner,
@@ -251,6 +276,11 @@ export function Perform({
         </div>
       </div>
 
+      <CaptureSceneSheet
+        editor={editor}
+        active={scene}
+        onSelect={selectScene}
+      />
       {/* What is playing. */}
       <div className="grid justify-items-center gap-0.5 text-center">
         <Eyebrow
@@ -263,7 +293,7 @@ export function Perform({
               className="size-2 rounded-full"
               style={{
                 backgroundColor: sceneColour(
-                  SCENES.findIndex((s) => s.id === scene),
+                  scenes.findIndex((s) => s.id === scene),
                 ),
               }}
             />
@@ -287,6 +317,17 @@ export function Perform({
               ? 'Default version'
               : `${entry.version} version`}
           </span>
+          {index === 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={protect}
+              title={protect ? 'Turn Protect off to edit scenes' : undefined}
+              onClick={() => editor.onOpenChange(true)}
+            >
+              {protect ? 'Edit scenes (protected)' : 'Edit scenes'}
+            </Button>
+          )}
           {next && (
             <>
               <span aria-hidden="true">·</span>

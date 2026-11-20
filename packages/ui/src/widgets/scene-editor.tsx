@@ -183,6 +183,7 @@ export function SceneEditor({
         name: `Scene ${scenes.length + 1}`,
         on: { ...(from?.on ?? {}) },
         levels: structuredClone(from?.levels ?? {}),
+        values: structuredClone(from?.values ?? {}),
       },
     ]);
     onSelect(id);
@@ -327,7 +328,8 @@ export function SceneEditor({
                       className={cn(
                         'p-1 text-center',
                         scene.id === active && 'bg-accent',
-                        !heard(scene, row.branch) && 'opacity-40',
+                        !heard(scene, row.branch) &&
+                          'rounded-md border border-dashed border-border',
                       )}
                     >
                       <Square
@@ -380,12 +382,11 @@ export function SceneEditor({
         </table>
       </div>
       <Caption className="text-xs">
-        Filled squares play in that scene; "2 set" means the scene sets two of
-        that block's values (choose This scene in the chain and change them
-        there). Nothing here stops: an off block is bypassed and a silent branch
-        is muted, but both keep running, so a scene change has no gap. To use
-        the same pedal or capture with other settings, duplicate it: the copy
-        starts off everywhere.
+        Switch a block on or off for each scene. Filled squares are on; "2 set"
+        means the scene sets two of that block's values (choose This scene in
+        the chain and change them there). Off bypasses a block. Muting a branch
+        silences that path. To use the same pedal or capture with other
+        settings, duplicate it: the copy starts off everywhere.
       </Caption>
     </div>
   );
@@ -407,7 +408,7 @@ function Square({
       aria-checked={on}
       aria-label={label}
       onClick={() => onChange(!on)}
-      className="group inline-grid size-touch place-items-center rounded-md hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+      className="group inline-grid min-h-touch min-w-touch content-center justify-items-center gap-0.5 rounded-md hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
     >
       <span
         aria-hidden="true"
@@ -418,6 +419,9 @@ function Square({
             : 'border-dashed border-muted-foreground bg-transparent',
         )}
       />
+      <span aria-hidden="true" className="text-xs">
+        {on ? 'On' : 'Off'}
+      </span>
     </button>
   );
 }

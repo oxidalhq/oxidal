@@ -71,6 +71,8 @@ export type BlockSource =
         package?: string;
         website: string;
         licence?: string;
+        /** The installed package's complete copyright and licence text. */
+        copyright?: string;
         /** How Oxidal tested it, such as "Qualified on ARM64". */
         qualification?: string;
       };
@@ -85,6 +87,7 @@ export type BlockSource =
       repo: string;
       /** The papers it is built from (its REFERENCES.md). */
       references?: string[];
+      referencesUrl?: string;
     }
   | {
       kind: 'engine';
@@ -346,7 +349,10 @@ export function SourceCard({
             {source.kind === 'tone3000' ? (
               <>
                 <span>by</span>
-                <Out href={safeLink(source.creator.profile)}>
+                <Out
+                  href={safeLink(source.creator.profile)}
+                  className="min-h-touch"
+                >
                   <User aria-hidden="true" className="size-3.5" />
                   {source.creator.name}
                 </Out>
@@ -482,7 +488,7 @@ export function SourceCard({
         )}
       </dl>
 
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm [&_a]:min-h-touch">
         {source.kind === 'tone3000' && (
           <>
             <Out href={safeLink(source.page)}>
@@ -502,9 +508,25 @@ export function SourceCard({
           </Out>
         )}
         {source.kind === 'lv2' && (
-          <Out href={safeLink(source.pack.website)}>
-            {source.pack.name} website <ArrowSquareOut aria-hidden="true" />
-          </Out>
+          <>
+            <Out href={safeLink(source.pack.website)}>
+              {source.pack.name} website <ArrowSquareOut aria-hidden="true" />
+            </Out>
+            {source.pack.copyright && (
+              <Out
+                className="min-h-touch"
+                href={
+                  /^\/api\/v1\/packs\/[a-z0-9-]+\/copyright$/.test(
+                    source.pack.copyright,
+                  )
+                    ? source.pack.copyright
+                    : undefined
+                }
+              >
+                Licence and copyright <ArrowSquareOut aria-hidden="true" />
+              </Out>
+            )}
+          </>
         )}
         {source.kind === 'oxidal' && (
           <>
@@ -512,9 +534,12 @@ export function SourceCard({
               <GithubLogo aria-hidden="true" /> Source code
             </Out>
             {source.references && (
-              <span className="inline-flex items-center gap-1 text-muted-foreground">
+              <Out
+                href={safeLink(source.referencesUrl)}
+                className="min-h-touch"
+              >
                 <BookOpen aria-hidden="true" /> REFERENCES.md in the crate
-              </span>
+              </Out>
             )}
           </>
         )}

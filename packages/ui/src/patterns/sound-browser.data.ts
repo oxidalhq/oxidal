@@ -4,6 +4,35 @@ import type { OxidalSound } from './sound-browser';
 /** Example sounds, from the product's own recipes (descriptions shortened). */
 export const SOUNDS: OxidalSound[] = [
   {
+    id: 'OX-43',
+    name: 'Caught Moments',
+    genres: ['Ambient', 'Experimental'],
+    engine: 'lv2',
+    complexity: 'layered',
+    description:
+      'Catch the last few seconds as a loop to slow, reverse, stretch or freeze while you keep playing. The caught loop is memory only and is not saved.',
+    inspiration:
+      'Ambient guitar and early digital samplers: a phrase caught on the fly, then reshaped while the player carries on above it.',
+    performance:
+      'Play in Listen, then choose Catch. Later scenes reshape the same loop. Return to Listen to let it go and record a new one.',
+    scenes: [
+      'Listen',
+      'Catch',
+      'Lead',
+      'Worn Half Speed',
+      'Backwards',
+      'Stretch',
+      'Touch',
+      'Frozen Octave',
+    ],
+    blocks: [
+      { label: 'Moment', kind: 'time', role: 'micro-loop' },
+      { label: 'Bloom', kind: 'time', role: 'reverb' },
+    ],
+    nam: 0,
+    readiness: { state: 'ready' },
+  },
+  {
     id: 'power-stack',
     name: 'Power Stack',
     era: '80s',

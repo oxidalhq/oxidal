@@ -2,15 +2,15 @@ import { Button } from '../components/ui/button';
 import { Card, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { EFFECTS } from '../patterns/block-chooser.data';
 import { NamBlockToolsDemo } from '../patterns/nam-block.demo';
-import { SCENES, SERIAL_ROUTE } from '../patterns/rig.fixtures';
 import { RigSurface } from '../patterns/rig-surface';
 import { useModelDownloads } from '../patterns/swap.demo';
 import { BLOCK_TYPES, MODELS } from '../patterns/swap.fixtures';
 import { useRigDemo } from '../patterns/use-rig.demo';
+import { CAPTURE_ROUTE, CAPTURE_SCENES } from './four-captures.fixtures';
 
 /** The Rig screen: the rig surface, or the card that says why audio is not playing. */
 export function Rig({ audio = true }: { audio?: boolean }) {
-  const rig = useRigDemo(SERIAL_ROUTE);
+  const rig = useRigDemo(CAPTURE_ROUTE, CAPTURE_SCENES);
   const store = useModelDownloads(MODELS);
   if (!audio)
     return (
@@ -51,7 +51,10 @@ export function Rig({ audio = true }: { audio?: boolean }) {
       onSaveVersion={rig.onSaveVersion}
       onSaveVersionAs={rig.onSaveVersionAs}
       onMakeDefault={rig.onMakeDefault}
-      scenes={SCENES}
+      scenes={rig.settings ?? CAPTURE_SCENES}
+      sceneSettings={rig.settings}
+      savedSceneSettings={rig.savedSettings}
+      onSceneSettings={rig.setSettings}
       activeScene={rig.scene}
       onScene={rig.onScene}
       sceneChanged={rig.sceneChanged}

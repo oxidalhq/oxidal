@@ -27,13 +27,16 @@ export type PluginControl = {
   name?: string;
   /** The plugin's group for it (`pg:group`), such as "Tone" or "Modulation". */
   group?: string;
+  /** Declared group identity; two groups may have the same visible label. */
+  groupId?: string;
   /** Its unit (`units:unit`): dB, Hz, ms, s, %. */
   unit?: string;
   kind: 'range' | 'toggle' | 'choice';
   min: number;
   max: number;
-  default: number;
+  default?: number;
   value: number;
+  display?: string;
   integer?: boolean;
   /** Named values (`lv2:scalePoint`), for a choice. */
   choices?: { value: number; label: string }[];
@@ -49,10 +52,14 @@ export type PluginView = {
   category?: string;
   /** What it does, in the maker's words (`rdfs:comment`). */
   description?: string;
+  homepage?: string;
   /** A picture of it, served by the device. */
   artwork?: string;
   origin?: BlockSource;
 };
+
+const differsFromDefault = (control: PluginControl) =>
+  control.default !== undefined && control.value !== control.default;
 
 const digitsOf = (c: PluginControl) =>
   c.integer ? 0 : c.max - c.min <= 2 ? 2 : c.max - c.min <= 40 ? 1 : 0;
@@ -63,7 +70,7 @@ const digitsOf = (c: PluginControl) =>
  * controls that matter most as large fields; the rest folded into the
  * plugin's own groups, with a search when there are many. Switches are
  * switches, named values are choices, numbers carry their unit. A dot marks
- * what you changed from the plugin's defaults, and Reset puts it back.
+ * controls that differ from their factory defaults.
  *
  * It works with what a plugin gives: with only symbols and ranges it still
  * shows every control, labelled from the symbol, in one list.
@@ -73,21 +80,39 @@ export function PluginPanel({
   controls,
   on,
   onToggle,
+  toggleLabel,
   onControl,
+  onAdjust,
+  disabled = false,
+  onRestoreDefaults,
+  renderRange,
   mainCount = 6,
   className,
 }: {
   plugin: PluginView;
   controls: PluginControl[];
   on: boolean;
-  onToggle: (on: boolean) => void;
+  onToggle?: (on: boolean) => void;
+  toggleLabel?: string;
   onControl: (symbol: string, value: number) => void;
+  /** Opens the host’s live adjustment dialog for a range control. */
+  onAdjust?: (symbol: string) => void;
+  disabled?: boolean;
+  /** Restores the factory defaults for the visible controls in one operation. */
+  onRestoreDefaults?: () => void;
+  /** A host-owned adjustment field that keeps its existing edit transaction. */
+  renderRange?: (control: PluginControl) => React.ReactNode;
   /** How many controls show large at the top. */
   mainCount?: number;
   className?: string;
 }) {
   const [query, setQuery] = React.useState('');
   const [broken, setBroken] = React.useState(false);
+  const [seenArtwork, setSeenArtwork] = React.useState(plugin.artwork);
+  if (seenArtwork !== plugin.artwork) {
+    setSeenArtwork(plugin.artwork);
+    setBroken(false);
+  }
   const switchId = React.useId();
   const shown = controls.filter((c) => !c.hidden);
   const ranked = [...shown].sort(
@@ -99,14 +124,17 @@ export function PluginPanel({
     `${controlLabel(c)} ${c.group ?? ''}`
       .toLowerCase()
       .includes(query.toLowerCase());
-  const groups = [...new Set(rest.map((c) => c.group ?? 'More controls'))];
-  const changed = shown.filter((c) => c.value !== c.default);
+  const groupId = (c: PluginControl) => c.groupId ?? c.group ?? 'More controls';
+  const groups = [...new Set(rest.map(groupId))];
+  const nonDefaultCount = shown.filter(differsFromDefault).length;
+  const allDefaultsKnown =
+    shown.length > 0 && shown.every((c) => c.default !== undefined);
 
   const field = (c: PluginControl, large = false) => {
     const label = controlLabel(c);
-    const dot = c.value !== c.default && (
+    const dot = differsFromDefault(c) && (
       <span
-        aria-label="Changed"
+        aria-label="Differs from factory default"
         role="img"
         className="size-1.5 shrink-0 rounded-full bg-brand"
       />
@@ -117,6 +145,13 @@ export function PluginPanel({
         {dot}
       </span>
     );
+    if (c.kind === 'range' && renderRange)
+      return (
+        <div key={c.symbol} className="grid gap-1">
+          {heading}
+          {renderRange(c)}
+        </div>
+      );
     if (c.kind === 'toggle')
       return (
         <label
@@ -126,7 +161,8 @@ export function PluginPanel({
           {heading}
           <Switch
             aria-label={label}
-            checked={c.value >= 0.5}
+            checked={c.value !== c.min}
+            disabled={disabled}
             onCheckedChange={(v) => onControl(c.symbol, v ? c.max : c.min)}
           />
         </label>
@@ -138,6 +174,7 @@ export function PluginPanel({
           {c.choices.length <= 3 ? (
             <SegmentedControl
               size="sm"
+              disabled={disabled}
               value={String(c.value)}
               onValueChange={(v) => v && onControl(c.symbol, Number(v))}
               aria-label={label}
@@ -151,6 +188,7 @@ export function PluginPanel({
             </SegmentedControl>
           ) : (
             <Select
+              disabled={disabled}
               value={String(c.value)}
               onValueChange={(v) => onControl(c.symbol, Number(v))}
             >
@@ -168,11 +206,28 @@ export function PluginPanel({
           )}
         </div>
       );
+    if (onAdjust)
+      return (
+        <div key={c.symbol} className="grid gap-1">
+          {heading}
+          <Button
+            variant="outline"
+            className="min-h-touch justify-start font-mono tabular-nums"
+            disabled={disabled}
+            aria-label={`Adjust ${label}`}
+            aria-haspopup="dialog"
+            onClick={() => onAdjust(c.symbol)}
+          >
+            {c.display ?? c.value}
+          </Button>
+        </div>
+      );
     return (
       <div key={c.symbol} className="grid gap-1">
         {heading}
         <NumberField
           label={label}
+          disabled={disabled}
           size={large ? 'lg' : 'md'}
           value={c.value}
           min={c.min}
@@ -220,17 +275,36 @@ export function PluginPanel({
           )}
           {plugin.origin && <SourceLine source={plugin.origin} />}
         </div>
-        <label
-          htmlFor={switchId}
-          // On a narrow phone the switch takes its own line under the name.
-          className="col-span-2 flex items-center justify-between gap-2 text-sm font-medium sm:col-span-1 sm:justify-start"
-        >
-          {on ? 'On' : 'Off'}
-          <Switch id={switchId} checked={on} onCheckedChange={onToggle} />
-        </label>
+        {onToggle && (
+          <label
+            htmlFor={switchId}
+            // On a narrow phone the switch takes its own line under the name.
+            className="col-span-2 flex items-center justify-between gap-2 text-sm font-medium sm:col-span-1 sm:justify-start"
+          >
+            {on ? 'On' : 'Off'}
+            <Switch
+              id={switchId}
+              aria-label={toggleLabel}
+              checked={on}
+              disabled={disabled}
+              onCheckedChange={onToggle}
+            />
+          </label>
+        )}
       </header>
       {plugin.description && (
         <Caption className="text-sm">{plugin.description}</Caption>
+      )}
+
+      {plugin.homepage && (
+        <a
+          href={plugin.homepage}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-fit text-sm underline"
+        >
+          Plugin website
+        </a>
       )}
 
       <div
@@ -260,21 +334,19 @@ export function PluginPanel({
             </label>
           )}
           {groups.map((group) => {
-            const list = rest.filter(
-              (c) => (c.group ?? 'More controls') === group && matches(c),
-            );
+            const list = rest.filter((c) => groupId(c) === group && matches(c));
             if (!list.length) return null;
-            const touched = list.filter((c) => c.value !== c.default).length;
+            const nonDefault = list.filter(differsFromDefault).length;
             return (
               <CollapsibleSection
                 key={group}
                 open={query ? true : undefined}
                 title={
                   <span className="flex items-baseline gap-2">
-                    {group}
+                    {list[0]?.group ?? 'More controls'}
                     <span className="font-mono text-xs font-normal text-muted-foreground">
                       {list.length}
-                      {touched > 0 && ` · ${touched} changed`}
+                      {nonDefault > 0 && ` · ${nonDefault} off default`}
                     </span>
                   </span>
                 }
@@ -291,18 +363,20 @@ export function PluginPanel({
       <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2">
         <Caption as="span" role="status" className="text-xs">
           {shown.length} controls
-          {changed.length > 0
-            ? ` · ${changed.length} changed from the plugin's own settings`
-            : " · all at the plugin's own settings"}
+          {nonDefaultCount > 0
+            ? ` · ${nonDefaultCount} ${nonDefaultCount === 1 ? 'differs' : 'differ'} from factory defaults`
+            : allDefaultsKnown && ' · all at factory defaults'}
         </Caption>
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={changed.length === 0}
-          onClick={() => changed.forEach((c) => onControl(c.symbol, c.default))}
-        >
-          <ArrowCounterClockwise /> Reset all
-        </Button>
+        {onRestoreDefaults && (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={disabled || nonDefaultCount === 0}
+            onClick={onRestoreDefaults}
+          >
+            <ArrowCounterClockwise /> Restore factory defaults
+          </Button>
+        )}
       </footer>
     </section>
   );

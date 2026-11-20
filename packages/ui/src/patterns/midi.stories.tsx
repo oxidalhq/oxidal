@@ -96,11 +96,11 @@ export const Learn: StoryObj = {
   render: () => <Demo />,
 };
 
-/** Show scenes, learn Scene 3 from switch C, then press C to play it. */
+/** Learn Scene 3 from switch C, then press C to play it. */
 Learn.play = async ({ canvasElement }) => {
   const canvas = within(canvasElement);
   const page = within(canvasElement.ownerDocument.body);
-  await userEvent.click(canvas.getByRole('button', { name: /Scenes/ }));
+  await expect(canvas.getByRole('button', { name: /^Scene 3/ })).toBeVisible();
   await userEvent.click(canvas.getByRole('button', { name: /MIDI view/ }));
   await userEvent.click(
     canvas.getByRole('button', { name: /MIDI for Scene 3 · Lead \(CC 18/ }),

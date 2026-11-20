@@ -459,7 +459,7 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
     onSelect(id);
   };
 
-  const block = (step: RouteBlock) => (
+  const block = (step: RouteBlock, audible: boolean) => (
     <div
       key={step.id}
       data-flip={step.id}
@@ -482,6 +482,9 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
           disabled={disabled}
           lifted={lifted === step.id}
           muted={heard === step.id}
+          tint={
+            audible && step.on && heard !== step.id ? sceneColour : undefined
+          }
           sceneMark={sceneChanged?.includes(step.id)}
           onSelect={select}
           className={cn(vertical && 'w-full')}
@@ -726,7 +729,7 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
             )}
           </div>,
         );
-      } else out.push(block(step));
+      } else out.push(block(step, audible));
       if (index < steps.length - 1 || !editing) {
         const after = isSplit(step) ? undefined : levels?.[step.id];
         if (index < steps.length - 1)

@@ -9,7 +9,7 @@ import { READINGS } from './fixtures';
 export function Screen({
   destination,
   children,
-  playing = 'Rhythm section · Scene 2',
+  playing = 'Rhythm section',
   status,
 }: {
   status?: 'simple' | 'detailed';

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { expect, userEvent, within } from 'storybook/test';
 
 import { Card } from '../components/ui/card';
+import { MOMENT_CONTROLS, MOMENT_PLUGIN } from './moment.fixture';
 import {
   type PluginControl,
   PluginPanel,
@@ -48,6 +49,15 @@ function Demo({
             all.map((c) => (c.symbol === symbol ? { ...c, value } : c)),
           )
         }
+        onRestoreDefaults={() =>
+          setControls((all) =>
+            all.map((c) =>
+              c.hidden || c.default === undefined
+                ? c
+                : { ...c, value: c.default },
+            ),
+          )
+        }
       />
     </Card>
   );
@@ -58,16 +68,23 @@ export const Described: StoryObj = {
   render: () => <Demo plugin={PLUGIN} initial={CONTROLS} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(
-      canvas.getByRole('switch', { name: 'Follow the tempo' }),
-    );
+    const tempo = canvas.getByRole('switch', { name: 'Follow the tempo' });
+    const restore = canvas.getByRole('button', {
+      name: 'Restore factory defaults',
+    });
+    await expect(restore).toBeDisabled();
+    await userEvent.click(tempo);
+    await userEvent.click(canvas.getByRole('button', { name: /^Output/ }));
+    const trails = canvas.getByRole('switch', { name: 'Trails when off' });
+    await userEvent.click(trails);
     await expect(
-      canvas.getByText(/1 changed from the plugin's own settings/),
+      canvas.getByText(/2 differ from factory defaults/),
     ).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: 'Reset all' }));
-    await expect(
-      canvas.getByText(/all at the plugin's own settings/),
-    ).toBeVisible();
+    await userEvent.click(restore);
+    await expect(tempo).not.toBeChecked();
+    await expect(trails).toBeChecked();
+    await expect(canvas.getByText(/all at factory defaults/)).toBeVisible();
+    await expect(restore).toBeDisabled();
   },
 };
 
@@ -75,4 +92,9 @@ export const Described: StoryObj = {
 export const Bare: StoryObj = {
   name: 'With only what the device reports today',
   render: () => <Demo plugin={BARE_PLUGIN} initial={BARE_CONTROLS} />,
+};
+
+export const Moment: StoryObj = {
+  name: 'Moment · real plugin controls',
+  render: () => <Demo plugin={MOMENT_PLUGIN} initial={MOMENT_CONTROLS} />,
 };

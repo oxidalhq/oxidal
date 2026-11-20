@@ -255,13 +255,15 @@ export function RigSurface({
     if (comparison === undefined) setLocalCompare(next);
     onCompare?.(next);
   };
-  const [scope, setScope] = React.useState<'scene' | 'preset'>('preset');
+  const [scope, setScope] = React.useState<'scene' | 'preset'>(
+    sceneSettings && activeScene ? 'scene' : 'preset',
+  );
   const [minimised, setMinimised] = useRemembered(
     'oxidal.rig.controls-minimised',
     false,
   );
   const [editing, setEditing] = React.useState(false);
-  const [showScenes, setShowScenes] = React.useState(false);
+  const [showScenes, setShowScenes] = React.useState(true);
   const [sceneEditor, setSceneEditor] = React.useState(false);
   const [localTransition, setLocalTransition] =
     React.useState<SceneChangeSettings>({
@@ -300,7 +302,13 @@ export function RigSurface({
     scope === 'scene' && compare !== 'saved'
       ? sceneModels.find((m) => m.id === activeScene)
       : undefined;
-  const shown = compare === 'saved' ? saved : applyScene(route, sceneModel);
+  const shown =
+    compare === 'saved'
+      ? applyScene(
+          saved,
+          savedSceneSettings?.find((scene) => scene.id === activeScene),
+        )
+      : applyScene(route, sceneModel);
   // In "This scene", on or off and branch levels go to the playing scene;
   // settings, moves and new blocks still change the whole preset.
   // A block added while editing a scene plays in that scene only.
@@ -652,6 +660,14 @@ export function RigSurface({
             <Button
               size="sm"
               variant="outline"
+              disabled={reading || !scenes.length}
+              onClick={() => setSceneEditor(true)}
+            >
+              Edit scenes
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
               disabled={!onTuner}
               onClick={onTuner}
             >
@@ -677,7 +693,10 @@ export function RigSurface({
               colour: sc.colour ?? sceneColour(i),
             }))}
             active={activeScene}
-            onSelect={onScene}
+            onSelect={(id) => {
+              setScope('scene');
+              onScene(id);
+            }}
           />
         </div>
       )}
@@ -1047,7 +1066,7 @@ export function RigSurface({
       <DockableSheet
         id="scenes"
         title="Edit scenes"
-        description={`What each scene of ${presetName} plays. Tap a scene name to hear it.`}
+        description={`Choose which blocks play in each scene of ${presetName}. Switch any capture, cabinet or effect on or off.`}
         icon={<SquaresFour />}
         open={sceneEditor}
         onOpenChange={setSceneEditor}
@@ -1060,7 +1079,10 @@ export function RigSurface({
           scenes={sceneModels}
           onScenes={setSceneModels}
           active={activeScene}
-          onSelect={onScene}
+          onSelect={(id) => {
+            setScope('scene');
+            onScene(id);
+          }}
         />
       </DockableSheet>
 

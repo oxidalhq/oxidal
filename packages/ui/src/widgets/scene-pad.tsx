@@ -40,6 +40,7 @@ export function ScenePad({
   onSelect,
   onMenu,
   className,
+  ...buttonProps
 }: {
   scene: Scene;
   active?: boolean;
@@ -49,7 +50,7 @@ export function ScenePad({
   onSelect: (id: string) => void;
   onMenu?: (id: string) => void;
   className?: string;
-}) {
+} & Omit<React.ComponentProps<'button'>, 'onSelect' | 'onClick' | 'children'>) {
   const held = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const fired = React.useRef(false);
   const cancel = () => {
@@ -84,6 +85,7 @@ export function ScenePad({
         if (fired.current) return;
         onSelect(scene.id);
       }}
+      {...buttonProps}
       className={cn(
         'relative grid min-w-0 content-start gap-0.5 overflow-hidden rounded-pad border border-input bg-card px-3 py-2 text-left transition-[background-color,transform] duration-[var(--duration-fast)] select-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40',
         size === 'md' ? 'min-h-14' : 'min-h-20 px-4 py-3',

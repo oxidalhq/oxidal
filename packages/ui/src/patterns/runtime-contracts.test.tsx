@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { blocksOf } from '../lib/route';
 import { diffRoutes } from '../lib/route-diff';
+import { Rig } from '../screens/rig';
 import { PracticePanel, type PracticeState } from '../widgets/practice';
 import { VenueEq } from '../widgets/venue-eq';
 import { VENUE_PROFILES } from '../widgets/venue-eq.data';
@@ -259,4 +260,32 @@ it('comparison waits for device readback and whole discard uses its product comm
   );
   expect(onDiscard).toHaveBeenCalledOnce();
   expect(onRoute).not.toHaveBeenCalled();
+});
+
+it('selects one full capture per scene and reflects the Dirt block switches in the chain', async () => {
+  const user = userEvent.setup();
+  const { container } = render(<Rig />);
+  const block = (id: string) =>
+    container.querySelector(`[data-slot="chain-block"][data-block="${id}"]`);
+  for (const name of ['Clean', 'Crunch', 'Lead', 'Dirt']) {
+    await user.click(
+      screen.getByRole('button', { name: new RegExp(`^Scene \\d+ ${name}$`) }),
+    );
+    for (const id of ['clean', 'crunch', 'lead', 'dirt'])
+      expect(block(id)).toHaveAttribute(
+        'data-on',
+        String(id === name.toLowerCase()),
+      );
+  }
+  expect(block('ts9')).toHaveAttribute('data-in-scene', 'true');
+  expect(block('ts9')?.getAttribute('style')).toContain('--scene-4');
+  expect(block('cab')).not.toHaveAttribute('data-in-scene');
+  await user.click(screen.getByRole('button', { name: 'Edit scenes' }));
+  const cab = screen.getByRole('switch', { name: 'Optional cabinet in Dirt' });
+  await user.click(cab);
+  expect(cab).toHaveAttribute('aria-checked', 'true');
+  expect(
+    screen.getByRole('switch', { name: 'Optional cabinet in Clean' }),
+  ).toHaveAttribute('aria-checked', 'false');
+  expect(block('cab')).toHaveAttribute('data-in-scene', 'true');
 });
