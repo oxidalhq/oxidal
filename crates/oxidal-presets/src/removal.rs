@@ -1468,8 +1468,11 @@ impl RemovalStore {
             blocked,
             model_cleanup_unavailable: unavailable,
         };
-        let catalog = CatalogStore::open(self.root.clone())?
-            .view(entries.iter().map(|e| e.item.clone()).collect())?;
+        let store = CatalogStore::open(self.root.clone())?;
+        if store.version_uses_content(kind, id) {
+            preview.blocked = Some("A saved preset version uses these contents.".into());
+        }
+        let catalog = store.view(entries.iter().map(|e| e.item.clone()).collect())?;
         let details_revision = crate::DetailsStore::new(self.root.clone())
             .snapshot()?
             .revision;

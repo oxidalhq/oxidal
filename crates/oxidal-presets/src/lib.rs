@@ -9,7 +9,7 @@ pub use details::{
 mod catalog;
 pub use catalog::{
     CatalogStore, LibraryAction, LibraryCatalog, LibraryItem, LibraryKind, LibraryOrigin,
-    LibraryUpdate,
+    LibraryUpdate, PresetFamily, PresetVersion, VersionAction, VersionEdit, VersionView,
 };
 mod bundle;
 mod graph;

@@ -1,4 +1,5 @@
 //! Device-local library labels/order/visibility; immutable tone payloads stay intact.
+mod versions;
 use crate::{Error, Result};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -9,6 +10,7 @@ use std::{
     io::Write,
     path::PathBuf,
 };
+pub use versions::{PresetFamily, PresetVersion, VersionAction, VersionEdit, VersionView};
 
 #[derive(
     Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
@@ -161,6 +163,10 @@ pub struct LibraryUpdate {
 #[serde(deny_unknown_fields)]
 #[derive(Clone)]
 struct Preferences {
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    families: BTreeMap<String, PresetFamily>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    version_receipts: Vec<versions::VersionReceipt>,
     labels: BTreeMap<String, String>,
     archived: BTreeSet<String>,
     order: Vec<String>,
@@ -176,8 +182,20 @@ struct Preferences {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     starter_offered: bool,
 }
+impl Preferences {
+    fn revision(&self) -> Result<String> {
+        // A receipt contains the revision returned to its caller. Hash only the
+        // state callers can edit, so that the receipt can be written atomically.
+        let mut state = self.clone();
+        state.version_receipts.clear();
+        let bytes = serde_json::to_vec(&state)
+            .map_err(|_| Error::Invalid("Invalid library preferences"))?;
+        Ok(format!("{:x}", Sha256::digest(bytes)))
+    }
+}
 #[derive(Debug)]
 pub struct CatalogStore {
+    version_stages: BTreeSet<String>,
     root: PathBuf,
     preferences: Preferences,
     revision: String,
@@ -232,11 +250,32 @@ impl CatalogStore {
     /// one's set-list place, name and visibility. The earlier revision stays on
     /// the device as hidden history, so references to it keep working.
     pub fn supersede(&mut self, kind: LibraryKind, old: &str, new: &str) -> Result<()> {
+        let first = self.logical_source(kind, old)?;
+        let mut family = self.family(kind, &first)?;
+        let selected = family
+            .versions
+            .iter_mut()
+            .find(|v| v.id == family.default_version)
+            .ok_or(Error::Invalid("Default version is missing"))?;
+        if selected.content != old {
+            return Err(Error::Conflict(
+                "Preset version changed; reopen before saving",
+            ));
+        }
+        selected.content = new.into();
         let (old, new) = (kind.key(old)?, kind.key(new)?);
         if old == new {
             return Ok(());
         }
         let mut candidate = self.preferences.clone();
+        candidate.families.insert(family.logical_id.clone(), family);
+        Self::move_default_content(&mut candidate, old, new)?;
+        self.persist(candidate)
+    }
+    fn move_default_content(candidate: &mut Preferences, old: String, new: String) -> Result<()> {
+        if old == new {
+            return Ok(());
+        }
         candidate.order.retain(|key| key != &new);
         match candidate.order.iter().position(|key| key == &old) {
             Some(place) => candidate.order[place] = new.clone(),
@@ -266,16 +305,26 @@ impl CatalogStore {
         if candidate.order.len() > 4096 || candidate.superseded.len() > 65536 {
             return Err(Error::Invalid("Library preferences exceed limit"));
         }
-        self.persist(candidate)
+        Ok(())
     }
+
     /// Whether a later save of the same preset has replaced this revision.
     pub fn is_superseded(&self, kind: LibraryKind, id: &str) -> Result<bool> {
-        Ok(self.preferences.superseded.contains(&kind.key(id)?))
+        Ok(self.preferences.superseded.contains(&kind.key(id)?)
+            || self.unpublished_version(kind, id)?)
     }
     /// Remove only the deleted entry's display preferences; no logical-ID fanout.
     pub fn forget(&mut self, kind: LibraryKind, id: &str) -> Result<()> {
         let key = kind.key(id)?;
         let mut candidate = self.preferences.clone();
+        if self.version_uses_content(kind, id) {
+            return Err(Error::Conflict(
+                "A saved preset version uses these contents",
+            ));
+        }
+        candidate.families.retain(|_, family| {
+            !(family.kind == kind && family.versions.len() == 1 && family.versions[0].content == id)
+        });
         candidate.labels.remove(&key);
         candidate.archived.remove(&key);
         candidate.order.retain(|k| k != &key);
@@ -298,7 +347,13 @@ impl CatalogStore {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Preferences::default(),
             Err(e) => return Err(e.into()),
         };
-        if preferences.labels.len() > 4096
+        if preferences.version_receipts.len() > 32
+            || preferences.families.len() > 4096
+            || !preferences
+                .families
+                .iter()
+                .all(|(key, family)| family.valid(key))
+            || preferences.labels.len() > 4096
             || preferences.superseded.len() > 65536
             || preferences.archived.len() > 65536 + 4096
             || preferences.order.len() > 4096
@@ -334,13 +389,7 @@ impl CatalogStore {
         {
             return Err(Error::Invalid("Invalid library preferences"));
         }
-        let revision = format!(
-            "{:x}",
-            Sha256::digest(
-                serde_json::to_vec(&preferences)
-                    .map_err(|_| Error::Invalid("Invalid library preferences"))?
-            )
-        );
+        let revision = preferences.revision()?;
         let positions = preferences
             .order
             .iter()
@@ -348,7 +397,31 @@ impl CatalogStore {
             .enumerate()
             .map(|(i, k)| (k, i))
             .collect();
+        let mut version_stages = BTreeSet::new();
+        let stage = root.join("version-staging");
+        match fs::symlink_metadata(&stage) {
+            Ok(meta) if meta.is_dir() => {
+                for entry in fs::read_dir(stage)? {
+                    let entry = entry?;
+                    let key = entry
+                        .file_name()
+                        .into_string()
+                        .map_err(|_| Error::Invalid("Invalid version stage"))?;
+                    if !valid_key(&key)
+                        || !entry.file_type()?.is_file()
+                        || version_stages.len() >= 65536
+                    {
+                        return Err(Error::Invalid("Invalid version stage"));
+                    }
+                    version_stages.insert(key);
+                }
+            }
+            Ok(_) => return Err(Error::Invalid("Invalid version staging directory")),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
         Ok(Self {
+            version_stages,
             root,
             preferences,
             revision,
@@ -356,7 +429,8 @@ impl CatalogStore {
         })
     }
     pub fn visible(&self, kind: LibraryKind, id: &str) -> Result<bool> {
-        Ok(!self.preferences.archived.contains(&kind.key(id)?))
+        Ok(!self.preferences.archived.contains(&kind.key(id)?)
+            && !self.unpublished_version(kind, id)?)
     }
     pub fn label<'a>(&'a self, kind: LibraryKind, id: &str, original: &'a str) -> Result<&'a str> {
         Ok(self
@@ -369,10 +443,7 @@ impl CatalogStore {
         for item in &mut items {
             item.name = self.label(item.kind, &item.id, &item.source_name)?.into();
             item.archived = !self.visible(item.kind, &item.id)?;
-            item.superseded = self
-                .preferences
-                .superseded
-                .contains(&item.kind.key(&item.id)?);
+            item.superseded = self.is_superseded(item.kind, &item.id)?;
             item.in_set_list = self.member(item)?;
         }
         items.sort_by(|a, b| {
@@ -717,6 +788,7 @@ impl CatalogStore {
         Ok(())
     }
     fn persist(&mut self, candidate: Preferences) -> Result<()> {
+        let revision = candidate.revision()?;
         let bytes = serde_json::to_vec(&candidate)
             .map_err(|_| Error::Invalid("Invalid library preferences"))?;
         if bytes.len() > 1024 * 1024 {
@@ -742,6 +814,25 @@ impl CatalogStore {
         lock.lock()?;
         if Self::open(self.root.clone())?.revision != self.revision {
             return Err(Error::Conflict("Library changed; refresh before editing"));
+        }
+        if self.preferences.families.is_empty() && !candidate.families.is_empty() {
+            // Rename-based writes leave the backed-up inode immutable.
+            let source = self.root.join("library.json");
+            if source.try_exists()? {
+                let backup = self.root.join("library-before-versions.json");
+                match fs::hard_link(source, &backup) {
+                    Ok(()) => fs::File::open(&self.root)?.sync_all()?,
+                    Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                        let metadata = fs::symlink_metadata(&backup)?;
+                        if !metadata.is_file() || metadata.len() > 1024 * 1024 {
+                            return Err(Error::Invalid("Invalid pre-version library backup"));
+                        }
+                        serde_json::from_slice::<Preferences>(&fs::read(backup)?)
+                            .map_err(|_| Error::Invalid("Invalid pre-version library backup"))?;
+                    }
+                    Err(e) => return Err(e.into()),
+                }
+            }
         }
         let temporary = self.root.join(format!(
             ".library-{}-{}.tmp",
@@ -774,7 +865,7 @@ impl CatalogStore {
             .map(|(i, k)| (k, i))
             .collect();
         self.preferences = candidate;
-        self.revision = format!("{:x}", Sha256::digest(bytes));
+        self.revision = revision;
         Ok(())
     }
 }
