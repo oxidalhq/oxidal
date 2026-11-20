@@ -14,7 +14,7 @@
 .oxidal-filter-set {
   display: grid;
   gap: 0.5rem;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .oxidal-filter {
   display: grid;
@@ -60,49 +60,6 @@
 .oxidal-group-head h3 {
   margin: 0;
   font-size: var(--text-sm);
-}
-.oxidal-cards {
-  display: grid;
-  gap: 0.5rem;
-  grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr));
-}
-.oxidal-card {
-  display: grid;
-  gap: 0.375rem;
-  align-content: start;
-  min-width: 0;
-  padding: 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  background: var(--card);
-  color: var(--card-foreground);
-}
-.oxidal-card-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-.oxidal-card-top h4 {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.oxidal-chip {
-  flex: none;
-  padding: 0.125rem 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  font-size: var(--text-xs);
-  white-space: nowrap;
-}
-.oxidal-card-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-}
-.oxidal-reason {
-  flex-basis: 100%;
 }
 .oxidal-scenes {
   margin: 0.25rem 0 0;

@@ -73,69 +73,111 @@ function Switch({
 }) {
   const tap = describe(sw.tap, state);
   const hold = sw.hold ? describe(sw.hold, state) : null;
-  const [flash, setFlash] = React.useState(false);
+  return (
+    <FootswitchPad
+      name={sw.name}
+      label={tap.label}
+      holdLabel={hold?.label}
+      pressed={
+        ['previous', 'next', 'tap'].includes(sw.tap.kind) ? undefined : tap.on
+      }
+      scene={sw.tap.kind === 'scene'}
+      colour={tap.colour}
+      size={size}
+      onTap={() => onAction(sw.tap)}
+      onHold={sw.hold ? () => onAction(sw.hold!) : undefined}
+    />
+  );
+}
+
+export function FootswitchPad({
+  name,
+  label,
+  accessibleName,
+  holdLabel,
+  pressed,
+  colour,
+  scene = false,
+  size = 'lg',
+  disabled,
+  onTap,
+  onHold,
+}: {
+  name: string;
+  label: string;
+  accessibleName?: string;
+  holdLabel?: string;
+  pressed?: boolean;
+  colour?: string;
+  scene?: boolean;
+  size?: 'md' | 'lg';
+  disabled?: boolean;
+  onTap: () => void;
+  onHold?: () => void;
+}) {
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const held = React.useRef(false);
-  const fire = (action: SwitchAction) => {
-    onAction(action);
-    setFlash(true);
-    setTimeout(() => setFlash(false), 180);
-  };
-  const scene = sw.tap.kind === 'scene';
+  const cancel = React.useCallback(() => {
+    if (timer.current !== null) clearTimeout(timer.current);
+    timer.current = null;
+  }, []);
+  React.useEffect(() => cancel, [cancel, disabled, name, label, holdLabel]);
   return (
     <button
       type="button"
       data-slot="footswitch"
-      aria-label={[sw.name, tap.label, hold && `Hold · ${hold.label}`]
-        .filter(Boolean)
-        .join(' ')}
-      data-on={tap.on || undefined}
-      aria-pressed={
-        sw.tap.kind === 'previous' ||
-        sw.tap.kind === 'next' ||
-        sw.tap.kind === 'tap'
-          ? undefined
-          : tap.on
+      disabled={disabled}
+      aria-label={
+        accessibleName ??
+        [name, label, holdLabel && `Hold · ${holdLabel}`]
+          .filter(Boolean)
+          .join(' ')
       }
-      onPointerDown={() => {
+      data-on={pressed || undefined}
+      aria-pressed={pressed}
+      onPointerDown={(event) => {
+        cancel();
         held.current = false;
-        if (sw.hold)
+        if (onHold && event.isPrimary !== false && event.button <= 0)
           timer.current = setTimeout(() => {
             held.current = true;
-            fire(sw.hold!);
+            onHold();
           }, HOLD_MS);
       }}
-      onPointerUp={() => timer.current && clearTimeout(timer.current)}
-      onPointerLeave={() => timer.current && clearTimeout(timer.current)}
+      onPointerCancel={cancel}
+      onPointerUp={cancel}
+      onPointerLeave={cancel}
+      onKeyDown={() => {
+        held.current = false;
+      }}
       onClick={() => {
-        if (held.current) return;
-        fire(sw.tap);
+        if (!held.current) onTap();
+        held.current = false;
       }}
       className={cn(
         'relative grid min-w-0 content-between gap-1 overflow-hidden rounded-pad border-2 border-input bg-card p-2.5 text-left transition-[background-color,transform] duration-[var(--duration-fast)] select-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.97]',
         size === 'lg' ? 'min-h-28' : 'min-h-20',
-        tap.on &&
+        pressed &&
           (scene
             ? 'border-foreground bg-foreground text-background hover:bg-foreground'
             : 'border-foreground'),
-        flash && 'scale-[0.97] bg-accent',
       )}
     >
-      {tap.colour && <SceneStripe colour={tap.colour} />}
+      {colour && <SceneStripe colour={colour} />}
       <span className="flex items-center justify-between gap-2">
         <span
           className={cn(
             'font-mono text-xs font-semibold',
-            tap.on && scene ? 'text-background/70' : 'text-muted-foreground',
+            pressed && scene ? 'text-background/70' : 'text-muted-foreground',
           )}
         >
-          {sw.name}
+          {name}
         </span>{' '}
         <span
           aria-hidden="true"
           className={cn(
             'size-3 rounded-full border-2',
-            tap.on
+            pressed
               ? scene
                 ? 'border-background bg-brand'
                 : 'border-brand bg-brand'
@@ -151,16 +193,16 @@ function Switch({
             : 'text-sm sm:text-md',
         )}
       >
-        {tap.label}
+        {label}
       </span>{' '}
-      {hold && (
+      {holdLabel && (
         <span
           className={cn(
             'truncate small-caps text-xs',
-            tap.on && scene ? 'text-background/70' : 'text-muted-foreground',
+            pressed && scene ? 'text-background/70' : 'text-muted-foreground',
           )}
         >
-          Hold · {hold.label}
+          Hold · {holdLabel}
         </span>
       )}
     </button>

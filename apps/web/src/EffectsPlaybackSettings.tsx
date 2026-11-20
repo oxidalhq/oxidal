@@ -15,7 +15,6 @@ import {
   checkSavedStream,
   resumeUnavailable,
 } from './audioResume';
-import { BufferFinder } from './BufferFinder';
 import { RecoveryAction } from './FailureNotice';
 import { friendlyError } from './lib/friendlyError';
 import { useFailure } from './lib/useFailure';
@@ -130,12 +129,6 @@ export function EffectsPlaybackSettings({
           disabled={!connected || busy || transitioning}
           running={state.phase === 'running'}
           onApply={(stream) => void command({ kind: 'reconfigure', stream })}
-        />
-        <BufferFinder
-          stream={stream}
-          running={state.phase === 'running'}
-          disabled={!connected || busy || transitioning}
-          apply={(stream) => command({ kind: 'reconfigure', stream })}
         />
       </section>
     </section>

@@ -820,3 +820,67 @@ it('Copy to preset names settings by their label and named values, never their s
     "'Echo' keeps Lead's own Sync on setting.",
   ]);
 });
+
+it('saves native block scene states from immutable defaults and preserves them through rename, duplicate, move and copy', () => {
+  const document = scenes();
+  const before = JSON.stringify(document);
+  const baseline = { node: 'crunch', block: 'pedal:1', value: true };
+  const request = updateScenes(
+    document,
+    {},
+    'fuzz',
+    {},
+    undefined,
+    [],
+    {},
+    {},
+    {},
+    [],
+    { fuzz: [{ ...baseline, value: false }] },
+    [baseline],
+  );
+  const saved: RigDocument = {
+    revision,
+    manifest: JSON.parse(request.manifest_json),
+  };
+  expect(scenesKey(saved.manifest)).toBe('urn:oxidal:scenes:5');
+  const definition = readScenes<{
+    initial_scene: string;
+    scenes: { id: string; native_bypass: (typeof baseline)[] }[];
+  }>(saved.manifest)!;
+  expect(definition.initial_scene).toBe('fuzz');
+  expect(definition.scenes.map((scene) => scene.native_bypass)).toEqual([
+    [baseline],
+    [{ ...baseline, value: false }],
+  ]);
+  expect(JSON.stringify(document)).toBe(before);
+  const renamed: RigDocument = {
+    revision,
+    manifest: JSON.parse(renameScene(saved, 'fuzz', 'Solo').manifest_json),
+  };
+  const duplicated = duplicateScene(renamed, 'fuzz');
+  const moved: RigDocument = {
+    revision,
+    manifest: JSON.parse(
+      moveScene(
+        { revision, manifest: JSON.parse(duplicated.publish.manifest_json) },
+        duplicated.id,
+        -1,
+      ).manifest_json,
+    ),
+  };
+  const movedRows = readScenes<typeof definition>(moved.manifest)!;
+  expect(
+    movedRows.scenes.find((scene) => scene.id === duplicated.id)?.native_bypass,
+  ).toEqual([{ ...baseline, value: false }]);
+  const copied = copySceneTo(saved, 'fuzz', renamed);
+  expect(
+    readScenes<typeof definition>(JSON.parse(copied.manifest_json))!.scenes.at(
+      -1,
+    )!.native_bypass,
+  ).toEqual([{ ...baseline, value: false }]);
+  expect(
+    validator(JSON.parse(copied.manifest_json)),
+    JSON.stringify(validator.errors),
+  ).toBe(true);
+});

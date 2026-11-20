@@ -8,8 +8,9 @@ import { useEffect, useState } from 'react';
 import { Button } from '@oxidal/design-system/components/button';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
-import { monitoring, protectState, setProtect } from '../../api';
+import { protectState, setProtect } from '../../api';
 import { friendlyError } from '../../lib/friendlyError';
+import { useMonitorReadings } from '../../monitorFeed';
 import { setOutputMute } from './outputMute';
 
 /**
@@ -33,21 +34,18 @@ export function StageControls({
   const [busy, setBusy] = useState(false);
   const [confirmOff, setConfirmOff] = useState(false);
   const [error, setError] = useState('');
+  useMonitorReadings(5000, (reading) => {
+    const value = reading.snapshot?.audio?.monitoring?.output_muted;
+    setMuted(
+      !reading.disconnected && typeof value === 'boolean' ? value : null,
+    );
+  });
   useEffect(() => {
     let alive = true;
     const read = () => {
       void protectState()
         .then((s) => alive && setProtectOn(s.on))
         .catch(() => alive && setProtectOn(null));
-      void monitoring()
-        .then(
-          (m) =>
-            alive &&
-            setMuted(
-              m.audio ? (m.audio.monitoring?.output_muted ?? false) : null,
-            ),
-        )
-        .catch(() => alive && setMuted(null));
     };
     read();
     const timer = window.setInterval(read, 5000);

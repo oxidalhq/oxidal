@@ -36,6 +36,7 @@ import {
   type Filters,
   groupItems,
   noFilters,
+  soundEffects,
   type SoundItem,
   summaryLine,
 } from './oxidalSounds.model';
@@ -105,6 +106,10 @@ export function OxidalSounds({
     () => new Map(unit.items.map((i) => [i.key, cardState(i, unit.facts)])),
     [unit.items, unit.facts],
   );
+  const effects = useMemo(
+    () => [...new Set(unit.items.flatMap(soundEffects))].sort(),
+    [unit.items],
+  );
   const shown = filterItems(unit.items, filters);
   const groups = groupItems(shown, filters.groupBy);
   const byKey = (key: string | null) =>
@@ -122,8 +127,8 @@ export function OxidalSounds({
       window.location.hash = 'settings/accounts';
     },
   };
-  const active = (['genre', 'engine', 'complexity'] as const).filter(
-    (k) => filters[k] !== 'all',
+  const active = (['genre', 'engine', 'complexity', 'effect'] as const).filter(
+    (k) => !!filters[k] && filters[k] !== 'all',
   ).length;
   const set = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
@@ -175,6 +180,12 @@ export function OxidalSounds({
             value={filters.engine}
             options={Object.entries(factoryEngineLabels)}
             onChange={(engine) => set({ engine })}
+          />
+          <FilterSelect
+            label="Effect"
+            value={filters.effect ?? 'all'}
+            options={effects.map((effect) => [effect, effect])}
+            onChange={(effect) => set({ effect })}
           />
           <FilterSelect
             label="Complexity"
@@ -244,7 +255,7 @@ export function OxidalSounds({
             <h3>{group.label}</h3>
             <span className="caption">{group.items.length}</span>
           </div>
-          <div className="oxidal-cards">{group.items.map(card)}</div>
+          <div className="grid gap-2">{group.items.map(card)}</div>
         </section>
       ))}
       {detailItem && (

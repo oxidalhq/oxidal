@@ -13,7 +13,6 @@ import {
   currentSplit,
   type MediaLibrary,
   mediaLibrary,
-  monitoring,
   playerCommand,
   type PlayerSnapshot,
   songSplitJob,
@@ -21,6 +20,7 @@ import {
 import { deviceSentence } from '../../lib/friendlyError';
 import { UploadQueue } from '../../lib/mediaUpload';
 import { onPlayer } from '../../lib/playerFeed';
+import { useMonitorReadings } from '../../monitorFeed';
 import {
   type MediaSheet,
   type PlayerCommand,
@@ -51,10 +51,14 @@ const cueBound = new Set<PlayerCommand['kind']>([
   'set_click',
   'set_speed',
   'set_stem_mix',
+  'set_muted_part',
+  'edit_stem',
 ]);
 const levelKinds = new Set<PlayerCommand['kind']>([
   'set_level',
   'adjust_level',
+  'edit_stem',
+  'set_muted_part',
 ]);
 const empty: never[] = [];
 
@@ -150,22 +154,15 @@ export function SessionMediaProvider({ children }: { children: ReactNode }) {
   }, [orderKey, titleKey, refreshLibrary]);
 
   const cued = !!player?.track;
-  useEffect(() => {
-    if (!cued) return;
-    let alive = true;
-    const read = () =>
-      void monitoring()
-        .then((m) => {
-          if (alive) setMuted(m.audio?.monitoring?.output_muted ?? false);
-        })
-        .catch(() => undefined);
-    read();
-    const timer = window.setInterval(read, 5000);
-    return () => {
-      alive = false;
-      window.clearInterval(timer);
-    };
-  }, [cued]);
+  useMonitorReadings(cued ? 5000 : null, (reading) => {
+    const monitoring = reading.snapshot?.audio?.monitoring;
+    if (
+      cued &&
+      typeof monitoring?.output_muted === 'boolean' &&
+      !reading.disconnected
+    )
+      setMuted(monitoring.output_muted);
+  });
 
   useEffect(() => {
     if (stalledAt === null) return;
@@ -179,8 +176,8 @@ export function SessionMediaProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timer);
   }, [notice]);
 
-  const send = useCallback(
-    async (command: PlayerCommand) => {
+  const dispatch = useCallback(
+    async (command: PlayerCommand, cue: string | null) => {
       // Level moves are coalesced by their control and never wait on transport.
       const transport = !levelKinds.has(command.kind);
       if (transport && busy.current) return false;
@@ -195,7 +192,7 @@ export function SessionMediaProvider({ children }: { children: ReactNode }) {
             setPending(false);
           }, PENDING_MS)
         : undefined;
-      const cue = current.current?.track?.id;
+
       const request = {
         requestId: crypto.randomUUID(),
         origin: 'ui' as const,
@@ -227,6 +224,52 @@ export function SessionMediaProvider({ children }: { children: ReactNode }) {
       }
     },
     [accept],
+  );
+
+  // A held fader replaces the pending value for that field. Keep other
+  // stems and controls in order, and bind each edit to the cue at the gesture.
+  const stemQueue = useRef(
+    new Map<
+      string,
+      {
+        command: PlayerCommand;
+        cue: string | null;
+        done: (applied: boolean) => void;
+      }
+    >(),
+  );
+  const drainingStems = useRef(false);
+  const send = useCallback(
+    (command: PlayerCommand) => {
+      const cue = current.current?.track?.id ?? null;
+      if (command.kind !== 'edit_stem' && command.kind !== 'set_muted_part')
+        return dispatch(command, cue);
+      const key =
+        command.kind === 'edit_stem'
+          ? command.role + ':' + command.edit.field
+          : 'part';
+      const queue = stemQueue.current;
+      const result = new Promise<boolean>((done) => {
+        queue.get(key)?.done(false);
+        queue.delete(key);
+        queue.set(key, { command, cue, done });
+      });
+      async function drain() {
+        if (drainingStems.current) return;
+        drainingStems.current = true;
+        try {
+          for (const [field, change] of queue) {
+            queue.delete(field);
+            change.done(await dispatch(change.command, change.cue));
+          }
+        } finally {
+          drainingStems.current = false;
+        }
+      }
+      void drain();
+      return result;
+    },
+    [dispatch],
   );
 
   const tracks = useMemo(() => {

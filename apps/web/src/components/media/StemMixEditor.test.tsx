@@ -346,11 +346,14 @@ it('plays the stems live from the editor and sends each change as it is made', a
     </SessionMediaContext.Provider>,
   );
   expect(screen.getByText('Playing the stems live')).toBeVisible();
+  expect(send).toHaveBeenCalledTimes(2);
   send.mockClear();
   fireEvent.click(screen.getByRole('button', { name: 'Mute Vocals' }));
   await waitFor(() =>
     expect(send).toHaveBeenCalledWith({
       kind: 'set_stem_mix',
+      split: 'six',
+      expected: mix.recipe,
       recipe: { ...mix.recipe, vocals: { ...neutral, muted: true } },
     }),
   );
@@ -436,6 +439,8 @@ it('lets the player change a playing mix stem by stem and save it to that mix', 
   await waitFor(() =>
     expect(send).toHaveBeenCalledWith({
       kind: 'set_stem_mix',
+      split: 'six',
+      expected: mix.recipe,
       recipe: unmuted,
     }),
   );

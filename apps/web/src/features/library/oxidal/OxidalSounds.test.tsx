@@ -658,11 +658,9 @@ it('an effect no pack provides makes the card Update needed, with no action but 
     ),
   ).toBeVisible();
   // Nothing to install, build or play: only the details.
-  expect(
-    within(card)
-      .getAllByRole('button')
-      .map((b) => b.textContent),
-  ).toEqual(['Details']);
+  expect(within(card).getAllByRole('button')).toEqual([
+    within(card).getByRole('button', { name: 'Details: Slow Weather' }),
+  ]);
 });
 
 it('a pack install that fails outright says why, saves nothing and offers it again', async () => {

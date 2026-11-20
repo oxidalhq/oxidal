@@ -22,7 +22,7 @@ import { DeviceError } from '../../lib/friendlyError';
 import { leaveScreen } from '../../lib/leaveGuard';
 import { withBand } from '../../lib/venueEq';
 import { publishVenue } from '../../lib/venueFeed';
-import { VenueEq } from './VenueEq';
+import { VenueEq, VenueProvider } from './VenueEq';
 
 vi.mock('../../api', async (original) => ({
   ...(await original<typeof import('../../api')>()),
@@ -423,4 +423,28 @@ it('keeps an unsaved edit alive every minute while open', async () => {
   } finally {
     vi.useRealTimers();
   }
+});
+
+it('shares one venue read and one confirmed change between Settings and the dock', async () => {
+  vi.mocked(venueState).mockResolvedValue(state());
+  vi.mocked(venueCommand).mockResolvedValue(
+    state({ revision: 4, bypass: true }),
+  );
+  render(
+    <VenueProvider connected>
+      <VenueEq connected />
+      <VenueEq connected />
+    </VenueProvider>,
+  );
+  const buttons = await screen.findAllByRole('button', { name: 'Bypass: Off' });
+  expect(buttons).toHaveLength(2);
+  expect(venueState).toHaveBeenCalledTimes(1);
+  expect(venueCommand).not.toHaveBeenCalled();
+  fireEvent.click(buttons[1]!);
+  await waitFor(() =>
+    expect(screen.getAllByRole('button', { name: 'Bypass: On' })).toHaveLength(
+      2,
+    ),
+  );
+  expect(venueCommand).toHaveBeenCalledTimes(1);
 });

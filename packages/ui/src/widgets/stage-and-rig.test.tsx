@@ -52,7 +52,7 @@ it('footswitches show the tap and hold actions and fire them', () => {
   const c = screen.getByRole('button', {
     name: 'C Previous Hold · Tuner',
   });
-  fireEvent.pointerDown(c);
+  fireEvent.pointerDown(c, { isPrimary: true, button: 0 });
   act(() => {
     vi.advanceTimersByTime(500);
   });

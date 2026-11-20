@@ -32,7 +32,6 @@ import {
   resumeUnavailable,
 } from './audioResume';
 import { BootPlayback } from './BootPlayback';
-import { BufferFinder } from './BufferFinder';
 import { bufferMs } from './bufferTiming';
 import { EffectsPlaybackSettings } from './EffectsPlaybackSettings';
 import { RecoveryAction } from './FailureNotice';
@@ -457,12 +456,6 @@ export function PlaybackSettings({
                 onApply={(stream) =>
                   void command({ kind: 'reconfigure', stream })
                 }
-              />
-              <BufferFinder
-                stream={state.configured.stream}
-                running={state.phase === 'running'}
-                disabled={!connected || busy || transitioning}
-                apply={(stream) => command({ kind: 'reconfigure', stream })}
               />
             </section>
           )}

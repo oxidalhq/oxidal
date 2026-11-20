@@ -228,10 +228,10 @@ export function StemMixEditor({
     };
   }, [running, source.id, source.title, slow]);
 
-  // While these stems play, every change is heard at once.
-  useEffect(() => {
-    if (live && recipe) void sendMix(recipe);
-  }, [live, recipe, sendMix]);
+  function hear(next: Draft) {
+    if (live && split && recipe && !sameRecipe(recipe, next.recipe))
+      void sendMix({ split: split.id, expected: recipe, recipe: next.recipe });
+  }
 
   async function startSplit(mode: Mode) {
     setBusy('split');
@@ -289,11 +289,13 @@ export function StemMixEditor({
   }
 
   function edit(next: Draft) {
+    hear(next);
     setHistory((state) => state && commit(state, next));
   }
 
   /** Slider drags update live and become one undo step when released. */
   function drag(next: Draft) {
+    hear(next);
     setHistory((state) => {
       if (!state) return state;
       gesture.current ??= state.current;
@@ -632,7 +634,11 @@ export function StemMixEditor({
                   aria-label="Undo"
                   title="Undo"
                   disabled={!mixable || !history.past.length}
-                  onClick={() => setHistory((state) => state && undo(state))}
+                  onClick={() => {
+                    const next = undo(history);
+                    hear(next.current);
+                    setHistory(next);
+                  }}
                 >
                   <ArrowCounterClockwise aria-hidden="true" />
                 </Button>
@@ -642,7 +648,11 @@ export function StemMixEditor({
                   aria-label="Redo"
                   title="Redo"
                   disabled={!mixable || !history.future.length}
-                  onClick={() => setHistory((state) => state && redo(state))}
+                  onClick={() => {
+                    const next = redo(history);
+                    hear(next.current);
+                    setHistory(next);
+                  }}
                 >
                   <ArrowClockwise aria-hidden="true" />
                 </Button>

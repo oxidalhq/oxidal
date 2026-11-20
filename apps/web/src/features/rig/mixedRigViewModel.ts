@@ -3,7 +3,10 @@ import { createElement } from 'react';
 import type { RigAudioState, RigControl, RigDocument } from '../../api';
 import type { SceneLanes } from '../../components/RouteTree';
 import { GearIcon } from '../../GearIcon';
-import type { SceneNativeControl } from '../../generated/contract';
+import type {
+  SceneNativeBypass,
+  SceneNativeControl,
+} from '../../generated/contract';
 import { lv2Control } from '../../lv2Control';
 import { oxidalEffectControls } from '../../oxidalEffectLabels';
 import {
@@ -111,6 +114,7 @@ export type SceneDraft = {
   controls?: Record<string, SceneControl[]>;
   bypass?: Record<string, SceneBypass[]>;
   native_controls?: Record<string, SceneNativeControl[]>;
+  native_bypass?: Record<string, SceneNativeBypass[]>;
 };
 
 export type MixedRigViewInput = {
@@ -428,6 +432,7 @@ export function mixedRigViewModel({
           ...Object.keys(sceneUpdates?.controls ?? {}),
           ...Object.keys(sceneUpdates?.bypass ?? {}),
           ...Object.keys(sceneUpdates?.native_controls ?? {}),
+          ...Object.keys(sceneUpdates?.native_bypass ?? {}),
         ]
       : []),
     ...addedScenes.map((scene) => scene.id),

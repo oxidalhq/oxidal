@@ -380,7 +380,7 @@ it('keeps scene levels through a routing change and maps new paths (C9)', () => 
       document,
       buildRoute('p', 'x', routeRemoveBranch(route, 'a'), 'prof'),
     ),
-  ).toThrow(/needs a split/);
+  ).toThrow(/needs a block switch, effect setting or routing input/);
 });
 
 it('adds, copies and removes a path by split and index for the split dialog', () => {

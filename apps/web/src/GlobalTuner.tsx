@@ -6,7 +6,15 @@ import {
   Plus,
   Sun,
 } from '@phosphor-icons/react';
-import { useEffect, useEffectEvent, useRef, useState } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import {
@@ -14,6 +22,7 @@ import {
   SegmentedControl,
 } from '@oxidal/design-system/components/segmented';
 import { StateNotice } from '@oxidal/design-system/components/states';
+import { TunerFace } from '@oxidal/design-system/widgets/tuner-face';
 
 import './Tuner.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
@@ -56,13 +65,7 @@ function remember(key: string, value: string) {
  * the stage and a high-contrast one for daylight.
  * @see docs/audio.md
  */
-export function GlobalTuner({
-  onClose,
-  slow = false,
-}: {
-  onClose: () => void;
-  slow?: boolean;
-}) {
+function useTunerOwner(watch: boolean, start: boolean, slow: boolean) {
   const [state, setState] = useState<TunerState | null>(null);
   const [error, setError] = useState('');
   const [muted, setMuted] = useState(true);
@@ -78,6 +81,9 @@ export function GlobalTuner({
   const [starting, setStarting] = useState(false);
   const wantMuted = useRef(true);
   const mutedBefore = useRef<boolean | null>(null);
+  const owned = useRef<TunerState | null>(null);
+  const opening = useRef<Promise<TunerState | null> | null>(null);
+  const closing = useRef(false);
   const lastStart = useRef(0);
   const startFailure = useRef('');
   const reference = useRef(a4);
@@ -108,12 +114,14 @@ export function GlobalTuner({
     }));
   });
   useEffect(() => {
+    if (!watch) return;
+    closing.current = false;
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
       try {
         let next = await tuner();
-        if (!active) return;
+        if (!active || closing.current) return;
         if (!next)
           throw new Error(
             'This unit’s software has no Oxidal tuner yet. Update it.',
@@ -121,7 +129,7 @@ export function GlobalTuner({
         // Start listening: under whatever plays, or, with nothing playing,
         // in the tuner's own silent session. A preset change starts a new
         // audio session, so this also listens again there.
-        if (!next.enabled && performance.now() > lastStart.current) {
+        if (start && !next.enabled && performance.now() > lastStart.current) {
           if (next.available && mutedBefore.current === null)
             mutedBefore.current = next.output_muted;
           // Opening the interface can fail (unplugged): do not hammer it.
@@ -129,17 +137,22 @@ export function GlobalTuner({
             performance.now() + (next.available ? 1000 : 5000);
           setStarting(!next.available);
           try {
-            next =
-              (await tuner({
-                enabled: true,
-                output_muted: wantMuted.current,
-              })) ?? next;
+            opening.current = tuner({
+              enabled: true,
+              output_muted: wantMuted.current,
+            });
+            const started = await opening.current;
+            if (started?.enabled) owned.current = started;
+            next = started ?? next;
             startFailure.current = '';
           } catch (cause) {
             startFailure.current = errorDetails(cause);
+          } finally {
+            opening.current = null;
           }
           if (!active) return;
         }
+        if (closing.current) return;
         take(next);
         // A failed start stays on screen between the spaced-out retries.
         setError(next.enabled ? '' : startFailure.current);
@@ -155,30 +168,37 @@ export function GlobalTuner({
       active = false;
       clearTimeout(timer);
     };
-  }, [slow]);
+  }, [slow, watch, start]);
 
   async function monitor(next: boolean) {
-    if (next === muted) return;
+    if (!state?.enabled || next === state.output_muted) return;
     wantMuted.current = next;
     setMuted(next);
     try {
-      await tuner({ enabled: true, output_muted: next });
+      const changed = await tuner({ enabled: true, output_muted: next });
+      if (changed) setState(changed);
     } catch (cause) {
       setError(errorDetails(cause));
     }
   }
   async function close() {
+    closing.current = true;
     try {
-      if (state?.available && !state.standalone)
+      await opening.current;
+      const session = owned.current;
+      if (session?.standalone) await tuner({ enabled: false });
+      else if (session?.available)
         await tuner({
           enabled: false,
-          output_muted: mutedBefore.current ?? false,
+          output_muted: mutedBefore.current ?? session.output_muted,
         });
-      else if (state?.standalone) await tuner({ enabled: false });
-    } catch {
-      /* Closing never waits on a stopped engine. */
+    } catch (cause) {
+      setError(errorDetails(cause));
     }
-    onClose();
+    owned.current = null;
+    mutedBefore.current = null;
+    lastStart.current = 0;
+    wantMuted.current = true;
   }
   function tune(next: number) {
     const value = Math.min(450, Math.max(430, next));
@@ -186,7 +206,114 @@ export function GlobalTuner({
     remember('oxidal.tuner.a4', String(value));
   }
 
-  const listening = !!state?.available && !error;
+  const listening = watch && !!state?.available && !!state.enabled && !error;
+  return {
+    state,
+    pitch,
+    error,
+    muted: state?.enabled ? state.output_muted : muted,
+    full,
+    setFull,
+    look,
+    setLook,
+    a4,
+    tune,
+    starting,
+    monitor,
+    close,
+    listening,
+  };
+}
+
+type Owner = ReturnType<typeof useTunerOwner>;
+const TunerContext = createContext<Owner | null>(null);
+
+export function TunerProvider({
+  watch,
+  start,
+  slow,
+  children,
+}: {
+  watch: boolean;
+  start: boolean;
+  slow: boolean;
+  children: ReactNode;
+}) {
+  const owner = useTunerOwner(watch, start, slow);
+  return (
+    <TunerContext.Provider value={owner}>{children}</TunerContext.Provider>
+  );
+}
+
+export function TunerTool({ onStart }: { onStart: () => void }) {
+  const owner = useContext(TunerContext);
+  if (!owner) return null;
+  const { state, pitch, error, a4, look, monitor, listening } = owner;
+  return (
+    <>
+      <TunerFace
+        note={listening ? (pitch?.note ?? null) : null}
+        cents={pitch?.cents ?? 0}
+        frequency={pitch?.frequency}
+        reference={a4}
+        day={look === 'day'}
+        muted={state?.output_muted}
+        onMuted={
+          listening && !state?.standalone
+            ? (next) => void monitor(next)
+            : undefined
+        }
+      />
+      {error && <p role="alert">{error}</p>}
+      <Button variant="outline" onClick={onStart}>
+        {listening ? 'Tuner controls' : 'Start tuning'}
+      </Button>
+    </>
+  );
+}
+
+export function GlobalTuner({
+  onClose,
+  slow = false,
+}: {
+  onClose: () => void;
+  slow?: boolean;
+}) {
+  const owner = useContext(TunerContext);
+  if (!owner)
+    return (
+      <TunerProvider watch start slow={slow}>
+        <GlobalTuner onClose={onClose} slow={slow} />
+      </TunerProvider>
+    );
+  return <TunerDialog owner={owner} slow={slow} onClose={onClose} />;
+}
+
+function TunerDialog({
+  owner,
+  slow,
+  onClose,
+}: {
+  owner: Owner;
+  slow: boolean;
+  onClose: () => void;
+}) {
+  const {
+    state,
+    pitch,
+    error,
+    muted,
+    full,
+    setFull,
+    look,
+    setLook,
+    a4,
+    tune,
+    starting,
+    monitor,
+    close,
+    listening,
+  } = owner;
   const inTune = pitch !== null && Math.abs(pitch.cents) <= LOCK;
   const shown = pitch === null ? null : Math.round(pitch.cents * 10) / 10;
   const name = pitch === null ? '—' : NOTES[((pitch.note % 12) + 12) % 12]!;
@@ -195,7 +322,7 @@ export function GlobalTuner({
     <AdjustmentDialog
       title="Tuner"
       className={full ? 'tuner-dialog tuner-full' : 'tuner-dialog'}
-      onCancel={() => void close()}
+      onCancel={() => void close().then(onClose)}
     >
       <div className="tuner" data-look={look} data-in-tune={inTune}>
         <div className="tuner-face">

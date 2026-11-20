@@ -32,6 +32,7 @@ export function BackingPanel({
   onStop,
   onSeek,
   stems,
+  minimumStemLevel,
   onStem,
   myPart,
   onMyPart,
@@ -48,6 +49,7 @@ export function BackingPanel({
   onSeek: (seconds: number) => void;
   /** The live stem mix, when the track has stems. */
   stems?: BackingStems;
+  minimumStemLevel?: number;
   onStem?: (role: StemRole, next: StemControls) => void;
   /** The stem you play yourself, muted in the mix. */
   myPart?: 'guitar' | 'bass' | 'none';
@@ -69,7 +71,6 @@ export function BackingPanel({
         onPlay={onPlay}
         onPause={onPause}
         onStop={onStop}
-        compact
       />
       <PositionBar
         position={position}
@@ -90,15 +91,24 @@ export function BackingPanel({
             aria-label="Mute my part"
             className="w-full"
           >
-            <Segment value="guitar">Guitar</Segment>
-            <Segment value="bass">Bass</Segment>
+            <Segment value="guitar" disabled={!stems.guitar}>
+              Guitar
+            </Segment>
+            <Segment value="bass" disabled={!stems.bass}>
+              Bass
+            </Segment>
             <Segment value="none">Nothing</Segment>
           </SegmentedControl>
         </div>
       )}
       {stems && onStem && (
         <CollapsibleSection title="Stem mix">
-          <StemMixer stems={stems} onChange={onStem} className="h-44" />
+          <StemMixer
+            minimumLevel={minimumStemLevel}
+            stems={stems}
+            onChange={onStem}
+            className="h-44"
+          />
         </CollapsibleSection>
       )}
       {next && (

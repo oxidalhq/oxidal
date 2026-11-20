@@ -28,7 +28,16 @@ const ms = (frames: number, periods: number, rate: number) =>
 
 export type AudioSetting = { rate: number; frames: number; periods: number };
 export type AudioChangePhase = 'idle' | 'restarting' | 'proving' | 'reverting';
-export type BufferTrial = { frames: number; periods: number; xruns: number };
+export type BufferTrial = {
+  frames: number;
+  periods: number;
+  xruns?: number | null;
+  deadline_misses?: number | null;
+  invalid_samples?: number | null;
+  outcome?: 'clean' | 'failed' | 'unavailable';
+  elapsed_ms?: number;
+  reason?: string | null;
+};
 export type BufferFinderRun = {
   /** Sizes tried so far, in order. */
   trials: BufferTrial[];
@@ -37,6 +46,12 @@ export type BufferFinderRun = {
   state: 'idle' | 'running' | 'done';
   onStart: () => void;
   onCancel: () => void;
+  onUse?: (setting: { frames: number; periods: number }) => void;
+  recommended?: { frames: number; periods: number } | null;
+  message?: string | null;
+  startDisabled?: boolean;
+  cancelDisabled?: boolean;
+  canUse?: boolean;
 };
 
 /**
@@ -66,12 +81,16 @@ export function AudioChange({
   onChange,
   waiting,
   recovery,
+  finderOpen,
+  onFinderOpenChange,
 }: {
   current: AudioSetting;
   phase: AudioChangePhase;
   /** While proving: seconds until it goes back on its own. */
   secondsLeft: number;
   finder?: BufferFinderRun;
+  finderOpen?: boolean;
+  onFinderOpenChange?: (open: boolean) => void;
   choices?: { rates: number[]; frames: number[]; periods: number[] };
   disabled?: boolean;
   additionalChanges?: boolean;
@@ -94,7 +113,9 @@ export function AudioChange({
   const draft = value ?? localDraft;
   const setDraft = (next: AudioSetting) =>
     onChange ? onChange(next) : setLocalDraft(next);
-  const [finding, setFinding] = React.useState(false);
+  const [localFinding, setLocalFinding] = React.useState(false);
+  const finding = finderOpen ?? localFinding;
+  const setFinding = onFinderOpenChange ?? setLocalFinding;
   const currentKey = JSON.stringify(current);
   const [seen, setSeen] = React.useState(currentKey);
   if (seen !== currentKey) {
@@ -209,10 +230,14 @@ export function AudioChange({
           {finder && (
             <Button
               variant="outline"
-              disabled={disabled}
+              disabled={disabled && finder.state === 'idle'}
               onClick={() => setFinding(true)}
             >
-              Find the smallest safe buffer…
+              {finder.state === 'running'
+                ? 'View buffer test…'
+                : finder.state === 'done'
+                  ? 'View buffer results…'
+                  : 'Find the smallest safe buffer…'}
             </Button>
           )}
           {changed && (
@@ -272,7 +297,9 @@ export function AudioChange({
           open={finding}
           onOpenChange={setFinding}
           rate={current.rate}
-          onUse={(s) => apply({ ...s, rate: current.rate })}
+          onUse={(s) =>
+            finder.onUse ? finder.onUse(s) : apply({ ...s, rate: current.rate })
+          }
         />
       )}
     </section>
@@ -294,6 +321,11 @@ export function BufferFinder({
   state,
   onStart,
   onCancel,
+  recommended,
+  message,
+  startDisabled = false,
+  cancelDisabled = false,
+  canUse = true,
 }: BufferFinderRun & {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -301,24 +333,27 @@ export function BufferFinder({
   onUse: (setting: { frames: number; periods: number }) => void;
 }) {
   const done = state === 'done';
-  const best = trials.filter((t) => t.xruns === 0).at(-1);
+  const clean = (trial: BufferTrial) =>
+    trial.outcome === 'clean' ||
+    (trial.outcome === undefined && trial.xruns === 0);
+  const best =
+    recommended === undefined ? trials.filter(clean).at(-1) : recommended;
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        if (!o) onCancel();
-        onOpenChange(o);
-      }}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader
           title="Find the smallest safe buffer"
-          description="Play hard, with your loudest preset, while each size is tried for ten seconds."
+          description="Play your intended rig while each setting is measured for one minute. The device restores the original buffer after each test. Closing this panel leaves testing running."
         />
         <DialogBody className="grid gap-3">
+          {message && (
+            <p role="status" className="text-sm break-words">
+              {message}
+            </p>
+          )}
           {state === 'running' && (
             <Progress
-              value={(trials.length / total) * 100}
+              value={total > 0 ? (trials.length / total) * 100 : 0}
               label="Finder progress"
             />
           )}
@@ -329,9 +364,9 @@ export function BufferFinder({
             {trials.map((t) => (
               <li
                 key={`${t.frames}x${t.periods}`}
-                className="flex items-center gap-2"
+                className="flex min-w-0 flex-wrap items-center gap-2"
               >
-                {t.xruns ? (
+                {!clean(t) ? (
                   <XCircle aria-hidden="true" className="text-brand" />
                 ) : (
                   <CheckCircle aria-hidden="true" />
@@ -341,7 +376,26 @@ export function BufferFinder({
                 </span>
                 <Caption as="span" className="text-xs">
                   {ms(t.frames, t.periods, rate).toFixed(1)} ms ·{' '}
-                  {t.xruns ? `${t.xruns} dropouts` : 'clean'}
+                  {clean(t)
+                    ? 'clean'
+                    : t.outcome === 'unavailable'
+                      ? 'unavailable'
+                      : 'failed'}
+                  {' · '}xruns {t.xruns ?? 'unknown'}
+                  {t.outcome !== undefined && (
+                    <>
+                      {' '}
+                      · deadlines {t.deadline_misses ?? 'unknown'} · invalid{' '}
+                      {t.invalid_samples ?? 'unknown'}
+                    </>
+                  )}
+                  {t.elapsed_ms !== undefined &&
+                    ` · ${(t.elapsed_ms / 1000).toFixed(1)} s`}
+                  {t.reason && (
+                    <span className="block max-w-full break-words">
+                      {t.reason}
+                    </span>
+                  )}
                 </Caption>
               </li>
             ))}
@@ -356,11 +410,38 @@ export function BufferFinder({
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {done ? 'Keep current' : 'Cancel'}
+            {done
+              ? 'Keep current'
+              : state === 'running'
+                ? 'Close panel'
+                : 'Cancel'}
           </Button>
-          {state === 'idle' && <Button onClick={onStart}>Start</Button>}
+          {state === 'idle' && (
+            <Button disabled={startDisabled} onClick={onStart}>
+              Start
+            </Button>
+          )}
+          {state === 'done' && (
+            <Button
+              variant="outline"
+              disabled={startDisabled}
+              onClick={onStart}
+            >
+              Run again
+            </Button>
+          )}
+          {state === 'running' && (
+            <Button
+              variant="outline"
+              disabled={cancelDisabled}
+              onClick={onCancel}
+            >
+              Stop test and restore
+            </Button>
+          )}
           {done && best && (
             <Button
+              disabled={!canUse}
               onClick={() => {
                 onUse({ frames: best.frames, periods: best.periods });
                 onOpenChange(false);

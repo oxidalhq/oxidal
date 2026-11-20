@@ -6,6 +6,8 @@ import {
 } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
+import { FootswitchPad } from '@oxidal/design-system/widgets/footswitches';
+
 import './ChainView.css';
 import './PerformView.css';
 import {
@@ -496,26 +498,15 @@ export function PerformView({
               {boxes.length > 0 ? (
                 <div className="perform-boxes" role="group" aria-label="Blocks">
                   {boxes.map(({ block, tag }) => (
-                    <button
+                    <FootswitchPad
                       key={block.id}
-                      type="button"
-                      className="perform-box"
-                      data-kind={block.kind}
-                      data-on={block.on}
-                      aria-pressed={block.on}
-                      aria-label={`${block.label} on`}
-                      title={block.label}
+                      name={tag ?? block.kind}
+                      label={block.label}
+                      accessibleName={`${block.label} on`}
+                      pressed={block.on}
                       disabled={disabled}
-                      onClick={() => onToggle(block.id)}
-                    >
-                      <span className="chain-led" aria-hidden="true" />
-                      {tag && <span className="perform-box-tag">{tag}</span>}
-                      <span className="perform-box-face">{block.face}</span>
-                      <span className="perform-box-label">{block.label}</span>
-                      <span className="perform-box-state">
-                        {block.on ? 'On' : 'Off'}
-                      </span>
-                    </button>
+                      onTap={() => onToggle(block.id)}
+                    />
                   ))}
                 </div>
               ) : (

@@ -116,7 +116,7 @@ export function refreshMonitorFeed() {
 
 /** Receive each shared reading as it arrives, for views that accumulate history. */
 export function useMonitorReadings(
-  everyMs: number,
+  everyMs: number | null,
   onReading: (reading: MonitorReading) => void,
 ) {
   useFeedInterval(everyMs);
@@ -135,8 +135,9 @@ export function useMonitorReadings(
   }, []);
 }
 
-function useFeedInterval(everyMs: number) {
+function useFeedInterval(everyMs: number | null) {
   useEffect(() => {
+    if (everyMs === null) return;
     const key = Symbol('monitor');
     const first = intervals.size === 0;
     intervals.set(key, everyMs);

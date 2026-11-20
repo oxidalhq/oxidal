@@ -161,3 +161,140 @@ it('offers ID-bound safety Stop even while a Keep reply is pending', async () =>
   await user.click(screen.getByRole('button', { name: 'Stop audio' }));
   expect(changeAudio).toHaveBeenCalledWith({ kind: 'stop', id: 'stop-trial' });
 });
+
+const finderFeed = (
+  state: 'running' | 'done',
+): ReturnType<typeof useAudioChange> => ({
+  state: {
+    phase: state === 'running' ? 'proving' : 'reverted',
+    owner: 'native',
+    id: 'finder-id',
+    previous: {
+      input,
+      output: initial.output,
+      input_map: initial.input_map,
+      output_map: initial.output_map,
+    },
+    finder: {
+      state,
+      session: cursor.session,
+      expected_revision: cursor.expected_revision,
+      total: 1,
+      candidate: { frames: 48, periods: 2 },
+      recommended: { frames: 48, periods: 2 },
+      trials:
+        state === 'done'
+          ? [
+              {
+                frames: 48,
+                periods: 2,
+                outcome: 'clean',
+                elapsed_ms: 60000,
+                xruns: 0,
+                deadline_misses: 0,
+                invalid_samples: 0,
+              },
+            ]
+          : [],
+    },
+  },
+  receivedAt: 0,
+  error: '',
+  pending: false,
+  readFailed: false,
+  active: state === 'running',
+  secondsLeft: 60,
+});
+
+it('starts device-owned buffer screening with only the confirmed owner cursor', async () => {
+  const user = userEvent.setup();
+  render(
+    <TimedAudioReconfigure
+      initial={initial}
+      checkedInput={null}
+      checkedOutput={null}
+      cursor={cursor}
+      disabled={false}
+      feed={{
+        state: { phase: 'idle' },
+        receivedAt: 0,
+        error: '',
+        pending: false,
+        readFailed: false,
+        active: false,
+        secondsLeft: 0,
+      }}
+    />,
+  );
+  await user.click(
+    screen.getByRole('button', { name: 'Find the smallest safe buffer…' }),
+  );
+  await user.click(screen.getByRole('button', { name: 'Start' }));
+  expect(changeAudio).toHaveBeenCalledTimes(1);
+  expect(changeAudio).toHaveBeenCalledWith({ kind: 'find_buffer', ...cursor });
+});
+
+it('keeps screening alive when its view closes and sends explicit ID-bound cancellation under Protect', async () => {
+  const user = userEvent.setup();
+  render(
+    <TimedAudioReconfigure
+      initial={initial}
+      checkedInput={null}
+      checkedOutput={null}
+      cursor={cursor}
+      disabled
+      feed={finderFeed('running')}
+    />,
+  );
+  expect(
+    screen.queryByRole('dialog', { name: 'Keep this audio setting?' }),
+  ).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'View buffer test…' }));
+  await user.click(screen.getByRole('button', { name: 'Close panel' }));
+  expect(changeAudio).not.toHaveBeenCalled();
+  await user.click(
+    screen.getByRole('button', { name: 'Stop test and restore' }),
+  );
+  expect(changeAudio).toHaveBeenCalledWith({ kind: 'revert', id: 'finder-id' });
+});
+
+it('applies measured sizing to the tested routing and refuses an old result after the owner cursor changes', async () => {
+  const user = userEvent.setup();
+  const feed = finderFeed('done');
+  const props = {
+    initial,
+    cursor,
+    disabled: false,
+    feed,
+    checkedInput: { ...input, endpoint: 'hw:other' },
+    checkedOutput: { ...initial.output, endpoint: 'hw:other' },
+  };
+  const view = render(<TimedAudioReconfigure {...props} />);
+  await user.click(screen.getByText('Interface routing', { exact: true }));
+  await user.click(
+    screen.getByRole('button', { name: 'Use checked interface' }),
+  );
+  await user.click(
+    screen.getByRole('button', { name: 'View buffer results…' }),
+  );
+  await user.click(screen.getByRole('button', { name: 'Use 48 × 2' }));
+  expect(changeAudio).toHaveBeenCalledWith({
+    kind: 'apply',
+    ...cursor,
+    input: { ...input, period_frames: 48, periods: 2 },
+    output: { ...initial.output, period_frames: 48, periods: 2 },
+    input_map: initial.input_map,
+    output_map: initial.output_map,
+  });
+  view.rerender(
+    <TimedAudioReconfigure
+      {...props}
+      cursor={{ ...cursor, expected_revision: 8 }}
+    />,
+  );
+  await user.click(
+    screen.getByRole('button', { name: 'View buffer results…' }),
+  );
+  expect(screen.getByRole('button', { name: 'Use 48 × 2' })).toBeDisabled();
+  expect(screen.getByText(/rig changed after screening/)).toBeVisible();
+});

@@ -3,7 +3,7 @@ import type { RigDocument } from './api';
 /**
  * Which version a preset's scenes are saved as. Version 1 mixes paths;
  * version 2 also sets effect settings (`controls`), and version 3 adds warm
- * processor bypass. Version 4 adds capture settings and an initial scene.
+ * processor bypass. Version 4 adds capture settings and an initial scene; version 5 adds warm native block switches.
  * Older readers refuse unknown required versions explicitly.
  * Version 1 manifests that already carry controls, saved before
  * version 2, are read as they are; the next save writes them as version 2.
@@ -16,12 +16,20 @@ export const SCENES_V1 = 'urn:oxidal:scenes:1';
 export const SCENES_V2 = 'urn:oxidal:scenes:2';
 export const SCENES_V3 = 'urn:oxidal:scenes:3';
 export const SCENES_V4 = 'urn:oxidal:scenes:4';
-const VERSIONS = [SCENES_V1, SCENES_V2, SCENES_V3, SCENES_V4] as const;
+export const SCENES_V5 = 'urn:oxidal:scenes:5';
+const VERSIONS = [
+  SCENES_V1,
+  SCENES_V2,
+  SCENES_V3,
+  SCENES_V4,
+  SCENES_V5,
+] as const;
 
 type SceneShape = {
   controls?: unknown[];
   bypass?: unknown[];
   native_controls?: unknown[];
+  native_bypass?: unknown[];
 };
 type ScenesShape = { scenes?: SceneShape[]; initial_scene?: string };
 
@@ -43,6 +51,7 @@ export function readScenes<T = Record<string, unknown>>(
 /** The version a set of scenes must be saved as. */
 export function scenesFormat(scenes: unknown): string {
   const list = (scenes as ScenesShape | undefined)?.scenes ?? [];
+  if (list.some((scene) => scene.native_bypass?.length)) return SCENES_V5;
   if (
     (scenes as ScenesShape | undefined)?.initial_scene !== undefined ||
     list.some((scene) => scene.native_controls?.length)

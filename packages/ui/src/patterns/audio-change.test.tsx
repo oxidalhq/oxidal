@@ -70,3 +70,67 @@ it('refuses Apply for invalid routing without locking the fields needed to fix i
     screen.getByRole('button', { name: 'Apply and restart audio' }),
   ).toBeDisabled();
 });
+
+it('closing a device buffer test is presentation only; explicit Stop test requests restoration', async () => {
+  const user = userEvent.setup();
+  const cancel = vi.fn();
+  render(
+    <AudioChange
+      current={current}
+      phase="idle"
+      secondsLeft={0}
+      disabled
+      onApply={vi.fn()}
+      onSettle={vi.fn()}
+      finder={{
+        state: 'running',
+        trials: [],
+        total: 3,
+        onStart: vi.fn(),
+        onCancel: cancel,
+      }}
+    />,
+  );
+  await user.click(screen.getByRole('button', { name: 'View buffer test…' }));
+  await user.click(screen.getByRole('button', { name: 'Close panel' }));
+  expect(cancel).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button', { name: 'View buffer test…' }));
+  await user.click(
+    screen.getByRole('button', { name: 'Stop test and restore' }),
+  );
+  expect(cancel).toHaveBeenCalledTimes(1);
+});
+
+it('unknown measurements are unavailable and never become a clean recommendation', async () => {
+  const user = userEvent.setup();
+  render(
+    <AudioChange
+      current={current}
+      phase="idle"
+      secondsLeft={0}
+      onApply={vi.fn()}
+      onSettle={vi.fn()}
+      finder={{
+        state: 'done',
+        trials: [
+          {
+            frames: 64,
+            periods: 2,
+            outcome: 'unavailable',
+            reason: 'Counters unavailable',
+          },
+        ],
+        total: 1,
+        onStart: vi.fn(),
+        onCancel: vi.fn(),
+        recommended: null,
+      }}
+    />,
+  );
+  await user.click(
+    screen.getByRole('button', { name: 'View buffer results…' }),
+  );
+  expect(screen.getByText(/xruns unknown/)).toBeVisible();
+  expect(screen.getByText('Counters unavailable')).toBeVisible();
+  expect(screen.queryByRole('button', { name: /^Use / })).toBeNull();
+});

@@ -7,6 +7,7 @@ import {
   factoryMetadata,
   factoryMissingPacks,
   factoryPackFor,
+  factoryPluginNames,
 } from '../../../factoryMetadata';
 import {
   factoryMissingPlugins,
@@ -327,6 +328,7 @@ export type Filters = {
   genre: string;
   engine: string;
   complexity: string;
+  effect?: string;
   groupBy: 'genre' | 'engine';
 };
 export const noFilters: Filters = {
@@ -334,13 +336,21 @@ export const noFilters: Filters = {
   genre: 'all',
   engine: 'all',
   complexity: 'all',
+  effect: 'all',
   groupBy: 'genre',
 };
+
+export function soundEffects(item: SoundItem): string[] {
+  return item.recipe ? factoryPluginNames(item.recipe) : [];
+}
 
 export function filterItems(items: SoundItem[], f: Filters): SoundItem[] {
   const text = f.query.trim().toLowerCase();
   return items.filter(
     (item) =>
+      (!f.effect ||
+        f.effect === 'all' ||
+        soundEffects(item).includes(f.effect)) &&
       (f.genre === 'all' || item.meta.genres.includes(f.genre)) &&
       (f.engine === 'all' || item.meta.engine === f.engine) &&
       (f.complexity === 'all' || item.meta.complexity === f.complexity) &&

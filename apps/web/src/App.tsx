@@ -549,7 +549,11 @@ function InstrumentApp() {
       status={statusMode}
       bottomBar={<NowPlaying placement="bottom" />}
     >
-      <PerformanceTools connected={connected}>
+      <PerformanceTools
+        tunerOpen={tunerOpen}
+        connected={connected}
+        slow={displayMode === 'epaper'}
+      >
         <NowPlaying placement="strip" />
         {tunerOpen && (
           <GlobalTuner

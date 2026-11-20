@@ -116,3 +116,24 @@ it('lets ID-bound Stop bypass a pending Keep and ignores the late Keep reply', a
     id: 'priority-trial',
   });
 });
+
+it('keeps the device finder active between restored trial phases', async () => {
+  vi.mocked(audioChange).mockResolvedValue({
+    phase: 'reverted',
+    owner: 'native',
+    id: 'search',
+    finder: {
+      state: 'running',
+      session: 's',
+      expected_revision: 1,
+      candidate: { frames: 64, periods: 2 },
+      total: 2,
+      trials: [],
+    },
+  });
+  const view = renderHook(() => useAudioChange());
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(view.result.current.active).toBe(true);
+});

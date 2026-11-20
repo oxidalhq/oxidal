@@ -90,7 +90,7 @@ const KIND_VAR: Record<BlockKind, string> = {
 };
 
 /** The block that gives the sound its character: its amp, else its first block. */
-const mainBlock = (sound: OxidalSound) =>
+const mainBlock = (sound: Pick<OxidalSound, 'blocks'>) =>
   sound.blocks.find((b) => b.kind === 'amp') ?? sound.blocks[0];
 
 /** A square tinted by the main block's category colour, with its glyph. */
@@ -98,7 +98,7 @@ function VoiceTile({
   sound,
   size = 'md',
 }: {
-  sound: OxidalSound;
+  sound: Pick<OxidalSound, 'blocks'>;
   size?: 'md' | 'lg';
 }) {
   const main = mainBlock(sound);
@@ -127,7 +127,7 @@ function VoiceTile({
 }
 
 /** The sound's blocks as a small signal chain: LED and glyph per block, joined by a wire. */
-function MiniChain({ sound }: { sound: OxidalSound }) {
+function MiniChain({ sound }: { sound: Pick<OxidalSound, 'blocks'> }) {
   const shown = sound.blocks.slice(0, 6);
   return (
     <span aria-hidden="true" className="inline-flex items-center">
@@ -196,47 +196,14 @@ function SoundRow({
   onTry: () => void;
 }) {
   return (
-    <li
-      data-active={active || undefined}
-      className={cn(
-        'relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border bg-card p-3 transition-[border-color,box-shadow] duration-[var(--duration-fast)] hover:border-foreground/40',
-        active &&
-          'before:rounded-r border-foreground shadow-raised before:absolute before:inset-y-3 before:left-0 before:w-1 before:bg-brand',
-      )}
-    >
-      <VoiceTile sound={s} />
-      <button
-        type="button"
-        aria-pressed={active}
-        onClick={onSelect}
-        className="grid min-w-0 gap-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-ring"
-      >
-        <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="font-display text-lg leading-tight font-semibold">
-            {s.name}
-          </span>
-          {s.era && (
-            <span className="rounded border border-border px-1 small-caps text-2xs text-muted-foreground">
-              {s.era}
-            </span>
-          )}
-          <span className="text-xs text-muted-foreground">
-            {s.genres.join(' · ')}
-          </span>
-        </span>
-        <span className="line-clamp-2 text-sm text-muted-foreground md:line-clamp-1">
-          {s.description}
-        </span>
-        <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-0.5">
-          <MiniChain sound={s} />
-          <span className="small-caps text-2xs text-muted-foreground">
-            {ENGINE[s.engine]} · {s.scenes.length} scenes
-          </span>
-          <ReadyPill readiness={s.readiness} />
-        </span>
-      </button>
-      <span className="relative z-10">
-        {s.readiness.state === 'ready' ? (
+    <SoundRecipeRow
+      sound={s}
+      active={active}
+      onSelect={onSelect}
+      summary={`${ENGINE[s.engine]} · ${s.scenes.length} scenes`}
+      badge={<ReadyPill readiness={s.readiness} />}
+      action={
+        s.readiness.state === 'ready' ? (
           <button
             type="button"
             aria-label={`Try ${s.name}`}
@@ -262,9 +229,88 @@ function SoundRow({
           >
             <CircleNotch className="size-4 animate-spin" />
           </span>
-        )}
-      </span>
-    </li>
+        )
+      }
+    />
+  );
+}
+
+export function SoundRecipeRow({
+  sound: s,
+  active,
+  onSelect,
+  summary,
+  badge,
+  action,
+  feedback,
+  selectLabel,
+  as: Row = 'li',
+  rowLabel,
+  state,
+}: {
+  sound: Pick<
+    OxidalSound,
+    'name' | 'era' | 'genres' | 'description' | 'blocks'
+  >;
+  active?: boolean;
+  onSelect: () => void;
+  summary: string;
+  badge: React.ReactNode;
+  action: React.ReactNode;
+  feedback?: React.ReactNode;
+  selectLabel?: string;
+  as?: 'article' | 'li';
+  rowLabel?: string;
+  state?: string;
+}) {
+  return (
+    <Row
+      aria-label={rowLabel}
+      data-state={state}
+      data-active={active || undefined}
+      className={cn(
+        'relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border bg-card p-3 transition-[border-color,box-shadow] duration-[var(--duration-fast)] hover:border-foreground/40',
+        active &&
+          'before:rounded-r border-foreground shadow-raised before:absolute before:inset-y-3 before:left-0 before:w-1 before:bg-brand',
+      )}
+    >
+      <VoiceTile sound={s} />
+      <button
+        type="button"
+        aria-label={selectLabel}
+        aria-pressed={active}
+        onClick={onSelect}
+        className="grid min-w-0 gap-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-ring"
+      >
+        <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="font-display text-lg leading-tight font-semibold">
+            {s.name}
+          </span>
+          {s.era && (
+            <span className="rounded border border-border px-1 small-caps text-2xs text-muted-foreground">
+              {s.era}
+            </span>
+          )}
+          <span className="text-xs text-muted-foreground">
+            {s.genres.join(' · ')}
+          </span>
+        </span>
+        <span className="line-clamp-2 text-sm text-muted-foreground md:line-clamp-1">
+          {s.description}
+        </span>
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-0.5">
+          <MiniChain sound={s} />
+          <span className="small-caps text-2xs text-muted-foreground">
+            {summary}
+          </span>
+          {badge}
+        </span>
+      </button>
+      <span className="relative z-10">{action}</span>
+      {feedback && (
+        <div className="col-span-full grid gap-1 text-sm">{feedback}</div>
+      )}
+    </Row>
   );
 }
 

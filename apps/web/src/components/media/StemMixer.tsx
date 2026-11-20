@@ -225,6 +225,11 @@ function LiveStemsBody({
   const sendMix = useStemMixSender();
   const [recipe, setRecipe] = useState(live.recipe);
   const [baseline, setBaseline] = useState(live.recipe);
+  const [seenRecipe, setSeenRecipe] = useState(live.recipe);
+  if (!sameRecipe(seenRecipe, live.recipe)) {
+    setSeenRecipe(live.recipe);
+    setRecipe(live.recipe);
+  }
   const [state, setState] = useState('');
   const [saving, setSaving] = useState(false);
   // The logical mix stays the same across saves, though its render changes.
@@ -241,7 +246,7 @@ function LiveStemsBody({
   function change(next: Recipe) {
     setRecipe(next);
     setState('');
-    void sendMix(next);
+    void sendMix({ split: live.split, expected: recipe, recipe: next });
   }
 
   async function save() {

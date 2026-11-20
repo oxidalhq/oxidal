@@ -186,3 +186,44 @@ test('songbook dock remembers placement through close, rotation and reload witho
   await expect(panel).toHaveAttribute('data-place', 'float');
   expect(writes).toEqual([]);
 });
+
+test('opening and moving backing, tuner and venue tools leaves the device controls alone', async ({
+  page,
+}) => {
+  const writes: string[] = [];
+  page.on('request', (request) => {
+    if (
+      request.method() !== 'GET' &&
+      /\/api\/v1\/(player\/commands|tuner|venue)(?:\/|$)/.test(
+        new URL(request.url()).pathname,
+      )
+    )
+      writes.push(request.url());
+  });
+  await page.goto('/#library/songbook');
+  const original = page.viewportSize()!;
+  for (const title of ['Backing', 'Tuner', 'Venue EQ']) {
+    await page.setViewportSize(original);
+    await page.getByRole('button', { name: 'Tools', exact: true }).click();
+    await page
+      .getByRole('menuitemcheckbox', { name: title, exact: true })
+      .click();
+    await expect(
+      page.getByRole('heading', { name: title, exact: true }).first(),
+    ).toBeVisible();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page
+      .getByRole('button', { name: 'Float: ' + title, exact: true })
+      .click();
+    const panel = page.getByRole('region', {
+      name: title + ' tool',
+      exact: true,
+    });
+    await expect(panel).toBeVisible();
+    await panel
+      .getByRole('button', { name: 'Close ' + title, exact: true })
+      .click();
+    await expect(panel).toBeHidden();
+  }
+  expect(writes).toEqual([]);
+});

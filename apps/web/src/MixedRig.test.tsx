@@ -272,6 +272,56 @@ it('shares exact block scene drafts and retains the local draft after a stale wr
   );
 });
 
+it('edits exact inner block scene states from saved defaults without using current power or sending legacy audio writes', async () => {
+  let device: SharedSceneDraft = { revision: 0, draft: null };
+  vi.mocked(sceneDraft).mockImplementation(async (update) => {
+    if (update) device = { revision: device.revision + 1, draft: update.draft };
+    return device;
+  });
+  const state = setup('mine', [], true);
+  state.control!.native_bypass_defaults = [
+    { node: 'amp', block: 'pedal', value: true },
+  ];
+  state.control!.controls.push({
+    target: { kind: 'native', node: 'amp', parameter: 'block:pedal:enabled' },
+    label: 'Pedal power',
+    display: 'On',
+    value: 1,
+    minimum: 0,
+    maximum: 1,
+    toggle: true,
+    integer: true,
+    logarithmic: false,
+  });
+  state.control!.scenes = {
+    fade_ms: 15,
+    branches: [],
+    scenes: [
+      { id: 'clean', name: 'Clean', gains: [] },
+      { id: 'lead', name: 'Lead', gains: [] },
+    ],
+  };
+  const edit = await screen.findByRole('button', { name: 'Edit scenes' });
+  await waitFor(() => expect(edit).toBeEnabled());
+  fireEvent.click(edit);
+  const grid = screen.getByRole('dialog', { name: 'Edit scenes' });
+  const clean = within(grid).getByRole('button', {
+    name: /Pedal power in Clean$/,
+  });
+  expect(clean).toHaveAttribute('aria-pressed', 'false');
+  fireEvent.click(clean);
+  await waitFor(() =>
+    expect(device.draft?.native_bypass?.clean).toEqual([
+      { node: 'amp', block: 'pedal', value: false },
+    ]),
+  );
+  expect(
+    within(grid).getByRole('button', { name: /Pedal power in Lead$/ }),
+  ).toHaveAttribute('aria-pressed', 'false');
+  expect(within(grid).getByRole('button', { name: 'Clean' })).toBeDisabled();
+  expect(rigAudioCommand).not.toHaveBeenCalled();
+});
+
 it('offers native capture scene settings only from verified saved defaults', async () => {
   let device: SharedSceneDraft = { revision: 0, draft: null };
   vi.mocked(sceneDraft).mockImplementation(async (update) => {

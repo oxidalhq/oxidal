@@ -1,7 +1,11 @@
 import { CheckCircle, Lock, Warning } from '@phosphor-icons/react';
 import {
+  createContext,
+  type ReactNode,
   useCallback,
+  useContext,
   useEffect,
+  useId,
   useRef,
   useState,
   useSyncExternalStore,
@@ -76,9 +80,9 @@ type Dialog =
  * local copy of a band only while a drag or step is on its way.
  * @see docs/media.md
  */
-export function VenueEq({ connected }: { connected: boolean }) {
+function useVenueOwner(connected: boolean, visible: boolean) {
   const slow = useSyncExternalStore(watchDisplay, epaper, () => false);
-  const protect = useProtect();
+  const protect = useProtect(visible);
   const [venue, setVenue] = useState<VenueState | null>(null);
   const [loadError, setLoadError] = useState('');
   const [draft, setDraftState] = useState<VenueSettings | null>(null);
@@ -111,6 +115,7 @@ export function VenueEq({ connected }: { connected: boolean }) {
   }, []);
 
   useEffect(() => {
+    if (!visible) return;
     let alive = true;
     const off = onVenue((next) => accept(next));
     void venueState()
@@ -122,7 +127,7 @@ export function VenueEq({ connected }: { connected: boolean }) {
       alive = false;
       off();
     };
-  }, [accept]);
+  }, [accept, visible]);
 
   const refuse = useCallback(
     (cause: unknown) => {
@@ -219,17 +224,17 @@ export function VenueEq({ connected }: { connected: boolean }) {
   // Keep an unsaved edit alive while this screen is open.
   const previewing = !!preview;
   useEffect(() => {
-    if (!previewing || !connected) return;
+    if (!previewing || !connected || !visible) return;
     const timer = window.setInterval(
       () => void keepVenuePreview().catch(() => undefined),
       KEEP_MS,
     );
     return () => window.clearInterval(timer);
-  }, [previewing, connected]);
+  }, [previewing, connected, visible]);
 
   // Leaving with an unsaved edit asks first (not while Protect locks it).
   useEffect(() => {
-    if (!edited || locked) return;
+    if (!visible || !edited || locked) return;
     return setLeaveGuard((go) => {
       setDialog({
         kind: 'leave',
@@ -239,37 +244,12 @@ export function VenueEq({ connected }: { connected: boolean }) {
       });
       return true;
     });
-  }, [edited, locked]);
-
-  if (loadError && !venue)
-    return (
-      <section
-        className="panel control-stack venue"
-        aria-labelledby="venue-title"
-      >
-        <h2 id="venue-title">Venue EQ</h2>
-        <p role="alert">{loadError}</p>
-      </section>
-    );
-  if (!venue || !active || !work)
-    return (
-      <section
-        className="panel control-stack venue"
-        aria-labelledby="venue-title"
-      >
-        <h2 id="venue-title">Venue EQ</h2>
-        <p role="status">Reading the venue EQ…</p>
-      </section>
-    );
+  }, [edited, locked, visible]);
 
   const openDialog = (next: Dialog) => {
     setMessage('');
     setDialog(next);
   };
-  const users = venue.profiles.filter((profile) => !profile.builtin);
-  const builtins = venue.profiles.filter((profile) => profile.builtin);
-  const check = headroom(work);
-  const notice = venue.notice && venue.notice !== dismissed ? venue.notice : '';
   function choose(profile: string) {
     if (profile === venue?.active) return;
     const go = () => void run({ kind: 'activate', profile });
@@ -292,14 +272,189 @@ export function VenueEq({ connected }: { connected: boolean }) {
     if (copy && !wasEdited) await run({ kind: 'activate', profile: copy.id });
   }
 
+  const dialogs = active && (
+    <>
+      {dialog?.kind === 'save-as' && (
+        <ProfileDialog
+          title="Save venue profile as"
+          name={active.builtin ? `${active.name} copy` : `${active.name} 2`}
+          notes={active.builtin ? '' : (active.notes ?? '')}
+          error={message}
+          onCancel={() => setDialog(null)}
+          onSave={async (name, notes) => {
+            if (await run({ kind: 'save_as', name, notes })) setDialog(null);
+          }}
+        />
+      )}
+      {dialog?.kind === 'rename' && (
+        <ProfileDialog
+          title="Rename venue profile"
+          name={active.name}
+          notes={active.notes ?? ''}
+          error={message}
+          onCancel={() => setDialog(null)}
+          onSave={async (name, notes) => {
+            if (await run({ kind: 'rename', profile: active.id, name, notes }))
+              setDialog(null);
+          }}
+        />
+      )}
+      {dialog?.kind === 'delete' && (
+        <DeleteProfileDialog
+          name={active.name}
+          error={message}
+          onCancel={() => setDialog(null)}
+          onDelete={async () => {
+            if (await run({ kind: 'delete', profile: active.id }))
+              setDialog(null);
+          }}
+        />
+      )}
+      {dialog?.kind === 'leave' && (
+        <LeaveDialog
+          name={active.name}
+          action={dialog.action}
+          error={message}
+          onKeep={() => setDialog(null)}
+          onLeave={async () => {
+            const { go, revert } = dialog;
+            throttle.current?.cancel();
+            setDraft(null);
+            if (!revert || (await run({ kind: 'revert' }))) {
+              setDialog(null);
+              go();
+            }
+          }}
+        />
+      )}
+    </>
+  );
+  return {
+    slow,
+    venue,
+    active,
+    work,
+    edited,
+    locked,
+    disabled,
+    preview,
+    compare,
+    selected,
+    setSelected,
+    edit,
+    editBand,
+    message,
+    busy,
+    conflict,
+    setConflict,
+    setDismissed,
+    dismissed,
+    run,
+    openDialog,
+    choose,
+    duplicate,
+    loadError,
+    dialog,
+    dialogs,
+  };
+}
+
+type Owner = ReturnType<typeof useVenueOwner>;
+const VenueContext = createContext<{
+  owner: Owner;
+  subscribe: () => () => void;
+} | null>(null);
+
+export function VenueProvider({
+  connected,
+  children,
+}: {
+  connected: boolean;
+  children: ReactNode;
+}) {
+  const [viewers, setViewers] = useState(0);
+  const subscribe = useCallback(() => {
+    setViewers((v) => v + 1);
+    return () => setViewers((v) => v - 1);
+  }, []);
+  const owner = useVenueOwner(connected, viewers > 0);
+  return (
+    <VenueContext.Provider value={{ owner, subscribe }}>
+      {children}
+      {owner.dialogs}
+    </VenueContext.Provider>
+  );
+}
+
+export function VenueEq({ connected }: { connected: boolean }) {
+  const context = useContext(VenueContext);
+  const subscribe = context?.subscribe;
+  useEffect(() => subscribe?.(), [subscribe]);
+  if (!context)
+    return (
+      <VenueProvider connected={connected}>
+        <VenueEq connected={connected} />
+      </VenueProvider>
+    );
+  return <VenueView owner={context.owner} />;
+}
+
+function VenueView({ owner }: { owner: Owner }) {
+  const titleId = useId();
+  const {
+    slow,
+    venue,
+    active,
+    work,
+    edited,
+    locked,
+    disabled,
+    preview,
+    compare,
+    selected,
+    setSelected,
+    edit,
+    editBand,
+    message,
+    busy,
+    conflict,
+    setConflict,
+    setDismissed,
+    dismissed,
+    run,
+    openDialog,
+    choose,
+    duplicate,
+    loadError,
+    dialog,
+  } = owner;
+  if (loadError && !venue)
+    return (
+      <section className="panel control-stack venue" aria-labelledby={titleId}>
+        <h2 id={titleId}>Venue EQ</h2>
+        <p role="alert">{loadError}</p>
+      </section>
+    );
+  if (!venue || !active || !work)
+    return (
+      <section className="panel control-stack venue" aria-labelledby={titleId}>
+        <h2 id={titleId}>Venue EQ</h2>
+        <p role="status">Reading the venue EQ…</p>
+      </section>
+    );
+
+  const users = venue.profiles.filter((profile) => !profile.builtin);
+  const builtins = venue.profiles.filter((profile) => profile.builtin);
+  const check = headroom(work);
+  const notice = venue.notice && venue.notice !== dismissed ? venue.notice : '';
   return (
     <section
       className="panel control-stack venue"
-      aria-labelledby="venue-title"
+      aria-labelledby={titleId}
       data-locked={locked || undefined}
     >
       <div>
-        <h2 id="venue-title" tabIndex={-1}>
+        <h2 id={titleId} tabIndex={-1}>
           Venue EQ
         </h2>
         <p className="caption">
@@ -495,59 +650,6 @@ export function VenueEq({ connected }: { connected: boolean }) {
         <p className="sr-only" role="status">
           Sending…
         </p>
-      )}
-      {dialog?.kind === 'save-as' && (
-        <ProfileDialog
-          title="Save venue profile as"
-          name={active.builtin ? `${active.name} copy` : `${active.name} 2`}
-          notes={active.builtin ? '' : (active.notes ?? '')}
-          error={message}
-          onCancel={() => setDialog(null)}
-          onSave={async (name, notes) => {
-            if (await run({ kind: 'save_as', name, notes })) setDialog(null);
-          }}
-        />
-      )}
-      {dialog?.kind === 'rename' && (
-        <ProfileDialog
-          title="Rename venue profile"
-          name={active.name}
-          notes={active.notes ?? ''}
-          error={message}
-          onCancel={() => setDialog(null)}
-          onSave={async (name, notes) => {
-            if (await run({ kind: 'rename', profile: active.id, name, notes }))
-              setDialog(null);
-          }}
-        />
-      )}
-      {dialog?.kind === 'delete' && (
-        <DeleteProfileDialog
-          name={active.name}
-          error={message}
-          onCancel={() => setDialog(null)}
-          onDelete={async () => {
-            if (await run({ kind: 'delete', profile: active.id }))
-              setDialog(null);
-          }}
-        />
-      )}
-      {dialog?.kind === 'leave' && (
-        <LeaveDialog
-          name={active.name}
-          action={dialog.action}
-          error={message}
-          onKeep={() => setDialog(null)}
-          onLeave={async () => {
-            const { go, revert } = dialog;
-            throttle.current?.cancel();
-            setDraft(null);
-            if (!revert || (await run({ kind: 'revert' }))) {
-              setDialog(null);
-              go();
-            }
-          }}
-        />
       )}
     </section>
   );

@@ -27,6 +27,7 @@ export function StemStrip({
   role,
   controls,
   heard = true,
+  minimumLevel = -60,
   disabled = false,
   onChange,
   onCommit,
@@ -35,6 +36,7 @@ export function StemStrip({
   role: StemRole;
   controls: StemControls;
   heard?: boolean;
+  minimumLevel?: number;
   disabled?: boolean;
   onChange: (next: StemControls) => void;
   onCommit?: () => void;
@@ -54,7 +56,7 @@ export function StemStrip({
       <Slider
         orientation="vertical"
         label={label}
-        min={-60}
+        min={minimumLevel}
         max={6}
         step={0.5}
         value={[controls.level]}
@@ -97,12 +99,14 @@ export function StemStrip({
 /** The strips in a row; scrolls sideways on phones. */
 export function StemMixer({
   stems,
+  minimumLevel = -60,
   disabled = false,
   onChange,
   onCommit,
   className,
 }: {
   stems: Partial<Record<StemRole, StemControls>>;
+  minimumLevel?: number;
   disabled?: boolean;
   onChange: (role: StemRole, next: StemControls) => void;
   onCommit?: () => void;
@@ -123,6 +127,7 @@ export function StemMixer({
           <StemStrip
             key={role}
             role={role}
+            minimumLevel={minimumLevel}
             controls={controls}
             heard={!controls.muted && (!anySolo || controls.solo)}
             disabled={disabled}

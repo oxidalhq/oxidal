@@ -6,6 +6,7 @@ import { Button } from '@oxidal/design-system/components/button';
 import './SceneEditor.css';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { SceneChange } from '../../SceneChange';
+import { nativeBypassKey } from '../../sceneNativeBypass';
 import { ScenePads } from '../../ScenePads';
 import { rigBusy } from './mixedRigViewModel';
 import { SceneSettings } from './SceneEditorControls';
@@ -61,6 +62,10 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
   const draftedNative =
     sceneUpdates?.session === session
       ? (sceneUpdates?.native_controls ?? {})
+      : {};
+  const draftedNativeBypass =
+    sceneUpdates && sceneUpdates.session === session
+      ? (sceneUpdates.native_bypass ?? {})
       : {};
   const changed = sceneMixChanged || settings.changed || nativeSettings.changed;
   const tooManySettings =
@@ -250,6 +255,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
                     controls: withSettings(editingScene.id),
                     bypass: draftedBypass,
                     native_controls: withNativeSettings(editingScene.id),
+                    native_bypass: draftedNativeBypass,
                   });
                   settings.reset();
                   nativeSettings.reset();
@@ -322,12 +328,40 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
                   const label = namingScene.trim();
                   if (!session || !label) return;
                   const values = settings.values();
+                  const nativeTargets = [
+                    ...new Map(
+                      [
+                        ...(state.control?.scenes?.scenes[0]?.native_bypass ??
+                          []),
+                        ...Object.values(draftedNativeBypass).flat(),
+                      ].map((row) => [nativeBypassKey(row), row]),
+                    ).values(),
+                  ];
+                  const nativeNow = nativeTargets.map((row) => {
+                    const live = state.control?.controls.find(
+                      (control) =>
+                        control.target.kind === 'native' &&
+                        control.target.node === row.node &&
+                        control.target.parameter ===
+                          `block:${row.block}:enabled`,
+                    );
+                    return live && (live.value === 0 || live.value === 1)
+                      ? { ...row, value: live.value === 0 }
+                      : undefined;
+                  });
+                  if (nativeNow.some((row) => row === undefined)) {
+                    setNotice(
+                      'Current capture block states are unavailable. Your new-scene draft has been kept.',
+                    );
+                    return;
+                  }
                   setSceneUpdates({
                     session,
                     gains: drafts,
                     controls: draftedControls,
                     bypass: draftedBypass,
                     native_controls: draftedNative,
+                    native_bypass: draftedNativeBypass,
                     added: [
                       ...addedScenes,
                       {
@@ -341,6 +375,13 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
                             value: c.value === 1,
                           })),
                         ...(values.length ? { controls: values } : {}),
+                        ...(nativeNow.length
+                          ? {
+                              native_bypass: nativeNow.filter(
+                                (row) => row !== undefined,
+                              ),
+                            }
+                          : {}),
                         ...(nativeSettings.values().length
                           ? { native_controls: nativeSettings.values() }
                           : {}),

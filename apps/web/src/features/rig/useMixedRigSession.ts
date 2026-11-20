@@ -636,6 +636,11 @@ export function useMixedRigSession({
           ...withNativeControls,
         },
         current.current?.control?.capture_defaults ?? [],
+        sceneUpdates &&
+          sceneUpdates.session === current.current?.control?.session
+          ? (sceneUpdates.native_bypass ?? {})
+          : {},
+        current.current?.control?.native_bypass_defaults ?? [],
       ),
     );
   }
@@ -707,6 +712,15 @@ export function useMixedRigSession({
   async function recallScene(scene: string) {
     const control = current.current?.control;
     if (!control) return;
+    if (
+      sceneUpdates?.session === control.session &&
+      sceneUpdates.native_bypass?.[scene]?.length
+    ) {
+      setError(
+        'Save scenes before playing edited capture block states. The saved scene remains unchanged.',
+      );
+      return;
+    }
     const recalled = await command({
       kind: 'scene',
       command: {

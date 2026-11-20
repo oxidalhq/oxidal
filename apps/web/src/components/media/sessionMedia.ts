@@ -179,9 +179,10 @@ export function useTimeText(state: ShownState): string {
 }
 
 /** Protect as the device reports it, re-read every 5 s while shown. */
-export function useProtect(): boolean {
+export function useProtect(active = true): boolean {
   const [on, setOn] = useState(false);
   useEffect(() => {
+    if (!active) return;
     let alive = true;
     const read = () =>
       void protectState()
@@ -193,7 +194,7 @@ export function useProtect(): boolean {
       alive = false;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [active]);
   return on;
 }
 
@@ -231,18 +232,26 @@ type LiveRecipe = Extract<PlayerCommand, { kind: 'set_stem_mix' }>['recipe'];
 export function useStemMixSender() {
   const { send } = useSessionMedia();
   const sending = useRef(false);
-  const waiting = useRef<LiveRecipe | null>(null);
+  type Change = { split: string; expected: LiveRecipe; recipe: LiveRecipe };
+  const waiting = useRef<Change | null>(null);
   return useCallback(
-    async (recipe: LiveRecipe) => {
+    async (change: Change) => {
       if (sending.current) {
-        waiting.current = recipe;
+        const prior = waiting.current;
+        waiting.current =
+          prior?.split === change.split
+            ? { ...change, expected: prior.expected }
+            : change;
         return;
       }
       sending.current = true;
-      let next: LiveRecipe | null = recipe;
+      let next: Change | null = change;
       while (next) {
         waiting.current = null;
-        await send({ kind: 'set_stem_mix', recipe: next });
+        if (!(await send({ kind: 'set_stem_mix', ...next }))) {
+          waiting.current = null;
+          break;
+        }
         next = waiting.current;
       }
       sending.current = false;

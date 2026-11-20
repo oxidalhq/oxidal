@@ -27,7 +27,9 @@ let reading = false;
 let generation = 0;
 let writeGeneration = 0;
 const active = (state: AudioChangeState | undefined) =>
-  !!state && ['restarting', 'proving', 'reverting'].includes(state.phase);
+  !!state &&
+  (['restarting', 'proving', 'reverting'].includes(state.phase) ||
+    ['running', 'cancelling'].includes(state.finder?.state ?? ''));
 function schedule(delay: number) {
   clearTimeout(timer);
   timer = setTimeout(() => {

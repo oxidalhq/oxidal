@@ -9,6 +9,7 @@ import {
 import { sceneColour } from '@oxidal/design-system/lib/scene-colours';
 
 import { blockLabel } from '../../sceneEdit';
+import { nativeBypassKey } from '../../sceneNativeBypass';
 import { rigBusy } from './mixedRigViewModel';
 import type { RigViewProps } from './useMixedRigSession';
 
@@ -32,6 +33,20 @@ export function SceneGrid({
     manifest.oxidal?.graph.nodes.filter(
       (n) => n.kind === 'lv2' || n.kind === 'tone3000',
     ) ?? [];
+  const nativeRows = [
+    ...new Map(
+      [
+        ...(control.native_bypass_defaults ?? []),
+        ...scenes.flatMap((scene) => scene.native_bypass ?? []),
+      ].map((row) => [nativeBypassKey(row), row]),
+    ).values(),
+  ];
+  const nativeDefaults = new Map(
+    control.native_bypass_defaults?.map((row) => [
+      nativeBypassKey(row),
+      row.value,
+    ]),
+  );
   const disabled = rigBusy(vm, rig) || rig.sceneSharing.conflict;
   const gains = [
     ...new Map(
@@ -98,12 +113,19 @@ export function SceneGrid({
                         }
                         disabled={
                           disabled ||
-                          !control.scenes?.scenes.some((s) => s.id === scene.id)
+                          !control.scenes?.scenes.some(
+                            (s) => s.id === scene.id,
+                          ) ||
+                          !!draft?.native_bypass?.[scene.id]?.length
                         }
                         title={
-                          control.scenes?.scenes.some((s) => s.id === scene.id)
-                            ? undefined
-                            : 'Save scenes before playing this new scene'
+                          draft?.native_bypass?.[scene.id]?.length
+                            ? 'Save scenes before playing edited capture block states'
+                            : control.scenes?.scenes.some(
+                                  (s) => s.id === scene.id,
+                                )
+                              ? undefined
+                              : 'Save scenes before playing this new scene'
                         }
                         onClick={() => void rig.recallScene(scene.id)}
                         className="min-w-20 border-t-4"
@@ -173,6 +195,97 @@ export function SceneGrid({
                     </tr>
                   );
                 })}
+                {nativeRows.map((row) => {
+                  const key = nativeBypassKey(row);
+                  const live = control.controls.find(
+                    (candidate) =>
+                      candidate.target.kind === 'native' &&
+                      candidate.target.node === row.node &&
+                      candidate.target.parameter ===
+                        `block:${row.block}:enabled`,
+                  );
+                  const label = `${blockLabel(manifest, row.node)} · ${live?.label ?? row.block}`;
+                  const armed =
+                    control.native_bypass_armed?.some(
+                      (candidate) => nativeBypassKey(candidate) === key,
+                    ) ?? false;
+                  return (
+                    <tr
+                      key={`native:${key}`}
+                      className="border-b border-border"
+                    >
+                      <th
+                        scope="row"
+                        className="sticky left-0 z-10 bg-card px-3 py-2 pl-6 text-left font-medium"
+                      >
+                        {label}
+                        {!armed && (
+                          <span className="block text-xs font-normal text-muted-foreground">
+                            Prepared when scenes are saved
+                          </span>
+                        )}
+                      </th>
+                      {scenes.map((scene) => {
+                        const value =
+                          draft?.native_bypass?.[scene.id]?.find(
+                            (candidate) => nativeBypassKey(candidate) === key,
+                          )?.value ??
+                          scene.native_bypass?.find(
+                            (candidate) => nativeBypassKey(candidate) === key,
+                          )?.value ??
+                          nativeDefaults.get(key);
+                        return (
+                          <td key={scene.id} className="p-1 text-center">
+                            <Button
+                              variant={value ? 'ghost' : 'outline'}
+                              aria-label={`${label} in ${scene.name}`}
+                              aria-pressed={value === false}
+                              disabled={disabled || value === undefined}
+                              title={
+                                value === undefined
+                                  ? 'Saved capture block state unavailable'
+                                  : undefined
+                              }
+                              onClick={() => {
+                                const entries = new Map(
+                                  (
+                                    draft?.native_bypass?.[scene.id] ??
+                                    scene.native_bypass ??
+                                    []
+                                  ).map((candidate) => [
+                                    nativeBypassKey(candidate),
+                                    candidate,
+                                  ]),
+                                );
+                                entries.set(key, {
+                                  node: row.node,
+                                  block: row.block,
+                                  value: !value,
+                                });
+                                rig.setSceneUpdates({
+                                  ...(draft ?? {
+                                    session: control.session,
+                                    gains: {},
+                                  }),
+                                  native_bypass: {
+                                    ...draft?.native_bypass,
+                                    [scene.id]: [...entries.values()],
+                                  },
+                                });
+                              }}
+                            >
+                              {value === undefined
+                                ? 'Unknown'
+                                : value
+                                  ? 'Off'
+                                  : 'On'}
+                            </Button>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
                 {gains.map((gain) => (
                   <tr
                     key={`${gain.node}:${gain.port}`}
@@ -229,7 +342,8 @@ export function SceneGrid({
           </div>
           <p className="mt-3 text-sm text-muted-foreground">
             Each branch input retains its own level and polarity. Muting sets
-            exact silence. Save scenes keeps these changes in the preset.
+            exact silence. Save scenes keeps these changes in the preset. Edited
+            capture block states are played after Save prepares them.
           </p>
           <Button
             className="mt-3"

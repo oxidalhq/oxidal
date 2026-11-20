@@ -6,6 +6,7 @@ import { AudioChange } from '@oxidal/design-system/patterns/audio-change';
 import type { AudioChangeRequest, AudioProbe, StartAudio } from './api';
 import { changeAudio, type useAudioChange } from './audioChangeFeed';
 import { BUFFER_SIZES, bufferMs } from './bufferTiming';
+import { useWorkspaceState } from './workspaceMemory';
 
 export type AudioChangeCursor = Pick<
   Extract<AudioChangeRequest, { kind: 'apply' }>,
@@ -33,6 +34,28 @@ export function TimedAudioReconfigure({
   const phase = own && feed.active ? feed.state!.phase : 'idle';
   const ready = !!feed.state && !feed.readFailed;
   const state = feed.state;
+  const finder = own ? state?.finder : undefined;
+  const finderActive =
+    finder?.state === 'running' || finder?.state === 'cancelling';
+  const [finderOpen, setFinderOpen] = useWorkspaceState(
+    `audio-finder-open:${cursor.owner}`,
+    false,
+  );
+  const testedContext =
+    !!finder &&
+    finder.session === cursor.session &&
+    finder.expected_revision === cursor.expected_revision;
+  const canUseMeasured =
+    testedContext &&
+    !!state?.previous &&
+    !feed.active &&
+    !feed.pending &&
+    ready &&
+    !disabled &&
+    !!finder?.recommended &&
+    (finder.recommended.frames !== initial.input.period_frames ||
+      finder.recommended.periods !== initial.input.periods);
+
   const current = {
     rate: initial.input.sample_rate,
     frames: initial.input.period_frames,
@@ -82,8 +105,79 @@ export function TimedAudioReconfigure({
         <p role="status">Waiting for the audio settings reply…</p>
       )}
       {own && state?.message && <p role="status">{state.message}</p>}
+      {finderActive && (
+        <section
+          aria-label="Device buffer test"
+          className="grid gap-2 rounded-lg border border-border p-3"
+        >
+          <p role="status">
+            Testing {finder!.candidate.frames} × {finder!.candidate.periods} on
+            the device.
+            {state?.phase === 'proving'
+              ? ' Measuring one minute of processed audio.'
+              : state?.phase === 'reverting'
+                ? ' Restoring the original buffer.'
+                : ' Preparing audio.'}
+          </p>
+          {finder?.message && <p className="text-sm">{finder.message}</p>}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              disabled={feed.pending || finder?.state === 'cancelling'}
+              onClick={() =>
+                state?.id && send({ kind: 'revert', id: state.id })
+              }
+            >
+              Stop test and restore
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={feed.pending && feed.pendingAction === 'stop'}
+              onClick={() => state?.id && send({ kind: 'stop', id: state.id })}
+            >
+              Stop audio
+            </Button>
+          </div>
+        </section>
+      )}
       <AudioChange
         current={current}
+        finderOpen={finderOpen}
+        onFinderOpenChange={setFinderOpen}
+        finder={{
+          trials: finder?.trials ?? [],
+          total: finder?.total ?? 0,
+          state: finder ? (finderActive ? 'running' : 'done') : 'idle',
+          message:
+            finder && !finderActive && !testedContext
+              ? `${finder.message ?? ''} The rig changed after screening; run again before using a recommendation.`
+              : finder?.message,
+          recommended: finder?.recommended ?? null,
+          startDisabled: disabled || !ready || feed.pending || feed.active,
+          cancelDisabled: feed.pending || finder?.state === 'cancelling',
+          canUse: canUseMeasured,
+          onStart: () => send({ kind: 'find_buffer', ...cursor }),
+          onCancel: () => state?.id && send({ kind: 'revert', id: state.id }),
+          onUse: (setting) => {
+            const previous = state?.previous;
+            if (!canUseMeasured || !previous) return;
+            send({
+              kind: 'apply',
+              ...cursor,
+              ...previous,
+              input: {
+                ...previous.input,
+                period_frames: setting.frames,
+                periods: setting.periods,
+              },
+              output: {
+                ...previous.output,
+                period_frames: setting.frames,
+                periods: setting.periods,
+              },
+            });
+          },
+        }}
         value={{
           rate: routing.input.sample_rate,
           frames: routing.input.period_frames,
@@ -109,12 +203,21 @@ export function TimedAudioReconfigure({
           });
         }}
         phase={
-          phase === 'restarting' || phase === 'proving' || phase === 'reverting'
+          !finderActive &&
+          (phase === 'restarting' ||
+            phase === 'proving' ||
+            phase === 'reverting')
             ? phase
             : 'idle'
         }
         secondsLeft={feed.secondsLeft}
-        disabled={disabled || !ready || feed.pending || (feed.active && !own)}
+        disabled={
+          disabled ||
+          !ready ||
+          feed.pending ||
+          (feed.active && !own) ||
+          finderActive
+        }
         canApply={validMaps}
         confirmationDisabled={feed.pending || !ready}
         waiting={

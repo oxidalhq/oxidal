@@ -22,6 +22,7 @@ import {
 } from '../../api';
 import { DeviceError } from '../../lib/friendlyError';
 import { publishPlayer } from '../../lib/playerFeed';
+import { useMonitorFeed } from '../../monitorFeed';
 import { BackingTracks } from './BackingTracks';
 import { NowPlaying } from './NowPlaying';
 import { PerformPlayerRow } from './PerformPlayerRow';
@@ -414,4 +415,30 @@ it('provider: draws from the stream and sends one command path with IDs and the 
   expect(vi.mocked(playerCommand).mock.calls[1]![0].expectedCue).toBeNull();
   expect(row).toHaveTextContent('Paused');
   await waitFor(() => expect(mediaLibrary).toHaveBeenCalled());
+});
+
+it('provider: shares the monitor reader with other views and never writes while reading mute', async () => {
+  vi.mocked(mediaLibrary).mockResolvedValue({
+    assets: tracks,
+    quarantined: [],
+    usedBytes: 0,
+  });
+  vi.mocked(monitoring).mockResolvedValue({
+    sequence: 100,
+    audio: { monitoring: { output_muted: true } },
+  } as unknown as Monitoring);
+  function AnotherView() {
+    useMonitorFeed(1000);
+    return null;
+  }
+  render(
+    <SessionMediaProvider>
+      <AnotherView />
+      <PerformPlayerRow />
+    </SessionMediaProvider>,
+  );
+  act(() => publishPlayer(snapshot('ready', 0)));
+  await screen.findByText('Output muted');
+  expect(monitoring).toHaveBeenCalledTimes(1);
+  expect(playerCommand).not.toHaveBeenCalled();
 });

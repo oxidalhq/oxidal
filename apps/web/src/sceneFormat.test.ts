@@ -11,6 +11,7 @@ import {
   SCENES_V2,
   SCENES_V3,
   SCENES_V4,
+  SCENES_V5,
   scenesFormat,
   scenesKey,
   sealScenes,
@@ -122,4 +123,21 @@ it('writes the version the scenes need and keeps the required list in order', ()
   writeScenes(fresh, undefined);
   expect(fresh.extensions).toEqual({});
   expect(fresh.requiredExtensions).toEqual(['urn:oxidal:gain:1']);
+});
+
+it('requires v5 for inner block switches and preserves exact rows through reopen and sealing', () => {
+  const inner = {
+    ...bypassed,
+    initial_scene: 'a',
+    scenes: bypassed.scenes.map((scene) => ({
+      ...scene,
+      native_bypass: [{ node: 'capture', block: 'pedal:1', value: false }],
+    })),
+  };
+  const document = manifest(SCENES_V4, bypassed);
+  writeScenes(document, inner);
+  const reopened = JSON.parse(JSON.stringify(document)) as Manifest;
+  expect(reopened.requiredExtensions).toEqual([SCENES_V5, 'urn:oxidal:gain:1']);
+  expect(readScenes(sealScenes(reopened))).toEqual(inner);
+  expect(reopened.extensions[SCENES_V4]).toBeUndefined();
 });

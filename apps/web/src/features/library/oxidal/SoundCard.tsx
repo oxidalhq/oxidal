@@ -1,11 +1,18 @@
 import { Button } from '@oxidal/design-system/components/button';
+import { glyphFor, glyphs } from '@oxidal/design-system/lib/block-glyphs';
+import {
+  type OxidalSound,
+  SoundRecipeRow,
+} from '@oxidal/design-system/patterns/sound-browser';
 
 import './oxidal.css';
+import { recipeEffects } from '../../../factoryRecipes';
 import { type CardHandlers, cardLine, primaryFor } from './cardActions';
 import {
   type CardState,
   complexityLabel,
   engineLabel,
+  roleLabel,
   type SoundItem,
 } from './oxidalSounds.model';
 import type { OxidalSounds } from './useOxidalSounds';
@@ -54,43 +61,55 @@ export function SoundCard({
 }) {
   const primary = primaryFor(item, state, unit, handlers);
   const reason = state.kind === 'heavy' ? heavyReason(state) : primary?.reason;
+  const blocks: OxidalSound['blocks'] = item.recipe
+    ? recipeEffects(item.recipe).map((block) => {
+        if ('native' in block)
+          return { label: roleLabel(block.native), kind: 'amp' };
+        const kind = glyphs[glyphFor('lv2', block.plugin)].kind;
+        return { label: block.plugin, kind: kind === 'other' ? 'lv2' : kind };
+      })
+    : [];
   return (
-    <article
-      className="oxidal-card"
-      aria-label={item.name}
-      data-state={state.kind}
-    >
-      <div className="oxidal-card-top">
-        <div>
-          <h4>{item.name}</h4>
-          <p className="caption">
-            {item.meta.genres.join(' · ')} · {engineLabel(item.meta.engine)} ·{' '}
-            {complexityLabel(item.meta.complexity)}
-          </p>
-        </div>
-        <span className="oxidal-chip">{chip(state)}</span>
-      </div>
-      <p className="caption">{cardLine(item, state, unit)}</p>
-      {unit.failures[item.key] && <p role="alert">{unit.failures[item.key]}</p>}
-      <div className="oxidal-card-actions">
-        {primary && (
+    <SoundRecipeRow
+      as="article"
+      rowLabel={item.name}
+      state={state.kind}
+      sound={{
+        name: item.name,
+        era: item.recipe?.era,
+        genres: item.meta.genres,
+        description: item.description,
+        blocks,
+      }}
+      onSelect={onDetails}
+      selectLabel={`Details: ${item.name}`}
+      summary={`${engineLabel(item.meta.engine)} · ${complexityLabel(item.meta.complexity)}`}
+      badge={
+        <span className="rounded-full border px-2 py-0.5 text-xs">
+          {chip(state)}
+        </span>
+      }
+      action={
+        primary && (
           <Button
+            size="sm"
             disabled={primary.disabled}
             aria-label={`${primary.label}: ${item.name}`}
             onClick={primary.run}
           >
             {primary.label}
           </Button>
-        )}
-        <Button
-          variant="ghost"
-          aria-label={`Details: ${item.name}`}
-          onClick={onDetails}
-        >
-          Details
-        </Button>
-        {reason && <span className="oxidal-reason caption">{reason}</span>}
-      </div>
-    </article>
+        )
+      }
+      feedback={
+        <>
+          <span>{cardLine(item, state, unit)}</span>
+          {reason && <span>{reason}</span>}
+          {unit.failures[item.key] && (
+            <p role="alert">{unit.failures[item.key]}</p>
+          )}
+        </>
+      }
+    />
   );
 }
