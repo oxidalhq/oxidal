@@ -23,6 +23,17 @@ import {
   selectSettingsSection,
   setDisplayMode,
 } from './display';
+
+async function keepAudioSettings(page: Page) {
+  const confirmation = page.getByRole('dialog', {
+    name: 'Keep this audio setting?',
+  });
+  const keep = confirmation.getByRole('button', { name: 'Keep', exact: true });
+  await expect(keep).toBeEnabled();
+  await keep.click();
+  await expect(confirmation).not.toBeVisible();
+}
+
 const fixtures = new URL(
   '../../../crates/oxidal-presets/tests/fixtures/',
   import.meta.url,
@@ -1676,24 +1687,31 @@ test('playback lifecycle keeps native authoring available after stop and restart
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     const audio = page.getByRole('region', { name: 'Playback controls' });
     await expect(audio.getByRole('status')).toContainText('Audio: running');
-    const currentBuffers = audio.getByRole('group', {
+    const currentBuffers = audio.getByRole('region', {
       name: 'Adjust current session',
     });
-    await currentBuffers.getByLabel('Session buffer (samples)').click();
-    await page.getByRole('option', { name: /^256 ·/ }).click();
+    await currentBuffers.getByLabel('Session buffer').click();
+    await page.getByRole('option', { name: '256', exact: true }).click();
+    await currentBuffers
+      .getByText('Interface routing', { exact: true })
+      .click();
     await currentBuffers.getByLabel('Session input right channel').fill('1');
     const appliedResponse = page.waitForResponse(
       (response) =>
-        response.url().endsWith('/api/v1/audio') &&
+        response.url().endsWith('/api/v1/audio/change') &&
         response.request().method() === 'POST' &&
-        response.request().postDataJSON().action.kind === 'reconfigure',
+        response.request().postDataJSON().kind === 'apply',
     );
     await currentBuffers
-      .getByRole('button', { name: 'Apply & restart audio', exact: true })
+      .getByRole('button', { name: 'Apply and restart audio', exact: true })
       .click();
     const applied = await appliedResponse;
     expect(applied.ok()).toBe(true);
-    const reconfigured = await applied.json();
+    const receipt = await applied.json();
+    expect(receipt.candidate.input.period_frames).toBe(256);
+    expect(receipt.candidate.input_map).toEqual([0, 0]);
+    await keepAudioSettings(page);
+    const reconfigured = await (await request.get('/api/v1/audio')).json();
     expect(reconfigured.configured.stream.input.period_frames).toBe(256);
     expect(reconfigured.configured.stream.input_map).toEqual([0, 0]);
     expect(reconfigured.configured.preset_id).toBe(
@@ -1701,12 +1719,10 @@ test('playback lifecycle keeps native authoring available after stop and restart
     );
     expect(reconfigured.controls).toEqual(savedLive.controls);
     await expect(audio.getByRole('status')).toContainText('Audio: running');
-    await expect(
-      currentBuffers.getByLabel('Session buffer (samples)'),
-    ).toHaveText(/^256 ·/);
+    await expect(currentBuffers.getByLabel('Session buffer')).toHaveText('256');
     await expect(
       currentBuffers.getByRole('button', {
-        name: 'Apply & restart audio',
+        name: 'Apply and restart audio',
         exact: true,
       }),
     ).toBeDisabled();
@@ -2319,19 +2335,16 @@ test('graph authoring creates an installed effect rig and saves live controls', 
   await expect
     .poll(async () => (await read()).native_values[0]?.value)
     .toBe(-35);
-  await playback
-    .getByLabel('Session sample rate (Hz)', { exact: true })
-    .click();
-  await page.getByRole('option', { name: '44100', exact: true }).click();
-  await playback
-    .getByLabel('Session buffer (samples)', { exact: true })
-    .click();
-  await page.getByRole('option', { name: /^256 ·/ }).click();
+  await playback.getByLabel('Session sample rate', { exact: true }).click();
+  await page.getByRole('option', { name: '44.1 kHz', exact: true }).click();
+  await playback.getByLabel('Session buffer', { exact: true }).click();
+  await page.getByRole('option', { name: '256', exact: true }).click();
   const apply = playback.getByRole('button', {
-    name: 'Apply & restart audio',
+    name: 'Apply and restart audio',
     exact: true,
   });
   await apply.click();
+  await keepAudioSettings(page);
   await expect
     .poll(async () => (await read()).configured.stream.input.sample_rate)
     .toBe(44100);
@@ -2832,22 +2845,26 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await expect(
     audioSettings.getByRole('heading', { name: 'Now playing' }),
   ).toBeVisible();
-  const buffers = audioSettings.getByRole('group', {
+  const buffers = audioSettings.getByRole('region', {
     name: 'Adjust current session',
   });
-  await buffers.getByLabel('Session buffer (samples)').click();
+  await buffers.getByLabel('Session buffer').click();
   await expect(page.getByRole('option', { name: /^129/ })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(
-    buffers.getByRole('button', { name: 'Apply & restart audio', exact: true }),
+    buffers.getByRole('button', {
+      name: 'Apply and restart audio',
+      exact: true,
+    }),
   ).toBeDisabled();
-  await buffers.getByLabel('Session buffer (samples)').click();
-  await page.getByRole('option', { name: /^256 ·/ }).click();
-  await buffers.getByLabel('Session sample rate (Hz)').click();
-  await page.getByRole('option', { name: '44100', exact: true }).click();
+  await buffers.getByLabel('Session buffer').click();
+  await page.getByRole('option', { name: '256', exact: true }).click();
+  await buffers.getByLabel('Session sample rate').click();
+  await page.getByRole('option', { name: '44.1 kHz', exact: true }).click();
   await buffers
-    .getByRole('button', { name: 'Apply & restart audio', exact: true })
+    .getByRole('button', { name: 'Apply and restart audio', exact: true })
     .click();
+  await keepAudioSettings(page);
   await expect
     .poll(async () => (await get()).configured.stream.input.period_frames)
     .toBe(256);
@@ -4984,6 +5001,10 @@ test('playback lifecycle distinguishes loading and offers readable buffer choice
   page,
   request,
 }, info) => {
+  await page.route('**/api/v1/audio/change', (route) => {
+    expect(route.request().method()).toBe('GET');
+    return route.fulfill({ json: { phase: 'idle' } });
+  });
   const baseline = await (await request.get('/api/v1/audio')).json();
   const input = {
     endpoint: 'hw:fixture',
@@ -5029,16 +5050,17 @@ test('playback lifecycle distinguishes loading and offers readable buffer choice
   await expect(
     page.getByRole('button', { name: 'Stop audio', exact: true }),
   ).toBeVisible();
-  const group = page.getByRole('group', { name: 'Adjust current session' });
+  const group = page.getByRole('region', { name: 'Adjust current session' });
   const buffer = group.getByRole('combobox', {
-    name: 'Session buffer (samples)',
+    name: 'Session buffer',
   });
   await buffer.click();
-  await page.getByRole('option', { name: /^256 ·/ }).click();
+  await page.getByRole('option', { name: '256', exact: true }).click();
   await expect(group.getByText(/one period 5\.33 ms/)).toBeVisible();
   await expect(
-    group.getByRole('button', { name: 'Apply & restart audio' }),
+    group.getByRole('button', { name: 'Apply and restart audio' }),
   ).toBeEnabled();
+  await group.getByText('Interface routing', { exact: true }).click();
   const left = (await group
     .getByLabel('Session input left channel')
     .boundingBox())!;
@@ -5048,9 +5070,9 @@ test('playback lifecycle distinguishes loading and offers readable buffer choice
   expect(Math.abs(left.y - right.y)).toBeLessThan(2);
   expect(right.x).toBeGreaterThan(left.x);
   await group.getByRole('button', { name: 'Reset changes' }).click();
-  await expect(buffer).toHaveText(/^64 ·/);
+  await expect(buffer).toHaveText('64');
   await expect(
-    group.getByRole('button', { name: 'Apply & restart audio' }),
+    group.getByRole('button', { name: 'Apply and restart audio' }),
   ).toBeDisabled();
   await page.screenshot({
     path: info.outputPath('audio-settings-portrait.png'),

@@ -2,7 +2,7 @@ import Ajv2020 from 'ajv/dist/2020';
 
 import type { Contract } from './generated/contract';
 import schema from './generated/contract.schema.json';
-import { deviceError } from './lib/friendlyError';
+import { DeviceError, deviceError } from './lib/friendlyError';
 
 export type Snapshot = Contract['snapshot'];
 export type Action = Contract['command']['action'];
@@ -1859,3 +1859,172 @@ export async function stopCapture(keep: boolean): Promise<CaptureState> {
 }
 export const wavPath = (id: string) =>
   `/api/v1/media/assets/${encodeURIComponent(id)}/wav`;
+
+export type SheetPage = Contract['sheet_page'];
+export type SheetDocument = Contract['sheet_document'];
+export type SheetWrite = Contract['sheet_write'];
+export type SheetMutation = Contract['sheet_mutation'];
+export type SheetLinks = Contract['sheet_links'];
+export type SheetLinkUpdate = Contract['sheet_link_update'];
+export type SheetReferences = Contract['sheet_references'];
+export type SheetArchive = Contract['sheet_archive'];
+export type SheetRestore = Contract['sheet_restore'];
+export type SheetRestored = Contract['sheet_restored'];
+
+const sheetValidators = {
+  sheet_page: ajv.compile<SheetPage>({
+    $defs: schema.$defs,
+    $ref: '#/$defs/SheetPage',
+  }),
+  sheet_document: ajv.compile<SheetDocument>({
+    $defs: schema.$defs,
+    $ref: '#/$defs/SheetDocument',
+  }),
+  sheet_mutation: ajv.compile<SheetMutation>({
+    $defs: schema.$defs,
+    $ref: '#/$defs/SheetMutation',
+  }),
+  sheet_links: ajv.compile<SheetLinks>({
+    $defs: schema.$defs,
+    $ref: '#/$defs/SheetLinks',
+  }),
+  sheet_references: ajv.compile<SheetReferences>({
+    $defs: schema.$defs,
+    $ref: '#/$defs/SheetReferences',
+  }),
+  sheet_archive: ajv.compile<SheetArchive>({
+    $defs: schema.$defs,
+    $ref: '#/$defs/SheetArchive',
+  }),
+  sheet_restored: ajv.compile<SheetRestored>({
+    $defs: schema.$defs,
+    $ref: '#/$defs/SheetRestored',
+  }),
+};
+const sheetFailureValidator = ajv.compile<Contract['sheet_failure']>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/SheetFailure',
+});
+
+/** A retained damaged-file digest is used only for an explicit reviewed restore. */
+export class SheetRequestError extends DeviceError {
+  readonly damagedSha256: string | undefined;
+  constructor(body: Contract['sheet_failure'], status: number) {
+    super(body.error, body.code, status);
+    this.damagedSha256 = body.damaged_sha256 ?? undefined;
+  }
+}
+
+async function sheetResponse<K extends keyof typeof sheetValidators>(
+  key: K,
+  path: string,
+  init?: RequestInit,
+): Promise<Contract[K]> {
+  const response = await fetch(`/api/v1/media/sheets${path}`, {
+    cache: 'no-store',
+    ...init,
+  });
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    if (sheetFailureValidator(body))
+      throw new SheetRequestError(body, response.status);
+    throw deviceError(
+      body,
+      response.status,
+      'The device could not read or save the chord sheet.',
+    );
+  }
+  if (!sheetValidators[key](body))
+    throw new Error('Incompatible chord-sheet response');
+  return body as Contract[K];
+}
+
+/** Device-owned sheets preserve source text and use revision-checked writes.
+ * @see docs/media.md
+ */
+export function chordSheets(after?: string): Promise<SheetPage> {
+  return sheetResponse(
+    'sheet_page',
+    `?limit=50${after ? `&after=${encodeURIComponent(after)}` : ''}`,
+  );
+}
+export function chordSheet(id: string): Promise<SheetDocument> {
+  return sheetResponse('sheet_document', `/${encodeURIComponent(id)}`);
+}
+export function saveChordSheet(
+  id: string | null,
+  write: SheetWrite,
+): Promise<SheetMutation> {
+  return sheetResponse(
+    'sheet_mutation',
+    id ? `/${encodeURIComponent(id)}` : '',
+    json(id ? 'PATCH' : 'POST', write),
+  );
+}
+export function deleteChordSheet(
+  id: string,
+  request: Contract['sheet_delete'],
+): Promise<SheetMutation> {
+  return sheetResponse(
+    'sheet_mutation',
+    `/${encodeURIComponent(id)}`,
+    json('DELETE', request),
+  );
+}
+export function chordSheetReferences(id: string): Promise<SheetReferences> {
+  return sheetResponse(
+    'sheet_references',
+    `/${encodeURIComponent(id)}/references`,
+  );
+}
+export function chordSheetLinks(): Promise<SheetLinks> {
+  return sheetResponse('sheet_links', '/links');
+}
+export function linkChordSheet(request: SheetLinkUpdate): Promise<SheetLinks> {
+  return sheetResponse('sheet_links', '/links', json('PUT', request));
+}
+export function restoreChordSheets(
+  request: SheetRestore,
+): Promise<SheetRestored> {
+  return sheetResponse('sheet_restored', '/restore', json('POST', request));
+}
+export function parseSheetArchive(body: unknown): SheetArchive {
+  if (!sheetValidators.sheet_archive(body))
+    throw new Error('This is not an Oxidal chord-sheet backup.');
+  return body;
+}
+export const chordSheetExport = (id: string) =>
+  `/api/v1/media/sheets/${encodeURIComponent(id)}/export`;
+export const chordSheetBackup = '/api/v1/media/sheets/backup';
+
+export type AudioChangeState = Contract['audio_change_state'];
+export type AudioChangeRequest = Contract['audio_change_request'];
+const audioChangeValidator = ajv.compile<AudioChangeState>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/AudioChangeState',
+});
+/** Hardware confirmation and expiry are owned by the daemon, including browser loss.
+ * @see docs/audio.md
+ */
+export async function audioChange(
+  request?: AudioChangeRequest,
+): Promise<AudioChangeState> {
+  const body = await presetResponse(
+    await fetch(
+      '/api/v1/audio/change',
+      request ? json('POST', request) : { cache: 'no-store' },
+    ),
+  );
+  if (!audioChangeValidator(body))
+    throw new Error('Incompatible audio confirmation response');
+  if (
+    ['restarting', 'proving', 'reverting'].includes(body.phase) &&
+    (!body.id ||
+      !body.owner ||
+      !body.previous ||
+      !body.candidate ||
+      (body.phase === 'proving' && body.remaining_ms == null))
+  )
+    throw new Error('Incomplete audio confirmation response');
+  return body;
+}

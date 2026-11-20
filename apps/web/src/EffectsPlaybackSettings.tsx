@@ -119,6 +119,11 @@ export function EffectsPlaybackSettings({
         <h4>Applied settings</h4>
         <AudioReconfigure
           key={JSON.stringify(stream)}
+          cursor={{
+            owner: 'effects',
+            session: state.session,
+            expected_revision: state.revision,
+          }}
           initial={stream}
           checkedInput={input}
           checkedOutput={output}

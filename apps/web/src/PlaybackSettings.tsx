@@ -444,6 +444,11 @@ export function PlaybackSettings({
               </p>
               <AudioReconfigure
                 key={JSON.stringify(state.configured.stream)}
+                cursor={{
+                  owner: 'native',
+                  session: state.session,
+                  expected_revision: state.revision,
+                }}
                 initial={state.configured.stream}
                 checkedInput={input}
                 checkedOutput={output}

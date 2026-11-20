@@ -10,26 +10,56 @@ import {
 } from '@oxidal/design-system/components/select';
 
 import type { AudioProbe, StartAudio } from './api';
+import { useAudioChange } from './audioChangeFeed';
 import { BUFFER_SIZES, bufferMs } from './bufferTiming';
+import {
+  type AudioChangeCursor,
+  TimedAudioReconfigure,
+} from './TimedAudioReconfigure';
 
 type Stream = StartAudio['stream'];
-
-/** Change the existing session's hardware settings without recalling its saved tone. */
-export function AudioReconfigure({
-  initial,
-  checkedInput,
-  checkedOutput,
-  disabled,
-  running,
-  onApply,
-}: {
+type Props = {
   initial: Stream;
   checkedInput: AudioProbe | null;
   checkedOutput: AudioProbe | null;
   disabled: boolean;
   running: boolean;
   onApply: (stream: Stream) => void;
-}) {
+  cursor?: AudioChangeCursor;
+};
+
+/** Keep the confirmation surface mounted through worker replacement and rollback. */
+export function AudioReconfigure(props: Props) {
+  return props.cursor ? (
+    <OwnedAudioReconfigure {...props} cursor={props.cursor} />
+  ) : (
+    <StoppedAudioReconfigure {...props} />
+  );
+}
+
+function OwnedAudioReconfigure(props: Props & { cursor: AudioChangeCursor }) {
+  const feed = useAudioChange();
+  return props.running ||
+    feed.pending ||
+    (feed.active && feed.state?.owner === props.cursor.owner) ? (
+    <TimedAudioReconfigure {...props} feed={feed} />
+  ) : (
+    <StoppedAudioReconfigure
+      {...props}
+      disabled={props.disabled || feed.active}
+    />
+  );
+}
+
+/** Stopped configuration keeps the explicit Resume action and full interface controls. */
+function StoppedAudioReconfigure({
+  initial,
+  checkedInput,
+  checkedOutput,
+  disabled,
+  running,
+  onApply,
+}: Props) {
   const [draft, setDraft] = useState<Stream>(initial);
   function shared(
     key: 'sample_rate' | 'period_frames' | 'periods',

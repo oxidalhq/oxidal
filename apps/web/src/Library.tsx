@@ -55,6 +55,7 @@ import { OfflineEditor } from './features/library/OfflineEditor';
 import { OxidalSounds } from './features/library/oxidal';
 import { PresetRow } from './features/library/PresetRow';
 import { duplicatePreset } from './features/library/setList';
+import { Songbook } from './features/library/Songbook';
 import { StarterOffer } from './features/library/StarterOffer';
 import { GraphAuthor } from './GraphAuthor';
 import { friendlyError } from './lib/friendlyError';
@@ -81,7 +82,7 @@ const soundSections = [
   'setlist',
   'tones',
 ] as const;
-const mediaSections = ['backing', 'stems', 'di'] as const;
+const mediaSections = ['backing', 'stems', 'di', 'songbook'] as const;
 const sections = [...soundSections, ...mediaSections] as const;
 type Section = (typeof sections)[number];
 const sectionLabels: Record<Section, string> = {
@@ -93,6 +94,7 @@ const sectionLabels: Record<Section, string> = {
   backing: 'Backing tracks',
   stems: 'Stems',
   di: 'DI and reamps',
+  songbook: 'Songbook',
 };
 /** One icon per Library section, beside its label. */
 const sectionIcons: Record<Section, ReactNode> = {
@@ -104,6 +106,7 @@ const sectionIcons: Record<Section, ReactNode> = {
   backing: <MusicNotes aria-hidden="true" />,
   stems: <Faders aria-hidden="true" />,
   di: <Plug aria-hidden="true" />,
+  songbook: <MusicNotes aria-hidden="true" />,
 };
 /** Links from before Sprint 12 keep working: they land on the new section. */
 const legacySections: Record<string, Section> = {
@@ -850,6 +853,9 @@ export function Library({
         </TabsContent>
         <TabsContent value="stems">
           <StemSongs connected={connected} />
+        </TabsContent>
+        <TabsContent value="songbook">
+          <Songbook connected={connected} />
         </TabsContent>
       </Tabs>
     </section>

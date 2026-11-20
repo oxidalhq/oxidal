@@ -125,6 +125,11 @@ export function MixedPlaybackSettings({
         </p>
         <AudioReconfigure
           key={JSON.stringify(stream)}
+          cursor={{
+            owner: 'mixed',
+            session: state.session,
+            expected_revision: state.revision,
+          }}
           initial={stream}
           checkedInput={input}
           checkedOutput={output}
