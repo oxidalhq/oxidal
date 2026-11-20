@@ -1,5 +1,5 @@
 //! Stream a bounded-surface library backup without duplicating large assets on disk.
-use crate::{Shared, failure};
+use crate::{Shared, failure, sheets};
 use axum::{
     body::{Body, Bytes},
     extract::State,
@@ -60,18 +60,22 @@ fn backup_layout(
     Ok((root, mappings_exist))
 }
 
-fn manifest() -> Vec<u8> {
+fn manifest(has_sheets: bool) -> Vec<u8> {
+    let mut includes = vec!["presets", "mappings.json"];
+    if has_sheets {
+        includes.push(sheets::FILE_NAME);
+    }
     serde_json::to_vec_pretty(&serde_json::json!({
         "format": 1,
         "content": "Oxidal library backup",
-        "includes": ["presets", "mappings.json"],
+        "includes": includes,
         "excludes": ["TONE3000 account tokens", "control audit", "monitor history"],
         "version": env!("CARGO_PKG_VERSION")
     }))
     .expect("static backup manifest is serializable")
 }
 
-fn temporary_manifest() -> Result<TemporaryDirectory, &'static str> {
+fn temporary_manifest(sheet_snapshot: Option<&[u8]>) -> Result<TemporaryDirectory, &'static str> {
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|_| "Cannot create backup manifest")?
@@ -80,19 +84,30 @@ fn temporary_manifest() -> Result<TemporaryDirectory, &'static str> {
         "oxidal-library-backup-{}-{nonce}",
         std::process::id()
     ));
-    fs::create_dir(&directory).map_err(|_| "Cannot create backup manifest")?;
-    let path = directory.join("manifest.json");
-    let result = (|| -> std::io::Result<()> {
-        let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
-        file.write_all(&manifest())?;
-        file.write_all(b"\n")?;
-        file.sync_all()
-    })();
-    if result.is_err() {
-        let _ = fs::remove_dir_all(&directory);
-        return Err("Cannot create backup manifest");
+    let mut directory_builder = fs::DirBuilder::new();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        directory_builder.mode(0o700);
     }
-    Ok(TemporaryDirectory(directory))
+    directory_builder
+        .create(&directory)
+        .map_err(|_| "Cannot create backup manifest")?;
+    let directory = TemporaryDirectory(directory);
+    let write = |name, bytes: &[u8]| -> std::io::Result<()> {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(directory.0.join(name))?;
+        file.write_all(bytes)?;
+        file.sync_all()
+    };
+    write("manifest.json", &manifest(sheet_snapshot.is_some()))
+        .map_err(|_| "Cannot create backup manifest")?;
+    if let Some(snapshot) = sheet_snapshot {
+        write(sheets::FILE_NAME, snapshot).map_err(|_| "Cannot create chord sheet backup")?;
+    }
+    Ok(directory)
 }
 
 pub(super) async fn library(State(shared): State<Arc<Shared>>) -> Response {
@@ -110,10 +125,40 @@ pub(super) async fn library(State(shared): State<Arc<Shared>>) -> Response {
         Ok(layout) => layout,
         Err(error) => return failure(StatusCode::SERVICE_UNAVAILABLE, error),
     };
-    let temporary = match temporary_manifest() {
-        Ok(temporary) => temporary,
-        Err(error) => return failure(StatusCode::INTERNAL_SERVER_ERROR, error),
+    let snapshot = match &shared.media {
+        Ok(store) => {
+            let store = Arc::clone(store);
+            match tokio::task::spawn_blocking(move || sheets::backup_snapshot(&store)).await {
+                Ok(Ok(snapshot)) => snapshot,
+                Ok(Err(response)) => return *response,
+                Err(_) => {
+                    return failure(
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        "Chord sheet backup is unavailable",
+                    );
+                }
+            }
+        }
+        Err(_) if shared.config.media_dir.is_none() => None,
+        Err(_) => {
+            return failure(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Chord sheet backup is unavailable",
+            );
+        }
     };
+    let has_sheets = snapshot.is_some();
+    let temporary =
+        match tokio::task::spawn_blocking(move || temporary_manifest(snapshot.as_deref())).await {
+            Ok(Ok(temporary)) => temporary,
+            Ok(Err(error)) => return failure(StatusCode::INTERNAL_SERVER_ERROR, error),
+            Err(_) => {
+                return failure(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Cannot prepare library backup",
+                );
+            }
+        };
     let mut command = Command::new("/usr/bin/tar");
     command.args([
         "-cf",
@@ -123,8 +168,11 @@ pub(super) async fn library(State(shared): State<Arc<Shared>>) -> Response {
         "--exclude=presets/monitor-history",
         "-C",
     ]);
-    command.arg(&temporary.0).args(["manifest.json", "-C"]);
-    command.arg(&root).arg("presets");
+    command.arg(&temporary.0).arg("manifest.json");
+    if has_sheets {
+        command.arg(sheets::FILE_NAME);
+    }
+    command.arg("-C").arg(&root).arg("presets");
     if mappings_exist {
         command.arg("mappings.json");
     }
@@ -211,7 +259,7 @@ mod tests {
 
     #[test]
     fn standard_layout_and_manifest_exclude_private_sessions() {
-        let bytes = manifest();
+        let bytes = manifest(false);
         let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(value["format"], 1);
         assert!(

@@ -948,6 +948,22 @@ export type ResourceSource =
       resource: string;
       revision: string;
     };
+export type SheetTarget =
+  | {
+      kind: "preset";
+      preset: LibraryReference;
+    }
+  | {
+      asset: string;
+      kind: "track";
+    };
+export type SheetFormat = "chordpro" | "markdown" | "text";
+/**
+ * Stable failure kinds shared by every endpoint.
+ * @see docs/architecture.md
+ */
+export type ErrorCode =
+  "invalid" | "not_found" | "conflict" | "busy" | "locked" | "unavailable" | "timeout" | "storage" | "internal";
 export type SplitMode = "four" | "six";
 export type Phase = "running" | "ready" | "failed" | "cancelled" | "interrupted";
 /**
@@ -1124,6 +1140,18 @@ export interface Contract {
   scene_blends: Blends;
   scene_draft: SceneDraftState;
   scene_draft_update: SceneDraftUpdate;
+  sheet_archive: SheetArchive;
+  sheet_delete: SheetDelete;
+  sheet_document: SheetDocument;
+  sheet_failure: SheetFailure;
+  sheet_link_update: SheetLinkUpdate;
+  sheet_links: SheetLinks;
+  sheet_mutation: SheetMutation;
+  sheet_page: SheetPage;
+  sheet_references: SheetReferences;
+  sheet_restore: SheetRestore;
+  sheet_restored: SheetRestored;
+  sheet_write: SheetWrite;
   snapshot: Snapshot;
   song_current_split: CurrentSplit;
   song_import_stems: ImportStems;
@@ -3665,6 +3693,83 @@ export interface SceneDraftUpdate {
    * Required when the current or submitted draft has bypass or capture edits.
    */
   expected_revision?: number | null;
+}
+export interface SheetArchive {
+  links: SheetLink[];
+  schema: number;
+  sheets: SheetDocument[];
+}
+export interface SheetLink {
+  sheet: string;
+  target: SheetTarget;
+}
+export interface SheetDocument {
+  format: SheetFormat;
+  id: string;
+  revision: string;
+  source: string;
+  title: string;
+}
+export interface SheetDelete {
+  expected: string;
+  registry_revision: string;
+}
+export interface SheetFailure {
+  code: ErrorCode;
+  damaged_sha256?: string | null;
+  error: string;
+}
+export interface SheetLinkUpdate {
+  expected: string;
+  sheet?: string | null;
+  target: SheetTarget;
+}
+export interface SheetLinks {
+  durability_warning?: string | null;
+  links: ResolvedSheetLink[];
+  registry_revision: string;
+}
+export interface ResolvedSheetLink {
+  available: boolean;
+  sheet: string;
+  target: SheetTarget;
+}
+export interface SheetMutation {
+  durability_warning?: string | null;
+  registry_revision: string;
+  sheet: SheetDocument;
+}
+export interface SheetPage {
+  next?: string | null;
+  registry_revision: string;
+  sheets: SheetSummary[];
+}
+export interface SheetSummary {
+  format: SheetFormat;
+  id: string;
+  revision: string;
+  title: string;
+}
+export interface SheetReferences {
+  links: ResolvedSheetLink[];
+  registry_revision: string;
+  sheet_revision: string;
+}
+export interface SheetRestore {
+  archive: SheetArchive;
+  damaged_sha256?: string | null;
+  expected?: string | null;
+}
+export interface SheetRestored {
+  durability_warning?: string | null;
+  registry_revision: string;
+  restored: number;
+}
+export interface SheetWrite {
+  expected: string;
+  format: SheetFormat;
+  source: string;
+  title: string;
 }
 /**
  * The one split running on this device, wherever it was started.

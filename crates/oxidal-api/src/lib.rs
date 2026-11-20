@@ -44,6 +44,7 @@ mod rig_library;
 mod rig_playback;
 mod rig_recovery;
 mod scene_draft;
+mod sheets;
 mod song_api;
 mod song_links;
 mod songs;
@@ -157,6 +158,18 @@ pub struct Contract {
     pub song_split_job: split_jobs::SplitJob,
     pub song_start_split: split_jobs::StartSplit,
     pub song_split_options: split_jobs::Options,
+    pub sheet_page: sheets::SheetPage,
+    pub sheet_document: sheets::SheetDocument,
+    pub sheet_write: sheets::SheetWrite,
+    pub sheet_mutation: sheets::SheetMutation,
+    pub sheet_delete: sheets::SheetDelete,
+    pub sheet_references: sheets::SheetReferences,
+    pub sheet_links: sheets::SheetLinks,
+    pub sheet_link_update: sheets::SheetLinkUpdate,
+    pub sheet_archive: sheets::SheetArchive,
+    pub sheet_restore: sheets::SheetRestore,
+    pub sheet_restored: sheets::SheetRestored,
+    pub sheet_failure: sheets::SheetFailure,
     pub song_links: song_links::Links,
     pub song_link_update: song_links::Update,
     pub practice_timing: timing::Timing,
@@ -316,6 +329,7 @@ struct Shared {
     media: Result<Arc<media::Store>, String>,
     uploads: media_api::Uploads,
     song_write: Arc<tokio::sync::Semaphore>,
+    sheet_write: std::sync::Mutex<()>,
     split_jobs: split_jobs::Jobs,
     player: player::Player,
     venues: venues::Venues,
@@ -415,6 +429,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         media,
         uploads: media_api::Uploads::default(),
         song_write: Arc::new(tokio::sync::Semaphore::new(1)),
+        sheet_write: std::sync::Mutex::new(()),
         split_jobs: split_jobs::Jobs::load(),
         player,
         venues,
@@ -670,6 +685,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/player/commands", post(player::command))
         .route("/player/order", axum::routing::put(player::reorder))
         .route("/media", get(media_api::library))
+        .merge(sheets::routes())
         .route("/media/songs", get(song_api::list))
         .route("/media/songs/{source}", get(song_api::view))
         .route("/media/songs/import-stems", post(song_api::import_stems))

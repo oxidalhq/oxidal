@@ -122,6 +122,8 @@ the preset to keep it.
 ## Library backup
 
 Open **Library → Set list → Download backup** to export presets, captures,
-IRs, set-list order and MIDI mappings as a tar archive. TONE3000 account tokens,
+IRs, set-list order and MIDI mappings as a tar archive. Backups include a
+`chord-sheets.json` member when a sheet registry exists. TONE3000 account tokens,
 control-audit records and monitor history are excluded. Sign in again when
-setting up another device. The interface currently supports backup download only.
+setting up another device. The Library tar is a download. Use the separate
+[chord-sheet JSON restore](media.md#chord-sheets) to restore sheets and their links.

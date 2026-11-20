@@ -262,6 +262,42 @@
     "scene_draft_update": {
       "$ref": "#/$defs/SceneDraftUpdate"
     },
+    "sheet_archive": {
+      "$ref": "#/$defs/SheetArchive"
+    },
+    "sheet_delete": {
+      "$ref": "#/$defs/SheetDelete"
+    },
+    "sheet_document": {
+      "$ref": "#/$defs/SheetDocument"
+    },
+    "sheet_failure": {
+      "$ref": "#/$defs/SheetFailure"
+    },
+    "sheet_link_update": {
+      "$ref": "#/$defs/SheetLinkUpdate"
+    },
+    "sheet_links": {
+      "$ref": "#/$defs/SheetLinks"
+    },
+    "sheet_mutation": {
+      "$ref": "#/$defs/SheetMutation"
+    },
+    "sheet_page": {
+      "$ref": "#/$defs/SheetPage"
+    },
+    "sheet_references": {
+      "$ref": "#/$defs/SheetReferences"
+    },
+    "sheet_restore": {
+      "$ref": "#/$defs/SheetRestore"
+    },
+    "sheet_restored": {
+      "$ref": "#/$defs/SheetRestored"
+    },
+    "sheet_write": {
+      "$ref": "#/$defs/SheetWrite"
+    },
     "snapshot": {
       "$ref": "#/$defs/Snapshot"
     },
@@ -370,6 +406,18 @@
     "song_split_job",
     "song_start_split",
     "song_split_options",
+    "sheet_page",
+    "sheet_document",
+    "sheet_write",
+    "sheet_mutation",
+    "sheet_delete",
+    "sheet_references",
+    "sheet_links",
+    "sheet_link_update",
+    "sheet_archive",
+    "sheet_restore",
+    "sheet_restored",
+    "sheet_failure",
     "song_links",
     "song_link_update",
     "practice_timing",
@@ -10806,6 +10854,25 @@
         "mix"
       ]
     },
+    "ResolvedSheetLink": {
+      "type": "object",
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "sheet": {
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/SheetTarget"
+        }
+      },
+      "required": [
+        "target",
+        "sheet",
+        "available"
+      ]
+    },
     "ResourceSource": {
       "oneOf": [
         {
@@ -12051,6 +12118,369 @@
         "input",
         "channel",
         "bindings"
+      ]
+    },
+    "SheetArchive": {
+      "type": "object",
+      "properties": {
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SheetLink"
+          }
+        },
+        "schema": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "sheets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SheetDocument"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "sheets",
+        "links"
+      ]
+    },
+    "SheetDelete": {
+      "type": "object",
+      "properties": {
+        "expected": {
+          "type": "string"
+        },
+        "registry_revision": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "expected",
+        "registry_revision"
+      ]
+    },
+    "SheetDocument": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "$ref": "#/$defs/SheetFormat"
+        },
+        "id": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "revision",
+        "title",
+        "format",
+        "source"
+      ]
+    },
+    "SheetFailure": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/ErrorCode"
+        },
+        "damaged_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "error",
+        "code"
+      ]
+    },
+    "SheetFormat": {
+      "type": "string",
+      "enum": [
+        "chordpro",
+        "markdown",
+        "text"
+      ]
+    },
+    "SheetLink": {
+      "type": "object",
+      "properties": {
+        "sheet": {
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/SheetTarget"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "sheet"
+      ]
+    },
+    "SheetLinkUpdate": {
+      "type": "object",
+      "properties": {
+        "expected": {
+          "type": "string"
+        },
+        "sheet": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/SheetTarget"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "expected",
+        "target"
+      ]
+    },
+    "SheetLinks": {
+      "type": "object",
+      "properties": {
+        "durability_warning": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResolvedSheetLink"
+          }
+        },
+        "registry_revision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "registry_revision",
+        "links"
+      ]
+    },
+    "SheetMutation": {
+      "type": "object",
+      "properties": {
+        "durability_warning": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "registry_revision": {
+          "type": "string"
+        },
+        "sheet": {
+          "$ref": "#/$defs/SheetDocument"
+        }
+      },
+      "required": [
+        "registry_revision",
+        "sheet"
+      ]
+    },
+    "SheetPage": {
+      "type": "object",
+      "properties": {
+        "next": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "registry_revision": {
+          "type": "string"
+        },
+        "sheets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SheetSummary"
+          }
+        }
+      },
+      "required": [
+        "registry_revision",
+        "sheets"
+      ]
+    },
+    "SheetReferences": {
+      "type": "object",
+      "properties": {
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResolvedSheetLink"
+          }
+        },
+        "registry_revision": {
+          "type": "string"
+        },
+        "sheet_revision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "registry_revision",
+        "sheet_revision",
+        "links"
+      ]
+    },
+    "SheetRestore": {
+      "type": "object",
+      "properties": {
+        "archive": {
+          "$ref": "#/$defs/SheetArchive"
+        },
+        "damaged_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expected": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "archive"
+      ]
+    },
+    "SheetRestored": {
+      "type": "object",
+      "properties": {
+        "durability_warning": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "registry_revision": {
+          "type": "string"
+        },
+        "restored": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "registry_revision",
+        "restored"
+      ]
+    },
+    "SheetSummary": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "$ref": "#/$defs/SheetFormat"
+        },
+        "id": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "revision",
+        "title",
+        "format"
+      ]
+    },
+    "SheetTarget": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "preset"
+            },
+            "preset": {
+              "$ref": "#/$defs/LibraryReference"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "preset"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "asset": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "track"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "asset"
+          ]
+        }
+      ]
+    },
+    "SheetWrite": {
+      "type": "object",
+      "properties": {
+        "expected": {
+          "type": "string"
+        },
+        "format": {
+          "$ref": "#/$defs/SheetFormat"
+        },
+        "source": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "expected",
+        "title",
+        "format",
+        "source"
       ]
     },
     "SlotPosition": {

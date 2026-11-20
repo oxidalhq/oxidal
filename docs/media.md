@@ -24,6 +24,7 @@ on first start. Its directories are mode `0750` and owned by the service user.
 ```text
 media/
   store.json              schema version and optional larger reserve
+  chord-sheets.json       chord-sheet source and links (when present)
   assets/<id>/            one directory per asset (ULID)
     manifest.json         written last; its presence makes the asset real
     original.mp3|.wav     the uploaded file, byte for byte
@@ -389,3 +390,45 @@ Library ▸ DI and reamps records the raw guitar and reamps it later.
 | `POST /api/v1/capture/reamp`        | Start a reamp (`source`, `processing`, …)  |
 | `POST /api/v1/capture/stop`         | `{ "keep": true }` saves, `false` discards |
 | `GET /api/v1/media/assets/{id}/wav` | Download any asset as 24-bit WAV           |
+
+## Chord sheets
+
+A sheet stores its title, format and exact UTF-8 source on the device. The API
+accepts ChordPro, Markdown and plain text. Sources are limited to 64 KiB and
+permit tabs and line breaks. A sheet title can contain up to 120 characters.
+The registry holds up to 128 sheets, 512 links and 4 MiB of serialized data.
+
+`GET /api/v1/media/sheets` lists summaries with an opaque `after` cursor and a
+page size of 20 by default, up to 50. `POST` creates or imports one sheet with
+the current registry revision in `expected`. `GET /api/v1/media/sheets/{id}`
+reads a document. `PATCH` edits it with the current document revision in
+`expected`. `GET /export` under the document route downloads the original
+source as plain text with a name based on its ID and format.
+
+`GET /api/v1/media/sheets/links` lists preset and backing-track links.
+`PUT` attaches one sheet to an available saved target or unlinks it with a
+null sheet ID. Both operations require the current registry revision.
+Unavailable targets remain visible until unlinked. In Stage, prefer the
+active preset's link before the cued backing track's link. Existing song-mix
+links are independent. `GET /references` under the document route previews
+the links and revisions required by `DELETE`. Clear the links first. An edit
+or link change after the preview causes a conflict, and deletion never
+removes a preset or track.
+
+Writes are serialized with Library backups and published by atomic rename.
+A conflict returns 409, data over a size limit returns 413, and insufficient
+storage returns 507 with the previously saved data still available when the
+write failed before publication. When a write is visible after a directory
+sync failure, the response includes the saved revision and a durability
+warning. Check the sheet again after restarting the device.
+
+`GET /api/v1/media/sheets/backup` exports the versioned JSON archive, and
+`POST /api/v1/media/sheets/restore` accepts that archive with the expected
+empty registry revision. The initial revision is an empty string. Restore
+preserves IDs and links and issues fresh revisions. Links to assets absent
+on the destination remain visible. A damaged registry blocks sheet reads
+and Library backup while other media remains usable. If its bytes are
+eligible for recovery, the error provides a SHA-256 digest. A restore that
+supplies this digest instead of the empty revision first verifies that the
+damaged file still matches and preserves its exact bytes in a digest-named
+file beside the registry. Keep that copy until recovery is confirmed.
