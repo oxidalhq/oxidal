@@ -79,6 +79,7 @@ fn scene_bypass_keeps_latency_aligned_and_recalls_the_confirmed_endpoint() {
             expected_revision: initial.revision,
             scene: "dry".into(),
             release_ms: None,
+            native_bypass_preview: None,
         })
         .unwrap();
     let selected = session.snapshot();
@@ -306,7 +307,7 @@ fn failed_latency_rollback_invalidates_the_session() {
             value: 6.0,
         })
         .unwrap_err();
-    assert!(error.contains("rollback failed"));
+    assert!(error.contains("rollback could not be verified"), "{error}");
     assert!(!session.healthy());
     assert_eq!(session.snapshot().revision, before.revision);
     let (mut l, mut r) = ([1.0; 64], [1.0; 64]);
@@ -749,6 +750,7 @@ fn scenes_ramp_exact_samples_preserve_shared_history_and_reject_stale_commands()
         expected_revision: before.revision,
         scene: "lead".into(),
         release_ms: None,
+        native_bypass_preview: None,
     };
     session.select_scene(command.clone()).unwrap();
     assert!(session.select_scene(command).is_err());
@@ -774,6 +776,7 @@ fn scenes_ramp_exact_samples_preserve_shared_history_and_reject_stale_commands()
         expected_revision: before.revision,
         scene: "missing".into(),
         release_ms: None,
+        native_bypass_preview: None,
     };
     assert!(session.select_scene(command.clone()).is_err());
     assert_eq!(session.snapshot().revision, before.revision);
@@ -787,6 +790,7 @@ fn scenes_ramp_exact_samples_preserve_shared_history_and_reject_stale_commands()
             expected_revision: before.revision,
             scene: "lead".into(),
             release_ms: None,
+            native_bypass_preview: None,
         })
         .unwrap();
     let mut samples = Vec::new();
@@ -823,6 +827,7 @@ fn a_blend_fades_the_outgoing_scene_slowly_while_the_new_one_opens_at_once() {
         expected_revision: before.revision,
         scene: "lead".into(),
         release_ms: Some(release_ms),
+        native_bypass_preview: None,
     };
     assert!(session.select_scene(blend(10_001)).is_err());
     // 30 ms: the outgoing scene (+1) closes over 1440 frames; the incoming
@@ -1054,6 +1059,7 @@ fn scene_input_gates_keep_outgoing_branch_audio_and_latency_aligned_crossfades()
             expected_revision: cursor.revision,
             scene: "lead".into(),
             release_ms: None,
+            native_bypass_preview: None,
         })
         .unwrap();
     for _ in 0..10 {
@@ -1075,6 +1081,7 @@ fn scene_input_gates_keep_outgoing_branch_audio_and_latency_aligned_crossfades()
             expected_revision: cursor.revision,
             scene: "lead".into(),
             release_ms: None,
+            native_bypass_preview: None,
         })
         .unwrap();
     for _ in 0..12 {

@@ -92,7 +92,12 @@ export function LinkedSheetProvider({
   const media = useSessionMedia();
   const preset = monitor.snapshot?.preset;
   const track = media.player?.track?.id;
-  const source = JSON.stringify([preset ?? null, track ?? null]);
+  const occurrence = monitor.snapshot?.set_entry;
+  const source = JSON.stringify([
+    preset ?? null,
+    track ?? null,
+    occurrence?.entry.id ?? null,
+  ]);
   const [links, setLinks] = useState<SheetLinks>();
   const [reading, setReading] = useState<Reading>();
   const [linkError, setLinkError] = useState('');
@@ -153,7 +158,7 @@ export function LinkedSheetProvider({
     };
   }, [connected, retry]);
   const link = resolveSheet(links?.links ?? [], preset, track);
-  const sheet = link?.sheet;
+  const sheet = occurrence?.entry.settings.sheet ?? link?.sheet;
   useEffect(() => {
     if (!connected || !sheet) return;
     let active = true;

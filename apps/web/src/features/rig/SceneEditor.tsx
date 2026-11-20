@@ -15,6 +15,7 @@ import { useSceneSettings } from './SceneEditorSettings';
 import { SceneGrid } from './SceneGrid';
 import { NativeSceneSettings } from './SceneNativeSettings';
 import { useNativeSceneSettings } from './SceneNativeSettingsState';
+import { PrepareSleepingBranches, SleepingBranches } from './SleepingBranches';
 import type { RigViewProps } from './useMixedRigSession';
 
 /**
@@ -88,6 +89,49 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
   return (
     <>
       <SceneGrid rig={rig} vm={vm} open={gridOpen} onOpenChange={setGridOpen} />
+      {state.control?.branch_sleep && (
+        <SleepingBranches
+          control={state.control}
+          disabled={waiting}
+          onChange={(enabled) => {
+            const control = rig.current.current?.control;
+            if (control?.branch_sleep)
+              void rig.command({
+                kind: 'branch_sleep',
+                command: {
+                  session: control.session,
+                  expected_revision: control.revision,
+                  enabled,
+                },
+              });
+          }}
+        />
+      )}
+      {!state.control?.branch_sleep &&
+        !!state.control?.branches?.length &&
+        rig.revision && (
+          <PrepareSleepingBranches
+            key={rig.revision}
+            revision={rig.revision}
+            disabled={waiting || !!pending || changed}
+            prepare={() =>
+              void rig.rebuild(({ opened, name }) => ({
+                manifest_json: JSON.stringify({ ...opened.manifest, name }),
+                resources: Object.fromEntries(
+                  opened.manifest.resources.map((resource) => [
+                    resource.id,
+                    {
+                      kind: 'bundle',
+                      revision: opened.revision,
+                      resource: resource.id,
+                    },
+                  ]),
+                ),
+                prepare_sleep_branches: true,
+              }))
+            }
+          />
+        )}
       {rig.sceneSharing.conflict && (
         <div
           role="alert"
@@ -154,7 +198,9 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
           }
           onMenu={setMenu}
           scenes={state.control.scenes.scenes}
-          active={state.control.scene}
+          active={
+            state.control.branch_sleep?.active_scene ?? state.control.scene
+          }
           fading={!!state.control.scene_transitioning}
           disabled={waiting}
           onSelect={(scene) => {

@@ -46,6 +46,8 @@ static void run(LV2_Handle h,uint32_t n){Test* t=h;if(n!=t->frames)abort();for(u
 static void cleanup(LV2_Handle h){free(h);}
 static const LV2_Descriptor descriptor={"urn:oxidal:test:contract",create,connect,NULL,run,NULL,cleanup,NULL};
 static const LV2_Descriptor quantized={"urn:oxidal:test:quantized",create,connect,NULL,run,NULL,cleanup,NULL};
+// Qualification only: unity feedback retains a finite input indefinitely.
+static const LV2_Descriptor sleep_tail={"urn:oxidal:test:sleep-tail",create,connect,NULL,run,NULL,cleanup,NULL};
 // Deliberately reports only from run(), including the core run(0) query.
 // Mode selects malformed or spontaneously changing latency for host rejection tests.
 typedef struct {float* p[7];float history[2][1024];uint32_t position;int stuck, stereo, poison_default;} Latent;
@@ -265,4 +267,4 @@ static LV2_State_Status atoms_restore(LV2_Handle h,LV2_State_Retrieve_Function r
 static const LV2_State_Interface atoms_state={atoms_save,atoms_restore};
 static const void* atoms_extension(const char* uri){return !strcmp(uri,LV2_STATE__interface)?&atoms_state:NULL;}
 static const LV2_Descriptor atoms_descriptor={"urn:oxidal:test:atoms",atoms_create,atoms_connect,NULL,atoms_run,NULL,cleanup,atoms_extension};
-LV2_SYMBOL_EXPORT const LV2_Descriptor* lv2_descriptor(uint32_t index){return index==0?&descriptor:index==1?&quantized:index==2?&latency:index==3?&latency_legacy:index==4?&latency_stereo:index==5?&async_descriptor:index==6?&missing_worker:index==7?&atoms_descriptor:NULL;}
+LV2_SYMBOL_EXPORT const LV2_Descriptor* lv2_descriptor(uint32_t index){return index==0?&descriptor:index==1?&quantized:index==2?&latency:index==3?&latency_legacy:index==4?&latency_stereo:index==5?&async_descriptor:index==6?&missing_worker:index==7?&atoms_descriptor:index==8?&sleep_tail:NULL;}

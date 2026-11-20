@@ -8,8 +8,9 @@ pub use details::{
 };
 mod catalog;
 pub use catalog::{
-    CatalogStore, LibraryAction, LibraryCatalog, LibraryItem, LibraryKind, LibraryOrigin,
-    LibraryUpdate, PresetFamily, PresetVersion, VersionAction, VersionEdit, VersionView,
+    CatalogStore, EntrySettings, LibraryAction, LibraryCatalog, LibraryItem, LibraryKind,
+    LibraryOrigin, LibraryUpdate, OccurrenceAction, OccurrenceEdit, PresetFamily, PresetVersion,
+    ResolvedOccurrence, SetOccurrence, SetOrder, VersionAction, VersionEdit, VersionView,
 };
 mod bundle;
 mod graph;

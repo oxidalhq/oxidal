@@ -24,7 +24,7 @@ fn pack_report_distinguishes_metadata_rejection_from_executed_audio() {
     assert_eq!(report["pack"], "fixture");
     assert_eq!(report["sample_rate"], 48000);
     let rows = report["plugins"].as_array().unwrap();
-    assert_eq!(rows.len(), 13);
+    assert_eq!(rows.len(), 14);
     let good = rows
         .iter()
         .find(|p| p["uri"] == "urn:oxidal:test:contract")

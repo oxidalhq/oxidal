@@ -119,8 +119,8 @@ pub fn rig(action: &RigAudioAction, phase: AudioPhase) -> bool {
     match action {
         RigAudioAction::Authoring { command } => tuner(&command.action),
         RigAudioAction::HostUtility { command } => utility(command),
+        RigAudioAction::Scene { command } => command.native_bypass_preview.is_none(),
         RigAudioAction::Switch { .. }
-        | RigAudioAction::Scene { .. }
         | RigAudioAction::Branch { .. }
         | RigAudioAction::Save { .. } => true,
         RigAudioAction::Control { command } => matches!(command.target, Target::Bypass { .. }),

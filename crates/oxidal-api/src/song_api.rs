@@ -139,6 +139,16 @@ pub(crate) async fn remove_mix(
         if shared.protect.refuse(false).is_some() {
             return Err(SongError::Interrupted);
         }
+        let catalog = oxidal_presets::CatalogStore::open(shared.config.preset_dir.clone())
+            .map_err(|e| crate::media::MediaError::Io(e.to_string()))?;
+        if catalog
+            .entry_settings()
+            .any(|s| s.track.as_ref() == Some(&source) && s.mix.as_ref() == Some(&target.id))
+        {
+            return Err(
+                crate::media::MediaError::Invalid("A set entry uses this mix".into()).into(),
+            );
+        }
         songs::remove_mix(store, &source, &target)?;
         Ok(StatusCode::NO_CONTENT.into_response())
     })

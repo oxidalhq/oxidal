@@ -382,7 +382,15 @@ async fn delete(
         Ok(request) => request,
         Err(error) => return error_response(error),
     };
-    write_with(shared, move |store, _| {
+    write_with(shared, move |store, shared| {
+        let catalog = oxidal_presets::CatalogStore::open(shared.config.preset_dir.clone())
+            .map_err(|_| SheetError::Unavailable)?;
+        if catalog
+            .entry_settings()
+            .any(|s| s.sheet.as_ref() == Some(&id))
+        {
+            return Err(SheetError::Conflict("A set entry uses this chord sheet"));
+        }
         let mut registry = Registry::load(store)?;
         let sheet = registry.delete(&id, &request)?;
         let save = registry.save(store)?;
@@ -465,6 +473,25 @@ fn resolve(
             })
         })
         .collect()
+}
+
+pub(crate) fn preset_links(
+    store: &Store,
+) -> Result<Vec<(LibraryReference, String)>, oxidal_presets::Error> {
+    let registry = Registry::load(store)
+        .map_err(|_| oxidal_presets::Error::Invalid("Chord sheet links are unavailable"))?;
+    Ok(registry
+        .links
+        .into_iter()
+        .filter_map(|link| match link.target {
+            SheetTarget::Preset { preset } => Some((preset, link.sheet)),
+            SheetTarget::Track { .. } => None,
+        })
+        .collect())
+}
+
+pub(crate) fn sheet_exists(store: &Store, id: &str) -> bool {
+    Registry::load(store).is_ok_and(|registry| registry.document(id).is_ok())
 }
 
 async fn references(State(shared): State<Arc<Shared>>, Path(id): Path<String>) -> Response {

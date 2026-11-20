@@ -357,6 +357,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 WorkerRequest::RestorePluginDefaults { .. } => "restore plugin defaults",
                 WorkerRequest::Scene { .. } => "scene",
                 WorkerRequest::Branch { .. } => "branch",
+                WorkerRequest::BranchSleep { .. } => "sleeping branches",
                 WorkerRequest::Eq { .. } => "eq",
                 WorkerRequest::Model { .. } => "model",
                 WorkerRequest::Switch { .. } => "switch",
@@ -365,7 +366,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let error = match request {
                 WorkerRequest::Protect { on } => {
                     midi.protect(on);
-                    None
+                    if on {
+                        rig.active_mut().cancel_protected_scene_preview().err()
+                    } else {
+                        None
+                    }
                 }
                 WorkerRequest::HostUtility { command } => {
                     drop(rig);
@@ -427,6 +432,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
                 WorkerRequest::Scene { command } => rig.active_mut().select_scene(command).err(),
                 WorkerRequest::Branch { command } => rig.active_mut().set_branch(command).err(),
+                WorkerRequest::BranchSleep { command } => {
+                    rig.active_mut().set_branch_sleep(command).err()
+                }
                 WorkerRequest::Eq { command } => rig.active_mut().apply_eq(command).err(),
                 WorkerRequest::Model { command } => match model_root.as_deref() {
                     Some(root) => rig.active_mut().model_command(command, root).err(),

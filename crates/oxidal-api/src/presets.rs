@@ -11,7 +11,7 @@ use axum::{
 use oxidal_presets::{Error, Store};
 use std::sync::Arc;
 
-async fn job<F>(shared: Arc<Shared>, operation: F) -> Response
+pub(super) async fn job<F>(shared: Arc<Shared>, operation: F) -> Response
 where
     F: FnOnce(&mut Store) -> Result<Response, Error> + Send + 'static,
 {
@@ -204,6 +204,66 @@ pub(super) async fn catalog(State(shared): State<Arc<Shared>>) -> Response {
     })
     .await
 }
+// Version browsing and metadata edits operate on the catalog without loading audio.
+pub(super) async fn versions(
+    State(shared): State<Arc<Shared>>,
+    Path((kind, first)): Path<(oxidal_presets::LibraryKind, String)>,
+) -> Response {
+    version_operation(shared, kind, first, None).await
+}
+
+pub(super) async fn edit_version(
+    State(shared): State<Arc<Shared>>,
+    Path((kind, first)): Path<(oxidal_presets::LibraryKind, String)>,
+    body: Result<Json<oxidal_presets::VersionEdit>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    let edit = match body {
+        Ok(Json(edit)) => edit,
+        Err(error) => return failure(error.status(), "Invalid version edit"),
+    };
+    version_operation(shared, kind, first, Some(edit)).await
+}
+
+async fn version_operation(
+    shared: Arc<Shared>,
+    kind: oxidal_presets::LibraryKind,
+    first: String,
+    edit: Option<oxidal_presets::VersionEdit>,
+) -> Response {
+    let root = shared.config.preset_dir.clone();
+    job(shared, move |_| {
+        let mut store = oxidal_presets::CatalogStore::open(root.clone())?;
+        let logical = store.logical_source(kind, &first)?;
+        let view = store.versions(kind, &logical)?;
+        let current = view
+            .preset
+            .versions
+            .iter()
+            .find(|v| v.id == view.preset.default_version)
+            .ok_or(Error::Invalid("Default version is unavailable"))?;
+        let items = catalog_items(&root)?;
+        let item = items
+            .iter()
+            .find(|i| i.kind == kind && i.id == current.content)
+            .ok_or(Error::Invalid("Preset is unavailable"))?;
+        if let Some(edit) = edit {
+            if matches!(edit.action, oxidal_presets::VersionAction::Publish { .. }) {
+                return Err(Error::Invalid(
+                    "Publish verified preset contents through Save",
+                ));
+            }
+            if item.origin != oxidal_presets::LibraryOrigin::Mine {
+                return Err(Error::Invalid(
+                    "Save a copy in Mine before editing versions",
+                ));
+            }
+            return Ok(Json(store.edit_version(kind, &logical, edit)?).into_response());
+        }
+        Ok(Json(view).into_response())
+    })
+    .await
+}
+
 pub(super) async fn manage(
     State(shared): State<Arc<Shared>>,
     body: Result<Json<oxidal_presets::LibraryUpdate>, axum::extract::rejection::JsonRejection>,

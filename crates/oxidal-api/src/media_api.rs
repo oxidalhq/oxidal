@@ -352,8 +352,20 @@ pub(crate) async fn remove(State(shared): State<Arc<Shared>>, Path(id): Path<Str
         Ok(store) => store,
         Err(response) => return *response,
     };
+    let access = shared.library_access.clone().write_owned().await;
     let worker = shared.clone();
     match blocking(move || {
+        let _access = access;
+        let catalog = oxidal_presets::CatalogStore::open(worker.config.preset_dir.clone())
+            .map_err(|e| MediaError::Io(e.to_string()))?;
+        if catalog
+            .entry_settings()
+            .any(|s| s.track.as_ref() == Some(&id))
+        {
+            return Err(MediaError::Invalid(
+                "A set entry uses this backing track".into(),
+            ));
+        }
         if let Ok(manifest) = store.manifest(&id) {
             if crate::songs::imported_stems(&manifest) {
                 let _permit = worker

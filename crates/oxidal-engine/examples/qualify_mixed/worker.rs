@@ -171,6 +171,7 @@ pub(super) fn qualify_capture_scenes(bundle: &Bundle, root: &Path) -> Result<()>
                 expected_revision: ready.control.revision,
                 scene: "base".into(),
                 release_ms: None,
+                native_bypass_preview: None,
             },
         },
     )?;
@@ -1154,6 +1155,7 @@ pub fn qualify_scenes(bundle: &Bundle, root: &Path, world: &World) -> Result<()>
                 expected_revision: scene.control.revision,
                 scene: "clean".into(),
                 release_ms: None,
+                native_bypass_preview: None,
             },
         },
     )?;
@@ -1236,6 +1238,7 @@ pub fn qualify_scenes(bundle: &Bundle, root: &Path, world: &World) -> Result<()>
         expected_revision: restored.control.revision,
         scene: "lead".into(),
         release_ms: None,
+        native_bypass_preview: None,
     };
     send(
         &mut child,
@@ -1350,6 +1353,7 @@ pub(super) fn qualify_warm_scenes(bundle: &Bundle, root: &Path) -> Result<()> {
                 expected_revision: ready.control.revision,
                 scene: "cab".into(),
                 release_ms: None,
+                native_bypass_preview: None,
             },
         },
     )?;
@@ -1386,6 +1390,7 @@ pub(super) fn qualify_warm_scenes(bundle: &Bundle, root: &Path) -> Result<()> {
                 expected_revision: ready.control.revision,
                 scene: "wet".into(),
                 release_ms: None,
+                native_bypass_preview: None,
             },
         },
     )?;

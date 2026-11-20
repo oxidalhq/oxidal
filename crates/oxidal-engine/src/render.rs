@@ -115,6 +115,7 @@ impl Drop for OwnerGuard<'_> {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LaneJob {
     port: *mut oxidal_tone3000::AudioPort,
+    error: *mut Option<oxidal_tone3000::NativeError>,
     left: *mut f32,
     right: *mut f32,
     frames: usize,
@@ -131,11 +132,21 @@ impl LaneJob {
     ) -> Self {
         Self {
             port,
+            error: std::ptr::null_mut(),
             left: samples.wrapping_add(offset),
             right: samples.wrapping_add(offset + frames),
             frames,
         }
     }
+    /// The caller joins before inspecting this disjoint per-node error slot.
+    pub(crate) fn report_failure(
+        mut self,
+        error: &mut Option<oxidal_tone3000::NativeError>,
+    ) -> Self {
+        self.error = error;
+        self
+    }
+
     /// Renders the lane on the calling thread (see `block` for the contract).
     pub(crate) fn run(self) -> Result<(), String> {
         // SAFETY: per `block`, the port and the disjoint block are exclusively
@@ -147,7 +158,14 @@ impl LaneJob {
                 std::slice::from_raw_parts_mut(self.right, self.frames),
             )
         };
-        port.process(left, right).map_err(|e| e.to_string())
+        match port.process(left, right) {
+            Err(error) if !self.error.is_null() => {
+                // SAFETY: this job owns exactly one error slot until joined.
+                unsafe { *self.error = Some(error) };
+                Ok(())
+            }
+            result => result.map_err(|e| e.to_string()),
+        }
     }
 }
 /// Exclusive resident block, with inputs prepared before publication. The

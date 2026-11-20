@@ -9,7 +9,10 @@ import {
 import { sceneColour } from '@oxidal/design-system/lib/scene-colours';
 
 import { blockLabel } from '../../sceneEdit';
-import { nativeBypassKey } from '../../sceneNativeBypass';
+import {
+  canPreviewNativeBypass,
+  nativeBypassKey,
+} from '../../sceneNativeBypass';
 import { rigBusy } from './mixedRigViewModel';
 import type { RigViewProps } from './useMixedRigSession';
 
@@ -116,11 +119,17 @@ export function SceneGrid({
                           !control.scenes?.scenes.some(
                             (s) => s.id === scene.id,
                           ) ||
-                          !!draft?.native_bypass?.[scene.id]?.length
+                          !canPreviewNativeBypass(
+                            draft?.native_bypass?.[scene.id],
+                            control.native_bypass_armed,
+                          )
                         }
                         title={
-                          draft?.native_bypass?.[scene.id]?.length
-                            ? 'Save scenes before playing edited capture block states'
+                          !canPreviewNativeBypass(
+                            draft?.native_bypass?.[scene.id],
+                            control.native_bypass_armed,
+                          )
+                            ? 'Save scenes to prepare new capture blocks'
                             : control.scenes?.scenes.some(
                                   (s) => s.id === scene.id,
                                 )

@@ -12,6 +12,44 @@ pub struct BranchState {
     pub enabled: bool,
     pub partial: bool,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BranchSleepPhase {
+    Playing,
+    Priming,
+    Draining,
+    Asleep,
+    Failed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SleepingBranchState {
+    pub branch: String,
+    pub phase: BranchSleepPhase,
+    pub processors: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BranchSleepState {
+    pub enabled: bool,
+    pub requested_scene: Option<String>,
+    pub active_scene: Option<String>,
+    pub branches: Vec<SleepingBranchState>,
+    pub running_processors: usize,
+    pub admitted_processors: usize,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BranchSleepCommand {
+    pub session: String,
+    pub expected_revision: u64,
+    pub enabled: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct BranchCommand {
@@ -179,10 +217,40 @@ pub struct Snapshot {
     pub scene_transitioning: bool,
     #[serde(default)]
     pub branches: Vec<BranchState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch_sleep: Option<BranchSleepState>,
     #[serde(default)]
     pub midi: oxidal_audio::midi::Status,
 }
 impl Snapshot {
+    pub fn valid_branch_sleep_state(&self) -> bool {
+        let Some(state) = &self.branch_sleep else {
+            return true;
+        };
+        !state.branches.is_empty()
+            && state.branches.len() <= oxidal_presets::manifest::MAX_SLEEP_BRANCHES
+            && state.running_processors <= state.admitted_processors
+            && state.active_scene == self.scene
+            && state.requested_scene.as_ref().is_none_or(|wanted| {
+                self.scenes
+                    .as_ref()
+                    .is_some_and(|scenes| scenes.scenes.iter().any(|s| &s.id == wanted))
+            })
+            && state.message.as_ref().is_none_or(|message| {
+                message.len() <= 1024 && !message.chars().any(char::is_control)
+            })
+            && state.branches.iter().enumerate().all(|(i, branch)| {
+                branch.processors > 0
+                    && branch.processors <= state.admitted_processors
+                    && self
+                        .branches
+                        .iter()
+                        .any(|declared| declared.id == branch.branch)
+                    && state.branches[..i]
+                        .iter()
+                        .all(|old| old.branch != branch.branch)
+            })
+    }
     pub fn valid_model_state(&self) -> bool {
         use oxidal_presets::manifest::{MAX_SCENE_BYPASS, SceneNativeBypass};
         if let Some(armed) = &self.native_bypass_armed {
@@ -253,6 +321,7 @@ impl Snapshot {
             eq: Some(self.eq.clone()),
             models: self.models.clone(),
             working: self.working.clone(),
+            sleep_enabled: self.branch_sleep.as_ref().map(|state| state.enabled),
             values: self
                 .controls
                 .iter()
@@ -275,6 +344,8 @@ pub struct Recall {
     pub models: Vec<NodeModels>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub working: Vec<NodeWorking>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sleep_enabled: Option<bool>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -294,6 +365,9 @@ pub struct SceneCommand {
     /// uses the preset's own fade, so delay and reverb tails ring out.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub release_ms: Option<u32>,
+    /// Draft values for already armed capture blocks. A regular performance recall uses the saved values.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_bypass_preview: Option<Vec<oxidal_presets::manifest::SceneNativeBypass>>,
 }
 /// Longest blend between scenes.
 pub const MAX_RELEASE_MS: u32 = 10_000;
@@ -403,6 +477,9 @@ pub enum WorkerRequest {
     },
     Branch {
         command: BranchCommand,
+    },
+    BranchSleep {
+        command: BranchSleepCommand,
     },
     Midi {
         settings: Option<oxidal_audio::midi::Settings>,
@@ -521,6 +598,9 @@ pub enum RigAudioAction {
     },
     Branch {
         command: BranchCommand,
+    },
+    BranchSleep {
+        command: BranchSleepCommand,
     },
     Midi {
         settings: Option<oxidal_audio::midi::Settings>,

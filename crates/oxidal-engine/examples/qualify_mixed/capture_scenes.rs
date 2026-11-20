@@ -41,6 +41,7 @@ fn select(session: &mut Session, id: &str) -> Result<(), String> {
         expected_revision: s.revision,
         scene: id.into(),
         release_ms: None,
+        native_bypass_preview: None,
     })
 }
 fn render(session: &mut Session, block: usize) -> Result<[f32; BLOCK], String> {
@@ -146,6 +147,7 @@ pub(super) fn qualify(
             expected_revision: stale.revision,
             scene: "base".into(),
             release_ms: None,
+            native_bypass_preview: None,
         })
         .is_err()
     );

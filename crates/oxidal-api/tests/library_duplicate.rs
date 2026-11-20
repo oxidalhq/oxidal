@@ -303,7 +303,70 @@ async fn republishing_an_earlier_revision_restores_it_and_moves_midi_back() {
     let map = get(&client, format!("{url}/midi/map")).await;
     assert!(midi_entry(&map, "rig", &second).is_some());
     assert!(midi_entry(&map, "rig", &first).is_none());
+    let family_url = format!("{url}/presets/catalog/rig/{first}/versions");
+    let initial = get(&client, family_url.clone()).await;
+    assert_eq!(initial["preset"]["versions"][0]["content"], second);
+    let (status, copied) = post(
+        &client,
+        family_url.clone(),
+        json!({
+            "request_id":"quiet-copy","expected_revision":initial["catalog_revision"],
+            "expected_content":second,"version":"main","action":{"action":"create","name":"Quiet"}
+        }),
+    )
+    .await;
+    assert_eq!(status, 200, "{copied}");
+    let version = &copied["preset"]["versions"][1]["id"];
+    let request = json!({"manifest_json":manifest(0.2),"resources":{},"source":{"kind":"rig","id":second},
+        "version_target":{"first":first,"version":version,"expected_content":second,
+            "expected_revision":copied["catalog_revision"],"request_id":"quiet-save"}});
+    let (status, saved) = post(&client, format!("{url}/presets/rigs"), request.clone()).await;
+    assert_eq!(status, 200, "{saved}");
+    let quiet = saved["revision"].as_str().unwrap();
+    assert_ne!(quiet, second);
+    let (status, replayed) = post(&client, format!("{url}/presets/rigs"), request).await;
+    assert_eq!(status, 200, "{replayed}");
+    assert_eq!(replayed, saved);
+    let cat = get(&client, format!("{url}/presets/catalog")).await;
+    assert_eq!(row(&cat, "rig", quiet).unwrap()["superseded"], true);
+    assert_eq!(row(&cat, "rig", &second).unwrap()["in_set_list"], true);
+    let current = get(&client, family_url.clone()).await;
+    let (status, switched) = post(&client,family_url,json!({"request_id":"use-quiet",
+        "expected_revision":current["catalog_revision"],"expected_content":quiet,"version":version,"action":{"action":"set_default"}})).await;
+    assert_eq!(status, 200, "{switched}");
+    let cat = get(&client, format!("{url}/presets/catalog")).await;
+    assert_eq!(row(&cat, "rig", quiet).unwrap()["in_set_list"], true);
+    assert_eq!(row(&cat, "rig", &second).unwrap()["superseded"], true);
     task.abort();
     let _ = std::fs::remove_file(&mapping);
     let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));
+}
+
+#[tokio::test]
+async fn named_versions_read_and_edit_owned_metadata_without_an_audio_worker() {
+    let (url, task, mapping) = start().await;
+    let root = mapping.with_extension("presets");
+    let owned = oxidal_presets::OwnedStore::new(root.join("owned"))
+        .save_created(CURRENT)
+        .unwrap();
+    let client = reqwest::Client::new();
+    let endpoint = format!("{url}/presets/catalog/owned/{}/versions", owned.id);
+    let before = get(&client, endpoint.clone()).await;
+    assert_eq!(before["preset"]["versions"][0]["content"], owned.id);
+    assert!(!root.join("library.json").exists());
+    let body = json!({"request_id":"create-1","expected_revision":before["catalog_revision"], "expected_content":owned.id, "version":"main", "action":{"action":"create","name":"Rehearsal"}});
+    let (status, reply) = post(&client, endpoint.clone(), body.clone()).await;
+    assert_eq!(status, 200, "{reply}");
+    assert_eq!(reply["preset"]["versions"][1]["name"], "Rehearsal");
+    assert_ne!(reply["preset"]["versions"][1]["id"], "main");
+    let (status, _) = post(&client,endpoint.clone(),json!({"request_id":"stale-rename","expected_revision":before["catalog_revision"],"expected_content":owned.id,"version":"main","action":{"action":"rename","name":"Stale"}})).await;
+    assert_eq!(status, 409);
+    assert_eq!(
+        post(&client, endpoint.clone(), body).await,
+        (200, reply.clone())
+    );
+    assert_eq!(get(&client, endpoint).await, reply);
+    task.abort();
+    let _ = std::fs::remove_file(mapping);
+    std::fs::remove_dir_all(root).unwrap();
 }

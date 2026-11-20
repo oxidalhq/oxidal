@@ -42,6 +42,7 @@ import {
   sceneTones,
 } from '../../rigRoute';
 import { keepScenes, updateScenes } from '../../sceneEdit';
+import { canPreviewNativeBypass } from '../../sceneNativeBypass';
 import {
   key,
   mixedRigViewModel,
@@ -712,12 +713,13 @@ export function useMixedRigSession({
   async function recallScene(scene: string) {
     const control = current.current?.control;
     if (!control) return;
-    if (
-      sceneUpdates?.session === control.session &&
-      sceneUpdates.native_bypass?.[scene]?.length
-    ) {
+    const preview =
+      sceneUpdates?.session === control.session
+        ? sceneUpdates.native_bypass?.[scene]
+        : undefined;
+    if (!canPreviewNativeBypass(preview, control.native_bypass_armed)) {
       setError(
-        'Save scenes before playing edited capture block states. The saved scene remains unchanged.',
+        'Save scenes to prepare the new capture blocks before playing this draft.',
       );
       return;
     }
@@ -727,6 +729,7 @@ export function useMixedRigSession({
         session: control.session,
         expected_revision: control.revision,
         scene,
+        ...(preview?.length ? { native_bypass_preview: preview } : {}),
       },
     });
     const drafted = sceneUpdates?.session === control.session;
@@ -739,6 +742,30 @@ export function useMixedRigSession({
       !(gains.length || controls.length || bypass.length || native.length)
     )
       return;
+    const pending = current.current?.control?.branch_sleep;
+    if (pending?.requested_scene && pending.active_scene !== scene) {
+      // Additional controls apply to the active scene. Wait for the device
+      // to finish priming and stop if another viewer selects a different scene.
+      let confirmed = false;
+      for (let i = 0; i < 50 && alive.current; i++) {
+        await new Promise((resolve) => window.setTimeout(resolve, 100));
+        const state = await rigAudioState().catch(() => null);
+        if (!state?.control || state.control.session !== control.session) break;
+        accept(state);
+        const branch = state.control.branch_sleep;
+        if (branch?.active_scene === scene && !branch.requested_scene) {
+          confirmed = true;
+          break;
+        }
+        if (branch?.requested_scene !== scene) break;
+      }
+      if (!confirmed) {
+        setError(
+          'The device has not confirmed this scene. Your additional draft settings are still available.',
+        );
+        return;
+      }
+    }
     // Once a drafted value is applied the mix no longer equals the saved scene,
     // so the engine stops naming it: remember which scene is being heard.
     setSceneDraft({ session: control.session, scene });
@@ -895,7 +922,8 @@ export function useMixedRigSession({
         }
         request.source = { kind: 'rig', id: opened.revision };
         const published = await publishRig(request);
-        publishedJson.current.set(published.revision, request.manifest_json);
+        if (!request.prepare_sleep_branches)
+          publishedJson.current.set(published.revision, request.manifest_json);
         // An edit of a preset in Mine replaces it and can be undone; the
         // first edit of anything else makes a copy, undone with Discard copy.
         setHistory((h) =>

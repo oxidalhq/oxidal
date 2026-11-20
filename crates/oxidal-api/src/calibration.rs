@@ -559,6 +559,7 @@ async fn select_scene(shared: &Shared, scene: &str) -> Result<(), String> {
                         expected_revision: control.revision,
                         scene: scene.into(),
                         release_ms: None,
+                        native_bypass_preview: None,
                     },
                 },
             })

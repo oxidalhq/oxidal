@@ -26,6 +26,7 @@ import {
   suggestedSetMessage,
   suggestedSets,
 } from './features/library/setList';
+import { SetOrderList } from './features/library/SetOrderList';
 import { friendlyError } from './lib/friendlyError';
 import { useFailure } from './lib/useFailure';
 import { requestMidiAssignments } from './midiNavigation';
@@ -58,6 +59,8 @@ export function LibraryManagement({
   const { failure, fail, clear } = useFailure();
   const [reload, setReload] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [orderReady, setOrderReady] = useState(false);
+  const [managePresets, setManagePresets] = useState(false);
   const [removed, setRemoved] = useState(false);
   const [outside, setOutside] = useState(false);
   const [notice, setNotice] = useState('');
@@ -255,81 +258,110 @@ export function LibraryManagement({
           </p>
         </div>
       )}
+      {catalog && !removed && (
+        <>
+          {orderReady && (
+            <Button
+              variant="outline"
+              onClick={() => setManagePresets(!managePresets)}
+            >
+              {managePresets ? 'Performance order' : 'Manage presets'}
+            </Button>
+          )}
+          <div hidden={managePresets}>
+            <SetOrderList
+              connected={connected}
+              revision={catalog.revision}
+              onReady={setOrderReady}
+              onChanged={() => {
+                setReload((n) => n + 1);
+                onChanged();
+              }}
+            />
+          </div>
+        </>
+      )}
       <div
         ref={root}
         className="set-list"
         data-dragging={drag.dragging || undefined}
       >
-        {shown.map((item) => {
-          const group = item.kind === 'graph' ? drafts : members;
-          const index = group.findIndex(
-            (i) => i.kind === item.kind && i.id === item.id,
-          );
-          return (
-            <LibraryRow
-              key={`${item.kind}:${item.id}:${item.name}`}
-              item={item}
-              position={item.in_set_list && !removed ? index + 1 : undefined}
-              disabled={disabled}
-              first={index === 0}
-              last={index === group.length - 1}
-              drag={drag}
-              onChanged={() => {
-                onChanged();
-                void libraryCatalog()
-                  .then((c) => {
-                    if (alive.current) setCatalog(c);
-                  })
-                  .catch((e: unknown) => {
-                    if (alive.current) fail(e, 'read the set list');
-                  });
-              }}
-              onEdit={(action) => void edit(item, action)}
-              menu={
-                item.in_set_list && !removed
-                  ? [
-                      {
-                        label: 'Open',
-                        onSelect: () => void open(item),
-                      },
-                      {
-                        label: 'Duplicate',
-                        disabled: item.kind !== 'rig' && item.kind !== 'owned',
-                        onSelect: () =>
-                          void run(
-                            'duplicate this preset',
-                            async () => (await duplicatePreset(item)).catalog,
-                            (c) =>
-                              `"${c.items.find((i) => i.kind === c.created?.kind && i.id === c.created?.id)?.name ?? 'The copy'}" is in Mine. It is not in the set list.`,
-                          ),
-                      },
-                      {
-                        label: 'Remove from set list',
-                        onSelect: () =>
-                          void run(
-                            'remove this preset from the set list',
-                            () => setListMember(item, false),
-                            () =>
-                              originOf(item) === 'mine'
-                                ? `Removed ${item.name} from the set list. It stays in Mine.`
-                                : `Removed ${item.name} from the set list.`,
-                          ),
-                      },
-                      {
-                        label: 'MIDI',
-                        onSelect: () => void open(item, true),
-                      },
-                    ]
-                  : undefined
-              }
-              note={
-                originOf(item) === 'oxidal_example'
-                  ? 'This is a read-only Oxidal sound. Duplicate makes your copy in Mine.'
-                  : undefined
-              }
-            />
-          );
-        })}
+        {shown
+          .filter(
+            (item) =>
+              removed || managePresets || !orderReady || item.kind === 'graph',
+          )
+          .map((item) => {
+            const group = item.kind === 'graph' ? drafts : members;
+            const index = group.findIndex(
+              (i) => i.kind === item.kind && i.id === item.id,
+            );
+            return (
+              <LibraryRow
+                key={`${item.kind}:${item.id}:${item.name}`}
+                item={item}
+                position={item.in_set_list && !removed ? index + 1 : undefined}
+                disabled={disabled}
+                first={index === 0}
+                last={index === group.length - 1}
+                drag={drag}
+                onChanged={() => {
+                  onChanged();
+                  void libraryCatalog()
+                    .then((c) => {
+                      if (alive.current) setCatalog(c);
+                    })
+                    .catch((e: unknown) => {
+                      if (alive.current) fail(e, 'read the set list');
+                    });
+                }}
+                onEdit={(action) => void edit(item, action)}
+                menu={
+                  item.in_set_list && !removed
+                    ? [
+                        {
+                          label: 'Open',
+                          onSelect: () => void open(item),
+                        },
+                        {
+                          label: 'Duplicate',
+                          disabled:
+                            item.kind !== 'rig' && item.kind !== 'owned',
+                          onSelect: () =>
+                            void run(
+                              'duplicate this preset',
+                              async () => (await duplicatePreset(item)).catalog,
+                              (c) =>
+                                `"${c.items.find((i) => i.kind === c.created?.kind && i.id === c.created?.id)?.name ?? 'The copy'}" is in Mine. It is not in the set list.`,
+                            ),
+                        },
+                        {
+                          label: 'Remove from set list',
+                          onSelect: () =>
+                            void run(
+                              'remove this preset from the set list',
+                              () => setListMember(item, false),
+                              () =>
+                                originOf(item) === 'mine'
+                                  ? `Removed ${item.name} from the set list. It stays in Mine.`
+                                  : `Removed ${item.name} from the set list.`,
+                            ),
+                        },
+                        {
+                          label: 'MIDI',
+                          onSelect: () => void open(item, true),
+                        },
+                      ]
+                    : undefined
+                }
+                note={
+                  originOf(item) === 'oxidal_example'
+                    ? 'This is a read-only Oxidal sound. Duplicate makes your copy in Mine.'
+                    : undefined
+                }
+              />
+            );
+          })}
       </div>
       {drag.dragging && (
         <p className="sr-only" role="status">

@@ -1,4 +1,8 @@
 //! Device-local library labels/order/visibility; immutable tone payloads stay intact.
+mod occurrences;
+pub use occurrences::{
+    EntrySettings, OccurrenceAction, OccurrenceEdit, ResolvedOccurrence, SetOccurrence, SetOrder,
+};
 mod versions;
 use crate::{Error, Result};
 use schemars::JsonSchema;
@@ -163,6 +167,8 @@ pub struct LibraryUpdate {
 #[serde(deny_unknown_fields)]
 #[derive(Clone)]
 struct Preferences {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    occurrences: Option<Vec<SetOccurrence>>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     families: BTreeMap<String, PresetFamily>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -347,7 +353,11 @@ impl CatalogStore {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Preferences::default(),
             Err(e) => return Err(e.into()),
         };
-        if preferences.version_receipts.len() > 32
+        if preferences.occurrences.as_ref().is_some_and(|rows| {
+            rows.len() > 4096
+                || rows.iter().any(|r| !r.valid())
+                || rows.iter().map(|r| &r.id).collect::<BTreeSet<_>>().len() != rows.len()
+        }) || preferences.version_receipts.len() > 32
             || preferences.families.len() > 4096
             || !preferences
                 .families
@@ -610,6 +620,14 @@ impl CatalogStore {
                         .iter()
                         .position(|k| k == &visible[to])
                         .expect("target checked");
+                    let before = visible.get(to + usize::from(!up)).map(String::as_str);
+                    self.place_unique_occurrence(
+                        &catalog,
+                        &mut candidate,
+                        request.entry_kind,
+                        &request.id,
+                        before,
+                    )?;
                     order.insert(target + usize::from(!up), key);
                 }
                 candidate.order = order;
@@ -658,6 +676,13 @@ impl CatalogStore {
                                 .unwrap_or(order.len())
                         }
                     });
+                self.place_unique_occurrence(
+                    &catalog,
+                    &mut candidate,
+                    request.entry_kind,
+                    &request.id,
+                    before.as_deref(),
+                )?;
                 order.insert(target, key);
                 candidate.order = order;
             }
@@ -667,6 +692,15 @@ impl CatalogStore {
                     .iter()
                     .find(|item| item.kind == request.entry_kind && item.id == request.id)
                     .expect("entry checked");
+                if !member && let Some(rows) = candidate.occurrences.as_mut() {
+                    let first = self.logical_source(item.kind, &item.id)?;
+                    let matches =
+                        |r: &SetOccurrence| r.preset.kind == item.kind && r.preset.id == first;
+                    if rows.iter().filter(|r| matches(r)).count() > 1 {
+                        return Err(Error::Conflict("Choose which repeated set entry to remove"));
+                    }
+                    rows.retain(|r| !matches(r));
+                }
                 if member == item.in_set_list {
                     return Ok(catalog);
                 }

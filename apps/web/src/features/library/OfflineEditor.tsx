@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import {
@@ -16,11 +16,13 @@ import {
   installedLv2,
   libraryCatalog,
   type Lv2Plugin,
+  presetVersions,
   publishRig,
   type RigDocument,
   rigDocument,
   rigLibrary,
   rigNativeSources,
+  type VersionSelection,
 } from '../../api';
 import {
   errorRecovery,
@@ -80,18 +82,21 @@ type Opened = {
  */
 export function OfflineEditor({
   revision,
+  selection,
   connected,
   onSaved,
   onCancel,
   onRefresh = onCancel,
 }: {
   revision: string;
+  selection?: VersionSelection;
   connected: boolean;
   onSaved: (saved: RigDocument) => void;
   onCancel: () => void;
   /** Closes the editor and reloads the Library after a conflict. */
   onRefresh?: () => void;
 }) {
+  const pendingSave = useRef<{ body: string; id: string } | null>(null);
   const [opened, setOpened] = useState<Opened | null>(null);
   const [route, setRoute] = useState<Route>([]);
   const [name, setName] = useState('');
@@ -181,6 +186,15 @@ export function OfflineEditor({
     if (!presetId) return;
     let alive = true;
     const check = async () => {
+      if (selection) {
+        const view = await presetVersions('rig', selection.first);
+        const selected = view.preset.versions.find(
+          (v) => v.id === selection.version,
+        );
+        if (alive)
+          setElsewhere(selected?.content === revision ? null : 'changed');
+        return;
+      }
       let after: string | undefined;
       let listed = false;
       let newer = false;
@@ -202,7 +216,7 @@ export function OfflineEditor({
       alive = false;
       window.clearInterval(timer);
     };
-  }, [presetId, revision]);
+  }, [presetId, revision, selection]);
   function change(edit: (route: Route) => Route) {
     setError('');
     setRoute((current) => {
@@ -239,6 +253,15 @@ export function OfflineEditor({
             buildRoute(id, name, route, opened.profile),
           );
       request.source = { kind: 'rig', id: opened.document.revision };
+      if (selection) {
+        const body = JSON.stringify(request);
+        if (pendingSave.current?.body !== body)
+          pendingSave.current = { body, id: crypto.randomUUID() };
+        request.version_target = {
+          ...selection,
+          request_id: pendingSave.current.id,
+        };
+      }
       onSaved(await publishRig(request));
     } catch (cause) {
       // The draft stays open so nothing is lost.

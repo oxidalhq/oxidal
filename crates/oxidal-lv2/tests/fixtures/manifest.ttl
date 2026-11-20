@@ -14,3 +14,5 @@
 <urn:oxidal:test:atoms> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .
 <urn:oxidal:test:atoms-large> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .
 <urn:oxidal:test:atoms-unsupported> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .
+
+<urn:oxidal:test:sleep-tail> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .

@@ -10,7 +10,9 @@ import {
   type LibraryCatalog,
   type PresetDetails,
   presetDetails,
+  type VersionSelection,
 } from './api';
+import { PresetVersions } from './features/library/PresetVersions';
 import { friendlyError } from './lib/friendlyError';
 import { detailsKey } from './presetMetadata';
 
@@ -25,12 +27,14 @@ export function PresetDetailsDialog({
   entry,
   onCancel,
   onChanged,
+  onEditVersion,
   editable = false,
   children,
 }: {
   entry: Entry;
   onCancel: () => void;
   onChanged?: () => void;
+  onEditVersion?: (selection: VersionSelection) => void;
   editable?: boolean;
   /** Extra actions for this preset, such as Manage on the playing preset. */
   children?: ReactNode;
@@ -206,6 +210,16 @@ export function PresetDetailsDialog({
               )}
             </>
           )
+        )}
+        {!editing && catalog && (
+          <PresetVersions
+            key={identity}
+            kind={entry.kind}
+            id={entry.id}
+            editable={editable && entry.kind !== 'original'}
+            onEdit={onEditVersion}
+            onChanged={onChanged}
+          />
         )}
         {children && <div className="action-row">{children}</div>}
       </div>

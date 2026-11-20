@@ -317,6 +317,7 @@ impl Owner {
             .as_mut()
             .ok_or("Missing mixed configuration")?;
         if !reply.control.valid_model_state()
+            || !reply.control.valid_branch_sleep_state()
             || reply.control.source_revision != settings.revision
             || reply.processed_frames < self.state.processed_frames
             || self.state.control.as_ref().is_some_and(|old| {
@@ -1427,6 +1428,22 @@ impl Owner {
                 }
                 if let Some(e) = error {
                     return Err(e);
+                }
+            }
+            RigAudioAction::BranchSleep { command } => {
+                if self.state.phase != AudioPhase::Running {
+                    return Err("Mixed audio is not running".into());
+                }
+                let reply = match self.exchange(&WorkerRequest::BranchSleep { command }).await {
+                    Ok(reply) => reply,
+                    Err(error) => return Err(self.fault(error).await),
+                };
+                let error = reply.error.clone();
+                if let Err(error) = self.readback(reply) {
+                    return Err(self.fault(error).await);
+                }
+                if let Some(error) = error {
+                    return Err(error);
                 }
             }
             RigAudioAction::Eq { command } => {

@@ -374,6 +374,22 @@ its own host-facing ports so intervening host nodes receive the host rate.
 Legacy scene readers and pairs keep the existing 48 kHz/1× behavior.
 See [mixed rig scenes](../mixed-engine.md#warm-bypass-inside-a-native-tone).
 
+### Sleeping branch extension
+
+`urn:oxidal:sleep-branches:1` is a required extension independent of the
+scene format version. Its value is `{"enabled":true,"branches":[{"branch":"clean","sends":["sendL","sendR"]}]}`.
+`enabled` defaults to true. Each entry names an existing scene branch and
+one to eight distinct mono Gain nodes that mark its input boundary.
+Its return ports are the exact gains in that scene branch declaration.
+Every scene declares all those return ports. There may be up to 32
+configured sleeping branches.
+
+Preparation verifies closed, disjoint routes between sends and returns.
+Scene processing edits inside a sleeping branch are refused to preserve
+its existing tail state. A saved copy retains the confirmed enable choice.
+Older readers refuse the required extension. See
+[mixed rig sleeping branches](../mixed-engine.md#sleeping-scene-branches).
+
 ### One performance set list
 
 The existing `library.json` order is authoritative across native originals, saved
@@ -510,3 +526,32 @@ same bytes owns an independent copy and does not depend on the separate source
 file. Unverifiable references still block deletion, and stale previews must be
 reviewed again. Preset-deletion optional cleanup keeps its existing conservative
 shared-byte checks.
+
+For a stored rig, `GET /api/v1/presets/rigs/{revision}/sleep-plan` previews the
+extension and exact edges that would receive unity send gains. An ineligible
+graph returns a reason. Set `prepare_sleep_branches` in a rig publication to
+rederive the plan from its submitted manifest and write the new revision.
+An ordinary publication preserves the submitted manifest bytes.
+
+### Named preset versions
+
+The device catalog identifies a preset family by its store kind and first
+immutable content digest. Existing presets have a Main version on first read.
+Opening the version list leaves the catalog file untouched. Copying a version
+starts with the selected version's bytes. Rename and default selection retain
+its version ID. The last version and the current default are protected from
+removal. A family holds up to 64 versions.
+
+`GET /api/v1/presets/catalog/{kind}/{first}/versions` returns the catalog
+revision, logical ID, default and immutable content for each version. A metadata
+edit supplies the expected catalog revision, source content, version and request
+ID. The catalog retains the last 32 version edit receipts across restart. A
+repeated request returns its original response. Reusing a retained request ID
+with different contents returns a conflict.
+
+An offline rig Save can include a `version_target` alongside its source and
+manifest. Publication verifies and syncs immutable contents before advancing
+the selected pointer. A newly staged payload stays hidden from Library until a
+committed default selects it. A non-default version remains accessible through
+its content digest. Keep the complete presets directory in the Library backup,
+including `version-staging`, `library.json` and the retained pre-version catalog.

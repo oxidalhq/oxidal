@@ -384,6 +384,7 @@ pub(super) fn saved_mixed(mut settings: StartRig) -> StartRig {
         eq: None,
         models: vec![],
         working: vec![],
+        sleep_enabled: None,
     });
     for prepared in &mut settings.prepared {
         prepared.recall = None;

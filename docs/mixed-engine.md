@@ -143,6 +143,43 @@ fades out the previous worker, starts the re-armed replacement and retains
 the previous working state if that startup fails. Pi timing and physical
 input/output still need qualification.
 
+### Sleeping scene branches
+
+A preset with the required `urn:oxidal:sleep-branches:1` extension can stop
+processing independent muted branches. Each branch starts at its declared
+mono Gain nodes and ends at the return gain ports in its scene branch entry.
+Preparation refuses overlapping routes, hidden inputs, undeclared outputs,
+and scene changes to processing inside the tail path. A shared downstream
+processor remains active and can still have its own scene controls.
+
+Saved rigs with older scene declarations can preview a sleep plan from their
+existing return routes. The plan places unity sends on the exact edges that
+enter an independent processing branch. Shared and dry paths stay scheduled.
+Publication applies the plan only when explicitly requested, and writes a new
+immutable revision. The preview checks routing. Plugin compatibility and
+buffer admission are checked when the revised rig prepares to play.
+
+Trails fades the outgoing branch's sends and leaves its old return level for
+the tail. Blend keeps its input until the selected return fade finishes,
+then closes the sends. A branch stays Draining until its sends have reached
+zero and its processor output stays below 2e-7 full scale for two seconds plus
+the prepared delay. A continuous feedback tail keeps occupying a running
+slot. An Asleep branch skips its audio processing and retains its processors
+and memory.
+
+A scene request primes any asleep branch with live input for the prepared
+graph delay plus one period. The old scene remains active until this completes.
+A later request can replace a pending request. If a branch fails during
+preparation, the old scene keeps playing and the failed branch must be
+prepared again. The device reports requested and active scene IDs separately.
+Turning branch sleep off prepares muted branches before any new return uses
+them. Save and working recovery retain the confirmed enable setting.
+
+The worker counts active, priming and draining branches against the same
+all-running graph bound it uses when branch sleep is off. Those counts
+describe scheduled processors. Pi measurements are required before assigning
+a processing cost or admitting larger rigs on the strength of branch sleep.
+
 ## Whole-native authoring and portable instance settings
 
 Whole-native blocks support live control and EQ edits, NAM and IR audition, and

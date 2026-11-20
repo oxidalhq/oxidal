@@ -43,6 +43,7 @@ import {
   type PresetDetails,
   presetDetails,
   presetLibrary,
+  type VersionSelection,
 } from './api';
 import { ArtworkDeck } from './AssetArtwork';
 import { BackingTracks } from './components/media/BackingTracks';
@@ -177,7 +178,10 @@ export function Library({
     null | 'effects' | 'tone3000'
   >('library-composer', null);
   const [creating, setCreating] = useState(false);
-  const [editing, setEditing] = useState<string | null>(null);
+  const [editing, setEditing] = useState<{
+    revision: string;
+    selection?: VersionSelection;
+  } | null>(null);
   const [created, setCreated] = useState<{
     name: string;
     revision: string;
@@ -599,6 +603,10 @@ export function Library({
         {preview && (
           <PresetDetailsDialog
             entry={preview}
+            onEditVersion={(selection) => {
+              setPreview(null);
+              setEditing({ revision: selection.expected_content, selection });
+            }}
             editable
             onChanged={() => setRefresh((v) => v + 1)}
             onCancel={() => setPreview(null)}
@@ -637,14 +645,15 @@ export function Library({
               onOpenRig={onOpenRig}
               onDismiss={() => setCreated(null)}
               onEdit={() => {
-                setEditing(created.revision);
+                setEditing({ revision: created.revision });
                 setCreated(null);
               }}
             />
           )}
           {editing && (
             <OfflineEditor
-              revision={editing}
+              revision={editing.revision}
+              selection={editing.selection}
               connected={connected}
               onCancel={() => setEditing(null)}
               onRefresh={() => {
@@ -685,7 +694,7 @@ export function Library({
             origin="mine"
             title="Mine"
             onDetails={(id, name) => setPreview({ kind: 'rig', id, name })}
-            onEdit={(revision) => setEditing(revision)}
+            onEdit={(revision) => setEditing({ revision })}
             onManage={(action, entry) => setMineDialog({ action, ...entry })}
             tailCount={ownedShown.length}
             tail={(setList) =>

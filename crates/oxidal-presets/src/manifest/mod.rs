@@ -8,6 +8,11 @@ pub use scenes::{
     SceneControl, SceneGain, SceneNativeBypass, SceneNativeBypassKey, SceneNativeControl, Scenes,
     UNSUPPORTED_SCENES,
 };
+mod sleep;
+pub use sleep::{
+    MAX_SLEEP_BRANCHES, RigSleepPlan, SLEEP_BRANCHES_EXTENSION, SleepBranch, SleepBranches,
+    SleepSendBoundary,
+};
 mod strict;
 #[cfg(test)]
 mod tests;
@@ -90,6 +95,7 @@ impl Manifest {
         self.shape()?;
         self.semantics()?;
         self.scenes()?;
+        self.sleep_branches()?;
         self.native_settings()?;
         crate::LibraryOrigin::from_manifest(self)?;
         Ok(())
@@ -112,6 +118,7 @@ impl Manifest {
                 && key != SCENES_BYPASS_EXTENSION
                 && key != SCENES_NATIVE_EXTENSION
                 && key != SCENES_INNER_BYPASS_EXTENSION
+                && key != SLEEP_BRANCHES_EXTENSION
                 && key != NATIVE_SETTINGS_EXTENSION
                 && key != GAIN_EXTENSION
         }) {

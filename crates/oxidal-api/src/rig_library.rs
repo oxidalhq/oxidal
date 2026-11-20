@@ -12,7 +12,7 @@ use axum::{
 };
 use oxidal_presets::{
     Bundle, BundleStore, Error, OwnedStore, Store,
-    manifest::{Graph, Manifest, ResourceKind},
+    manifest::{Graph, Manifest, ResourceKind, RigSleepPlan},
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -187,6 +187,12 @@ pub async fn native_sources(State(shared): State<Arc<Shared>>) -> Response {
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RigPublish {
+    /// Explicitly derive and publish verified closed sleep sends on this graph.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub prepare_sleep_branches: bool,
+    /// Saving an explicit named version binds the edit to the catalog and source bytes.
+    #[serde(default)]
+    pub version_target: Option<VersionTarget>,
     /// Exact manifest JSON: strict parsing also rejects duplicate keys in metadata.
     pub manifest_json: String,
     /// Each declared resource maps to an existing verified local payload.
@@ -195,6 +201,15 @@ pub struct RigPublish {
     /// immutable revision. The source itself is never changed.
     #[serde(default)]
     pub source: Option<oxidal_presets::LibraryReference>,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct VersionTarget {
+    pub first: String,
+    pub version: String,
+    pub expected_content: String,
+    pub expected_revision: String,
+    pub request_id: String,
 }
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -408,6 +423,21 @@ pub async fn read(State(shared): State<Arc<Shared>>, Path(revision): Path<String
     })
     .await
 }
+pub async fn sleep_plan(
+    State(shared): State<Arc<Shared>>,
+    Path(revision): Path<String>,
+) -> Response {
+    if !valid_revision(&revision) {
+        return failure(StatusCode::UNPROCESSABLE_ENTITY, "Invalid rig revision");
+    }
+    job(shared, true, move |root| {
+        let manifest = BundleStore::new(root.join("bundles")).manifest(&revision)?;
+        manifest.check_required_extensions()?;
+        Ok::<RigSleepPlan, Error>(manifest.preview_sleep_branches())
+    })
+    .await
+}
+
 pub async fn publish(
     State(shared): State<Arc<Shared>>,
     body: Result<Json<RigPublish>, JsonRejection>,
@@ -416,9 +446,20 @@ pub async fn publish(
         Ok(Json(r)) => r,
         Err(e) => return failure(e.status(), "Invalid rig publication request"),
     };
+    if request.prepare_sleep_branches
+        && let Some(reason) = shared.protect.refuse(false)
+    {
+        return crate::protect::locked(reason);
+    }
     job(shared, false, move |root| {
-        let manifest = Manifest::parse(request.manifest_json.as_bytes())?;
+        let mut manifest = Manifest::parse(request.manifest_json.as_bytes())?;
         manifest.check_required_extensions()?;
+        let manifest_bytes = if request.prepare_sleep_branches {
+            manifest.prepare_sleep_branches()?;
+            manifest.encode()?
+        } else {
+            request.manifest_json.into_bytes()
+        };
         if let Some(source) = &request.source {
             if source.kind != oxidal_presets::LibraryKind::Rig {
                 return Err(Error::Invalid("A rig copy must name a rig source"));
@@ -518,7 +559,28 @@ pub async fn publish(
             }
             None => false,
         };
-        let bundle = Bundle::from_parts(request.manifest_json.into_bytes(), payloads)?;
+        let bundle = Bundle::from_parts(manifest_bytes, payloads)?;
+        if let Some(target) = request.version_target {
+            if !replaces || request.source.as_ref().is_none_or(|source| source.id != target.expected_content) {
+                return Err(Error::Invalid("Save a named version from its current owned source"));
+            }
+            let kind = oxidal_presets::LibraryKind::Rig;
+            let mut catalog = oxidal_presets::CatalogStore::open(root.clone())?;
+            let revision = bundle.revision().to_owned();
+            let edit = oxidal_presets::VersionEdit {
+                request_id:target.request_id, version:target.version, expected_revision:target.expected_revision,
+                expected_content:target.expected_content, action:oxidal_presets::VersionAction::Publish {content:revision.clone()},
+            };
+            // Verify bytes on write or deduplication before advancing the pointer.
+            catalog.edit_version_after(kind, &target.first, edit, || {
+                if !root.join("bundles").join(&revision).try_exists()? {
+                    oxidal_presets::CatalogStore::mark_version_payload(&root, kind, &revision)?;
+                }
+                store.save(&bundle)?;
+                Ok(())
+            })?;
+            return Ok(RigDocument { revision, manifest });
+        }
         // Another browser saved this preset since this edit began: refuse
         // before writing, so the newer save is never silently replaced (C1).
         // Publishes are serialized by `bundle_work`, so the check cannot race.

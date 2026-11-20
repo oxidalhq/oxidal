@@ -45,6 +45,7 @@ mod rig_library;
 mod rig_playback;
 mod rig_recovery;
 mod scene_draft;
+mod set_order;
 mod sheets;
 mod song_api;
 mod song_links;
@@ -199,6 +200,7 @@ pub struct Contract {
     pub rig_document: rig_library::RigDocument,
     pub rig_library: rig_library::RigPage,
     pub rig_publish: rig_library::RigPublish,
+    pub rig_sleep_plan: oxidal_presets::manifest::RigSleepPlan,
     pub rig_native_sources: Vec<rig_library::RigNativeSource>,
     pub lv2_catalog: oxidal_lv2::PluginCatalog,
     pub graph_presets: Vec<oxidal_presets::SavedGraph>,
@@ -268,6 +270,10 @@ pub struct Contract {
     pub preset_details: oxidal_presets::DetailsCatalog,
     pub preset_details_update: oxidal_presets::DetailsUpdate,
     pub library_catalog: oxidal_presets::LibraryCatalog,
+    pub set_order: oxidal_presets::SetOrder,
+    pub occurrence_edit: oxidal_presets::OccurrenceEdit,
+    pub preset_versions: oxidal_presets::VersionView,
+    pub preset_version_edit: oxidal_presets::VersionEdit,
     pub library_update: oxidal_presets::LibraryUpdate,
     pub library: oxidal_presets::Library,
     pub preset: oxidal_presets::Inspection,
@@ -317,6 +323,8 @@ struct Shared {
     levels: Arc<levels::Levels>,
     midi_map: Arc<oxidal_presets::MidiMapStore>,
     midi_action: std::sync::Mutex<midi_recall::MidiAction>,
+    set_position: std::sync::Mutex<Option<midi_recall::PlayingOccurrence>>,
+    set_recall: tokio::sync::Mutex<()>,
     guitars: Arc<guitars::Store>,
     tuner: tuner::Standalone,
     boosts: Arc<boosts::Store>,
@@ -492,6 +500,8 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         levels,
         midi_map,
         midi_action: Default::default(),
+        set_position: Default::default(),
+        set_recall: Default::default(),
         library_access,
         guitars: Arc::new(guitars::Store::load(config.preset_dir.join("guitars.json"))),
         tuner: tuner::Standalone::default(),
@@ -635,6 +645,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         )
         .route("/presets/rigs/{revision}", get(rig_library::read))
         .route(
+            "/presets/rigs/{revision}/sleep-plan",
+            get(rig_library::sleep_plan),
+        )
+        .route(
             "/presets/rigs/{revision}/resources/{resource}/import",
             post(rig_library::import_resource),
         )
@@ -670,6 +684,15 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route(
             "/presets/catalog",
             get(presets::catalog).post(presets::manage),
+        )
+        .route("/presets/set-list/{id}/recall", post(set_order::jump))
+        .route(
+            "/presets/set-list",
+            get(set_order::read).post(set_order::edit),
+        )
+        .route(
+            "/presets/catalog/{kind}/{first}/versions",
+            get(presets::versions).post(presets::edit_version),
         )
         .route(
             "/presets/details",

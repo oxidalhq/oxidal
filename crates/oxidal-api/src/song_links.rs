@@ -113,6 +113,15 @@ fn resolve(store: &Store, record: Records) -> Links {
     }
 }
 
+pub(crate) fn set_defaults(store: &Store) -> Result<Vec<(LibraryReference, MixLink)>, MediaError> {
+    Ok(load(store)?
+        .links
+        .into_iter()
+        .filter(|entry| entry.target.scope == Scope::SetList)
+        .map(|entry| (entry.target.preset, entry.mix))
+        .collect())
+}
+
 pub(crate) fn in_use(store: &Store, source: &str, id: &str) -> Result<bool, MediaError> {
     Ok(load(store)?
         .links

@@ -736,6 +736,20 @@ export async function rigDocument(revision: string): Promise<RigDocument> {
   if (!rigDocumentValidator(body)) throw new Error('Incompatible rig document');
   return body;
 }
+export type RigSleepPlan = Contract['rig_sleep_plan'];
+const sleepPlanValidator = ajv.compile<RigSleepPlan>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/RigSleepPlan',
+});
+export async function rigSleepPlan(revision: string): Promise<RigSleepPlan> {
+  const body = await presetResponse(
+    await fetch(
+      `/api/v1/presets/rigs/${encodeURIComponent(revision)}/sleep-plan`,
+    ),
+  );
+  if (!sleepPlanValidator(body)) throw new Error('Incompatible branch plan');
+  return body;
+}
 export async function rigLibrary(after?: string): Promise<RigPage> {
   const body = await presetResponse(
     await fetch(
@@ -1227,6 +1241,63 @@ export async function libraryCatalog(
   );
   if (!catalogValidator(body)) throw new Error('Incompatible library catalog');
   return body;
+}
+
+export type SetOrder = Contract['set_order'];
+export type OccurrenceEdit = Contract['occurrence_edit'];
+const setOrderValidator = ajv.compile<SetOrder>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/SetOrder',
+});
+export async function setOrder(edit?: OccurrenceEdit): Promise<SetOrder> {
+  const body = await presetResponse(
+    await fetch(
+      '/api/v1/presets/set-list',
+      edit ? json('POST', edit) : undefined,
+    ),
+  );
+  if (!setOrderValidator(body)) throw new Error('Incompatible set list');
+  return body;
+}
+export async function recallOccurrence(
+  id: string,
+  revision: string,
+): Promise<void> {
+  const response = await fetch(
+    `/api/v1/presets/set-list/${encodeURIComponent(id)}/recall`,
+    json('POST', { expected_revision: revision }),
+  );
+  if (!response.ok) await presetResponse(response);
+}
+
+export type VersionSelection = Omit<
+  NonNullable<Contract['rig_publish']['version_target']>,
+  'request_id'
+>;
+export type VersionView = Contract['preset_versions'];
+export type VersionEdit = Contract['preset_version_edit'];
+const versionValidator = ajv.compile<VersionView>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/VersionView',
+});
+export async function presetVersions(
+  kind: LibraryCatalog['items'][number]['kind'],
+  id: string,
+  edit?: VersionEdit,
+): Promise<VersionView> {
+  const response = await fetch(
+    `/api/v1/presets/catalog/${encodeURIComponent(kind)}/${encodeURIComponent(id)}/versions`,
+    edit
+      ? {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(edit),
+        }
+      : undefined,
+  );
+  const value = await presetResponse(response);
+  if (!versionValidator(value)) throw new Error('Incompatible preset versions');
+  return value;
 }
 
 export type MonitoringHistory = Contract['monitoring_history'];

@@ -8,6 +8,7 @@ pub(crate) mod authoring;
 mod capture_scenes;
 pub(crate) mod models;
 mod native_scenes;
+mod sleep;
 
 pub(crate) const MAX_CAPTURE_DEFAULTS: usize = 512;
 const MAX_CAPTURE_DEFAULT_BYTES: usize = 128 * 1024;
@@ -27,6 +28,9 @@ pub struct Session {
     rate: f64,
     /// Scene control ramps started; read the plugins back once they end.
     scene_readback: bool,
+    initial_sleep_enabled: Option<bool>,
+    sleep_pending: Option<sleep::Pending>,
+    sleep_message: Option<String>,
     capture_fade_remaining: usize,
     authoring_histories: std::collections::BTreeMap<String, oxidal_tone3000::working::Authoring>,
 }
@@ -239,8 +243,10 @@ impl Session {
             scene: None,
             scene_transitioning: false,
             branches: Vec::new(),
+            branch_sleep: None,
             midi: Default::default(),
         };
+        let initial_sleep_enabled = graph.sleep_enabled();
         let mut result = Self {
             graph,
             bundle,
@@ -255,6 +261,9 @@ impl Session {
             authoring_histories,
             rate,
             scene_readback: false,
+            initial_sleep_enabled,
+            sleep_pending: None,
+            sleep_message: None,
             capture_fade_remaining: 0,
         };
         result.apply_initial_scene()?;
@@ -331,6 +340,7 @@ impl Session {
             expected_revision: self.state.revision,
             scene,
             release_ms: None,
+            native_bypass_preview: None,
         })?;
         for index in 0..self.state.controls.len() {
             let control = &self.state.controls[index];
@@ -366,8 +376,9 @@ impl Session {
     pub fn snapshot(&self) -> Snapshot {
         let mut state = self.state.clone();
         state.modified = self.is_modified();
-        state.scene_transitioning =
-            self.graph.scene_transitioning() || self.capture_fade_remaining > 0;
+        state.scene_transitioning = self.graph.scene_transitioning()
+            || self.capture_fade_remaining > 0
+            || self.sleep_pending.is_some();
         if let Some(scenes) = &state.scenes {
             let matches = |scene: &&oxidal_presets::manifest::Scene| {
                 scene.gains.iter().all(|gain| {
@@ -446,14 +457,23 @@ impl Session {
                 })
                 .collect();
         }
+        state.branch_sleep = self.graph.sleep_snapshot(
+            self.sleep_pending
+                .as_ref()
+                .and_then(sleep::Pending::requested_scene),
+            state.scene.clone(),
+            self.sleep_message.clone(),
+        );
         state
     }
     pub(crate) fn is_modified(&self) -> bool {
-        self.state
-            .controls
-            .iter()
-            .zip(&self.initial)
-            .any(|(current, initial)| current.value != initial.value)
+        self.graph.sleep_enabled() != self.initial_sleep_enabled
+            || self
+                .state
+                .controls
+                .iter()
+                .zip(&self.initial)
+                .any(|(current, initial)| current.value != initial.value)
             || self.state.eq != self.initial_eq
             || !self.state.models.is_empty()
             || !self.state.working.is_empty()
@@ -518,6 +538,7 @@ impl Session {
             self.failed = true;
             return Err(error);
         }
+        self.finish_sleep_change()?;
         self.settle_scene_controls()?;
         self.advance_model()
     }
@@ -545,10 +566,15 @@ impl Session {
             self.failed = true;
             return Err(error);
         }
+        self.finish_sleep_change()?;
         self.settle_scene_controls()?;
         self.advance_model()
     }
     pub fn apply(&mut self, command: ControlCommand) -> Result<(), String> {
+        self.apply_control(command, true)
+    }
+
+    fn apply_control(&mut self, command: ControlCommand, with_sleep: bool) -> Result<(), String> {
         if self.measurement_pending() || self.gesture_pending() {
             return Err("Cancel measurement before editing".into());
         }
@@ -576,6 +602,31 @@ impl Session {
             .revision
             .checked_add(1)
             .ok_or("Rig revision exhausted")?;
+        if with_sleep
+            && let Target::Merge { node, port } = &command.target
+            && self.graph.sleep_owns_return(node, *port)
+        {
+            let gain = oxidal_presets::manifest::SceneGain {
+                node: node.clone(),
+                port: *port as u8,
+                value: command.value,
+            };
+            if self.queue_sleep_change(
+                std::slice::from_ref(&gain),
+                sleep::Pending::Control(command),
+            )? {
+                return Ok(());
+            }
+            let fade = self
+                .state
+                .scenes
+                .as_ref()
+                .ok_or("Rig has no scenes")?
+                .fade_ms;
+            self.apply_mix(&[gain], fade, fade, false)?;
+            self.state.scene = None;
+            return Ok(());
+        }
         if let Some((node, block)) = self.armed_edit(&command.target) {
             let (node, block) = (node.to_owned(), block.to_owned());
             self.set_native_bypass(index, &node, &block, command.value as f32)?;
@@ -675,7 +726,30 @@ impl Session {
         let gains = scene.gains.clone();
         let controls = scene.controls.clone();
         let capture_controls = scene.native_controls.clone();
-        let native_bypass = scene.native_bypass.clone();
+        let mut native_bypass = scene.native_bypass.clone();
+        if let Some(edits) = &command.native_bypass_preview {
+            let armed = self
+                .state
+                .native_bypass_armed
+                .as_ref()
+                .ok_or("Prepare capture blocks before preview")?;
+            if edits.is_empty() || edits.len() > armed.len() {
+                return Err("Invalid capture block preview".into());
+            }
+            for (index, edit) in edits.iter().enumerate() {
+                let same = |node: &str, block: &str| edit.node == node && edit.block == block;
+                if edits[..index].iter().any(|row| same(&row.node, &row.block))
+                    || !armed.iter().any(|row| same(&row.node, &row.block))
+                {
+                    return Err("Preview requires unique, already prepared capture blocks".into());
+                }
+                let row = native_bypass
+                    .iter_mut()
+                    .find(|row| same(&row.node, &row.block))
+                    .ok_or("Capture block is missing from the saved scene")?;
+                row.value = edit.value;
+            }
+        }
         if (!capture_controls.is_empty() || !native_bypass.is_empty())
             && (self.gesture_pending() || self.measurement_pending())
         {
@@ -693,20 +767,28 @@ impl Session {
         self.graph.check_scene_bypass(&bypass)?;
         self.check_capture_scene(&capture_controls)?;
         let scene5 = self.graph.native_scene5();
+        self.graph.check_scene_gains(
+            &gains,
+            self.fade_frames(fade_ms),
+            self.fade_frames(release_ms),
+        )?;
+        if self.queue_sleep_change(&gains, sleep::Pending::Scene(command.clone()))? {
+            return Ok(());
+        }
         if scene5 {
             self.state
                 .revision
                 .checked_add(1)
                 .ok_or("Rig revision exhausted")?;
-            self.graph.check_scene_gains(
-                &gains,
-                self.fade_frames(fade_ms),
-                self.fade_frames(release_ms),
-            )?;
             self.apply_native_scene(&native_bypass, &capture_controls)?;
         }
         let applied = self
-            .apply_mix(&gains, fade_ms, release_ms)
+            .apply_mix(
+                &gains,
+                fade_ms,
+                release_ms,
+                command.release_ms.unwrap_or(0) == 0,
+            )
             .and_then(|()| self.apply_scene_controls(&controls, fade_ms));
         if let Err(error) = applied {
             self.failed |= scene5;
@@ -757,7 +839,10 @@ impl Session {
             })
             .collect();
         let fade_ms = scenes.fade_ms;
-        self.apply_mix(&gains, fade_ms, fade_ms)?;
+        if self.queue_sleep_change(&gains, sleep::Pending::Branch(command))? {
+            return Ok(());
+        }
+        self.apply_mix(&gains, fade_ms, fade_ms, false)?;
         self.state.scene = None;
         Ok(())
     }
@@ -776,6 +861,7 @@ impl Session {
                     expected_revision: cursor.revision,
                     scene: scene.into(),
                     release_ms: None,
+                    native_bypass_preview: None,
                 })?;
             }
             return Ok(true);
@@ -829,6 +915,7 @@ impl Session {
         gains: &[oxidal_presets::manifest::SceneGain],
         fade_ms: u32,
         release_ms: u32,
+        trails: bool,
     ) -> Result<(), String> {
         let revision = self
             .state
@@ -839,6 +926,7 @@ impl Session {
             gains,
             self.fade_frames(fade_ms),
             self.fade_frames(release_ms),
+            trails,
         )?;
         for gain in gains {
             let target = Target::Merge {
@@ -1047,7 +1135,13 @@ impl Session {
                     .find(|p| &p.symbol == symbol)
                     .ok_or("Missing LV2 port")?
                     .index;
-                let actual = p.set_control(port, value as f32)?;
+                let actual = match p.set_control(port, value as f32) {
+                    Ok(actual) => actual,
+                    Err(error) => {
+                        self.failed = !p.healthy();
+                        return Err(error);
+                    }
+                };
                 c.value = f64::from(actual);
                 c.display = p.info().ports[port as usize].display(actual);
             }
@@ -1182,7 +1276,10 @@ impl Session {
                 target: value.target.clone(),
                 value: value.value,
             };
-            self.apply(command)?;
+            self.apply_control(command, false)?;
+        }
+        if let Some(enabled) = recall.sleep_enabled {
+            self.graph.set_sleep_enabled(enabled, 0)?;
         }
         if let Some(eq) = &eq {
             for row in eq {
@@ -1292,11 +1389,12 @@ mod scene_control_tests {
                     expected_revision: before.revision,
                     scene: "b".into(),
                     release_ms: None,
+                    native_bypass_preview: None,
                 })
                 .unwrap();
             assert_eq!(session.snapshot().scene.as_deref(), Some("b"), "{key}");
         }
-        match prepare("urn:oxidal:scenes:5") {
+        match prepare("urn:oxidal:scenes:6") {
             Err(error) => assert_eq!(error, UNSUPPORTED_SCENES),
             Ok(_) => panic!("an unknown scenes version prepared"),
         }
@@ -1312,6 +1410,7 @@ mod scene_control_tests {
                 expected_revision: before.revision,
                 scene: "b".into(),
                 release_ms: None,
+                native_bypass_preview: None,
             })
             .unwrap_err();
         assert_eq!(error, "Invalid scene bypass target");
@@ -1345,6 +1444,7 @@ mod scene_control_tests {
                         expected_revision: before.revision,
                         scene: "b".into(),
                         release_ms: None,
+                        native_bypass_preview: None,
                     })
                     .is_err()
             );

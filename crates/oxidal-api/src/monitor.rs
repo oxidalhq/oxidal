@@ -42,6 +42,8 @@ pub struct Monitoring {
     /// Actual saved source of the running owner; absent for unsaved drafts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preset: Option<LibraryReference>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub set_entry: Option<oxidal_presets::ResolvedOccurrence>,
     pub stream: Option<StreamConfig>,
     pub audio: Option<Snapshot>,
     pub audio_age_ms: Option<u64>,
@@ -238,7 +240,26 @@ pub(super) fn start(shared: Weak<Shared>, updates: watch::Sender<Monitoring>) {
                 graph_frames = None;
                 (None, None, None, None, None)
             };
+            let set_entry = shared.set_position.lock().ok().and_then(|mut current| {
+                if current.as_ref().is_some_and(|p| {
+                    !preset.as_ref().is_some_and(|reference| {
+                        reference.kind == p.row.entry.preset.kind
+                            && reference.id == p.row.content
+                            && p.session
+                                == if reference.kind == LibraryKind::Rig {
+                                    &rig.session
+                                } else {
+                                    &native.session
+                                }
+                                .as_str()
+                    })
+                }) {
+                    *current = None;
+                }
+                current.as_ref().map(|p| p.row.clone())
+            });
             updates.send_replace(Monitoring {
+                set_entry,
                 sequence,
                 host: host.clone(),
                 audio_phase: phase(native.phase),

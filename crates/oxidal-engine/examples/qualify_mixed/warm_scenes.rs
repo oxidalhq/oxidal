@@ -50,6 +50,7 @@ fn select(session: &mut Session, scene: &str) -> Result<()> {
         expected_revision: before.revision,
         scene: scene.into(),
         release_ms: None,
+        native_bypass_preview: None,
     })?;
     Ok(())
 }
@@ -538,9 +539,49 @@ pub(super) fn qualify(world: &World, root: &Path) -> Result<()> {
             expected_revision: before.revision,
             scene: "wet".into(),
             release_ms: None,
+            native_bypass_preview: None,
         };
         assert!(session.select_scene(command).is_err());
         assert_eq!(session.snapshot().revision, active.revision);
+        let saved_cab = active
+            .scenes
+            .as_ref()
+            .unwrap()
+            .scenes
+            .iter()
+            .find(|scene| scene.id == "cab")
+            .unwrap();
+        let mut draft = saved_cab.native_bypass[0].clone();
+        draft.value = !draft.value;
+        let mut preview = SceneCommand {
+            session: active.session.clone(),
+            expected_revision: active.revision,
+            scene: "cab".into(),
+            release_ms: None,
+            native_bypass_preview: Some(vec![draft.clone(), draft.clone()]),
+        };
+        assert!(session.select_scene(preview.clone()).is_err());
+        assert_eq!(session.snapshot().revision, active.revision);
+        preview.native_bypass_preview = Some(vec![draft.clone()]);
+        session.select_scene(preview)?;
+        let confirmed = session.snapshot();
+        assert_eq!(confirmed.revision, active.revision + 1);
+        let control = confirmed.controls.iter().find(|control| matches!(&control.target,
+            oxidal_engine::protocol::Target::Native {node,parameter} if node==&draft.node && parameter==&format!("block:{}:enabled",draft.block))).unwrap();
+        assert_eq!(control.value, if draft.value { 0.0 } else { 1.0 });
+        assert_eq!(
+            confirmed
+                .scenes
+                .as_ref()
+                .unwrap()
+                .scenes
+                .iter()
+                .find(|scene| scene.id == "cab")
+                .unwrap()
+                .native_bypass,
+            saved_cab.native_bypass
+        );
+        select(&mut session, "cab")?;
         if amp_node == "tone" {
             check_working_default(&bundle, world, root, amp)?;
         }

@@ -799,6 +799,22 @@ export type Command3 =
 export type PowerAction = "reboot" | "shutdown";
 export type StorageMode = "unlocked" | "locked";
 export type Mode = "never" | "no_ethernet" | "not_at_home" | "no_remembered" | "always";
+export type OccurrenceAction =
+  | {
+      kind: "repeat";
+      new_id: string;
+    }
+  | {
+      kind: "change";
+      settings: EntrySettings;
+    }
+  | {
+      before?: string | null;
+      kind: "place";
+    }
+  | {
+      kind: "remove";
+    };
 export type PlayerCommand =
   | {
       kind: "toggle_play";
@@ -921,6 +937,25 @@ export type StemRole = "vocals" | "drums" | "bass" | "other" | "guitar" | "piano
 export type PlayerPart = "bass" | "guitar";
 export type Origin = "ui" | "midi" | "api";
 export type PlayerState = ("empty" | "ready" | "playing" | "paused" | "ended") | "interrupted" | "unavailable";
+export type VersionAction =
+  | {
+      action: "create";
+      name: string;
+    }
+  | {
+      action: "rename";
+      name: string;
+    }
+  | {
+      action: "publish";
+      content: string;
+    }
+  | {
+      action: "set_default";
+    }
+  | {
+      action: "delete";
+    };
 export type RigAudioAction =
   | {
       command: PluginDefaultsCommand;
@@ -973,6 +1008,10 @@ export type RigAudioAction =
       kind: "branch";
     }
   | {
+      command: BranchSleepCommand;
+      kind: "branch_sleep";
+    }
+  | {
       kind: "midi";
       settings?: Settings2 | null;
     }
@@ -1006,6 +1045,7 @@ export type ModelOperation =
   | {
       kind: "cancel";
     };
+export type BranchSleepPhase = "playing" | "priming" | "draining" | "asleep" | "failed";
 export type PortableNodeKind = "input" | "output" | "tone3000" | "lv2" | "split" | "merge" | "gain";
 export type PortableTails = "cut" | "preserve";
 export type PortableResourceKind = "tone3000-preset" | "tone3000-source" | "lv2-state" | "lv2-asset";
@@ -1198,6 +1238,7 @@ export interface Contract {
   native_editor: EditorSnapshot;
   network_command: Command3;
   network_state: NetworkState;
+  occurrence_edit: OccurrenceEdit;
   player_order: PlayerOrder;
   player_request: PlayerRequest;
   player_snapshot: PlayerSnapshot;
@@ -1205,6 +1246,8 @@ export interface Contract {
   preset: Inspection;
   preset_details: DetailsCatalog;
   preset_details_update: DetailsUpdate;
+  preset_version_edit: VersionEdit;
+  preset_versions: VersionView;
   protect_state: ProtectState;
   reamp_request: ReampRequest;
   removal_preview: RemovalPreview;
@@ -1217,10 +1260,12 @@ export interface Contract {
   rig_library: RigPage;
   rig_native_sources: RigNativeSource[];
   rig_publish: RigPublish;
+  rig_sleep_plan: RigSleepPlan;
   scene_blend_update: BlendUpdate;
   scene_blends: Blends;
   scene_draft: SceneDraftState;
   scene_draft_update: SceneDraftUpdate;
+  set_order: SetOrder;
   sheet_archive: SheetArchive;
   sheet_delete: SheetDelete;
   sheet_document: SheetDocument;
@@ -2900,6 +2945,7 @@ export interface MidiPosition {
   index?: number | null;
   length: number;
   next?: Neighbor | null;
+  occurrence?: ResolvedOccurrence | null;
   previous?: Neighbor | null;
 }
 /**
@@ -2912,6 +2958,24 @@ export interface Neighbor {
   detail: string;
   name: string;
   ready: boolean;
+}
+export interface ResolvedOccurrence {
+  content: string;
+  entry: SetOccurrence;
+  name: string;
+}
+export interface SetOccurrence {
+  id: string;
+  preset: LibraryReference;
+  settings: EntrySettings;
+}
+export interface EntrySettings {
+  mix?: string | null;
+  own_media?: boolean;
+  scene?: string | null;
+  sheet?: string | null;
+  track?: string | null;
+  version?: string | null;
 }
 export interface MidiTemplateApply {
   entry: LibraryReference;
@@ -2980,6 +3044,7 @@ export interface Monitoring {
   preset?: LibraryReference | null;
   rig_phase: string;
   sequence: number;
+  set_entry?: ResolvedOccurrence | null;
   source?: string | null;
   stream?: StreamConfig | null;
   /**
@@ -3177,6 +3242,11 @@ export interface SavedNetwork {
   ssid?: string | null;
   uuid: string;
 }
+export interface OccurrenceEdit {
+  action: OccurrenceAction;
+  entry: string;
+  expected_revision: string;
+}
 export interface PlayerOrder {
   order: string[];
 }
@@ -3329,6 +3399,29 @@ export interface DetailsUpdate {
    */
   metadata?: RecipeMetadata | null;
 }
+export interface VersionEdit {
+  action: VersionAction;
+  expected_content: string;
+  expected_revision: string;
+  request_id: string;
+  version: string;
+}
+export interface VersionView {
+  catalog_revision: string;
+  preset: PresetFamily;
+}
+export interface PresetFamily {
+  default_version: string;
+  generation: number;
+  kind: LibraryKind;
+  logical_id: string;
+  versions: PresetVersion[];
+}
+export interface PresetVersion {
+  content: string;
+  id: string;
+  name: string;
+}
 export interface ProtectState {
   on: boolean;
 }
@@ -3395,6 +3488,7 @@ export interface PreparedRecall {
 export interface Recall {
   eq?: NodeEq[] | null;
   models?: NodeModels[];
+  sleep_enabled?: boolean | null;
   source_revision: string;
   values: Value[];
   working?: NodeWorking[];
@@ -3440,6 +3534,10 @@ export interface SwitchCommand {
 export interface SceneCommand {
   expected_revision: number;
   /**
+   * Draft values for already armed capture blocks. A regular performance recall uses the saved values.
+   */
+  native_bypass_preview?: SceneNativeBypass[] | null;
+  /**
    * How long the outgoing scene takes to fade out, in ms (up to 10 s); none
    * uses the preset's own fade, so delay and reverb tails ring out.
    */
@@ -3447,8 +3545,21 @@ export interface SceneCommand {
   scene: string;
   session: string;
 }
+export interface SceneNativeBypass {
+  block: string;
+  node: string;
+  /**
+   * True means bypassed.
+   */
+  value: boolean;
+}
 export interface BranchCommand {
   branch: string;
+  enabled: boolean;
+  expected_revision: number;
+  session: string;
+}
+export interface BranchSleepCommand {
   enabled: boolean;
   expected_revision: number;
   session: string;
@@ -3483,6 +3594,7 @@ export interface RigAudioState {
 }
 export interface Snapshot3 {
   authoring?: NodeAuthoring[];
+  branch_sleep?: BranchSleepState | null;
   branches?: BranchState[];
   buffer_bytes: number;
   /**
@@ -3523,6 +3635,20 @@ export interface Snapshot3 {
 export interface NodeAuthoring {
   node: string;
   status: AuthoringStatus;
+}
+export interface BranchSleepState {
+  active_scene?: string | null;
+  admitted_processors: number;
+  branches: SleepingBranchState[];
+  enabled: boolean;
+  message?: string | null;
+  requested_scene?: string | null;
+  running_processors: number;
+}
+export interface SleepingBranchState {
+  branch: string;
+  phase: BranchSleepPhase;
+  processors: number;
 }
 export interface BranchState {
   enabled: boolean;
@@ -3578,14 +3704,6 @@ export interface NodeModelChange {
 export interface SceneNativeBypassKey {
   block: string;
   node: string;
-}
-export interface SceneNativeBypass {
-  block: string;
-  node: string;
-  /**
-   * True means bypassed.
-   */
-  value: boolean;
 }
 export interface PreparedStatus {
   error?: string | null;
@@ -3781,6 +3899,10 @@ export interface RigPublish {
    */
   manifest_json: string;
   /**
+   * Explicitly derive and publish verified closed sleep sends on this graph.
+   */
+  prepare_sleep_branches?: boolean;
+  /**
    * Each declared resource maps to an existing verified local payload.
    */
   resources: {
@@ -3791,6 +3913,41 @@ export interface RigPublish {
    * immutable revision. The source itself is never changed.
    */
   source?: LibraryReference | null;
+  /**
+   * Saving an explicit named version binds the edit to the catalog and source bytes.
+   */
+  version_target?: VersionTarget | null;
+}
+export interface VersionTarget {
+  expected_content: string;
+  expected_revision: string;
+  first: string;
+  request_id: string;
+  version: string;
+}
+export interface RigSleepPlan {
+  inserted_sends: SleepSendBoundary[];
+  plan?: SleepBranches | null;
+  reason?: string | null;
+}
+export interface SleepSendBoundary {
+  from: PortableEndpoint;
+  node: string;
+  to: PortableEndpoint;
+}
+export interface SleepBranches {
+  branches: SleepBranch[];
+  enabled?: boolean;
+}
+export interface SleepBranch {
+  /**
+   * Existing scene branch declaration supplies the exact return gain ports.
+   */
+  branch: string;
+  /**
+   * Each named mono host gain node is an input boundary for this branch.
+   */
+  sends: string[];
 }
 /**
  * Sets one preset's blend; 0 returns it to trails.
@@ -3871,6 +4028,10 @@ export interface SceneDraftUpdate {
    * Required when the current or submitted draft has bypass or capture edits.
    */
   expected_revision?: number | null;
+}
+export interface SetOrder {
+  entries: ResolvedOccurrence[];
+  revision: string;
 }
 export interface SheetArchive {
   links: SheetLink[];

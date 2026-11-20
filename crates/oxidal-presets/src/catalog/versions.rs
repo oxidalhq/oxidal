@@ -313,6 +313,13 @@ impl CatalogStore {
                 family.default_version = edit.version;
             }
             VersionAction::Delete => {
+                if candidate.occurrences.iter().flatten().any(|entry| {
+                    entry.preset.kind == kind
+                        && entry.preset.id == first
+                        && entry.settings.version.as_ref() == Some(&edit.version)
+                }) {
+                    return Err(Error::Conflict("A set entry uses this version"));
+                }
                 if family.default_version == edit.version || family.versions.len() == 1 {
                     return Err(Error::Conflict(
                         "Choose another default before removing this version",

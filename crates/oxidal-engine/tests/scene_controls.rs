@@ -67,6 +67,7 @@ fn select(session: &mut Session, scene: &str) -> Result<(), String> {
         expected_revision: cursor.revision,
         scene: scene.into(),
         release_ms: None,
+        native_bypass_preview: None,
     })
 }
 fn render(session: &mut Session, input: impl Fn(usize) -> f32, clock: &mut usize) -> Vec<f32> {

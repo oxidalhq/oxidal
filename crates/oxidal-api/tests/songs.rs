@@ -379,6 +379,40 @@ async fn prepared_song_mixes_save_reopen_cue_and_export_both_stem_counts() {
         assert_eq!(status, 200, "{result}");
         links = result;
     }
+    let order_path = "/presets/set-list";
+    let (status, order) = json_request(&app, "GET", order_path, Value::Null).await;
+    assert_eq!(status, 200, "{order}");
+    let slot = &order["entries"][0]["entry"];
+    assert_eq!(slot["settings"]["mix"], old["id"]);
+    let (status,repeated)=json_request(&app,"POST",order_path,json!({
+        "expected_revision":order["revision"],"entry":slot["id"],"action":{"kind":"repeat","new_id":"encore"}
+    })).await;
+    assert_eq!(status, 200, "{repeated}");
+    assert_eq!(
+        repeated["entries"][1]["entry"]["settings"]["mix"],
+        old["id"]
+    );
+    let alternate = reopened["mixes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["id"] != old["id"])
+        .unwrap();
+    let (status,independent)=json_request(&app,"POST",order_path,json!({
+        "expected_revision":repeated["revision"],"entry":"encore",
+        "action":{"kind":"change","settings":{"own_media":true,"track":source,"mix":alternate["id"]}}
+    })).await;
+    assert_eq!(status, 200, "{independent}");
+    assert_eq!(
+        independent["entries"][0]["entry"]["settings"]["mix"],
+        old["id"]
+    );
+    assert_eq!(
+        independent["entries"][1]["entry"]["settings"]["mix"],
+        alternate["id"]
+    );
+    let (_, position) = json_request(&app, "GET", "/midi/position", Value::Null).await;
+    assert_eq!(position["length"], 2);
     body["replace"] = json!({"id":old["id"],"revision":old["revision"]});
     body["title"] = "Stage mix".into();
     let (status, saved) = json_request(&app, "POST", &mix_path, body.clone()).await;
@@ -536,6 +570,8 @@ async fn prepared_song_mixes_save_reopen_cue_and_export_both_stem_counts() {
     // After a restart the restored mix plays its stems live again.
     drop(app);
     app = router(config.clone()).unwrap();
+    let (_, restored_order) = json_request(&app, "GET", order_path, Value::Null).await;
+    assert_eq!(restored_order["entries"], independent["entries"]);
     let (_, restored) = json_request(&app, "GET", "/player", Value::Null).await;
     assert_eq!(restored["track"]["id"], asset);
     assert_eq!(restored["stems"]["split"], "01JD2W8T3N8M4K6V0P7Q9R1S2V");

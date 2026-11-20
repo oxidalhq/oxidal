@@ -6,6 +6,13 @@ import type {
 
 export const nativeBypassKey = (target: SceneNativeBypassKey) =>
   JSON.stringify([target.node, target.block]);
+export function canPreviewNativeBypass(
+  edits: readonly SceneNativeBypass[] | undefined,
+  armed: readonly SceneNativeBypassKey[] | null | undefined,
+) {
+  const keys = new Set(armed?.map(nativeBypassKey));
+  return (edits ?? []).every((row) => keys.has(nativeBypassKey(row)));
+}
 type Scene = {
   id: string;
   bypass?: { node: string }[];

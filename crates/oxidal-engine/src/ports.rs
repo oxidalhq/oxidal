@@ -7,6 +7,8 @@ use oxidal_presets::{
 };
 use oxidal_tone3000::ProcessingRole as NativeRole;
 use std::collections::{BTreeMap, VecDeque};
+#[path = "ports/sleep.rs"]
+mod sleep;
 
 #[derive(Debug)]
 struct PortNode {
@@ -20,13 +22,14 @@ struct PortNode {
     processor: Option<Processor>,
     /// Render-thread handle for a native processor, created on first render.
     port: Option<oxidal_tone3000::AudioPort>,
+    render_error: Option<oxidal_tone3000::NativeError>,
     bypassed: bool,
     scene_bypass: Option<WarmBypass>,
     gains: Vec<Gain>,
 }
 // Ramp state belongs to each already prepared merge input. No processing-time
 // allocation or processor reconstruction is needed when selecting a scene.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Gain {
     current: f32,
     target: f32,
@@ -252,6 +255,7 @@ pub struct PreparedPorts {
     buffer_bytes: usize,
     warm_bytes: usize,
     native_scene5: bool,
+    sleep: Option<sleep::Sleep>,
     latency_frames: u32,
     /// Length of the group of independent native lanes starting at each
     /// position of `order` (0 inside or outside a group).
@@ -561,6 +565,7 @@ impl PreparedPorts {
                 dry: vec![],
                 processor,
                 port: None,
+                render_error: None,
                 bypassed: declaration.bypassed.unwrap_or(false),
                 scene_bypass: None,
                 gains: declaration.input_gains.as_ref().map_or_else(Vec::new, |g| {
@@ -722,6 +727,26 @@ impl PreparedPorts {
         } else {
             None
         };
+        let sleep = manifest
+            .sleep_branches()
+            .map_err(|e| e.to_string())?
+            .map(|config| {
+                sleep::Sleep::new(
+                    config,
+                    scenes.as_ref().unwrap(),
+                    host,
+                    &indices,
+                    &nodes,
+                    (rate, frames, latency[output]),
+                )
+            })
+            .transpose()?;
+        if let Some(sleep) = &sleep {
+            buffer_bytes = buffer_bytes
+                .checked_add(sleep.buffer_bytes())
+                .filter(|used| *used <= buffer_budget)
+                .ok_or("Sleeping branch state exceeds host buffer budget")?;
+        }
         let mut graph = Self {
             nodes,
             order,
@@ -736,6 +761,7 @@ impl PreparedPorts {
             buffer_bytes,
             warm_bytes,
             native_scene5,
+            sleep,
             latency_frames: latency[output],
             assets,
         };
@@ -821,25 +847,39 @@ impl PreparedPorts {
     /// Owner-thread check that no processor's latency moved away from the
     /// prepared alignment. Marks the graph failed if one did.
     pub(crate) fn verify_latency(&mut self) -> Result<(), String> {
-        for node in &self.nodes {
-            if node
+        for i in 0..self.nodes.len() {
+            if self.sleep_skips(i) {
+                continue;
+            }
+            let node = &self.nodes[i];
+            let error = match node
                 .processor
                 .as_ref()
-                .map_or(Ok(0), Processor::latency_frames)?
-                != node.latency
+                .map_or(Ok(0), Processor::latency_frames)
             {
+                Ok(latency) if latency == node.latency => continue,
+                Ok(_) => "Processor latency changed; prepare a new graph".into(),
+                Err(error) => error,
+            };
+            if !self.sleep_failure(i) {
                 self.failed = true;
-                return Err("Processor latency changed; prepare a new graph".into());
+                return Err(error);
             }
         }
         Ok(())
     }
     /// Confirm armed processors still own the DSP that their readback promises.
-    pub(crate) fn verify_warm_scene_health(&self) -> Result<(), String> {
+    pub(crate) fn verify_warm_scene_health(&mut self) -> Result<(), String> {
         if self.native_scene5 {
-            for node in &self.nodes {
-                if let Some(Processor::Native(engine)) = &node.processor {
-                    engine.scene_transitioning().map_err(|e| e.to_string())?;
+            for i in 0..self.nodes.len() {
+                if self.sleep_skips(i) {
+                    continue;
+                }
+                if let Some(Processor::Native(engine)) = &self.nodes[i].processor
+                    && let Err(error) = engine.scene_transitioning()
+                    && !self.sleep_failure(i)
+                {
+                    return Err(error.to_string());
                 }
             }
         }
@@ -875,6 +915,9 @@ impl PreparedPorts {
             }
         }
         self.samples.fill(0.0);
+        if let Some(sleep) = &mut self.sleep {
+            sleep.reset(&self.nodes);
+        }
         self.verify_warm_scene_health()
     }
     pub(crate) fn frames(&self) -> usize {
@@ -945,9 +988,16 @@ impl PreparedPorts {
         values: &[oxidal_presets::manifest::SceneGain],
         frames: u32,
         release: u32,
+        trails: bool,
     ) -> Result<(), String> {
         self.check_scene_gains(values, frames, release)?;
+        if let Some(sleep) = &mut self.sleep {
+            sleep.activate(&mut self.nodes, values, frames, release, trails)?;
+        }
         for value in values {
+            if self.sleep_owns_return(&value.node, usize::from(value.port)) {
+                continue;
+            }
             let node = self.nodes.iter_mut().find(|n| n.id == value.node).unwrap();
             let gain = &mut node.gains[usize::from(value.port)];
             // A path closes when its level falls, whatever its polarity.
@@ -1190,10 +1240,20 @@ impl PreparedPorts {
                 continue;
             }
             let index = self.order[position];
-            self.feed(index, check_latency)?;
-            self.process_node(index)?;
-            self.finish_node(index)?;
+            if self.sleep_skips(index) {
+                self.clear_node(index);
+            } else if let Err(error) = self
+                .feed(index, check_latency)
+                .and_then(|()| self.process_node(index))
+                .and_then(|()| self.finish_node(index))
+                && !self.sleep_failure(index)
+            {
+                return Err(error);
+            }
             position += 1;
+        }
+        if let Some(sleep) = &mut self.sleep {
+            sleep.finish(&mut self.nodes, &self.samples, self.frames);
         }
         Ok(())
     }
@@ -1292,6 +1352,9 @@ impl PreparedPorts {
     fn finish_node(&mut self, index: usize) -> Result<(), String> {
         let node = &mut self.nodes[index];
         let data = &mut self.samples[node.offset..node.offset + node.channels * self.frames];
+        if let Some(sleep) = &mut self.sleep {
+            sleep.gate(index, data, self.frames);
+        }
         if data.iter().any(|v| !v.is_finite()) {
             return Err("Non-finite port graph output".into());
         }
@@ -1325,7 +1388,15 @@ impl PreparedPorts {
     fn run_lanes(&mut self, position: usize, wave: usize) -> Result<(), String> {
         let check_latency = !crate::render::render_thread_enabled();
         for k in position..position + wave {
-            self.feed(self.order[k], check_latency)?;
+            let index = self.order[k];
+            self.nodes[index].render_error = None;
+            if self.sleep_skips(index) {
+                self.clear_node(index);
+            } else if let Err(error) = self.feed(index, check_latency)
+                && !self.sleep_failure(index)
+            {
+                return Err(error);
+            }
         }
         let Some(lanes) = self.lanes.as_ref() else {
             return Err("Lane helpers unavailable".into());
@@ -1338,7 +1409,11 @@ impl PreparedPorts {
         let mut own = [None; 4];
         let mut owned = 0;
         for (slot, k) in (position..position + wave).enumerate() {
-            let node = &mut self.nodes[self.order[k]];
+            let index = self.order[k];
+            if self.sleep_skips(index) {
+                continue;
+            }
+            let node = &mut self.nodes[index];
             let Some(Processor::Native(p)) = node.processor.as_mut() else {
                 continue;
             };
@@ -1349,6 +1424,11 @@ impl PreparedPorts {
                 .port
                 .get_or_insert_with(|| crate::render::audio_port(p));
             let job = crate::render::LaneJob::block(port, samples, node.offset, frames);
+            let job = if self.sleep.is_some() {
+                job.report_failure(&mut node.render_error)
+            } else {
+                job
+            };
             match slot % slots {
                 0 => {
                     // `run` admits only groups that fit (wave ≤ 4 × slots).
@@ -1370,9 +1450,92 @@ impl PreparedPorts {
         result?;
         joined?;
         for k in position..position + wave {
-            self.finish_node(self.order[k])?;
+            let index = self.order[k];
+            if self.sleep_skips(index) {
+                self.clear_node(index);
+                continue;
+            }
+            let result = if let Some(error) = self.nodes[index].render_error.take() {
+                Err(error.to_string())
+            } else {
+                self.finish_node(index)
+            };
+            if let Err(error) = result
+                && !self.sleep_failure(index)
+            {
+                return Err(error);
+            }
         }
         Ok(())
+    }
+
+    fn clear_node(&mut self, index: usize) {
+        let node = &self.nodes[index];
+        self.samples[node.offset..node.offset + node.channels * self.frames].fill(0.0);
+    }
+
+    fn sleep_skips(&self, index: usize) -> bool {
+        self.sleep
+            .as_ref()
+            .is_some_and(|sleep| sleep.skipped(index))
+    }
+
+    fn sleep_failure(&mut self, index: usize) -> bool {
+        let handled = self
+            .sleep
+            .as_mut()
+            .is_some_and(|sleep| sleep.fail_inactive(index, &mut self.nodes));
+        if handled {
+            self.clear_node(index);
+        }
+        handled
+    }
+
+    pub(crate) fn sleep_owns_return(&self, node: &str, port: usize) -> bool {
+        self.sleep
+            .as_ref()
+            .is_some_and(|sleep| sleep.targets_return(&self.nodes, node, port))
+    }
+
+    pub(crate) fn sleep_enabled(&self) -> Option<bool> {
+        self.sleep.as_ref().map(sleep::Sleep::enabled)
+    }
+
+    pub(crate) fn sleep_prime(
+        &mut self,
+        values: &[oxidal_presets::manifest::SceneGain],
+    ) -> Result<bool, String> {
+        self.sleep
+            .as_mut()
+            .map_or(Ok(false), |sleep| sleep.prime(&self.nodes, values))
+    }
+
+    pub(crate) fn sleep_prime_ready(&self) -> bool {
+        self.sleep.as_ref().is_none_or(sleep::Sleep::prime_ready)
+    }
+
+    pub(crate) fn cancel_sleep_prime(&mut self) {
+        if let Some(sleep) = &mut self.sleep {
+            sleep.cancel_prime();
+        }
+    }
+
+    pub(crate) fn set_sleep_enabled(&mut self, enabled: bool, frames: u32) -> Result<(), String> {
+        self.sleep
+            .as_mut()
+            .ok_or("Rig has no sleeping branch plan")?
+            .set_enabled(enabled, &mut self.nodes, frames)
+    }
+
+    pub(crate) fn sleep_snapshot(
+        &self,
+        requested_scene: Option<String>,
+        active_scene: Option<String>,
+        message: Option<String>,
+    ) -> Option<crate::protocol::BranchSleepState> {
+        self.sleep
+            .as_ref()
+            .map(|sleep| sleep.snapshot(requested_scene, active_scene, message))
     }
 }
 #[cfg(test)]

@@ -6,7 +6,7 @@ use oxidal_audio::{
     midi::Message,
 };
 use oxidal_engine::protocol::{RigAudioAction, RigAudioCommand, StartRig, SwitchCommand};
-use oxidal_presets::{DeviceAction, LibraryKind};
+use oxidal_presets::{DeviceAction, LibraryKind, ResolvedOccurrence, SetOrder};
 use std::sync::{Arc, Weak};
 use tokio::sync::mpsc;
 
@@ -160,20 +160,22 @@ fn channel_of(message: Message) -> Option<u8> {
     }
 }
 
-fn is_playing(shared: &Shared, item: &oxidal_presets::LibraryItem) -> bool {
-    match item.kind {
+fn is_playing(shared: &Shared, item: &ResolvedOccurrence) -> bool {
+    match item.entry.preset.kind {
         LibraryKind::Owned => shared
             .playback
             .snapshot()
             .configured
             .as_ref()
             .and_then(crate::library_removal::native_reference)
-            .is_some_and(|reference| reference.kind == item.kind && reference.id == item.id),
+            .is_some_and(|reference| {
+                reference.kind == item.entry.preset.kind && reference.id == item.content
+            }),
         LibraryKind::Rig => shared
             .rig_playback
             .snapshot()
             .configured
-            .is_some_and(|configured| configured.revision == item.id),
+            .is_some_and(|configured| configured.revision == item.content),
         _ => false,
     }
 }
@@ -219,21 +221,23 @@ pub struct Neighbor {
 pub struct MidiPosition {
     /// Zero-based position of the playing preset; None when it is not in the list.
     pub index: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub occurrence: Option<ResolvedOccurrence>,
     pub length: usize,
     pub previous: Option<Neighbor>,
     pub next: Option<Neighbor>,
 }
 
-fn neighbor(shared: &Shared, item: &oxidal_presets::LibraryItem) -> Neighbor {
+fn neighbor(shared: &Shared, item: &ResolvedOccurrence) -> Neighbor {
     let protect = shared.protect.on();
-    let prepared = item.kind == LibraryKind::Rig && {
+    let prepared = item.entry.preset.kind == LibraryKind::Rig && {
         let state = shared.rig_playback.snapshot();
         state.phase == AudioPhase::Running
             && state.control.as_ref().is_some_and(|control| {
                 control
                     .prepared
                     .iter()
-                    .any(|p| p.revision == item.id && p.error.is_none())
+                    .any(|p| p.revision == item.content && p.error.is_none())
             })
     };
     let (ready, detail) = if prepared {
@@ -250,11 +254,37 @@ fn neighbor(shared: &Shared, item: &oxidal_presets::LibraryItem) -> Neighbor {
     }
 }
 
+#[derive(Debug, Clone)]
+pub(super) struct PlayingOccurrence {
+    pub session: String,
+    pub row: ResolvedOccurrence,
+}
+
+fn owner_session(shared: &Shared, kind: LibraryKind) -> String {
+    if kind == LibraryKind::Rig {
+        shared.rig_playback.snapshot().session
+    } else {
+        shared.playback.snapshot().session
+    }
+}
+
+fn playing_index(shared: &Shared, items: &[ResolvedOccurrence]) -> Option<usize> {
+    let last = shared.set_position.lock().ok()?.clone();
+    last.filter(|p| p.session == owner_session(shared, p.row.entry.preset.kind))
+        .and_then(|playing| {
+            items
+                .iter()
+                .position(|r| r.entry.id == playing.row.entry.id && is_playing(shared, r))
+        })
+        .or_else(|| items.iter().position(|r| is_playing(shared, r)))
+}
+
 pub(crate) async fn position(shared: &Arc<Shared>) -> Result<MidiPosition, String> {
-    let items = set_list(shared).await?;
-    let index = items.iter().position(|item| is_playing(shared, item));
+    let items = set_list(shared).await?.entries;
+    let index = playing_index(shared, &items);
     let target = |direction| target_index(index, items.len(), direction).ok();
     Ok(MidiPosition {
+        occurrence: index.map(|i| items[i].clone()),
         index,
         length: items.len(),
         previous: target(-1).map(|i| neighbor(shared, &items[i])),
@@ -311,31 +341,21 @@ pub(crate) async fn navigate_recorded(
 /// From a preset outside the Set list, Next goes to its first preset and
 /// Previous to its last, as a footswitch on a modeller would.
 async fn navigate(shared: &Arc<Shared>, direction: i8) -> Result<String, String> {
-    let items = set_list(shared).await?;
-    let current = items.iter().position(|item| is_playing(shared, item));
-    let target = target_index(current, items.len(), direction)?;
-    let item = items[target].clone();
-    let name = item.name.clone();
-    recall_target(shared, item).await?;
+    let _guard = shared.set_recall.lock().await;
+    let order = set_list(shared).await?;
+    let current = playing_index(shared, &order.entries);
+    let index = target_index(current, order.entries.len(), direction)?;
+    let name = order.entries[index].name.clone();
+    recall_slot(shared, &order.revision, &order.entries[index]).await?;
     Ok(format!("Recalled {name}"))
 }
 
-async fn set_list(shared: &Arc<Shared>) -> Result<Vec<oxidal_presets::LibraryItem>, String> {
-    let root = shared.config.preset_dir.clone();
+async fn set_list(shared: &Arc<Shared>) -> Result<SetOrder, String> {
+    let worker = shared.clone();
     let access = shared.library_access.clone().read_owned().await;
     tokio::task::spawn_blocking(move || {
         let _access = access;
-        let items = crate::presets::catalog_items(&root).map_err(|error| error.to_string())?;
-        let catalog = oxidal_presets::CatalogStore::open(root)
-            .and_then(|mut store| store.reconcile(items))
-            .map_err(|error| error.to_string())?;
-        Ok(catalog
-            .items
-            .into_iter()
-            .filter(|item| {
-                item.in_set_list && matches!(item.kind, LibraryKind::Owned | LibraryKind::Rig)
-            })
-            .collect())
+        crate::set_order::current(&worker).map_err(|e| e.to_string())
     })
     .await
     .map_err(|_| "MIDI set-list task failed".to_owned())?
@@ -409,29 +429,117 @@ pub(crate) fn stream(shared: &Shared) -> Option<oxidal_audio::StreamConfig> {
 }
 
 async fn recall(shared: &Arc<Shared>, slot: usize) -> Result<(), String> {
-    let target = set_list(shared)
-        .await?
-        .into_iter()
-        .nth(slot)
+    let _guard = shared.set_recall.lock().await;
+    let order = set_list(shared).await?;
+    let entry = order
+        .entries
+        .get(slot)
         .ok_or("MIDI Program is outside the Mine set list")?;
-    recall_target(shared, target).await
+    recall_slot(shared, &order.revision, entry).await
 }
 
 pub(crate) async fn recall_entry(
     shared: &Arc<Shared>,
     entry: &oxidal_presets::LibraryReference,
 ) -> Result<(), String> {
-    let target = set_list(shared)
-        .await?
-        .into_iter()
-        .find(|item| item.kind == entry.kind && item.id == entry.id)
+    let _guard = shared.set_recall.lock().await;
+    let order = set_list(shared).await?;
+    let mut matches = order
+        .entries
+        .iter()
+        .filter(|r| r.entry.preset.kind == entry.kind && r.content == entry.id);
+    let target = matches
+        .next()
         .ok_or("Preset is not in the active Mine set list")?;
-    recall_target(shared, target).await
+    if matches.next().is_some() {
+        return Err("Choose the occurrence to recall from the set list".into());
+    }
+    recall_slot(shared, &order.revision, target).await
+}
+
+pub(super) async fn jump(shared: &Arc<Shared>, expected: &str, id: &str) -> Result<(), String> {
+    let _guard = shared.set_recall.lock().await;
+    let order = set_list(shared).await?;
+    if order.revision != expected {
+        return Err("Set list changed; reload before recall".into());
+    }
+    let row = order
+        .entries
+        .iter()
+        .find(|r| r.entry.id == id)
+        .ok_or("Set entry is unavailable")?;
+    recall_slot(shared, expected, row).await
+}
+
+async fn recall_slot(
+    shared: &Arc<Shared>,
+    expected: &str,
+    target: &ResolvedOccurrence,
+) -> Result<(), String> {
+    let worker = shared.clone();
+    let row = target.clone();
+    let expected = expected.to_owned();
+    tokio::task::spawn_blocking(move || {
+        let root = &worker.config.preset_dir;
+        let catalog = oxidal_presets::CatalogStore::open(root.clone())?;
+        let view = catalog.versions(row.entry.preset.kind, &row.entry.preset.id)?;
+        if view.catalog_revision != expected {
+            return Err(oxidal_presets::Error::Conflict(
+                "Set list changed; reload before recall",
+            ));
+        }
+        crate::set_order::validate(
+            &worker,
+            root,
+            row.entry.preset.kind,
+            &row.content,
+            &row.entry.settings,
+        )
+    })
+    .await
+    .map_err(|_| "Could not check the set entry".to_owned())?
+    .map_err(|e| e.to_string())?;
+    recall_target(
+        shared,
+        oxidal_presets::LibraryReference {
+            kind: target.entry.preset.kind,
+            id: target.content.clone(),
+        },
+    )
+    .await?;
+    if let Some(scene) = &target.entry.settings.scene {
+        let state = shared.rig_playback.snapshot();
+        let control = state.control.ok_or("Starting scene is unavailable")?;
+        shared
+            .rig_playback
+            .dispatch(RigAudioCommand {
+                session: state.session,
+                expected_revision: state.revision,
+                action: RigAudioAction::Scene {
+                    command: oxidal_engine::protocol::SceneCommand {
+                        session: control.session,
+                        expected_revision: control.revision,
+                        scene: scene.clone(),
+                        release_ms: None,
+                        native_bypass_preview: None,
+                    },
+                },
+            })
+            .await?;
+    }
+    *shared
+        .set_position
+        .lock()
+        .map_err(|_| "Set-list position is unavailable")? = Some(PlayingOccurrence {
+        session: owner_session(shared, target.entry.preset.kind),
+        row: target.clone(),
+    });
+    Ok(())
 }
 
 async fn recall_target(
     shared: &Arc<Shared>,
-    target: oxidal_presets::LibraryItem,
+    target: oxidal_presets::LibraryReference,
 ) -> Result<(), String> {
     let stream = stream(shared).ok_or("Choose an audio interface before MIDI recall")?;
     const PROTECTED: &str = "Protect is on: MIDI can only switch to presets that are ready. Prepare it or turn Protect off.";

@@ -196,6 +196,9 @@
     "network_state": {
       "$ref": "#/$defs/NetworkState"
     },
+    "occurrence_edit": {
+      "$ref": "#/$defs/OccurrenceEdit"
+    },
     "player_order": {
       "$ref": "#/$defs/PlayerOrder"
     },
@@ -216,6 +219,12 @@
     },
     "preset_details_update": {
       "$ref": "#/$defs/DetailsUpdate"
+    },
+    "preset_version_edit": {
+      "$ref": "#/$defs/VersionEdit"
+    },
+    "preset_versions": {
+      "$ref": "#/$defs/VersionView"
     },
     "protect_state": {
       "$ref": "#/$defs/ProtectState"
@@ -256,6 +265,9 @@
     "rig_publish": {
       "$ref": "#/$defs/RigPublish"
     },
+    "rig_sleep_plan": {
+      "$ref": "#/$defs/RigSleepPlan"
+    },
     "scene_blend_update": {
       "$ref": "#/$defs/BlendUpdate"
     },
@@ -267,6 +279,9 @@
     },
     "scene_draft_update": {
       "$ref": "#/$defs/SceneDraftUpdate"
+    },
+    "set_order": {
+      "$ref": "#/$defs/SetOrder"
     },
     "sheet_archive": {
       "$ref": "#/$defs/SheetArchive"
@@ -452,6 +467,7 @@
     "rig_document",
     "rig_library",
     "rig_publish",
+    "rig_sleep_plan",
     "rig_native_sources",
     "lv2_catalog",
     "graph_presets",
@@ -521,6 +537,10 @@
     "preset_details",
     "preset_details_update",
     "library_catalog",
+    "set_order",
+    "occurrence_edit",
+    "preset_versions",
+    "preset_version_edit",
     "library_update",
     "library",
     "preset",
@@ -2896,6 +2916,87 @@
         "gate"
       ]
     },
+    "BranchSleepCommand": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "expected_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "expected_revision",
+        "enabled"
+      ]
+    },
+    "BranchSleepPhase": {
+      "type": "string",
+      "enum": [
+        "playing",
+        "priming",
+        "draining",
+        "asleep",
+        "failed"
+      ]
+    },
+    "BranchSleepState": {
+      "type": "object",
+      "properties": {
+        "active_scene": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "admitted_processors": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "branches": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SleepingBranchState"
+          }
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "requested_scene": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "running_processors": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "branches",
+        "running_processors",
+        "admitted_processors"
+      ]
+    },
     "BranchState": {
       "type": "object",
       "properties": {
@@ -5241,6 +5342,45 @@
         "id",
         "name"
       ]
+    },
+    "EntrySettings": {
+      "type": "object",
+      "properties": {
+        "mix": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "own_media": {
+          "type": "boolean"
+        },
+        "scene": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sheet": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "track": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "EqBand": {
       "type": "object",
@@ -8122,6 +8262,16 @@
             }
           ]
         },
+        "occurrence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResolvedOccurrence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "previous": {
           "anyOf": [
             {
@@ -8686,6 +8836,16 @@
           "format": "uint64",
           "minimum": 0
         },
+        "set_entry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResolvedOccurrence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "source": {
           "type": [
             "string",
@@ -9242,6 +9402,96 @@
       "required": [
         "seq",
         "message"
+      ]
+    },
+    "OccurrenceAction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "repeat"
+            },
+            "new_id": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "new_id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "change"
+            },
+            "settings": {
+              "$ref": "#/$defs/EntrySettings"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "settings"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "before": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "place"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "remove"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    },
+    "OccurrenceEdit": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/OccurrenceAction"
+        },
+        "entry": {
+          "type": "string"
+        },
+        "expected_revision": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "expected_revision",
+        "entry",
+        "action"
       ]
     },
     "Operation": {
@@ -10996,6 +11246,59 @@
         "categories"
       ]
     },
+    "PresetFamily": {
+      "type": "object",
+      "properties": {
+        "default_version": {
+          "type": "string"
+        },
+        "generation": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "kind": {
+          "$ref": "#/$defs/LibraryKind"
+        },
+        "logical_id": {
+          "type": "string"
+        },
+        "versions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PresetVersion"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "logical_id",
+        "kind",
+        "default_version",
+        "versions",
+        "generation"
+      ]
+    },
+    "PresetVersion": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "content"
+      ]
+    },
     "Progress": {
       "type": "object",
       "properties": {
@@ -11191,6 +11494,12 @@
           "items": {
             "$ref": "#/$defs/NodeModels"
           }
+        },
+        "sleep_enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
         "source_revision": {
           "type": "string"
@@ -11482,6 +11791,26 @@
       "required": [
         "target",
         "mix"
+      ]
+    },
+    "ResolvedOccurrence": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "entry": {
+          "$ref": "#/$defs/SetOccurrence"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "entry",
+        "name",
+        "content"
       ]
     },
     "ResolvedSheetLink": {
@@ -11792,6 +12121,23 @@
             "kind": {
               "type": "string",
               "const": "branch"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "command": {
+              "$ref": "#/$defs/BranchSleepCommand"
+            },
+            "kind": {
+              "type": "string",
+              "const": "branch_sleep"
             }
           },
           "additionalProperties": false,
@@ -12129,6 +12475,10 @@
           "description": "Exact manifest JSON: strict parsing also rejects duplicate keys in metadata.",
           "type": "string"
         },
+        "prepare_sleep_branches": {
+          "description": "Explicitly derive and publish verified closed sleep sends on this graph.",
+          "type": "boolean"
+        },
         "resources": {
           "description": "Each declared resource maps to an existing verified local payload.",
           "type": "object",
@@ -12147,12 +12497,55 @@
             }
           ],
           "default": null
+        },
+        "version_target": {
+          "description": "Saving an explicit named version binds the edit to the catalog and source bytes.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VersionTarget"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false,
       "required": [
         "manifest_json",
         "resources"
+      ]
+    },
+    "RigSleepPlan": {
+      "type": "object",
+      "properties": {
+        "inserted_sends": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SleepSendBoundary"
+          }
+        },
+        "plan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SleepBranches"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "inserted_sends"
       ]
     },
     "RigTopology": {
@@ -12440,6 +12833,16 @@
           "type": "integer",
           "format": "uint64",
           "minimum": 0
+        },
+        "native_bypass_preview": {
+          "description": "Draft values for already armed capture blocks. A regular performance recall uses the saved values.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/SceneNativeBypass"
+          }
         },
         "release_ms": {
           "description": "How long the outgoing scene takes to fade out, in ms (up to 10 s); none\nuses the preset's own fade, so delay and reverb tails ring out.",
@@ -12748,6 +13151,45 @@
       "enum": [
         "rig",
         "set_list"
+      ]
+    },
+    "SetOccurrence": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "preset": {
+          "$ref": "#/$defs/LibraryReference"
+        },
+        "settings": {
+          "$ref": "#/$defs/EntrySettings"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "preset",
+        "settings"
+      ]
+    },
+    "SetOrder": {
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResolvedOccurrence"
+          }
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "entries"
       ]
     },
     "Settings": {
@@ -13182,6 +13624,88 @@
         "source"
       ]
     },
+    "SleepBranch": {
+      "type": "object",
+      "properties": {
+        "branch": {
+          "description": "Existing scene branch declaration supplies the exact return gain ports.",
+          "type": "string"
+        },
+        "sends": {
+          "description": "Each named mono host gain node is an input boundary for this branch.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "branch",
+        "sends"
+      ]
+    },
+    "SleepBranches": {
+      "type": "object",
+      "properties": {
+        "branches": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SleepBranch"
+          }
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "branches"
+      ]
+    },
+    "SleepSendBoundary": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/PortableEndpoint"
+        },
+        "node": {
+          "type": "string"
+        },
+        "to": {
+          "$ref": "#/$defs/PortableEndpoint"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "node",
+        "from",
+        "to"
+      ]
+    },
+    "SleepingBranchState": {
+      "type": "object",
+      "properties": {
+        "branch": {
+          "type": "string"
+        },
+        "phase": {
+          "$ref": "#/$defs/BranchSleepPhase"
+        },
+        "processors": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "branch",
+        "phase",
+        "processors"
+      ]
+    },
     "SlotPosition": {
       "type": "object",
       "properties": {
@@ -13405,6 +13929,16 @@
           "items": {
             "$ref": "#/$defs/NodeAuthoring"
           }
+        },
+        "branch_sleep": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BranchSleepState"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "branches": {
           "type": "array",
@@ -15838,6 +16372,160 @@
         "active",
         "bypass",
         "profiles"
+      ]
+    },
+    "VersionAction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "const": "create"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "action",
+            "name"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "const": "rename"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "action",
+            "name"
+          ]
+        },
+        {
+          "description": "Only the publication endpoint accepts this action after verifying the stored bytes.",
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "const": "publish"
+            },
+            "content": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "action",
+            "content"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "const": "set_default"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "action"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "const": "delete"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "action"
+          ]
+        }
+      ]
+    },
+    "VersionEdit": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/VersionAction"
+        },
+        "expected_content": {
+          "type": "string"
+        },
+        "expected_revision": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "request_id",
+        "expected_revision",
+        "expected_content",
+        "version",
+        "action"
+      ]
+    },
+    "VersionTarget": {
+      "type": "object",
+      "properties": {
+        "expected_content": {
+          "type": "string"
+        },
+        "expected_revision": {
+          "type": "string"
+        },
+        "first": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "first",
+        "version",
+        "expected_content",
+        "expected_revision",
+        "request_id"
+      ]
+    },
+    "VersionView": {
+      "type": "object",
+      "properties": {
+        "catalog_revision": {
+          "type": "string"
+        },
+        "preset": {
+          "$ref": "#/$defs/PresetFamily"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "catalog_revision",
+        "preset"
       ]
     },
     "VoiceCapture": {

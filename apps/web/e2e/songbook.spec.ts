@@ -194,7 +194,7 @@ test('opening and moving backing, tuner and venue tools leaves the device contro
   page.on('request', (request) => {
     if (
       request.method() !== 'GET' &&
-      /\/api\/v1\/(player\/commands|tuner|venue)(?:\/|$)/.test(
+      /\/api\/v1\/(player\/commands|tuner|venues)(?:\/|$)/.test(
         new URL(request.url()).pathname,
       )
     )

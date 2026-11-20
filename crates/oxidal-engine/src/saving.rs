@@ -97,6 +97,13 @@ fn save_with_assets(
     let confirmed = session.snapshot();
     let mut manifest = original.manifest().clone();
     manifest.name = request.name.clone();
+    if let Some(enabled) = request.recall.sleep_enabled
+        && let Some(extension) = manifest
+            .extensions
+            .get_mut(oxidal_presets::manifest::SLEEP_BRANCHES_EXTENSION)
+    {
+        extension.insert("enabled".into(), serde_json::Value::Bool(enabled));
+    }
     for key in [SCENES_NATIVE_EXTENSION, SCENES_INNER_BYPASS_EXTENSION] {
         let Some(extension) = manifest.extensions.get_mut(key) else {
             continue;
