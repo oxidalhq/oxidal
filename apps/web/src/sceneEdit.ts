@@ -1,8 +1,14 @@
 import type { Lv2Plugin, RigDocument } from './api';
-import type { RigPublish, SceneControl } from './generated/contract';
+import type {
+  RigPublish,
+  SceneControl,
+  SceneNativeControl,
+} from './generated/contract';
 import { controlLabel, scalePointLabel } from './lv2Control';
 import { type DraftEffect, rigBuilder } from './rigDraft';
+import { applySceneBypass, type SceneBypass } from './sceneBypass';
 import { readScenes, sealScenes, writeScenes } from './sceneFormat';
+import { applyNativeSceneControls, nativeSceneKey } from './sceneNative';
 
 /**
  * Effects on one scene of a preset with scenes. A scene is a whole TONE3000
@@ -142,14 +148,19 @@ export type NewScene = {
   name: string;
   gains: Gain[];
   controls?: SceneControl[];
+  bypass?: SceneBypass[];
+  native_controls?: SceneNativeControl[];
 };
 type SceneDef = {
   id: string;
   name: string;
   gains: Gain[];
   controls?: SceneControl[];
+  bypass?: SceneBypass[];
+  native_controls?: SceneNativeControl[];
 };
 type ScenesExtension = {
+  initial_scene?: string;
   fade_ms: number;
   scenes: SceneDef[];
   branches?: SceneDef[];
@@ -180,6 +191,13 @@ function newSceneId(taken: { id: string }[] = []): string {
 
 /** The graph starts where `scene` is: its mix and its effect settings. */
 function startOn(manifest: Manifest, scene: SceneDef) {
+  const definition = readScenes<ScenesExtension>(manifest);
+  if (
+    definition &&
+    (definition.initial_scene !== undefined ||
+      definition.scenes.some((s) => s.native_controls?.length))
+  )
+    definition.initial_scene = scene.id;
   for (const gain of scene.gains) {
     const node = manifest.oxidal?.graph.nodes.find((n) => n.id === gain.node);
     if (node?.inputGains && gain.port < node.inputGains.length)
@@ -188,6 +206,10 @@ function startOn(manifest: Manifest, scene: SceneDef) {
   for (const control of scene.controls ?? []) {
     const effect = manifest.oxidal?.lv2.find((l) => l.id === control.node);
     if (effect) effect.controls[control.symbol] = control.value;
+  }
+  for (const bypass of scene.bypass ?? []) {
+    const node = manifest.oxidal?.graph.nodes.find((n) => n.id === bypass.node);
+    if (node) node.bypassed = bypass.value;
   }
 }
 
@@ -382,6 +404,16 @@ function removeScenePath(
     );
   extension.branches.splice(path, 1);
   for (const scene of [...extension.scenes, ...extension.branches]) {
+    if (scene.native_controls) {
+      scene.native_controls = scene.native_controls.filter(
+        (c) => !gone.has(c.node),
+      );
+      if (!scene.native_controls.length) delete scene.native_controls;
+    }
+    if (scene.bypass) {
+      scene.bypass = scene.bypass.filter((b) => !gone.has(b.node));
+      if (!scene.bypass.length) delete scene.bypass;
+    }
     scene.gains = scene.gains
       .filter(
         (g) => !gone.has(g.node) && !(sums.includes(g.node) && g.port === path),
@@ -561,6 +593,8 @@ function sceneMatch(
     manifest.oxidal?.lv2.find((l) => l.id === node)?.pluginUri;
   const gains = new Map<string, number>();
   const controls = new Map<string, number>();
+  const bypass = new Map<string, boolean>();
+  const nativeControls = new Map<string, number>();
   const skipped = new Set<string>();
   const kept = new Set<string>();
   for (const gain of scene.gains) {
@@ -574,6 +608,35 @@ function sceneMatch(
         `${sentence(path)} is a different sound in ${targetName}: its level is skipped.`,
       );
     else gains.set(gainKey(gain), gain.value);
+  }
+  for (const item of scene.bypass ?? []) {
+    const identity = blockIdentity(source, item.node);
+    if (
+      !identity ||
+      identity.endsWith(':') ||
+      identity !== blockIdentity(target, item.node)
+    )
+      skipped.add(
+        `${blockLabel(source, item.node)} is missing or a different block in ${targetName}: its On/Off setting is skipped.`,
+      );
+    else bypass.set(item.node, item.value);
+  }
+  for (const item of scene.native_controls ?? []) {
+    const identity = blockIdentity(source, item.node);
+    const key = nativeSceneKey(item);
+    if (
+      !identity ||
+      identity.endsWith(':') ||
+      identity !== blockIdentity(target, item.node)
+    )
+      skipped.add(
+        `${blockLabel(source, item.node)} is missing or different in ${targetName}: its capture setting is skipped.`,
+      );
+    else if (!shape.native_controls?.some((c) => nativeSceneKey(c) === key))
+      skipped.add(
+        `${targetName}'s scenes do not change ${blockLabel(source, item.node)} ${item.parameter.split(':').at(-1)}: it is skipped.`,
+      );
+    else nativeControls.set(key, item.value);
   }
   for (const control of scene.controls ?? []) {
     const block = shownBlock(source, control.node);
@@ -603,11 +666,21 @@ function sceneMatch(
       kept.add(
         `${shownBlock(target, control.node)} keeps ${targetName}'s own ${controlLabel(control.symbol)} setting.`,
       );
+  for (const item of shape.bypass ?? [])
+    if (!bypass.has(item.node))
+      kept.add(
+        `${blockLabel(target, item.node)} keeps ${targetName}'s own On/Off setting.`,
+      );
+  for (const item of shape.native_controls ?? [])
+    if (!nativeControls.has(nativeSceneKey(item)))
+      kept.add(
+        `${blockLabel(target, item.node)} keeps the destination scene's capture setting.`,
+      );
   const refused =
-    gains.size || controls.size
+    gains.size || controls.size || bypass.size || nativeControls.size
       ? undefined
       : `'${scene.name}' cannot be copied to ${targetName}: the two presets have no paths or effects in common.`;
-  return { gains, controls, skipped, kept, refused };
+  return { gains, controls, bypass, nativeControls, skipped, kept, refused };
 }
 
 /**
@@ -655,7 +728,7 @@ export function copySceneTo(
   if (extension.scenes.length >= MAX_SCENES)
     throw new Error(`${manifest.name} already has ${MAX_SCENES} scenes.`);
   const shape = extension.scenes[0]!;
-  const { gains, controls, refused } = sceneMatch(
+  const { gains, controls, bypass, nativeControls, refused } = sceneMatch(
     source.manifest,
     scene,
     target.manifest,
@@ -683,7 +756,33 @@ export function copySceneTo(
       ...c,
       value: controls.get(controlKey(c)) ?? graphControl(c),
     }));
+  if (shape.native_controls?.length)
+    copy.native_controls = shape.native_controls.map((c) => ({
+      ...c,
+      value: nativeControls.get(nativeSceneKey(c)) ?? c.value,
+    }));
   extension.scenes.push(copy);
+  if (bypass.size || shape.bypass?.length) {
+    applySceneBypass(
+      target.manifest,
+      manifest,
+      extension.scenes,
+      {
+        [copy.id]: [
+          ...(shape.bypass ?? [])
+            .filter((b) => !bypass.has(b.node))
+            .map((b) => ({
+              node: b.node,
+              value:
+                manifest.oxidal?.graph.nodes.find((n) => n.id === b.node)
+                  ?.bypassed ?? false,
+            })),
+          ...[...bypass].map(([node, value]) => ({ node, value })),
+        ],
+      },
+      undefined,
+    );
+  }
   return {
     ...publish(manifest, target.revision),
     source: { kind: 'rig', id: target.revision },
@@ -706,14 +805,19 @@ export function updateScenes(
   name?: string,
   added: NewScene[] = [],
   controls: Record<string, SceneControl[]> = {},
+  bypass: Record<string, SceneBypass[]> = {},
+  nativeControls: Record<string, SceneNativeControl[]> = {},
+  captureDefaults: readonly SceneNativeControl[] = [],
 ): RigPublish {
   const manifest = clone(document, live, name);
-  const extension = readScenes<{ scenes?: SceneDef[] }>(manifest);
+  const extension = readScenes<ScenesExtension>(manifest);
   if (
     !manifest.oxidal ||
     (!Object.keys(updates).length &&
       !added.length &&
-      !Object.keys(controls).length)
+      !Object.keys(controls).length &&
+      !Object.keys(bypass).length &&
+      !Object.keys(nativeControls).length)
   )
     throw new Error('There are no scene updates to save.');
   for (const scene of added) {
@@ -728,6 +832,12 @@ export function updateScenes(
       gains: scene.gains.map((g) => ({ ...g })),
       ...(scene.controls?.length
         ? { controls: scene.controls.map((c) => ({ ...c })) }
+        : {}),
+      ...(scene.bypass?.length
+        ? { bypass: scene.bypass.map((b) => ({ ...b })) }
+        : {}),
+      ...(scene.native_controls?.length
+        ? { native_controls: scene.native_controls.map((c) => ({ ...c })) }
         : {}),
     });
   }
@@ -755,6 +865,21 @@ export function updateScenes(
     start,
     live,
   );
+  applySceneBypass(
+    document.manifest,
+    manifest,
+    extension?.scenes ?? [],
+    bypass,
+    start,
+  );
+  if (extension)
+    applyNativeSceneControls(
+      manifest,
+      extension,
+      nativeControls,
+      captureDefaults,
+      start,
+    );
   return publish(manifest, document.revision);
 }
 
@@ -861,7 +986,7 @@ export function keepScenes(
 ): RigPublish {
   const before = readScenes<{
     branches?: unknown[];
-    scenes?: { gains: Gain[] }[];
+    scenes?: SceneDef[];
   }>(document.manifest);
   if (!before) return request;
   if (before.branches?.length)
@@ -886,9 +1011,27 @@ export function keepScenes(
     nodes.filter((node) => node.kind === 'lv2').map((node) => node.id),
   );
   const scenes = JSON.parse(JSON.stringify(before)) as typeof before & {
-    scenes?: { gains: Gain[]; controls?: SceneControl[] }[];
+    scenes?: {
+      gains: Gain[];
+      controls?: SceneControl[];
+      bypass?: SceneBypass[];
+    }[];
   };
   for (const scene of scenes.scenes ?? []) {
+    if (scene.native_controls) {
+      scene.native_controls = scene.native_controls.filter((c) =>
+        nodes.some((n) => n.id === c.node && n.kind === 'tone3000'),
+      );
+      if (!scene.native_controls.length) delete scene.native_controls;
+    }
+    if (scene.bypass) {
+      scene.bypass = scene.bypass.filter((b) =>
+        nodes.some(
+          (n) => n.id === b.node && ['tone3000', 'lv2'].includes(n.kind),
+        ),
+      );
+      if (!scene.bypass.length) delete scene.bypass;
+    }
     // Settings of effects the rebuilt chain no longer has go with them.
     if (scene.controls) {
       scene.controls = scene.controls.filter((c) => effects.has(c.node));
@@ -902,7 +1045,14 @@ export function keepScenes(
     ];
   }
   // Scenes switch levels; with no split left there is nothing to switch.
-  if (scenes.scenes?.some((scene) => !scene.gains.length))
+  if (
+    scenes.scenes?.some(
+      (scene) =>
+        !scene.gains.length &&
+        !scene.bypass?.length &&
+        !scene.native_controls?.length,
+    )
+  )
     throw new Error(
       'A preset with scenes needs a split. Keep at least one split with two paths.',
     );

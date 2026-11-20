@@ -1,4 +1,5 @@
 import { Button } from '@oxidal/design-system/components/button';
+import { sceneColour } from '@oxidal/design-system/lib/scene-colours';
 
 import { type MoveKey, RouteTree } from '../../components/RouteTree';
 import { useEpaper } from '../../components/RouteTree.display';
@@ -70,6 +71,15 @@ export function RigChainSurface({ rig, vm }: RigViewProps) {
     void shiftPath(id, step);
   };
   const open = editing && running && !locked;
+  const sceneIndex =
+    vm.state.control?.scenes?.scenes.findIndex(
+      (s) => s.id === vm.state.control?.scene,
+    ) ?? -1;
+  const audible = new Set(
+    vm.stageLanes.flatMap((lane) =>
+      lane.blocks.filter((b) => b.on).map((b) => b.id),
+    ),
+  );
   return (
     <>
       <div className="space-y-2">
@@ -85,9 +95,16 @@ export function RigChainSurface({ rig, vm }: RigViewProps) {
             if (!n) return [];
             // A TONE3000 block draws its own blocks once they are known.
             const inner = n.kind === 'tone3000' ? nativeTiles(n) : [];
-            return inner.length
+            const tiles = inner.length
               ? inner
               : [{ ...describeNode(n).block, id: laneBlockId(n.id, '') }];
+            return tiles.map((b) => ({
+              ...b,
+              tint:
+                sceneIndex >= 0 && b.on && audible.has(b.id)
+                  ? sceneColour(sceneIndex)
+                  : undefined,
+            }));
           }}
           selected={
             selectedLaneTile ??

@@ -17,6 +17,8 @@ export interface RigBlockVM {
   on: boolean;
   /** Model artwork or gear glyph drawn inside the tile face. */
   face: ReactNode;
+  /** Playing-scene colour, supplied only for blocks in the sounding lane. */
+  tint?: string;
   /** An empty slot: drawn as a + tile where a block can be added. */
   empty?: boolean;
 }

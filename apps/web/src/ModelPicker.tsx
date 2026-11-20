@@ -557,8 +557,19 @@ export function ModelPicker({
                   <strong>{tone.title}</strong>
                   <span className="catalog-meta">
                     <GearLabel gear={tone.gear} /> ·{' '}
-                    {tone.user.display_name || tone.user.username} · licence{' '}
-                    {tone.license.toUpperCase()}
+                    {tone.user.profile_url ? (
+                      <a
+                        href={tone.user.profile_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex min-h-touch items-center underline"
+                      >
+                        {tone.user.display_name || tone.user.username}
+                      </a>
+                    ) : (
+                      tone.user.display_name || tone.user.username
+                    )}{' '}
+                    · licence {tone.license.toUpperCase()}
                   </span>
                 </div>
               </div>

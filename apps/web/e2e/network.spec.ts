@@ -283,7 +283,7 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
     }
     await route.fulfill({ json: state });
   });
-  await page.goto('/');
+  await page.goto('/#rig');
   await expect(
     page.getByRole('complementary', { name: 'DSP and system resources' }),
   ).toHaveAttribute('data-connected', 'true');

@@ -11,7 +11,8 @@ import type {
   PluginView,
 } from '@oxidal/design-system/patterns/plugin-panel';
 
-import type { Lv2Plugin } from './api';
+import type { Lv2Plugin, RigControl } from './api';
+import { controlDisplay } from './lv2Control';
 
 type Lv2Port = Lv2Plugin['ports'][number];
 
@@ -21,6 +22,14 @@ export function lv2PluginView(plugin: Lv2Plugin): PluginView {
     name: plugin.name,
     category: plugin.category ?? undefined,
     description: plugin.comment ?? undefined,
+    ...(plugin.artwork
+      ? {
+          artwork: `/api/v1/plugins/lv2/artwork?uri=${encodeURIComponent(plugin.uri)}`,
+        }
+      : {}),
+    ...(plugin.homepage && /^https?:\/\//i.test(plugin.homepage)
+      ? { homepage: plugin.homepage }
+      : {}),
   };
 }
 
@@ -59,11 +68,16 @@ function lv2PanelControl(
     symbol: port.symbol,
     name: port.name ?? undefined,
     group: port.group ?? undefined,
+    groupId: port.group_uri
+      ? `uri:${port.group_uri}`
+      : port.group_symbol
+        ? `symbol:${port.group_symbol}`
+        : undefined,
     unit: port.unit ?? undefined,
     kind: port.toggled ? 'toggle' : choices.length ? 'choice' : 'range',
     min,
     max,
-    default: fallback,
+    default: port.default ?? undefined,
     value:
       current !== undefined && Number.isFinite(current) ? current : fallback,
     integer: port.integer,
@@ -71,4 +85,48 @@ function lv2PanelControl(
     priority: port.display_priority ?? undefined,
     hidden: port.not_on_gui ? true : undefined,
   };
+}
+
+/** Add catalog display hints to the selected block's worker-owned controls. */
+export function liveLv2Controls(
+  plugin: Lv2Plugin | undefined,
+  live: ReadonlyMap<string, RigControl>,
+): PluginControl[] {
+  const described = plugin
+    ? new Map(
+        lv2PluginControls(plugin).map((control) => [control.symbol, control]),
+      )
+    : null;
+  const ports = new Map(plugin?.ports.map((port) => [port.symbol, port]));
+  return [...live].flatMap(([symbol, control]) => {
+    const metadata = described?.get(symbol);
+    const port = ports.get(symbol);
+    if (port && !metadata) return [];
+    const choices =
+      metadata?.kind === 'choice'
+        ? (control.scale_points ?? metadata.choices)
+        : undefined;
+    const display = controlDisplay(control) || String(control.value);
+    const unit = metadata?.unit;
+    return [
+      {
+        ...metadata,
+        symbol,
+        name: plugin?.uri.startsWith('urn:oxidal:plugin:moment#')
+          ? control.label
+          : metadata?.name,
+        kind: control.toggle ? 'toggle' : choices?.length ? 'choice' : 'range',
+        min: control.minimum,
+        max: control.maximum,
+        default: port?.default ?? undefined,
+        value: control.value,
+        choices,
+        integer: control.integer,
+        display:
+          unit && Number.isFinite(Number(display))
+            ? `${display} ${unit}`
+            : display,
+      },
+    ];
+  });
 }

@@ -194,13 +194,23 @@ export function EffectPacks({
                   <div className="effect-pack-title">
                     <strong>{pack.name}</strong>
                     <a
-                      className="tone-details-link text-xs"
+                      className="inline-flex min-h-touch w-fit items-center gap-1 text-xs font-semibold underline"
                       href={pack.website}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
                       Website <ArrowSquareOut aria-hidden="true" />
                     </a>
+                    {pack.copyright_available && (
+                      <a
+                        className="inline-flex min-h-touch items-center text-xs underline"
+                        href={`/api/v1/packs/${encodeURIComponent(pack.id)}/copyright`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Licence and copyright
+                      </a>
+                    )}
                     <span className="effect-pack-state">
                       {pack.installed
                         ? `Installed${pack.version ? ` · ${pack.version}` : ''}`

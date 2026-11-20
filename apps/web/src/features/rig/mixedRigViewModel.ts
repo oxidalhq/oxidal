@@ -3,6 +3,7 @@ import { createElement } from 'react';
 import type { RigAudioState, RigControl, RigDocument } from '../../api';
 import type { SceneLanes } from '../../components/RouteTree';
 import { GearIcon } from '../../GearIcon';
+import type { SceneNativeControl } from '../../generated/contract';
 import { lv2Control } from '../../lv2Control';
 import { oxidalEffectControls } from '../../oxidalEffectLabels';
 import {
@@ -19,6 +20,7 @@ import {
 import { controlGroup } from '../../rigControls';
 import { rigNodeLabel } from '../../rigDraft';
 import { sceneSplitIndex } from '../../rigRoute';
+import type { SceneBypass } from '../../sceneBypass';
 import {
   branchEffects,
   type NewScene,
@@ -107,6 +109,8 @@ export type SceneDraft = {
   added?: NewScene[];
   /** Effect settings changed with Update scene, by scene id. */
   controls?: Record<string, SceneControl[]>;
+  bypass?: Record<string, SceneBypass[]>;
+  native_controls?: Record<string, SceneNativeControl[]>;
 };
 
 export type MixedRigViewInput = {
@@ -417,7 +421,17 @@ export function mixedRigViewModel({
     sceneUpdates && sceneUpdates.session === state.control?.session
       ? (sceneUpdates.added ?? [])
       : [];
-  const draftCount = Object.keys(drafts).length + addedScenes.length;
+  const draftCount = new Set([
+    ...Object.keys(drafts),
+    ...(sceneUpdates?.session === state.control?.session
+      ? [
+          ...Object.keys(sceneUpdates?.controls ?? {}),
+          ...Object.keys(sceneUpdates?.bypass ?? {}),
+          ...Object.keys(sceneUpdates?.native_controls ?? {}),
+        ]
+      : []),
+    ...addedScenes.map((scene) => scene.id),
+  ]).size;
   const editingBase = editingScene
     ? (drafts[editingScene.id] ?? editingScene.gains)
     : [];
@@ -757,6 +771,7 @@ export function mixedRigViewModel({
     running,
     nodes,
     selected,
+    selectedPluginUri,
     stageRole,
     controls,
     currentSave,

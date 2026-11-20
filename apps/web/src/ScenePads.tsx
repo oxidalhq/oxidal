@@ -1,5 +1,8 @@
 import { useEffect, useRef } from 'react';
 
+import { sceneColour } from '@oxidal/design-system/lib/scene-colours';
+import { ScenePad } from '@oxidal/design-system/widgets/scene-pad';
+
 import './ScenePads.css';
 
 type Scene = { id: string; name: string };
@@ -84,7 +87,7 @@ export function ScenePads({
         </span>
       </h3>
       <div
-        className="scene-pad-grid"
+        className="grid grid-cols-2 gap-2 sm:grid-cols-4"
         role="group"
         aria-label="Scenes"
         aria-busy={fading}
@@ -94,15 +97,16 @@ export function ScenePads({
       >
         {scenes.map((scene, i) => {
           const pad = (
-            <button
+            <ScenePad
               key={scene.id}
-              type="button"
-              className="scene-pad"
+              scene={{ ...scene, number: i + 1, colour: sceneColour(i) }}
+              active={scene.id === active}
+              fading={fading && scene.id === active}
+              className={onMenu ? 'h-full w-full pr-11' : 'h-full w-full'}
               aria-label={`Scene ${i + 1}: ${scene.name}`}
-              aria-pressed={scene.id === active}
               aria-keyshortcuts={i < 9 ? String(i + 1) : undefined}
               disabled={disabled}
-              onClick={() => {
+              onSelect={() => {
                 // A hold that opened the menu is not also a tap.
                 if (held.current?.fired) {
                   held.current = null;
@@ -132,10 +136,7 @@ export function ScenePads({
                   if (held.current) held.current.fired = true;
                 },
               })}
-            >
-              <span className="scene-pad-number">{i + 1}</span>
-              <strong>{scene.name}</strong>
-            </button>
+            />
           );
           return onMenu ? (
             <div key={scene.id} className="scene-pad-cell">

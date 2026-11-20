@@ -134,7 +134,7 @@ it('uses one signal canvas and selected-block inspector for chain and scenes', a
     screen.getByRole('button', { name: 'Move Tape delay earlier' }),
   );
   expect(
-    container.querySelector('.rig-tile:first-child .rig-tile-label'),
+    container.querySelector('[data-slot="chain-block"]'),
   ).toHaveTextContent('Tape delay');
   await user.click(screen.getByRole('tab', { name: 'Scenes' }));
   expect(screen.getByLabelText('Scene tails')).toHaveTextContent(

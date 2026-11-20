@@ -2,6 +2,7 @@ import { Eraser, FloppyDisk, Plus, Stop } from '@phosphor-icons/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { PluginPanel } from '@oxidal/design-system/patterns/plugin-panel';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { rigAudioState } from './api';
@@ -18,6 +19,7 @@ import {
   type Lv2Plugin,
   playbackCommand,
   playbackState,
+  type RigControl,
   type SavedGraph,
   type Snapshot,
 } from './api';
@@ -27,7 +29,10 @@ import { StageControls } from './features/stage/StageControls';
 import { GearIcon } from './GearIcon';
 import { friendlyError } from './lib/friendlyError';
 import { lv2Control } from './lv2Control';
+import { liveLv2Controls, lv2PluginView } from './lv2PluginPanel';
 import { ModelPicker } from './ModelPicker';
+import { oxidalEffectControls } from './oxidalEffectLabels';
+import { PluginSourceDetails } from './PluginSourceDetails';
 import { blockKind } from './rigChain';
 import { RigComposer } from './RigComposer';
 import { type DraftEffect, lv2Effect } from './rigDraft';
@@ -517,41 +522,112 @@ export function GraphAuthor({
               <Stop aria-hidden="true" /> Stop audio
             </Button>
           </div>
-          {effects.map((node, index) => {
+          {effects.map((node) => {
             if (node.id !== selectedEffect) return null;
             const binding = configured?.bindings.find(
               (b) => b.node === node.id,
             );
             const plugin = catalog.find((p) => p.uri === binding?.uri);
-            const title = `${index + 1} · ${plugin?.name ?? binding?.uri.split(/[/#]/).pop() ?? 'Effect'}`;
+            const title =
+              plugin?.name ?? binding?.uri.split(/[/#]/).pop() ?? 'Effect';
+            const parameters = state.control!.parameters.filter((p) =>
+              p.id.startsWith(`${node.id}.`),
+            );
+            const bySymbol = new Map(
+              parameters.map((p) => [p.id.slice(node.id.length + 1), p]),
+            );
+            const native = parameters
+              .filter((p) => p.writable)
+              .map((p): RigControl => {
+                const symbol = p.id.slice(node.id.length + 1);
+                const port = plugin?.ports.find((p) => p.symbol === symbol);
+                const scale = controlScale(p.id);
+                return {
+                  target: { kind: 'lv2', node: node.id, symbol },
+                  label: port?.name ?? p.label,
+                  minimum: scale?.min ?? p.min,
+                  maximum: scale?.max ?? p.max,
+                  value: scale?.native(p.value) ?? p.value,
+                  display:
+                    scale?.format(p.value) ??
+                    `${Number((p.value * 100).toFixed(2))}%`,
+                  toggle: port?.toggled ?? false,
+                  integer: port?.integer ?? false,
+                  logarithmic: port?.logarithmic ?? false,
+                  scale_points: port?.scale_points,
+                };
+              });
+            const live = new Map(
+              oxidalEffectControls(native, binding?.uri).flatMap((c) =>
+                c.target.kind === 'lv2' ? [[c.target.symbol, c] as const] : [],
+              ),
+            );
             return (
               <section key={node.id} className="space-y-2" aria-label={title}>
-                <h3>{title}</h3>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                  {state
-                    .control!.parameters.filter((parameter) =>
-                      parameter.id.startsWith(`${node.id}.`),
-                    )
-                    .map((parameter) => (
-                      <div
-                        key={parameter.id}
-                        className="min-w-0 rounded-md border border-border p-2"
-                      >
-                        <h4 className="break-words">
-                          {parameter.label.replaceAll('_', ' ')}
-                        </h4>
-                        <ControlEditor
-                          parameter={parameter}
-                          state={state.control!}
-                          connected={connected && !busy}
-                          send={send}
-                          scale={controlScale(parameter.id)}
-                          formatValue={controlScale(parameter.id)?.format}
-                          accept={() => {}}
-                        />
-                      </div>
-                    ))}
-                </div>
+                <PluginPanel
+                  key={`${state.control!.session}:${node.id}`}
+                  plugin={plugin ? lv2PluginView(plugin) : { name: title }}
+                  controls={liveLv2Controls(plugin, live)}
+                  on
+                  disabled={disabled || !!state.control!.edit}
+                  onControl={(symbol, value) => {
+                    const parameter = bySymbol.get(symbol);
+                    const owner = current.current?.control;
+                    if (!parameter?.writable || !owner || disabled) return;
+                    const normalized =
+                      controlScale(parameter.id)?.normalized(value) ?? value;
+                    void send(
+                      { type: 'set', target: parameter.id, value: normalized },
+                      owner.revision,
+                      owner.session,
+                    ).catch((cause) =>
+                      setError(friendlyError(cause, 'change this control')),
+                    );
+                  }}
+                  renderRange={(control) => {
+                    const parameter = bySymbol.get(control.symbol)!;
+                    const scale = controlScale(parameter.id);
+                    return (
+                      <ControlEditor
+                        key={`${state.control!.session}:${node.id}:${parameter.id}`}
+                        parameter={{
+                          ...parameter,
+                          label: control.name ?? parameter.label,
+                        }}
+                        state={state.control!}
+                        connected={connected && !busy}
+                        send={send}
+                        scale={scale}
+                        formatValue={
+                          scale &&
+                          ((value) =>
+                            `${scale.format(value)}${control.unit ? ` ${control.unit}` : ''}`)
+                        }
+                        appearance="value"
+                        accept={() => {}}
+                      />
+                    );
+                  }}
+                />
+                {plugin && (
+                  <PluginSourceDetails key={plugin.uri} plugin={plugin} />
+                )}
+                {parameters.some((p) => !p.writable) && (
+                  <dl className="grid gap-1" aria-label="Plugin readings">
+                    {parameters
+                      .filter((p) => !p.writable)
+                      .map((p) => (
+                        <div key={p.id} className="flex justify-between gap-3">
+                          <dt>{p.label}</dt>
+                          <dd>
+                            <output>
+                              {controlScale(p.id)?.format(p.value) ?? p.value}
+                            </output>
+                          </dd>
+                        </div>
+                      ))}
+                  </dl>
+                )}
               </section>
             );
           })}

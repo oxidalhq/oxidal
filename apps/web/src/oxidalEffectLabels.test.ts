@@ -16,6 +16,38 @@ const control = (symbol: string, value: number): Control => ({
   value,
 });
 
+it.each([
+  [0, 0, ['Loop length', 'Tape speed', 'Size and decay', 'Echo spread']],
+  [1, 1, ['Slice size', 'Travel', 'Delay time', 'Feedback']],
+  [2, 2, ['Slice size', 'Sensitivity', 'Sample size', 'Pitch speed']],
+])(
+  'names Moment controls for loop %s and wet %s without changing values',
+  (loop, wet, labels) => {
+    const original = [
+      control('loopmode', loop),
+      control('wetmode', wet),
+      ...['length', 'move', 'time', 'shape'].map((symbol) =>
+        control(symbol, 50),
+      ),
+    ];
+    const result = oxidalEffectControls(
+      original,
+      'urn:oxidal:plugin:moment#stereo',
+    );
+    expect(result.slice(2).map((c) => c.label)).toEqual(labels);
+    result.forEach((c, index) =>
+      expect(c).toEqual({ ...original[index], label: c.label }),
+    );
+  },
+);
+
+it('keeps Moment labels when modes are missing or unknown', () => {
+  const original = [control('length', 50), control('shape', 50)];
+  expect(
+    oxidalEffectControls(original, 'urn:oxidal:plugin:moment#mono'),
+  ).toEqual(original);
+});
+
 it('names Motion shapes for the playing mode and leaves other plugins alone', () => {
   const phaser = oxidalEffectControls(
     [control('mode', 2), control('shape', 1)],

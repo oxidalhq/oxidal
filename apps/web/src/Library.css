@@ -524,22 +524,6 @@
   font-weight: 400;
 }
 
-.library-model-preview .tone-details {
-  grid-template-columns: clamp(5rem, 22vw, 7rem) minmax(0, 1fr);
-  padding: 0;
-  border: 0;
-  gap: 1rem;
-}
-.library-model-preview .tone-details-picture {
-  width: clamp(5rem, 22vw, 7rem);
-  height: clamp(5rem, 22vw, 7rem);
-  border: 0;
-  background: var(--muted);
-}
-.library-model-preview .tone-details-picture img {
-  object-fit: contain;
-}
-
 /* Reordering uses a dedicated handle so normal row gestures keep scrolling. */
 .set-list-handle {
   touch-action: none;

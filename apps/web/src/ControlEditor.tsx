@@ -17,6 +17,7 @@ export function ControlEditor({
   accept,
   send = sendCommand,
   scale,
+  appearance = 'dial',
   formatValue = (value: number) => `${Number((value * 100).toFixed(2))}%`,
 }: {
   parameter: Parameter;
@@ -26,6 +27,7 @@ export function ControlEditor({
   send?: typeof sendCommand;
   formatValue?: (value: number) => string;
   scale?: ControlScale;
+  appearance?: 'dial' | 'value';
 }) {
   const [owner] = useState(() => crypto.randomUUID());
   const [opened, setOpened] = useState(false);
@@ -115,29 +117,40 @@ export function ControlEditor({
   const unavailable = !connected || busy || !owned;
   return (
     <div className="control-editor">
-      <button
+      <Button
         type="button"
-        className="parameter-touch"
+        variant="outline"
+        className={
+          appearance === 'dial'
+            ? 'parameter-touch'
+            : 'w-full justify-start font-mono tabular-nums'
+        }
         disabled={!connected || busy || !!state.edit}
         onClick={() => void begin()}
         aria-label={`Adjust ${parameter.label} value`}
         aria-haspopup="dialog"
       >
-        <svg className="parameter-dial" viewBox="0 0 64 64" aria-hidden="true">
-          <circle cx="32" cy="32" r="26" className="dial-track" />
-          <circle
-            cx="32"
-            cy="32"
-            r="26"
-            className="dial-value"
-            pathLength="100"
-            strokeDasharray={`${Math.max(0, Math.min(100, ((parameter.value - parameter.min) / (parameter.max - parameter.min)) * 100))} 100`}
-          />
-        </svg>
+        {appearance === 'dial' && (
+          <svg
+            className="parameter-dial"
+            viewBox="0 0 64 64"
+            aria-hidden="true"
+          >
+            <circle cx="32" cy="32" r="26" className="dial-track" />
+            <circle
+              cx="32"
+              cy="32"
+              r="26"
+              className="dial-value"
+              pathLength="100"
+              strokeDasharray={`${Math.max(0, Math.min(100, ((parameter.value - parameter.min) / (parameter.max - parameter.min)) * 100))} 100`}
+            />
+          </svg>
+        )}
         <output data-testid={`value-${parameter.id}`}>
           {formatValue(parameter.value)}
         </output>
-      </button>
+      </Button>
       {opened && (
         <AdjustmentDialog
           title={parameter.label}

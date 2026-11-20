@@ -71,7 +71,7 @@ export function LibraryModelPreview({
               </p>
               {modelSourceLink(model) && (
                 <a
-                  className="tone-details-link"
+                  className="inline-flex min-h-touch w-fit items-center gap-1 font-semibold underline"
                   href={modelSourceLink(model)!}
                   target="_blank"
                   rel="noopener noreferrer"

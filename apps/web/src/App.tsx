@@ -3,6 +3,7 @@ import {
   Cpu,
   Faders,
   Info,
+  ListChecks,
   Monitor,
   PianoKeys,
   Power,
@@ -37,6 +38,10 @@ import {
   PageHeading,
 } from '@oxidal/design-system/patterns/app-shell';
 import { DisplaySettings } from '@oxidal/design-system/patterns/display-settings';
+import {
+  FirstRun,
+  type FirstRunRoute,
+} from '@oxidal/design-system/patterns/first-run';
 import { SettingsPage } from '@oxidal/design-system/patterns/settings-page';
 
 import { About } from './About';
@@ -79,6 +84,7 @@ import { GUITARS_CHANGED_EVENT } from './useGuitars';
 import { useResourceStatus } from './useResourceStatus';
 import { useScreenSession } from './useScreenSession';
 import {
+  replaceWorkspaceLocation,
   useSectionLocation,
   useWorkspaceNavigation,
   WorkspaceMemory,
@@ -106,6 +112,7 @@ const WebTerminal = lazy(() =>
 /** Settings destinations, each with its own link such as `#settings/accounts`. */
 /** One icon per Settings section, beside its label. */
 const settingsIcons = {
+  essentials: <ListChecks aria-hidden="true" />,
   audio: <SpeakerHigh aria-hidden="true" />,
   connections: <WifiHigh aria-hidden="true" />,
   accounts: <UserCircle aria-hidden="true" />,
@@ -117,6 +124,7 @@ const settingsIcons = {
   about: <Info aria-hidden="true" />,
 } as const;
 const settingsSections = [
+  'essentials',
   'audio',
   'connections',
   'accounts',
@@ -200,6 +208,7 @@ function InstrumentApp() {
     'audio',
   );
   const settingsLabels = {
+    essentials: 'Before you play',
     audio: 'Audio',
     connections: 'Network',
     accounts: 'Accounts',
@@ -387,6 +396,27 @@ function InstrumentApp() {
       active = false;
     };
   }, [connected]);
+
+  function openSetupStep(route: FirstRunRoute) {
+    leaveScreen(() => {
+      if (route === 'guitars') return setView('guitars');
+      if (route === 'library/oxidal') {
+        setView('library');
+        const url = new URL(window.location.href);
+        url.hash = route;
+        replaceWorkspaceLocation(url);
+        return;
+      }
+      showSettings();
+      setSettingsSection(
+        route === 'settings/audio'
+          ? 'audio'
+          : route === 'settings/midi'
+            ? 'midi'
+            : 'connections',
+      );
+    });
+  }
 
   function showSettings() {
     const mapping = state?.mappings.mappings[0];
@@ -822,6 +852,9 @@ function InstrumentApp() {
                 );
             }}
           >
+            {settingsSection === 'essentials' && (
+              <FirstRun onStep={openSetupStep} onDone={() => setView('rig')} />
+            )}
             {settingsSection === 'display' && (
               <DisplaySettings
                 mode={displayMode}

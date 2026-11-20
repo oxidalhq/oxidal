@@ -1,9 +1,9 @@
-import { ArrowSquareOut } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
-import './ToneDetails.css';
+import { SourceCard } from '@oxidal/design-system/widgets/block-source';
+
 import { tone3000Tone, toneImage, type TonePage } from './api';
-import { GearIcon, GearLabel } from './GearIcon';
+import { GearLabel } from './GearIcon';
 import { friendlyError } from './lib/friendlyError';
 import { toneLink } from './toneLink';
 
@@ -42,7 +42,6 @@ function ToneCard({
     initialTone ?? known.get(toneId) ?? null,
   );
   const [error, setError] = useState('');
-  const [pictureFailed, setPictureFailed] = useState(false);
   useEffect(() => {
     if (initialTone || known.has(toneId)) return;
     const abort = new AbortController();
@@ -65,49 +64,35 @@ function ToneCard({
           : 'Reading tone details…'}
       </p>
     );
-  const author = tone.user.display_name || tone.user.username;
   const models =
     (tone.a1_models_count ?? 0) +
     (tone.a2_models_count ?? 0) +
     (tone.custom_models_count ?? 0);
   const count = models || tone.models_count;
   return (
-    <section className="tone-details" aria-label="TONE3000 details">
-      <div className="tone-details-picture">
-        {pictureFailed ? (
-          <GearIcon gear={tone.gear} name={tone.title} />
-        ) : (
-          <img
-            src={toneImage(tone.id)}
-            alt=""
-            loading="lazy"
-            onError={() => setPictureFailed(true)}
-          />
-        )}
-      </div>
-      <div className="tone-details-text">
-        <strong>{tone.title}</strong>
-        <span>
-          by {author}
-          {tone.user.display_name && (
-            <span className="caption"> @{tone.user.username}</span>
-          )}
-        </span>
-        <span className="caption">
-          <GearLabel gear={tone.gear} /> · {tone.format.toUpperCase()}
-          {count > 0 && ` · ${count} model${count === 1 ? '' : 's'}`}
-          {' · '}
-          {licenses[tone.license] ?? tone.license}
-        </span>
-        <a
-          className="tone-details-link"
-          href={toneLink(tone)}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          View on TONE3000 <ArrowSquareOut aria-hidden="true" />
-        </a>
-      </div>
-    </section>
+    <SourceCard
+      source={{
+        kind: 'tone3000',
+        title: tone.title,
+        creator: {
+          name: tone.user.display_name || tone.user.username,
+          username: tone.user.display_name ? tone.user.username : undefined,
+          profile: tone.user.profile_url ?? undefined,
+        },
+        page: toneLink(tone),
+        image: toneImage(tone.id),
+        gear: GearLabel({ gear: tone.gear }),
+        format: tone.format.toUpperCase(),
+        models: count,
+        counts: models
+          ? {
+              standard: tone.a1_models_count,
+              a2: tone.a2_models_count,
+              custom: tone.custom_models_count,
+            }
+          : undefined,
+        licence: licenses[tone.license] ?? tone.license,
+      }}
+    />
   );
 }

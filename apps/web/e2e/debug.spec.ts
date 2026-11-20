@@ -46,7 +46,7 @@ test('debug requires enablement, executes once, cancels and keeps commands out o
     }
     await route.fulfill({ json: state });
   });
-  await page.goto('/');
+  await page.goto('/#rig');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await selectSettingsSection(page, 'Maintenance');
   const panel = page.getByRole('region', { name: 'Debug console' });
@@ -145,7 +145,7 @@ test('interactive terminal reconnects without replaying input and stays usable a
       'Interactive terminal',
     );
   }
-  await page.goto('/');
+  await page.goto('/#rig');
   if (testInfo.project.name === 'boox-air3c')
     await setDisplayMode(page, 'epaper');
   await open();
@@ -244,7 +244,7 @@ test('administrator terminal is explicit and mode changes never start a shell', 
       },
     });
   });
-  await page.goto('/');
+  await page.goto('/#rig');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await selectSettingsSection(page, 'Maintenance');
   const panel = page.getByRole('region', { name: 'Web terminal' });

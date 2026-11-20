@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 
 import './styles.css';
 import App from './App';
+import { openFirstRun } from './firstRun';
 
 // A deploy replaces the hashed chunks an open tab still points at. Reload once
 // to pick up the new build instead of leaving a blank page.
@@ -17,6 +18,8 @@ window.addEventListener('vite:preloadError', (event) => {
   }
   window.location.reload();
 });
+
+openFirstRun();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

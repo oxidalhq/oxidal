@@ -11,6 +11,9 @@ import { rigBusy } from './mixedRigViewModel';
 import { SceneSettings } from './SceneEditorControls';
 import { SceneMenu } from './SceneEditorMenu';
 import { useSceneSettings } from './SceneEditorSettings';
+import { SceneGrid } from './SceneGrid';
+import { NativeSceneSettings } from './SceneNativeSettings';
+import { useNativeSceneSettings } from './SceneNativeSettingsState';
 import type { RigViewProps } from './useMixedRigSession';
 
 /**
@@ -19,10 +22,12 @@ import type { RigViewProps } from './useMixedRigSession';
  * @see docs/interface.md
  */
 export function SceneEditor({ rig, vm }: RigViewProps) {
-  const waiting = rigBusy(vm, rig);
+  const waiting = rigBusy(vm, rig) || rig.sceneSharing.conflict;
   const [menu, setMenu] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
+  const [gridOpen, setGridOpen] = useState(false);
   const settings = useSceneSettings({ rig, vm });
+  const nativeSettings = useNativeSceneSettings({ rig, vm });
   const {
     current,
     matching,
@@ -50,11 +55,22 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
   /** Effect settings drafted with Update scene, kept with the scene draft. */
   const draftedControls =
     sceneUpdates?.session === session ? (sceneUpdates?.controls ?? {}) : {};
-  const controlOnly = Object.keys(draftedControls).filter(
-    (id) => !drafts[id],
-  ).length;
-  const pending = draftCount + controlOnly;
-  const changed = sceneMixChanged || settings.changed;
+  const pending = draftCount;
+  const draftedBypass =
+    sceneUpdates?.session === session ? (sceneUpdates?.bypass ?? {}) : {};
+  const draftedNative =
+    sceneUpdates?.session === session
+      ? (sceneUpdates?.native_controls ?? {})
+      : {};
+  const changed = sceneMixChanged || settings.changed || nativeSettings.changed;
+  const tooManySettings =
+    settings.values().length + nativeSettings.values().length > 32;
+  const withNativeSettings = (sceneId: string) => {
+    const values = nativeSettings.values();
+    return values.length
+      ? { ...draftedNative, [sceneId]: values }
+      : draftedNative;
+  };
   const withSettings = (sceneId: string) => {
     const values = settings.values();
     return values.length
@@ -66,10 +82,47 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
   );
   return (
     <>
+      <SceneGrid rig={rig} vm={vm} open={gridOpen} onOpenChange={setGridOpen} />
+      {rig.sceneSharing.conflict && (
+        <div
+          role="alert"
+          className="grid gap-2 rounded-lg border border-border p-3"
+        >
+          <p>
+            Your scene draft is kept in this browser. Review the other viewer’s
+            changes before replacing the shared draft.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() =>
+                void rig.sceneSharing
+                  .retry()
+                  .catch(() =>
+                    rig.setError(
+                      'The shared scene draft is unavailable. Your draft is kept here.',
+                    ),
+                  )
+              }
+            >
+              Share my draft
+            </Button>
+            <Button variant="outline" onClick={rig.sceneSharing.discard}>
+              Use shared draft
+            </Button>
+          </div>
+        </div>
+      )}
       {!!state.control?.scenes?.scenes.length && (
         <ScenePads
           extra={
             <>
+              <Button
+                variant="outline"
+                disabled={waiting}
+                onClick={() => setGridOpen(true)}
+              >
+                Edit scenes
+              </Button>
               {matching && (
                 <SceneChange
                   preset={matching.manifest.id}
@@ -170,6 +223,12 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
             </div>
           )}
           <SceneSettings settings={settings} />
+          <NativeSceneSettings settings={nativeSettings} />
+          {tooManySettings && (
+            <p role="alert">
+              Scenes can change at most 32 effect and capture settings together.
+            </p>
+          )}
           {changed && (
             <div className="scene-context-actions">
               <Button
@@ -183,14 +242,17 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
                 disabled={waiting}
                 onClick={() => {
                   const session = state.control?.session;
-                  if (!session) return;
+                  if (!session || tooManySettings) return;
                   setSceneUpdates({
                     session,
                     gains: { ...drafts, [editingScene.id]: editingSceneGains },
                     added: addedScenes,
                     controls: withSettings(editingScene.id),
+                    bypass: draftedBypass,
+                    native_controls: withNativeSettings(editingScene.id),
                   });
                   settings.reset();
+                  nativeSettings.reset();
                 }}
               >
                 Update scene
@@ -216,7 +278,11 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
               <div className="control-stack">
                 <Button
                   onClick={() =>
-                    void saveScenes(true, withSettings(editingScene.id))
+                    void saveScenes(
+                      true,
+                      withSettings(editingScene.id),
+                      withNativeSettings(editingScene.id),
+                    )
                   }
                 >
                   Update {editingScene.name} and save
@@ -260,18 +326,30 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
                     session,
                     gains: drafts,
                     controls: draftedControls,
+                    bypass: draftedBypass,
+                    native_controls: draftedNative,
                     added: [
                       ...addedScenes,
                       {
                         id: `scene-${crypto.randomUUID().slice(0, 8)}`,
                         name: label,
                         gains: editingSceneGains,
+                        bypass: state.control?.controls
+                          .filter((c) => c.target.kind === 'bypass')
+                          .map((c) => ({
+                            node: c.target.node,
+                            value: c.value === 1,
+                          })),
                         ...(values.length ? { controls: values } : {}),
+                        ...(nativeSettings.values().length
+                          ? { native_controls: nativeSettings.values() }
+                          : {}),
                       },
                     ],
                   });
                   settings.reset();
                   setNamingScene(null);
+                  nativeSettings.reset();
                 }}
               >
                 <label className="field">

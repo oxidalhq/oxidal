@@ -905,7 +905,7 @@ test('audio setup recovers a late USB interface without losing its draft', async
       },
     }),
   );
-  await page.goto('/');
+  await page.goto('/#rig');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const setup = page.getByRole('region', { name: 'Interface and buffers' });
   await expect(setup.getByLabel('Input', { exact: true })).toBeDisabled();
@@ -990,7 +990,7 @@ test('audio configuration exposes buffers and discards changed or failed checks'
       },
     }),
   );
-  await page.goto('/');
+  await page.goto('/#rig');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const panel = page.getByRole('region', { name: 'Audio devices' });
   const setup = panel.getByRole('region', { name: 'Interface and buffers' });
@@ -1055,7 +1055,7 @@ test('native device defaults save independently of the playing tone', async ({
   const endpoint = '/api/v1/native/defaults';
   const initial = await (await request.get(endpoint)).json();
   try {
-    await page.goto('/');
+    await page.goto('/#rig');
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     // Engine settings are their own Audio tab, peer of the device (7.17).
     await page

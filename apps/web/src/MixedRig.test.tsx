@@ -12,9 +12,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   installedLv2,
   libraryCatalog,
+  type Lv2Plugin,
   publishRig,
   rigAudioCommand,
   rigAudioState,
+  type RigControl,
   rigDocument,
   rigLibrary,
   sceneDraft,
@@ -214,6 +216,104 @@ it('keeps gapless-ready presets distinct from scenes in a compact disclosure', a
     screen.getByText(/Loaded presets can switch without reopening audio/),
   ).toBeVisible();
   expect(screen.getByRole('group', { name: 'Ready presets' })).toBeVisible();
+});
+
+it('shares exact block scene drafts and retains the local draft after a stale write', async () => {
+  let device: SharedSceneDraft = { revision: 0, draft: null };
+  vi.mocked(sceneDraft).mockImplementation(async (update) => {
+    if (update) {
+      if (update.expected_revision !== device.revision)
+        throw new Error('Stale');
+      device = { revision: device.revision + 1, draft: update.draft };
+    }
+    return device;
+  });
+  const state = setup('mine', [], true);
+  state.control!.scenes = {
+    fade_ms: 15,
+    branches: [],
+    scenes: [
+      { id: 'clean', name: 'Clean', gains: [] },
+      { id: 'lead', name: 'Lead', gains: [] },
+    ],
+  };
+  await waitFor(() => expect(vi.mocked(sceneDraft)).toHaveBeenCalled());
+  const editScenes = await screen.findByRole('button', {
+    name: 'Edit scenes',
+  });
+  await waitFor(() => expect(editScenes).toBeEnabled());
+  fireEvent.click(editScenes);
+  const grid = screen.getByRole('dialog', { name: 'Edit scenes' });
+  const clean = within(grid).getByRole('button', { name: / in Clean$/ });
+  fireEvent.click(clean);
+  await waitFor(() =>
+    expect(device.draft?.bypass?.clean).toEqual([{ node: 'amp', value: true }]),
+  );
+  expect(clean).toHaveAttribute('aria-pressed', 'false');
+  expect(
+    within(grid).getByRole('button', { name: / in Lead$/ }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  expect(vi.mocked(rigAudioCommand)).not.toHaveBeenCalled();
+  device = { ...device, revision: device.revision + 1 };
+  fireEvent.click(within(grid).getByRole('button', { name: / in Lead$/ }));
+  await waitFor(() =>
+    expect(
+      within(grid).getByRole('button', { name: 'Save scenes' }),
+    ).toBeDisabled(),
+  );
+  expect(
+    within(grid).getByRole('button', { name: / in Lead$/ }),
+  ).toHaveAttribute('aria-pressed', 'false');
+  expect(device.draft?.bypass?.lead).toBeUndefined();
+  fireEvent.click(within(grid).getByRole('button', { name: 'Close' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Share my draft' }));
+  await waitFor(() =>
+    expect(device.draft?.bypass?.lead).toEqual([{ node: 'amp', value: true }]),
+  );
+});
+
+it('offers native capture scene settings only from verified saved defaults', async () => {
+  let device: SharedSceneDraft = { revision: 0, draft: null };
+  vi.mocked(sceneDraft).mockImplementation(async (update) => {
+    if (update) device = { revision: device.revision + 1, draft: update.draft };
+    return device;
+  });
+  const state = setup('mine', [], true);
+  const target = { node: 'amp', parameter: 'block:capture:inputGain' };
+  state.control!.capture_defaults = [{ ...target, value: 0.5 }];
+  state.control!.controls.push({
+    target: { kind: 'native', ...target },
+    label: 'Capture input gain',
+    display: '+4.8 dB',
+    value: 0.6,
+    minimum: 0,
+    maximum: 1,
+    toggle: false,
+    integer: false,
+    logarithmic: false,
+  });
+  state.control!.scenes = {
+    fade_ms: 15,
+    branches: [],
+    scenes: [
+      { id: 'clean', name: 'Clean', gains: [] },
+      { id: 'lead', name: 'Lead', gains: [] },
+    ],
+  };
+  state.control!.scene = 'clean';
+  fireEvent.click(await screen.findByText('Current scene ·'));
+  const settings = await screen.findByRole('group', {
+    name: 'Capture settings in scenes',
+  });
+  fireEvent.click(within(settings).getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Update scene' }));
+  await waitFor(() =>
+    expect(device.draft?.native_controls?.clean).toEqual([
+      { ...target, value: 0.6 },
+    ]),
+  );
+  expect(device.draft?.native_controls?.lead).toBeUndefined();
+  expect(vi.mocked(rigAudioCommand)).not.toHaveBeenCalled();
 });
 it('reports native engines separately from actual blocks and A2 quality', async () => {
   const state = setup();
@@ -740,24 +840,19 @@ it('copies a read-only example on its first confirmed control edit', async () =>
 });
 
 /** Two parallel effects, Clean and Dirt, sounding with a path level each side. */
-function twoPaths() {
-  const plugin = {
-    name: 'Verb',
-    uri: 'urn:example:verb',
-    unsupported: null,
-    ports: [
-      ['in_l', true, true],
-      ['out_l', true, false],
-      ['in_r', true, true],
-      ['out_r', true, false],
-    ].map(([symbol, audio, input], index) => ({
+function twoPaths(
+  controlPorts: Lv2Plugin['ports'] = [],
+  liveControls: RigControl[] = [],
+) {
+  const audioPorts = ['in_l', 'out_l', 'in_r', 'out_r'].map(
+    (symbol, index): Lv2Plugin['ports'][number] => ({
       index,
       symbol,
-      audio,
+      audio: true,
       control: false,
       atom: false,
-      input,
-      output: !input,
+      input: symbol.startsWith('in'),
+      output: symbol.startsWith('out'),
       integer: false,
       toggled: false,
       logarithmic: false,
@@ -765,8 +860,20 @@ function twoPaths() {
       minimum: null,
       maximum: null,
       default: null,
-    })),
-  } as never;
+    }),
+  );
+  const plugin: Lv2Plugin = {
+    name: 'Verb',
+    uri: 'urn:example:verb',
+    unsupported: null,
+    ports: [
+      ...audioPorts,
+      ...controlPorts.map((port, index) => ({
+        ...port,
+        index: audioPorts.length + index,
+      })),
+    ],
+  };
   const effect = (id: string) => ({ ...lv2Effect(plugin), id, name: id });
   const built = buildRoute(
     'preset',
@@ -794,6 +901,7 @@ function twoPaths() {
       modified: false,
       eq: [],
       controls: [
+        ...liveControls,
         ...['left', 'right'].map((side) => ({
           target: { kind: 'merge', node: `merge-${side}`, port: 1 },
           label: 'Level',
@@ -1065,4 +1173,185 @@ it('recalls a scene with every drafted level and effect setting, not only the fi
       [{ kind: 'lv2', node: 'fx', symbol: 'gain' }, 3],
     ]),
   );
+});
+
+it('opens the shared LV2 panel and keeps a live adjustment on the selected node and port', async () => {
+  const port = (
+    symbol: string,
+    extra: Partial<Lv2Plugin['ports'][number]> = {},
+  ): Lv2Plugin['ports'][number] => ({
+    index: 0,
+    symbol,
+    control: true,
+    input: true,
+    audio: false,
+    output: false,
+    integer: false,
+    toggled: false,
+    logarithmic: false,
+    latency: false,
+    minimum: 0,
+    maximum: 4,
+    default: 1,
+    ...extra,
+  });
+  const control = (
+    node: string,
+    symbol: string,
+    value: number,
+  ): RigControl => ({
+    target: { kind: 'lv2', node, symbol },
+    label: symbol,
+    value,
+    display: String(value),
+    minimum: 0,
+    maximum: 4,
+    integer: false,
+    logarithmic: false,
+    toggle: false,
+  });
+  const { state } = twoPaths(
+    [
+      port('wet_mix', { name: 'Wet level', unit: 'dB', display_priority: 5 }),
+      port('hidden', { not_on_gui: true }),
+      port('mode', {
+        enumeration: true,
+        scale_points: [
+          { value: 0, label: 'Soft' },
+          { value: 1, label: 'Bright' },
+        ],
+      }),
+      port('catalog_only', { name: 'Catalog only' }),
+    ],
+    [
+      control('clean', 'wet_mix', 1),
+      control('dirt', 'wet_mix', 2),
+      control('dirt', 'hidden', 1),
+      control('dirt', 'mode', 0),
+    ],
+  );
+  let live = state;
+  vi.mocked(rigAudioCommand).mockImplementation(async (_state, action) => {
+    if (action.kind === 'control') {
+      const control = live.control!;
+      live = {
+        ...live,
+        control: {
+          ...control,
+          revision: control.revision + 1,
+          controls: control.controls.map((c) =>
+            JSON.stringify(c.target) === JSON.stringify(action.command.target)
+              ? {
+                  ...c,
+                  value: action.command.value,
+                  display: String(action.command.value),
+                }
+              : c,
+          ),
+        },
+      };
+    }
+    return live;
+  });
+  fireEvent.click(await screen.findByRole('button', { name: 'dirt' }));
+  const panel = await screen.findByRole('region', { name: 'Verb controls' });
+  const adjust = within(panel).getByRole('button', {
+    name: 'Adjust Wet level',
+  });
+  expect(adjust).toHaveTextContent('2 dB');
+  expect(
+    within(panel).queryByRole('button', { name: 'Adjust Hidden' }),
+  ).toBeNull();
+  expect(within(panel).queryByText('Catalog only')).toBeNull();
+  expect(rigAudioCommand).not.toHaveBeenCalled();
+
+  fireEvent.click(adjust);
+  const dialog = screen.getByRole('dialog', { name: 'Wet level' });
+  fireEvent.click(
+    within(dialog).getByRole('button', { name: 'Increase Wet level' }),
+  );
+  await waitFor(() => expect(rigAudioCommand).toHaveBeenCalledTimes(1));
+  expect(rigAudioCommand).toHaveBeenLastCalledWith(expect.anything(), {
+    kind: 'control',
+    command: {
+      session: 'audio',
+      expected_revision: 3,
+      target: { kind: 'lv2', node: 'dirt', symbol: 'wet_mix' },
+      value: 2.004,
+    },
+  });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(dialog).not.toBeInTheDocument());
+  expect(rigAudioCommand).toHaveBeenLastCalledWith(expect.anything(), {
+    kind: 'control',
+    command: {
+      session: 'audio',
+      expected_revision: 4,
+      target: { kind: 'lv2', node: 'dirt', symbol: 'wet_mix' },
+      value: 2,
+    },
+  });
+
+  fireEvent.click(within(panel).getByRole('radio', { name: 'Bright' }));
+  await waitFor(() =>
+    expect(within(panel).getByRole('radio', { name: 'Bright' })).toBeChecked(),
+  );
+  expect(rigAudioCommand).toHaveBeenLastCalledWith(expect.anything(), {
+    kind: 'control',
+    command: {
+      session: 'audio',
+      expected_revision: 5,
+      target: { kind: 'lv2', node: 'dirt', symbol: 'mode' },
+      value: 1,
+    },
+  });
+  fireEvent.click(within(panel).getByRole('switch', { name: 'dirt on' }));
+  await waitFor(() =>
+    expect(
+      within(panel).getByRole('switch', { name: 'dirt on' }),
+    ).not.toBeChecked(),
+  );
+  expect(rigAudioCommand).toHaveBeenLastCalledWith(expect.anything(), {
+    kind: 'control',
+    command: {
+      session: 'audio',
+      expected_revision: 6,
+      target: { kind: 'bypass', node: 'dirt' },
+      value: 1,
+    },
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: 'clean' }));
+  const other = await screen.findByRole('region', { name: 'Verb controls' });
+  expect(
+    within(other).getByRole('button', { name: 'Adjust Wet level' }),
+  ).toHaveTextContent('1 dB');
+  expect(within(other).getByRole('switch', { name: 'clean on' })).toBeChecked();
+});
+
+it('shows live symbol controls when discovery is unavailable', async () => {
+  twoPaths(
+    [],
+    [
+      {
+        target: { kind: 'lv2', node: 'dirt', symbol: 'wet_mix' },
+        label: 'wet_mix',
+        value: 0.625,
+        display: '0.625',
+        minimum: 0,
+        maximum: 1,
+        integer: false,
+        logarithmic: false,
+        toggle: false,
+      },
+    ],
+  );
+  vi.mocked(installedLv2).mockRejectedValue(new Error('Catalog unavailable'));
+  fireEvent.click(await screen.findByRole('button', { name: 'dirt' }));
+  const panel = await screen.findByRole('region', { name: 'dirt controls' });
+  expect(
+    within(panel).getByRole('button', { name: 'Adjust Wet mix' }),
+  ).toHaveTextContent('0.625');
+  expect(within(panel).queryByText(/factory defaults/)).toBeNull();
+  expect(rigAudioCommand).not.toHaveBeenCalled();
 });

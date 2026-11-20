@@ -97,7 +97,7 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
       },
     }),
   );
-  await page.goto('/');
+  await page.goto('/#rig');
   const strip = page.getByRole('complementary', {
     name: 'DSP and system resources',
   });
@@ -262,7 +262,7 @@ test('monitor shows device history after browser reload and exports retained sam
     )
     .toBeGreaterThan(0);
   const initial = await (await request.get('/api/v1/monitor/history')).json();
-  await page.goto('/');
+  await page.goto('/#rig');
   await page.getByRole('button', { name: 'Levels', exact: true }).click();
   await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
   await page.getByText('Device history', { exact: true }).click();
@@ -347,7 +347,7 @@ test('monitor shows redacted control audit with filters and reload persistence',
       );
     })
     .toBe(true);
-  await page.goto('/');
+  await page.goto('/#rig');
   await page.getByRole('button', { name: 'Levels', exact: true }).click();
   await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
   await page.getByText('Control audit', { exact: true }).click();

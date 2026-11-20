@@ -7,6 +7,8 @@ import {
   useState,
 } from 'react';
 
+import { ChainBlock } from '@oxidal/design-system/widgets/chain';
+
 import './ChainView.css';
 import type { BlockKind, RigBlockVM, RigLaneVM } from './rigChain';
 
@@ -201,7 +203,7 @@ function SlotTile({
   );
 }
 
-/** One block: outlined face, category LED, short label. A tap selects. */
+/** Shared chain block with the runtime's exact identity, artwork and drag owner. */
 export function RigTile({
   block,
   selected,
@@ -223,9 +225,18 @@ export function RigTile({
   dropBefore?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      className="rig-tile"
+    <ChainBlock
+      block={{
+        id: block.id,
+        label: block.label,
+        kind: block.kind === 'other' ? 'lv2' : block.kind,
+        on: block.on,
+        icon: block.face,
+      }}
+      selected={selected}
+      tint={block.tint}
+      lifted={!!drag?.style}
+      className={dropBefore ? 'outline-2 outline-brand' : undefined}
       data-tile={block.id}
       data-movable={drag ? true : undefined}
       data-lifted={drag?.style ? true : undefined}
@@ -236,16 +247,9 @@ export function RigTile({
       data-on={block.on}
       aria-label={block.on ? block.label : `${block.label}, bypassed`}
       title={block.label}
-      aria-pressed={selected}
       disabled={disabled}
-      onClick={onSelect}
-    >
-      <span className="rig-tile-face">
-        <span className="chain-led" aria-hidden="true" />
-        {block.face}
-      </span>
-      <span className="rig-tile-label">{block.label}</span>
-    </button>
+      onSelect={onSelect}
+    />
   );
 }
 

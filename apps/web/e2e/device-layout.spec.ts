@@ -515,7 +515,7 @@ test('stage display keeps screen awake across views and exposes fullscreen avail
       },
     });
   });
-  await page.goto('/');
+  await page.goto('/#rig');
   const navigation = page.getByRole('navigation', {
     name: 'Instrument navigation',
   });

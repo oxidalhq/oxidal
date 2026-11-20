@@ -2,9 +2,10 @@ import type { RigDocument } from './api';
 
 /**
  * Which version a preset's scenes are saved as. Version 1 mixes paths;
- * version 2 also sets effect settings (`controls`), so an Oxidal that only
- * reads version 1 refuses the preset as unsupported instead of failing to
- * read it. Version 1 manifests that already carry controls, saved before
+ * version 2 also sets effect settings (`controls`), and version 3 adds warm
+ * processor bypass. Version 4 adds capture settings and an initial scene.
+ * Older readers refuse unknown required versions explicitly.
+ * Version 1 manifests that already carry controls, saved before
  * version 2, are read as they are; the next save writes them as version 2.
  * Mirrors `manifest/scenes.rs` in `oxidal-presets`.
  * @see docs/presets/format.md
@@ -13,10 +14,16 @@ type Manifest = RigDocument['manifest'];
 
 export const SCENES_V1 = 'urn:oxidal:scenes:1';
 export const SCENES_V2 = 'urn:oxidal:scenes:2';
-const VERSIONS = [SCENES_V1, SCENES_V2] as const;
+export const SCENES_V3 = 'urn:oxidal:scenes:3';
+export const SCENES_V4 = 'urn:oxidal:scenes:4';
+const VERSIONS = [SCENES_V1, SCENES_V2, SCENES_V3, SCENES_V4] as const;
 
-type SceneShape = { controls?: unknown[] };
-type ScenesShape = { scenes?: SceneShape[] };
+type SceneShape = {
+  controls?: unknown[];
+  bypass?: unknown[];
+  native_controls?: unknown[];
+};
+type ScenesShape = { scenes?: SceneShape[]; initial_scene?: string };
 
 /** The key a preset's scenes are stored under, or undefined without scenes. */
 export function scenesKey(manifest: Manifest): string | undefined {
@@ -36,13 +43,19 @@ export function readScenes<T = Record<string, unknown>>(
 /** The version a set of scenes must be saved as. */
 export function scenesFormat(scenes: unknown): string {
   const list = (scenes as ScenesShape | undefined)?.scenes ?? [];
+  if (
+    (scenes as ScenesShape | undefined)?.initial_scene !== undefined ||
+    list.some((scene) => scene.native_controls?.length)
+  )
+    return SCENES_V4;
+  if (list.some((scene) => scene.bypass?.length)) return SCENES_V3;
   return list.some((scene) => scene.controls?.length) ? SCENES_V2 : SCENES_V1;
 }
 
 /**
  * Store `scenes` under the version they need, replacing any other version,
  * and keep `requiredExtensions` naming exactly that version. Without scenes,
- * removes both versions.
+ * removes every supported scene version.
  */
 export function writeScenes(manifest: Manifest, scenes: unknown): void {
   const key = scenes === undefined ? undefined : scenesFormat(scenes);

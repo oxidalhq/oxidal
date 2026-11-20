@@ -322,6 +322,9 @@ export function useMixedRigSession({
   const draftFromDevice = useRef(false);
   const draftPushes = useRef(0);
   const draftShared = useRef(true);
+  const draftConflictRef = useRef(false);
+  const [draftConflict, setDraftConflict] = useState(false);
+  const remoteDraft = useRef<SceneDraft | null>(null);
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
@@ -335,6 +338,11 @@ export function useMixedRigSession({
         }
         if (draftPushes.current || remote.revision === draftRevision.current)
           return;
+        remoteDraft.current = (remote.draft as SceneDraft | null) ?? null;
+        if (draftConflictRef.current) {
+          draftRevision.current = remote.revision;
+          return;
+        }
         const first = draftRevision.current === null;
         draftRevision.current = remote.revision;
         if (first && !remote.draft) {
@@ -370,10 +378,15 @@ export function useMixedRigSession({
     try {
       const saved = await sharedSceneDraft({
         draft: draft && { ...draft, added: draft.added ?? [] },
+        expected_revision: draftRevision.current ?? undefined,
       });
       if (saved) draftRevision.current = saved.revision;
     } catch {
-      /* kept in this tab; the next change shares it again */
+      draftConflictRef.current = true;
+      setDraftConflict(true);
+      setError(
+        'These scene edits could not be shared. Your draft is kept in this browser. Review the current scenes before trying again.',
+      );
     } finally {
       draftPushes.current--;
     }
@@ -383,7 +396,8 @@ export function useMixedRigSession({
       draftFromDevice.current = false;
       return;
     }
-    if (draftRevision.current !== null) void pushDraft(sceneUpdates);
+    if (draftRevision.current !== null && !draftConflictRef.current)
+      void pushDraft(sceneUpdates);
   }, [sceneUpdates]);
   useEffect(() => {
     try {
@@ -587,6 +601,7 @@ export function useMixedRigSession({
   function saveScenes(
     withMix: boolean,
     withControls: SceneDraft['controls'] = {},
+    withNativeControls: SceneDraft['native_controls'] = {},
   ) {
     const { editingScene, drafts, editingSceneGains, addedScenes } = view!;
     setSaveReview(false);
@@ -610,6 +625,17 @@ export function useMixedRigSession({
         name,
         addedScenes,
         controls,
+        sceneUpdates &&
+          sceneUpdates.session === current.current?.control?.session
+          ? (sceneUpdates.bypass ?? {})
+          : {},
+        {
+          ...(sceneUpdates?.session === current.current?.control?.session
+            ? (sceneUpdates?.native_controls ?? {})
+            : {}),
+          ...withNativeControls,
+        },
+        current.current?.control?.capture_defaults ?? [],
       ),
     );
   }
@@ -692,7 +718,13 @@ export function useMixedRigSession({
     const drafted = sceneUpdates?.session === control.session;
     const gains = (drafted && sceneUpdates.gains[scene]) || [];
     const controls = (drafted && sceneUpdates.controls?.[scene]) || [];
-    if (!recalled || !(gains.length || controls.length)) return;
+    const bypass = (drafted && sceneUpdates.bypass?.[scene]) || [];
+    const native = (drafted && sceneUpdates.native_controls?.[scene]) || [];
+    if (
+      !recalled ||
+      !(gains.length || controls.length || bypass.length || native.length)
+    )
+      return;
     // Once a drafted value is applied the mix no longer equals the saved scene,
     // so the engine stops naming it: remember which scene is being heard.
     setSceneDraft({ session: control.session, scene });
@@ -703,6 +735,14 @@ export function useMixedRigSession({
       ]),
       ...controls.map((c): [RigControl['target'], number] => [
         { kind: 'lv2', node: c.node, symbol: c.symbol },
+        c.value,
+      ]),
+      ...bypass.map((b): [RigControl['target'], number] => [
+        { kind: 'bypass', node: b.node },
+        b.value ? 1 : 0,
+      ]),
+      ...native.map((c): [RigControl['target'], number] => [
+        { kind: 'native', node: c.node, parameter: c.parameter },
         c.value,
       ]),
     ];
@@ -716,9 +756,13 @@ export function useMixedRigSession({
           c.target.node === target.node &&
           (c.target.kind === 'merge'
             ? target.kind === 'merge' && c.target.port === target.port
-            : c.target.kind === 'lv2' &&
-              target.kind === 'lv2' &&
-              c.target.symbol === target.symbol),
+            : c.target.kind === 'bypass' ||
+              (c.target.kind === 'native' &&
+                target.kind === 'native' &&
+                c.target.parameter === target.parameter) ||
+              (c.target.kind === 'lv2' &&
+                target.kind === 'lv2' &&
+                c.target.symbol === target.symbol)),
       );
       // A setting the sounding rig does not have is left to Save to report.
       if (!live || Math.abs(live.value - value) <= 0.0001) continue;
@@ -1249,6 +1293,26 @@ export function useMixedRigSession({
     setSceneDraft,
     sceneUpdates,
     setSceneUpdates,
+    sceneSharing: {
+      conflict: draftConflict,
+      retry: async () => {
+        const remote = await sharedSceneDraft();
+        if (!remote) return;
+        draftRevision.current = remote.revision;
+        remoteDraft.current = (remote.draft as SceneDraft | null) ?? null;
+        draftConflictRef.current = false;
+        setDraftConflict(false);
+        setError('');
+        await pushDraft(sceneUpdates);
+      },
+      discard: () => {
+        draftConflictRef.current = false;
+        setDraftConflict(false);
+        draftFromDevice.current = true;
+        setSceneUpdates(remoteDraft.current);
+        setError('');
+      },
+    },
     namingScene,
     setNamingScene,
     saveReview,

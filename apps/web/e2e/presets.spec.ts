@@ -205,7 +205,7 @@ test('rig controls follow the actual session without example effects', async ({
     }
     await route.fulfill({ json: audio });
   });
-  await page.goto('/');
+  await page.goto('/#rig');
   await expect(
     page.getByRole('heading', { name: 'Audio stopped', exact: true }),
   ).toBeVisible();
@@ -260,7 +260,7 @@ test('rig controls follow the actual session without example effects', async ({
   const rig = page.getByRole('region', { name: 'Sounding rig' });
   await expect(rig).toBeVisible();
   await expect(page.getByTestId('active-preset')).toHaveText('Amp only');
-  await expect(rig.locator('.rig-tile')).toHaveCount(1);
+  await expect(rig.locator('[data-slot="chain-block"]')).toHaveCount(1);
   await rig.getByRole('button', { name: 'My amp', exact: true }).click();
   await expect(
     rig.getByRole('button', {
@@ -327,7 +327,9 @@ test('rig controls follow the actual session without example effects', async ({
     'data-chain-view',
     'artwork',
   );
-  await expect(rig.locator('.rig-tile .chain-led')).toHaveCount(1);
+  await expect(
+    rig.locator('[data-slot="chain-block"] [data-slot="led"]'),
+  ).toHaveCount(1);
   await page.screenshot({
     path: info.outputPath('rig-artwork-mobile.png'),
     fullPage: true,
@@ -404,7 +406,7 @@ test('rig controls follow the actual session without example effects', async ({
     controls: [audio.controls[0]],
   };
   await expect(page.getByTestId('active-preset')).toHaveText('Output only');
-  await expect(rig.locator('.rig-tile')).toHaveCount(0);
+  await expect(rig.locator('[data-slot="chain-block"]')).toHaveCount(0);
   await expect(
     rig.getByRole('button', { name: 'Adjust sounding Output', exact: true }),
   ).toBeVisible();
@@ -442,7 +444,7 @@ test('native preset upload, durable library, exact download and rejected replace
   request,
 }) => {
   const before: unknown = await (await request.get('/api/v1/state')).json();
-  await page.goto('/');
+  await page.goto('/#rig');
   await expect(
     page.getByRole('complementary', { name: 'DSP and system resources' }),
   ).toHaveAttribute('data-connected', 'true');
@@ -570,7 +572,7 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   });
   expect(imported.ok()).toBeTruthy();
   const preset = await imported.json();
-  await page.goto('/');
+  await page.goto('/#rig');
   if (test.info().project.name === 'boox-air3c') {
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await setDisplayMode(page, 'epaper');
@@ -1175,7 +1177,7 @@ test('playback lifecycle clears a corrupt boot preference without a worker', asy
       },
     }),
   );
-  await page.goto('/');
+  await page.goto('/#rig');
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await selectSettingsSection(page, 'Audio');
@@ -1272,7 +1274,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
     });
     expect(recallCopy.ok()).toBe(true);
     running = await recallCopy.json();
-    await page.goto('/');
+    await page.goto('/#rig');
     await page
       .getByRole('navigation', { name: 'Instrument navigation' })
       .getByRole('button', { name: 'Library', exact: true })
@@ -1307,7 +1309,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
       )
       .toBe(preset.sha256);
     const nativeBefore = await (await request.get('/api/v1/native')).json();
-    await page.goto('/');
+    await page.goto('/#rig');
     if (test.info().project.name === 'boox-air3c')
       await setDisplayMode(page, 'epaper');
     const sounding = page.getByRole('region', { name: 'Sounding rig' });
@@ -1331,7 +1333,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
       (c: { target: string }) =>
         c.target.startsWith('block:') && c.target.endsWith(':enabled'),
     );
-    await sounding.locator('.rig-tile').first().click();
+    await sounding.locator('[data-slot="chain-block"]').first().click();
     const power = sounding.locator('.led-toggle');
     await power.click();
     await expect
@@ -1358,14 +1360,14 @@ test('playback lifecycle keeps native authoring available after stop and restart
       portrait,
     ]) {
       await page.setViewportSize(viewport);
-      const cards = await sounding.locator('.rig-tile').evaluateAll((items) =>
-        items.map((item) => ({
-          top: item.getBoundingClientRect().top,
-          buttonBottom: item
-            .querySelector('.rig-tile-face')!
-            .getBoundingClientRect().bottom,
-        })),
-      );
+      const cards = await sounding
+        .locator('[data-slot="chain-block"]')
+        .evaluateAll((items) =>
+          items.map((item) => ({
+            top: item.getBoundingClientRect().top,
+            buttonBottom: item.getBoundingClientRect().bottom,
+          })),
+        );
       for (const card of cards)
         for (const other of cards) {
           if (Math.abs(card.top - other.top) < 1)
@@ -1379,7 +1381,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
         ),
       ).toBe(true);
     }
-    await sounding.locator('.rig-tile').first().click();
+    await sounding.locator('[data-slot="chain-block"]').first().click();
     const eq = sounding.getByRole('region', { name: 'Block EQ' });
     await expect(eq).toBeVisible();
     const eqBefore = (await (await request.get('/api/v1/audio')).json()).eq[0];
@@ -1567,7 +1569,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
     const irFixture = fixtures.find((f) => f.metadata.format === 'ir')!;
     expect(irFixture).toBeTruthy();
     const beforeModel = await (await request.get('/api/v1/audio')).json();
-    await sounding.locator('.rig-tile').first().click();
+    await sounding.locator('[data-slot="chain-block"]').first().click();
     await sounding
       .getByRole('button', { name: 'Change model', exact: true })
       .first()
@@ -1624,9 +1626,9 @@ test('playback lifecycle keeps native authoring available after stop and restart
             ?.phase,
       )
       .toBe('applied');
-    await expect(sounding.locator('.rig-tile').first()).toContainText(
-      'Audition fixture',
-    );
+    await expect(
+      sounding.locator('[data-slot="chain-block"]').first(),
+    ).toContainText('Audition fixture');
     const confirmedAfterOther = await (
       await request.get('/api/v1/audio')
     ).json();
@@ -1845,7 +1847,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
             ?.phase,
       )
       .toBe('applied');
-    await expect(sounding.locator('.rig-tile')).toHaveCount(1);
+    await expect(sounding.locator('[data-slot="chain-block"]')).toHaveCount(1);
     await sounding.getByRole('button', { name: 'Add block' }).click();
     await sounding
       .getByRole('button', { name: 'Add NAM', exact: true })
@@ -1864,7 +1866,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
           (await (await request.get('/api/v1/audio')).json()).models.length,
       )
       .toBe(2);
-    await expect(sounding.locator('.rig-tile')).toHaveCount(2);
+    await expect(sounding.locator('[data-slot="chain-block"]')).toHaveCount(2);
     await sounding.getByRole('button', { name: 'Add block' }).click();
     await sounding.getByRole('button', { name: 'Add IR', exact: true }).click();
     await sounding
@@ -1887,7 +1889,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
           (await (await request.get('/api/v1/audio')).json()).models.length,
       )
       .toBe(3);
-    await expect(sounding.locator('.rig-tile')).toHaveCount(3);
+    await expect(sounding.locator('[data-slot="chain-block"]')).toHaveCount(3);
     const created = await (await request.get('/api/v1/audio')).json();
     expect(created.configured.draft).toBe(true);
     expect(created.saved_copy).toBeNull();
@@ -1940,7 +1942,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
       ).toEqual([]);
       // Compact blocks retain separate, full-size touch targets after rotation.
       const blockGeometry = await sounding
-        .locator('.rig-tile')
+        .locator('[data-slot="chain-block"]')
         .evaluateAll((cards) =>
           cards.map((card) => ({
             height: card.getBoundingClientRect().height,
@@ -2070,7 +2072,7 @@ test('asset artwork stays identifiable offline in portrait and landscape', async
     if (!new URL(request.url()).hostname.match(/^(127\.0\.0\.1|localhost)$/))
       external.push(request.url());
   });
-  await page.goto('/');
+  await page.goto('/#rig');
   if (testInfo.project.name === 'boox-air3c') {
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await setDisplayMode(page, 'epaper');
@@ -2159,6 +2161,18 @@ test('graph authoring creates an installed effect rig and saves live controls', 
   );
   test.setTimeout(90000);
   const endpoint = '/api/v1/graph-audio';
+  const catalog = await (
+    await request.get('/api/v1/plugins/lv2?sample_rate=48000')
+  ).json();
+  const amplifier = (
+    catalog.plugins as {
+      name: string;
+      ports: { symbol: string; name?: string; unit?: string }[];
+    }[]
+  ).find((p) => p.name === 'Simple amplifier');
+  expect(amplifier).toBeDefined();
+  const gainPort = amplifier!.ports.find((p) => p.symbol === 'gain')!;
+  const gainLabel = gainPort.name ?? 'gain';
   const read = async () => (await request.get(endpoint)).json();
   const send = async (action: unknown) => {
     const s = await read();
@@ -2193,7 +2207,7 @@ test('graph authoring creates an installed effect rig and saves live controls', 
     settings: { ...configured.configured, name: 'Previous session' },
   });
   await send({ kind: 'stop' });
-  await page.goto('/');
+  await page.goto('/#rig');
   if (testInfo.project.name === 'boox-air3c')
     await setDisplayMode(page, 'epaper');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
@@ -2256,13 +2270,13 @@ test('graph authoring creates an installed effect rig and saves live controls', 
     editor.getByRole('button', { name: 'Save preset', exact: true }),
   ).toBeVisible();
   const adjust = editor.getByRole('button', {
-    name: 'Adjust gain value',
+    name: `Adjust ${gainLabel} value`,
     exact: true,
   });
   await adjust.click();
-  const dialog = page.getByRole('dialog', { name: 'gain', exact: true });
+  const dialog = page.getByRole('dialog', { name: gainLabel, exact: true });
   await dialog.getByText('Enter value', { exact: true }).click();
-  await dialog.getByLabel('Draft gain', { exact: true }).fill('-35');
+  await dialog.getByLabel(`Draft ${gainLabel}`, { exact: true }).fill('-35');
   await expect
     .poll(async () => (await read()).native_values[0].value)
     .toBe(-35);
@@ -2270,7 +2284,7 @@ test('graph authoring creates an installed effect rig and saves live controls', 
   await expect.poll(async () => (await read()).native_values[0].value).toBe(0);
   await adjust.click();
   await dialog.getByText('Enter value', { exact: true }).click();
-  await dialog.getByLabel('Draft gain', { exact: true }).fill('-35');
+  await dialog.getByLabel(`Draft ${gainLabel}`, { exact: true }).fill('-35');
   await dialog.getByRole('button', { name: 'Done', exact: true }).click();
   await expect
     .poll(async () => (await read()).native_values[0].value)
@@ -2379,11 +2393,13 @@ test('graph authoring creates an installed effect rig and saves live controls', 
     timeout: 12000,
   });
   const effect = page.getByRole('region', {
-    name: '1 · Simple amplifier',
+    name: 'Simple amplifier',
     exact: true,
   });
   await expect(effect).toBeVisible();
-  await expect(effect.locator('output')).toHaveText('-35');
+  await expect(effect.locator('output')).toHaveText(
+    `-35${gainPort.unit ? ` ${gainPort.unit}` : ''}`,
+  );
   await page.screenshot({
     path: testInfo.outputPath('effects-live.png'),
     fullPage: true,
@@ -2475,7 +2491,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     },
   });
   await expect.poll(async () => (await get()).phase).toBe('running');
-  await page.goto('/');
+  await page.goto('/#rig');
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
   const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
   await expect(rig).toBeVisible();
@@ -3187,7 +3203,7 @@ for (const layout of ['serial', 'scenes'] as const) {
     });
     expect(imported.ok()).toBe(true);
     const tone = await imported.json();
-    await page.goto('/');
+    await page.goto('/#rig');
     if (info.project.name === 'boox-air3c')
       await setDisplayMode(page, 'epaper');
     await page.getByRole('button', { name: 'Library', exact: true }).click();
@@ -3229,9 +3245,9 @@ for (const layout of ['serial', 'scenes'] as const) {
       await composer
         .getByRole('button', { name: 'Move Simple amplifier earlier' })
         .click();
-      await expect(composer.locator('.rig-tile').first()).toContainText(
-        'Simple amplifier',
-      );
+      await expect(
+        composer.locator('[data-slot="chain-block"]').first(),
+      ).toContainText('Simple amplifier');
       await composer
         .getByRole('button', { name: 'Move Simple amplifier later' })
         .click();
@@ -3579,7 +3595,7 @@ test('mixed rig authoring separates guarded amp/cab stages and saves their live 
   });
   expect(imported.ok(), await imported.text()).toBe(true);
   const tone = await imported.json();
-  await page.goto('/');
+  await page.goto('/#rig');
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   await openComposer(page, 'effects');
@@ -3934,7 +3950,7 @@ test('native editor loads draft structure commands and preserves history', async
   });
   expect(imported.ok()).toBeTruthy();
   const preset = await imported.json();
-  await page.goto('/');
+  await page.goto('/#rig');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   await openComposer(page, 'tone3000');
   const editor = page.getByRole('region', { name: 'Native preset editor' });
@@ -4051,7 +4067,7 @@ test('playback lifecycle applies live chain edits and prepared DSP settings befo
   });
   expect(started.ok(), await started.text()).toBe(true);
   try {
-    await page.goto('/');
+    await page.goto('/#rig');
     const sounding = page.getByRole('region', { name: 'Sounding rig' });
     await expect(sounding).toBeVisible();
     await page.route('**/api/v1/midi/devices', (route) =>
@@ -4271,7 +4287,7 @@ test('mixed rig authoring: local NAM and IR collections audition without provide
   await page.route('**/api/v1/tone3000/**', (route) =>
     route.fulfill({ status: 401, json: { error: 'Provider offline' } }),
   );
-  await page.goto('/');
+  await page.goto('/#rig');
   const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
   await expect(rig).toBeVisible();
   await rig.locator('[data-node="tone"]').getByRole('button').first().click();
@@ -4576,7 +4592,7 @@ test('live model comparison stays open, waits for application and rejects a chan
       },
     });
   });
-  await page.goto('/');
+  await page.goto('/#rig');
   const rig = page.getByRole('region', { name: 'Sounding rig' });
   await rig.getByRole('button', { name: 'Current amp', exact: true }).click();
   await rig.getByRole('button', { name: 'Change model', exact: true }).click();
@@ -4737,7 +4753,7 @@ test('mixed rig authoring presents parallel routing and guarded Save on small sc
   await page.route('**/api/v1/presets/rigs/fixture', (route) =>
     route.fulfill({ json: document }),
   );
-  await page.goto('/');
+  await page.goto('/#rig');
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
   const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
   await expect(
@@ -4930,7 +4946,7 @@ test('mixed rig authoring keeps a long selected block name on its own row beside
   await page.route('**/api/v1/presets/rigs/fixture', (route) =>
     route.fulfill({ json: { revision: 'fixture', manifest } }),
   );
-  await page.goto('/');
+  await page.goto('/#rig');
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
   const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
   for (const width of [345, 690, 930]) {
@@ -5003,7 +5019,7 @@ test('playback lifecycle distinguishes loading and offers readable buffer choice
     await ready;
     await route.fulfill({ json: audio });
   });
-  await page.goto('/');
+  await page.goto('/#rig');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(
     page.getByText('Reading audio settings…', { exact: true }),
@@ -5096,7 +5112,7 @@ test('native preset library keeps originals accessible when saved copies cannot 
       },
     });
   });
-  await page.goto('/');
+  await page.goto('/#rig');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   await expect(page.getByText('Saved copies could not be read.')).toBeVisible();
   await expect(
@@ -5131,7 +5147,7 @@ test('device portrait shared NAM and IR libraries import, search and page indepe
     );
     expect(response.status()).toBe(201);
   }
-  await page.goto('/');
+  await page.goto('/#rig');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   await openSounds(page, 'ir');
   await page.getByRole('searchbox', { name: 'Search IRs' }).fill(prefix);
@@ -5946,7 +5962,7 @@ test('mixed rig authoring splits inside scene lanes and asks before removing a p
       .manifest_json,
   );
   const unit = await mockCanvasUnit(page, request, manifest, 'lead');
-  await page.goto('/');
+  await page.goto('/#rig');
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
   const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
   const selected = rig.locator('[aria-label="Selected block"]');
@@ -6012,7 +6028,7 @@ test('mixed rig authoring builds a split and changes a level with buttons only o
     request,
     JSON.parse(buildRoute('canvas', 'Plain', route, 'prof').manifest_json),
   );
-  await page.goto('/');
+  await page.goto('/#rig');
   await setDisplayMode(page, 'epaper');
   const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
   const list = rig.getByRole('list', { name: 'Chain as a list' });
@@ -6066,7 +6082,7 @@ test('mixed rig authoring moves blocks across paths by keys, buttons and drag', 
     request,
     JSON.parse(buildRoute('canvas', 'Two paths', route, 'prof').manifest_json),
   );
-  await page.goto('/');
+  await page.goto('/#rig');
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
   const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
   const selected = rig.locator('[aria-label="Selected block"]');

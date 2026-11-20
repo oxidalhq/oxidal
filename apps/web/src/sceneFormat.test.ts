@@ -1,5 +1,5 @@
 /**
- * Scenes are saved as version 2 only when a scene sets an effect setting.
+ * Saved scenes require exactly the version that carries their sonic fields.
  * @see docs/presets/format.md
  */
 import { expect, it } from 'vitest';
@@ -9,6 +9,8 @@ import {
   readScenes,
   SCENES_V1,
   SCENES_V2,
+  SCENES_V3,
+  SCENES_V4,
   scenesFormat,
   scenesKey,
   sealScenes,
@@ -29,11 +31,52 @@ const controlled = {
     },
   ],
 };
+const bypassed = {
+  ...plain,
+  scenes: plain.scenes.map((s) => ({
+    ...s,
+    bypass: [{ node: 'capture', value: true }],
+  })),
+};
+
+it('requires version 3 for bypass and preserves it through sealing and replacement', () => {
+  const document = manifest(SCENES_V2, controlled);
+  writeScenes(document, bypassed);
+  expect(scenesKey(document)).toBe(SCENES_V3);
+  expect(document.requiredExtensions).toEqual([SCENES_V3, 'urn:oxidal:gain:1']);
+  expect(sealScenes(document)).toEqual(document);
+  expect(readScenes(document)).toEqual(bypassed);
+  writeScenes(document, controlled);
+  expect(scenesKey(document)).toBe(SCENES_V2);
+  expect(document.extensions[SCENES_V3]).toBeUndefined();
+});
 const manifest = (key: string, scenes: unknown): Manifest =>
   ({
     extensions: { 'urn:oxidal:authoring': {}, [key]: scenes },
     requiredExtensions: [key, 'urn:oxidal:gain:1'],
   }) as unknown as Manifest;
+
+it('preserves capture values and starting scene through serialization and upgrades', () => {
+  const captured = {
+    ...bypassed,
+    initial_scene: 'a',
+    scenes: bypassed.scenes.map((s) => ({
+      ...s,
+      native_controls: [
+        { node: 'capture', parameter: 'block:amp:outputGain', value: 0 },
+      ],
+    })),
+  };
+  const document = manifest(SCENES_V3, bypassed);
+  writeScenes(document, captured);
+  const reopened = JSON.parse(JSON.stringify(document)) as Manifest;
+  expect(reopened.requiredExtensions).toEqual([SCENES_V4, 'urn:oxidal:gain:1']);
+  expect(readScenes(sealScenes(reopened))).toEqual(captured);
+  expect(reopened.extensions[SCENES_V3]).toBeUndefined();
+  writeScenes(reopened, undefined);
+  expect(scenesKey(reopened)).toBeUndefined();
+  expect(reopened.requiredExtensions).toEqual(['urn:oxidal:gain:1']);
+});
 
 it('chooses version 2 only for scenes that set effect settings', () => {
   expect(scenesFormat(plain)).toBe(SCENES_V1);

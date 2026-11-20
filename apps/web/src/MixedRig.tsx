@@ -8,6 +8,7 @@ import { MaybeSheet } from './components/RigSheet';
 import { FailureNotice } from './FailureNotice';
 import { ControlAdjustDialog } from './features/rig/ControlAdjustDialog';
 import { ControlGrid } from './features/rig/ControlGrid';
+import { LiveLv2Panel } from './features/rig/LiveLv2Panel';
 import { rigBusy } from './features/rig/mixedRigViewModel';
 import { PathLevelsDialog } from './features/rig/PathLevelsDialog';
 import { RigChainSurface } from './features/rig/RigChainSurface';
@@ -300,8 +301,11 @@ export function MixedRig(props: {
       <RigChoosers rig={rig} vm={vm} />
       <MaybeSheet sheet={running && selected ? selectedSheet : null}>
         <SelectedModelControls rig={rig} vm={vm} />
+        {running && selected?.kind === 'lv2' && (
+          <LiveLv2Panel rig={rig} vm={vm} />
+        )}
         <SelectedBlockPanel rig={rig} vm={vm} />
-        <ControlGrid rig={rig} vm={vm} />
+        {selected?.kind !== 'lv2' && <ControlGrid rig={rig} vm={vm} />}
       </MaybeSheet>
       <ControlAdjustDialog rig={rig} vm={vm} />
       {nativeLoad.engines > 0 && (

@@ -238,9 +238,9 @@ export function About() {
           <Sparkle aria-hidden="true" /> Oxidal effects
         </Title>
         <Caption>
-          Bloom, Echo, Motion and Sustain are safe Rust, and Hold and Swell
-          native plugins, all written for Oxidal from published research and its
-          own code. Pitch is a port of a third-party engine.
+          Bloom, Echo, Motion, Moment and Sustain are safe Rust, and Hold and
+          Swell native plugins, all written for Oxidal from published research
+          and its own code. Pitch is a port of a third-party engine.
         </Caption>
         <dl className="m-0 grid">
           {EFFECTS.map((effect) => (

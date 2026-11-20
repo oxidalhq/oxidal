@@ -90,9 +90,18 @@ it('shows the plugin default until a current value is known', () => {
   const noDefault = lv2PluginControls(
     plugin([port({ symbol: 'gain', default: null, minimum: -3 })]),
   );
-  expect(find(noDefault, 'gain')).toMatchObject({ default: -3, value: -3 });
+  expect(find(noDefault, 'gain')).toMatchObject({ value: -3 });
+  expect(find(noDefault, 'gain').default).toBeUndefined();
   const bad = lv2PluginControls(plugin([port({ symbol: 'gain' })]), () => NaN);
   expect(find(bad, 'gain').value).toBe(1);
+});
+
+it('uses only the device artwork endpoint when discovery admits a picture', () => {
+  const uri = 'urn:example#stereo&extra=value';
+  expect(lv2PluginView(plugin([], { uri, artwork: true })).artwork).toBe(
+    `/api/v1/plugins/lv2/artwork?uri=${encodeURIComponent(uri)}`,
+  );
+  expect(lv2PluginView(plugin([], { artwork: false })).artwork).toBeUndefined();
 });
 
 it('leaves out outputs, latency, audio, event ports and unusable ranges', () => {
@@ -171,4 +180,5 @@ it('keeps two groups that share a label as separate controls with separate symbo
   );
   expect(controls.map((c) => c.symbol)).toEqual(['low_cut', 'high_cut']);
   expect(controls.every((c) => c.group === 'Filter')).toBe(true);
+  expect(controls.map((c) => c.groupId)).toEqual(['symbol:low', 'symbol:high']);
 });

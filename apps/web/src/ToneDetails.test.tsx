@@ -32,7 +32,7 @@ it('shows who made the tone, what is in it and a link to its TONE3000 page', asy
   );
   render(<ToneDetails toneId={1001} />);
   expect(await screen.findByText('1997 Match Brave 2x12')).toBeInTheDocument();
-  expect(screen.getByText(/by Tone Junkie/)).toBeInTheDocument();
+  expect(screen.getByText('Tone Junkie')).toBeInTheDocument();
   expect(screen.getByText('@tonejunkie')).toBeInTheDocument();
   expect(screen.getByText(/2 models/)).toBeInTheDocument();
   expect(screen.getByText(/TONE3000 license/)).toBeInTheDocument();
@@ -64,13 +64,25 @@ it('says details need a connection when TONE3000 cannot be reached', async () =>
 
 it('uses downloaded metadata and the unit image cache without a provider metadata request', () => {
   const saved = tone(1004, 'https://www.tone3000.com/tones/saved');
+  saved.user.profile_url = 'https://www.tone3000.com/Scottcorgan';
   const { container } = render(
     <ToneDetails toneId={1004} initialTone={saved} />,
   );
   expect(screen.getByText('1997 Match Brave 2x12')).toBeVisible();
-  expect(container.querySelector('img')).toHaveAttribute(
-    'src',
-    '/tone-1004.png',
+  expect(
+    container.querySelector('[data-slot="source-picture"] img'),
+  ).toHaveAttribute('src', '/tone-1004.png');
+  expect(tone3000Tone).not.toHaveBeenCalled();
+  expect(screen.getByRole('link', { name: 'Tone Junkie' })).toHaveAttribute(
+    'href',
+    'https://www.tone3000.com/Scottcorgan',
   );
+});
+
+it('keeps a creator with no supplied profile as text', () => {
+  render(<ToneDetails toneId={1005} initialTone={tone(1005, '')} />);
+  expect(
+    screen.queryByRole('link', { name: 'Tone Junkie' }),
+  ).not.toBeInTheDocument();
   expect(tone3000Tone).not.toHaveBeenCalled();
 });

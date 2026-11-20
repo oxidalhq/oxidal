@@ -144,50 +144,52 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
   const why = 'selected-block-why';
   return (
     <div className="selected-block" aria-label="Selected block">
-      <div className="selected-block-head">
-        <h3 className="selected-block-title" title={label}>
-          {label}
-        </h3>
-        <span className="selected-block-type">{kind}</span>
-        {selectedView.branch ? (
-          <LedToggle
-            on={selectedView.branch.enabled}
-            kind={selectedView.block.kind}
-            state={selectedView.branch.partial ? 'Mixed' : undefined}
-            label={`Toggle path ${selectedView.branch.name}`}
-            disabled={busy}
-            onToggle={() =>
-              void command({
-                kind: 'branch',
-                command: {
-                  session: state.control!.session,
-                  expected_revision: state.control!.revision,
-                  branch: selectedView.branch!.id,
-                  enabled: !selectedView.branch!.enabled,
-                },
-              })
-            }
-          />
-        ) : (
-          <LedToggle
-            on={selectedView.bypass!.value !== 1}
-            kind={selectedView.block.kind}
-            label={`${label} on`}
-            disabled={busy}
-            onToggle={() =>
-              void command({
-                kind: 'control',
-                command: {
-                  session: state.control!.session,
-                  expected_revision: state.control!.revision,
-                  target: selectedView.bypass!.target,
-                  value: selectedView.bypass!.value === 1 ? 0 : 1,
-                },
-              })
-            }
-          />
-        )}
-      </div>
+      {(selected?.kind !== 'lv2' || selectedView.branch) && (
+        <div className="selected-block-head">
+          <h3 className="selected-block-title" title={label}>
+            {label}
+          </h3>
+          <span className="selected-block-type">{kind}</span>
+          {selectedView.branch ? (
+            <LedToggle
+              on={selectedView.branch.enabled}
+              kind={selectedView.block.kind}
+              state={selectedView.branch.partial ? 'Mixed' : undefined}
+              label={`Toggle path ${selectedView.branch.name}`}
+              disabled={busy}
+              onToggle={() =>
+                void command({
+                  kind: 'branch',
+                  command: {
+                    session: state.control!.session,
+                    expected_revision: state.control!.revision,
+                    branch: selectedView.branch!.id,
+                    enabled: !selectedView.branch!.enabled,
+                  },
+                })
+              }
+            />
+          ) : (
+            <LedToggle
+              on={selectedView.bypass!.value !== 1}
+              kind={selectedView.block.kind}
+              label={`${label} on`}
+              disabled={busy}
+              onToggle={() =>
+                void command({
+                  kind: 'control',
+                  command: {
+                    session: state.control!.session,
+                    expected_revision: state.control!.revision,
+                    target: selectedView.bypass!.target,
+                    value: selectedView.bypass!.value === 1 ? 0 : 1,
+                  },
+                })
+              }
+            />
+          )}
+        </div>
+      )}
       {movable && (
         <div className="action-row" role="group" aria-label="Arrange">
           <Button

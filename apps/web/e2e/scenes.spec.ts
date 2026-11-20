@@ -379,6 +379,7 @@ async function mockRig(
       await request.get(`/api/v1/presets/rigs/${rev}`)
     ).json();
     const scenes =
+      document.manifest.extensions['urn:oxidal:scenes:3'] ??
       document.manifest.extensions['urn:oxidal:scenes:2'] ??
       document.manifest.extensions['urn:oxidal:scenes:1'];
     count++;
@@ -434,6 +435,84 @@ async function mockRig(
   });
   return () => state.configured.revision as string;
 }
+
+test('mixed rig authoring: scene grid saves block On/Off in version 3 and reopens it', async ({
+  page,
+  request,
+}, info) => {
+  const document = manifest(`Grid ${info.project.name} ${Date.now()}`, [
+    { id: 'clean', name: 'Clean', value: 1 },
+    { id: 'lead', name: 'Lead', value: 0.5 },
+  ]);
+  const effect = {
+    id: 'echo',
+    kind: 'lv2',
+    audioInputs: 1,
+    audioOutputs: 1,
+    instance: 'echo',
+    bypassed: false,
+  };
+  document.oxidal.graph.nodes.splice(1, 0, effect);
+  document.oxidal.graph.edges = [
+    { from: { node: 'in', port: 0 }, to: { node: 'echo', port: 0 } },
+    { from: { node: 'echo', port: 0 }, to: { node: 'scene-gain', port: 0 } },
+    { from: { node: 'scene-gain', port: 0 }, to: { node: 'out', port: 0 } },
+  ];
+  Object.assign(document.oxidal, {
+    lv2: [
+      { id: 'echo', pluginUri: 'urn:oxidal:plugin:echo#mono', controls: {} },
+    ],
+  });
+  Object.assign(document.extensions['urn:oxidal:authoring'], {
+    labels: { echo: 'Echo' },
+  });
+  const first = await publish(request, document);
+  const playing = await mockRig(page, request, first);
+  try {
+    await page.goto('/#rig');
+    await page
+      .getByRole('button', { name: 'Edit scenes', exact: true })
+      .click();
+    const grid = page.getByRole('dialog', { name: 'Edit scenes' });
+    await grid
+      .getByRole('button', { name: 'Echo in Clean', exact: true })
+      .click();
+    await expect(
+      grid.getByRole('button', { name: 'Echo in Clean', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'false');
+    await expect(
+      grid.getByRole('button', { name: 'Echo in Lead', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await page.screenshot({
+      path: info.outputPath('scene-grid.png'),
+      fullPage: true,
+    });
+    await grid
+      .getByRole('button', { name: 'Save scenes', exact: true })
+      .click();
+    await expect.poll(playing).not.toBe(first);
+    const saved = await (
+      await request.get(`/api/v1/presets/rigs/${playing()}`)
+    ).json();
+    expect(saved.manifest.requiredExtensions).toContain('urn:oxidal:scenes:3');
+    const scenes = saved.manifest.extensions['urn:oxidal:scenes:3'].scenes;
+    expect(scenes.map((s: { bypass: unknown }) => s.bypass)).toEqual([
+      [{ node: 'echo', value: true }],
+      [{ node: 'echo', value: false }],
+    ]);
+    await page.reload();
+    await page
+      .getByRole('button', { name: 'Edit scenes', exact: true })
+      .click();
+    await expect(
+      page
+        .getByRole('dialog', { name: 'Edit scenes' })
+        .getByRole('button', { name: 'Echo in Clean', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'false');
+  } finally {
+    await remove(request, [first, playing()]);
+  }
+});
 async function bind(
   request: APIRequestContext,
   revision: string,
@@ -489,7 +568,7 @@ test('mixed rig authoring: scenes move with their MIDI bindings and the last sce
   ]);
   const playing = await mockRig(page, request, first);
   try {
-    await page.goto('/');
+    await page.goto('/#rig');
     const pads = page.getByRole('group', { name: 'Scenes' });
     await expect(
       pads.getByRole('button', { name: 'Scene 2: Lead' }),
@@ -575,7 +654,7 @@ test('mixed rig authoring: Copy to preset says what copies and refuses presets w
   );
   await mockRig(page, request, source);
   try {
-    await page.goto('/');
+    await page.goto('/#rig');
     await page.getByRole('button', { name: 'More for scene Lead' }).click();
     await page
       .getByRole('dialog', { name: 'Scene 2: Lead' })

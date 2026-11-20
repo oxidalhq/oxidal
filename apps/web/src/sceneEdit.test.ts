@@ -366,6 +366,60 @@ function lv2Scenes(
 const extOf = (request: { manifest_json: string }) =>
   readScenes(JSON.parse(request.manifest_json)) as Ext;
 
+it('saves version-3 bypass without leaking the active scene and preserves copy, duplicate and deletion', () => {
+  const document = lv2Scenes('Lead', ['echo'], { gain: -3 });
+  const saved = JSON.parse(
+    updateScenes(
+      document,
+      {},
+      'lead',
+      {},
+      undefined,
+      [],
+      {},
+      {
+        lead: [{ node: 'echo', value: true }],
+      },
+    ).manifest_json,
+  ) as RigDocument['manifest'];
+  expect(saved.requiredExtensions).toContain('urn:oxidal:scenes:3');
+  const definition = readScenes<{
+    scenes: { id: string; bypass: { node: string; value: boolean }[] }[];
+  }>(saved)!;
+  expect(definition.scenes.map((s) => s.bypass)).toEqual([
+    [{ node: 'echo', value: false }],
+    [{ node: 'echo', value: true }],
+  ]);
+  expect(saved.oxidal!.graph.nodes.find((n) => n.id === 'echo')!.bypassed).toBe(
+    true,
+  );
+  const source = { revision: document.revision, manifest: saved };
+  const duplicate = JSON.parse(
+    duplicateScene(source, 'lead').publish.manifest_json,
+  );
+  expect(
+    readScenes<typeof definition>(duplicate)!.scenes.filter(
+      (s) => s.bypass[0]!.value,
+    ),
+  ).toHaveLength(2);
+  const deleted = JSON.parse(
+    deleteScene(source, 'clean', 'clean').manifest_json,
+  );
+  expect(
+    deleted.oxidal.graph.nodes.find((n: { id: string }) => n.id === 'echo')
+      .bypassed,
+  ).toBe(true);
+  const target = lv2Scenes('Twin', ['echo']);
+  const copied = JSON.parse(copySceneTo(source, 'lead', target).manifest_json);
+  const copiedScenes = readScenes<typeof definition>(copied)!.scenes;
+  expect(copiedScenes.map((s) => s.bypass)).toEqual([
+    [{ node: 'echo', value: false }],
+    [{ node: 'echo', value: false }],
+    [{ node: 'echo', value: true }],
+  ]);
+  expect(target.manifest.extensions['urn:oxidal:scenes:3']).toBeUndefined();
+});
+
 it('renames, moves, duplicates and deletes scenes by id', () => {
   const document = lv2Scenes();
   const renamed = extOf(renameScene(document, 'lead', '  Solo '));
