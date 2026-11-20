@@ -10,6 +10,7 @@ const CAPTURE_FADE_MS: u32 = 50;
 pub(super) fn saved_defaults(
     controls: &[Control],
     working: &[NodeWorking],
+    models: &[NodeModels],
     saved_before_working: Option<Vec<SceneNativeControl>>,
 ) -> Vec<SceneNativeControl> {
     let Some(mut saved) = saved_before_working else {
@@ -18,6 +19,7 @@ pub(super) fn saved_defaults(
     for c in controls {
         if let Target::Native { node, parameter } = &c.target
             && !working.iter().any(|w| &w.node == node)
+            && !models.iter().any(|m| &m.node == node)
         {
             let value = SceneNativeControl {
                 node: node.clone(),

@@ -154,6 +154,9 @@ public:
   }
   ~OxidalModelPreparation() { cancel(); if (task.joinable()) task.join(); }
   bool finishedPreparing() const { return done.load(std::memory_order_acquire); }
+  bool sceneChangeReady() const noexcept {
+    return phase == applied || phase == failed || phase == cancelled;
+  }
   void cancel() {
     if (phase == applied || phase == failed || phase == cancelled) return;
     resetFade(); phase = cancelled;

@@ -13,7 +13,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use oxidal_presets::manifest::{
-    MAX_SCENE_BYPASS, MAX_SCENE_CONTROLS, SceneBypass, SceneControl, SceneNativeControl,
+    MAX_SCENE_BYPASS, MAX_SCENE_CONTROLS, SceneBypass, SceneControl, SceneNativeBypass,
+    SceneNativeControl,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -49,6 +50,8 @@ pub struct DraftScene {
     pub bypass: Vec<SceneBypass>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub native_controls: Vec<SceneNativeControl>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub native_bypass: Vec<SceneNativeBypass>,
 }
 
 /// Scene levels changed with Update scene, by scene id, plus new scenes.
@@ -66,6 +69,8 @@ pub struct SceneDraft {
     pub bypass: BTreeMap<String, Vec<SceneBypass>>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub native_controls: BTreeMap<String, Vec<SceneNativeControl>>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub native_bypass: BTreeMap<String, Vec<SceneNativeBypass>>,
 }
 
 /// The shared draft; `revision` moves on every change so clients notice.
@@ -123,13 +128,25 @@ fn native_controls(list: &[SceneNativeControl], lv2_count: usize) -> bool {
                 && targets.insert((&c.node, &c.parameter))
         })
 }
+fn native_bypass(list: &[SceneNativeBypass], outer: usize) -> bool {
+    let mut keys = BTreeSet::new();
+    list.len() + outer <= MAX_SCENE_BYPASS
+        && list.iter().all(|row| {
+            text(&row.node)
+                && !row.node.chars().any(char::is_control)
+                && SceneNativeBypass::valid_block(&row.block)
+                && keys.insert((&row.node, &row.block))
+        })
+}
 fn needs_revision(draft: &SceneDraft) -> bool {
     !draft.bypass.is_empty()
         || !draft.native_controls.is_empty()
-        || draft
-            .added
-            .iter()
-            .any(|scene| !scene.bypass.is_empty() || !scene.native_controls.is_empty())
+        || !draft.native_bypass.is_empty()
+        || draft.added.iter().any(|scene| {
+            !scene.bypass.is_empty()
+                || !scene.native_controls.is_empty()
+                || !scene.native_bypass.is_empty()
+        })
 }
 fn valid(draft: &SceneDraft) -> bool {
     text(&draft.session)
@@ -138,6 +155,10 @@ fn valid(draft: &SceneDraft) -> bool {
         && draft.controls.len() <= MAX_SCENES
         && draft.bypass.len() <= MAX_SCENES
         && draft.native_controls.len() <= MAX_SCENES
+        && draft.native_bypass.len() <= MAX_SCENES
+        && draft.native_bypass.iter().all(|(scene, list)| {
+            text(scene) && native_bypass(list, draft.bypass.get(scene).map_or(0, Vec::len))
+        })
         && draft.native_controls.iter().all(|(scene, list)| {
             text(scene) && native_controls(list, draft.controls.get(scene).map_or(0, Vec::len))
         })
@@ -160,6 +181,7 @@ fn valid(draft: &SceneDraft) -> bool {
                 && controls(&s.controls)
                 && bypass(&s.bypass)
                 && native_controls(&s.native_controls, s.controls.len())
+                && native_bypass(&s.native_bypass, s.bypass.len())
         })
 }
 
@@ -234,6 +256,7 @@ mod tests {
             controls: BTreeMap::new(),
             bypass: BTreeMap::new(),
             native_controls: BTreeMap::new(),
+            native_bypass: BTreeMap::new(),
         }
     }
 
@@ -342,6 +365,43 @@ mod tests {
         with.controls.clear();
         with.native_controls
             .insert("a".into(), vec![capture.clone(), capture]);
+        assert!(!valid(&with));
+    }
+    #[test]
+    fn inner_bypass_draft_requires_cas_for_clear_and_uses_the_shared_limit() {
+        let mut with = draft(1.0);
+        let slot = SceneNativeBypass {
+            node: "capture".into(),
+            block: "native:exact".into(),
+            value: true,
+        };
+        with.native_bypass.insert("a".into(), vec![slot.clone()]);
+        assert!(valid(&with));
+        let store = Store::default();
+        let write = |draft, expected_revision| {
+            store.replace(SceneDraftUpdate {
+                draft,
+                expected_revision,
+            })
+        };
+        assert!(write(Some(with.clone()), None).is_none());
+        assert_eq!(write(Some(with.clone()), Some(0)).unwrap().revision, 1);
+        assert!(write(None, Some(0)).is_none());
+        assert!(write(None, None).is_none());
+        assert_eq!(write(None, Some(1)).unwrap().revision, 2);
+        with.bypass.insert(
+            "a".into(),
+            (0..MAX_SCENE_BYPASS)
+                .map(|i| SceneBypass {
+                    node: format!("node{i}"),
+                    value: true,
+                })
+                .collect(),
+        );
+        assert!(!valid(&with));
+        with.bypass.clear();
+        with.native_bypass
+            .insert("a".into(), vec![slot.clone(), slot]);
         assert!(!valid(&with));
     }
 }

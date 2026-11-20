@@ -1,5 +1,6 @@
 //! Daemon-owned confirmation of a replacement audio stream.
 //! @see docs/audio.md
+mod finder;
 pub(super) mod recovery;
 
 use crate::{Shared, failure, media, media_api, protect};
@@ -109,6 +110,8 @@ pub struct AudioChangeObservation {
 #[derive(Debug, Clone, Default, Deserialize, Serialize, JsonSchema)]
 pub struct AudioChangeState {
     pub phase: AudioChangePhase,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finder: Option<finder::BufferFinderState>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -128,6 +131,11 @@ pub struct AudioChangeState {
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum AudioChangeRequest {
+    FindBuffer {
+        owner: AudioChangeOwner,
+        session: String,
+        expected_revision: u64,
+    },
     Apply {
         owner: AudioChangeOwner,
         session: String,
@@ -186,6 +194,7 @@ struct Inner {
     committed: bool,
     stopped: bool,
     stop_requested: bool,
+    stop_finalized: bool,
     stop_result: Option<Result<(), String>>,
     operations: usize,
     power_queued: bool,
@@ -200,10 +209,16 @@ pub(super) struct Change {
 
 impl Inner {
     fn active(&self) -> bool {
-        matches!(
-            self.view.phase,
-            AudioChangePhase::Restarting | AudioChangePhase::Proving | AudioChangePhase::Reverting
-        )
+        self.view
+            .finder
+            .as_ref()
+            .is_some_and(finder::BufferFinderState::active)
+            || matches!(
+                self.view.phase,
+                AudioChangePhase::Restarting
+                    | AudioChangePhase::Proving
+                    | AudioChangePhase::Reverting
+            )
     }
 }
 
@@ -454,9 +469,13 @@ impl Change {
             let notified = self.stop_notified.notified();
             {
                 let mut inner = self.lock();
+                if inner.stop_finalized {
+                    return inner.view.clone();
+                }
                 match (inner.stop_requested, inner.stop_result.take()) {
                     (false, _) => return Self::finish_locked(&mut inner, phase, message),
                     (true, Some(Ok(()))) => {
+                        inner.stop_finalized = true;
                         let (phase, message) = match recovery_error {
                             Some(error) => (AudioChangePhase::Failed, Some(error)),
                             None => (
@@ -470,6 +489,7 @@ impl Change {
                         return Self::finish_locked(&mut inner, phase, message);
                     }
                     (true, Some(Err(error))) => {
+                        inner.stop_finalized = true;
                         return Self::finish_locked(
                             &mut inner,
                             AudioChangePhase::Failed,
@@ -598,6 +618,9 @@ impl AudioChangeOwner {
     }
 
     async fn dispatch(self, shared: &Shared, id: &str, mode: Mode) -> Result<(), String> {
+        if matches!(mode, Mode::Observe) {
+            return Ok(());
+        }
         let current = self.state(shared);
         let (session, expected_revision) = match &mode {
             Mode::Apply {
@@ -673,15 +696,15 @@ impl AudioChangeOwner {
         let start = Instant::now();
         loop {
             let current = self.state(shared);
-            if current.phase == AudioPhase::Running
+            let matching = current.phase == AudioPhase::Running
                 && current
                     .stream
                     .as_ref()
-                    .is_some_and(|stream| AudioChangeHardware::from_stream(stream) == *hardware)
-            {
+                    .is_some_and(|stream| AudioChangeHardware::from_stream(stream) == *hardware);
+            if matching && current.meter.is_some_and(|sample| sample.frames > 0) {
                 return Ok(());
             }
-            if !matches!(current.phase, AudioPhase::Starting | AudioPhase::Stopping) {
+            if !matching && !matches!(current.phase, AudioPhase::Starting | AudioPhase::Stopping) {
                 return Err(current.error.unwrap_or_else(|| {
                     "Audio worker did not confirm the requested settings".into()
                 }));
@@ -695,6 +718,7 @@ impl AudioChangeOwner {
 }
 
 enum Mode {
+    Observe,
     Apply {
         session: String,
         revision: u64,
@@ -707,6 +731,7 @@ enum Mode {
 impl Mode {
     fn message<C>(&self, id: &str, action: C) -> OwnerRequest<C> {
         match self {
+            Self::Observe => unreachable!("Observation does not send an owner command"),
             Self::Apply { .. } => OwnerRequest::Apply {
                 id: id.to_owned(),
                 action,
@@ -728,21 +753,56 @@ async fn run(
     previous: AudioChangeHardware,
     candidate: AudioChangeHardware,
     apply: Mode,
-) {
+    find_buffer: bool,
+) -> Option<finder::BufferTrial> {
     let change = &shared.audio_change;
-    let applied = owner.dispatch(&shared, &id, apply).await;
+    let startup_end = Instant::now() + finder::START;
+    let applied = if find_buffer {
+        tokio::time::timeout_at(startup_end, owner.dispatch(&shared, &id, apply)).await
+            .unwrap_or_else(|_| Err("Buffer candidate did not start within 15 seconds; restoring the original stream".into()))
+    } else {
+        owner.dispatch(&shared, &id, apply).await
+    };
+    let mut trial = None;
+    let mut proof = None;
     let mut decision = None;
-    let ready = if let Err(error) = applied {
+    let mut ready = if let Err(error) = applied {
         Some(Err(error))
     } else {
         // Native and Effects finish priming inside their command. Mixed can
         // still be preparing here, so an explicit revert cancels that wait.
-        let readiness = owner.ready(&shared, &candidate);
+        let readiness = async {
+            if find_buffer {
+                tokio::time::timeout_at(startup_end, owner.ready(&shared, &candidate))
+                    .await
+                    .unwrap_or_else(|_| {
+                        Err(
+                            "Buffer candidate did not confirm processed audio within 15 seconds"
+                                .into(),
+                        )
+                    })
+            } else {
+                owner.ready(&shared, &candidate).await
+            }
+        };
         tokio::pin!(readiness);
         loop {
             {
                 let mut inner = change.lock();
-                if inner.stopped {
+                if find_buffer
+                    && shared.protect.refuse(false).is_some()
+                    && let Some(finder) = &mut inner.view.finder
+                {
+                    finder.state = finder::BufferFinderPhase::Cancelling;
+                }
+                if inner.stopped
+                    || (find_buffer
+                        && inner
+                            .view
+                            .finder
+                            .as_ref()
+                            .is_some_and(|f| f.state == finder::BufferFinderPhase::Cancelling))
+                {
                     break None;
                 }
                 if inner.decision.as_ref().is_some_and(|request| !request.keep) {
@@ -755,16 +815,26 @@ async fn run(
                 biased;
                 _ = change.notified.notified() => (),
                 ready = &mut readiness => break Some(ready),
+                _ = tokio::time::sleep(Duration::from_millis(100)) => (),
             }
         }
     };
+    if find_buffer && matches!(ready, Some(Ok(()))) {
+        match finder::Proof::new(Instant::now(), owner.state(&shared).meter) {
+            Ok(prepared) => proof = Some(prepared),
+            Err(error) => ready = Some(Err(error.into())),
+        }
+    }
+    let candidate_session = owner.state(&shared).session;
     let applying_failed = matches!(ready, Some(Err(_)));
     let reason = if let Some(Err(error)) = ready {
         Some(error)
     } else if ready.is_none() {
         None
     } else {
-        let until = Instant::now() + PROVING;
+        let until = proof
+            .as_ref()
+            .map_or_else(|| Instant::now() + PROVING, finder::Proof::deadline);
         {
             let mut inner = change.lock();
             if !inner.stopped {
@@ -775,7 +845,20 @@ async fn run(
         loop {
             {
                 let mut inner = change.lock();
-                if inner.stopped {
+                if find_buffer
+                    && shared.protect.refuse(false).is_some()
+                    && let Some(finder) = &mut inner.view.finder
+                {
+                    finder.state = finder::BufferFinderPhase::Cancelling;
+                }
+                if inner.stopped
+                    || (find_buffer
+                        && inner
+                            .view
+                            .finder
+                            .as_ref()
+                            .is_some_and(|f| f.state == finder::BufferFinderPhase::Cancelling))
+                {
                     break None;
                 }
                 if Instant::now() < until {
@@ -791,7 +874,7 @@ async fn run(
                         Ok(()) => {
                             let state = change.finish(AudioChangePhase::Kept, None, None).await;
                             let _ = decision.take().unwrap().reply.send(Ok(state));
-                            return;
+                            return None;
                         }
                         Err(error) => {
                             let _ = decision.take().unwrap().reply.send(Err(error.clone()));
@@ -802,12 +885,21 @@ async fn run(
                 break None;
             }
             let current = owner.state(&shared);
-            if current.phase != AudioPhase::Running {
+            if current.phase != AudioPhase::Running
+                || (find_buffer && current.session != candidate_session)
+            {
                 break Some(
                     current
                         .error
                         .unwrap_or_else(|| "The candidate audio worker stopped".into()),
                 );
+            }
+            if let Some(proof) = &mut proof
+                && let Some(result) = proof.observe(Instant::now(), current.meter, &candidate)
+            {
+                let reason = result.reason.clone();
+                trial = Some(result);
+                break reason;
             }
             if Instant::now() >= until {
                 break Some("Audio settings confirmation timed out".into());
@@ -820,6 +912,16 @@ async fn run(
             }
         }
     };
+    let report = find_buffer.then(|| {
+        trial.unwrap_or_else(|| {
+            finder::BufferTrial::refused(
+                &candidate,
+                reason
+                    .as_deref()
+                    .unwrap_or("Buffer screening was cancelled or stopped"),
+            )
+        })
+    });
     {
         let mut inner = change.lock();
         inner.view.phase = AudioChangePhase::Reverting;
@@ -839,7 +941,10 @@ async fn run(
                 .decision
                 .as_ref()
                 .is_some_and(|request| !request.keep);
-        let phase = if reverting && previous_selected && current.phase == AudioPhase::Running {
+        let phase = if (reverting || find_buffer)
+            && previous_selected
+            && current.phase == AudioPhase::Running
+        {
             AudioChangePhase::Reverted
         } else {
             AudioChangePhase::Failed
@@ -848,7 +953,7 @@ async fn run(
         if let Some(decision) = decision {
             let _ = decision.reply.send(Ok(state));
         }
-        return;
+        return report;
     }
     let result = match recovery::has_marker(path, &id) {
         Err(error) => Err(error),
@@ -920,6 +1025,7 @@ async fn run(
     if let Some(decision) = decision {
         let _ = decision.reply.send(Ok(terminal));
     }
+    report
 }
 
 async fn external_admission(shared: &Shared) -> Result<(), (StatusCode, &'static str)> {
@@ -982,6 +1088,11 @@ pub(super) async fn command(
         }
     };
     match body {
+        AudioChangeRequest::FindBuffer {
+            owner,
+            session,
+            expected_revision,
+        } => finder::start(shared, owner, session, expected_revision).await,
         AudioChangeRequest::Apply {
             owner,
             session,
@@ -1061,7 +1172,7 @@ pub(super) async fn command(
                     } => (),
                     _ = run(shared, owner, id, previous, candidate.clone(), Mode::Apply {
                         session, revision: expected_revision, hardware: candidate,
-                    }) => (),
+                    }, false) => (),
                 }
             });
             match admission.await {
@@ -1117,6 +1228,32 @@ fn stop(shared: Arc<Shared>, id: String) -> Response {
 }
 
 async fn settle(shared: Arc<Shared>, id: &str, keep: bool) -> Response {
+    {
+        let mut inner = shared.audio_change.lock();
+        if inner.view.id.as_deref() == Some(id)
+            && inner
+                .view
+                .finder
+                .as_ref()
+                .is_some_and(finder::BufferFinderState::active)
+        {
+            if keep {
+                return failure(
+                    StatusCode::CONFLICT,
+                    "Finish buffer screening and use normal Apply before keeping hardware",
+                );
+            }
+            if let Some(finder) = &mut inner.view.finder {
+                finder.state = finder::BufferFinderPhase::Cancelling;
+            }
+            inner.view.message =
+                Some("Cancelling buffer screening; restoring the original settings".into());
+            let view = inner.view.clone();
+            drop(inner);
+            shared.audio_change.notified.notify_one();
+            return media_api::no_store(StatusCode::ACCEPTED, view);
+        }
+    }
     if keep && let Some(reason) = shared.protect.refuse(false) {
         return protect::locked(reason);
     }

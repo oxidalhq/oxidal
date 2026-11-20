@@ -719,7 +719,30 @@ impl CatalogStore {
     fn persist(&mut self, candidate: Preferences) -> Result<()> {
         let bytes = serde_json::to_vec(&candidate)
             .map_err(|_| Error::Invalid("Invalid library preferences"))?;
+        if bytes.len() > 1024 * 1024 {
+            return Err(Error::Invalid("Library preferences exceed storage limit"));
+        }
         fs::create_dir_all(&self.root)?;
+        // Bundle publication and catalog editing can run in different workers.
+        // Compare the durable revision under one lock before replacing its file.
+        let path = self.root.join(".library.lock");
+        match fs::symlink_metadata(&path) {
+            Ok(metadata) if !metadata.is_file() => {
+                return Err(Error::Invalid("Invalid library lock"));
+            }
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
+            _ => {}
+        }
+        let lock = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(path)?;
+        lock.lock()?;
+        if Self::open(self.root.clone())?.revision != self.revision {
+            return Err(Error::Conflict("Library changed; refresh before editing"));
+        }
         let temporary = self.root.join(format!(
             ".library-{}-{}.tmp",
             std::process::id(),
@@ -776,6 +799,7 @@ mod tests {
         let mut rows = vec![rig("a"), rig("b"), rig("c")];
         let mut store = CatalogStore::open(root.clone()).unwrap();
         let first = store.reconcile(rows.clone()).unwrap();
+        let mut stale = CatalogStore::open(root.clone()).unwrap();
         let renamed = store
             .update(
                 rows.clone(),
@@ -790,6 +814,10 @@ mod tests {
             )
             .unwrap();
         assert_eq!(renamed.items[0].name, "Lead");
+        assert!(matches!(
+            stale.supersede(LibraryKind::Rig, &"a".repeat(64), &"e".repeat(64)),
+            Err(Error::Conflict(_))
+        ));
         // "a" is saved again as "d": same place, same name, no new row at the end.
         rows.push(rig("d"));
         store
@@ -808,7 +836,7 @@ mod tests {
         assert_eq!(visible, [('d', "Lead"), ('b', "Rig b"), ('c', "Rig c")]);
         let earlier = view.items.iter().find(|i| i.id == "a".repeat(64)).unwrap();
         assert!(earlier.archived && earlier.superseded);
-        let current = CatalogStore::open(root.clone()).unwrap();
+        let mut current = CatalogStore::open(root.clone()).unwrap();
         assert!(
             current
                 .is_superseded(LibraryKind::Rig, &"a".repeat(64))
@@ -820,7 +848,7 @@ mod tests {
                 .unwrap()
         );
         // Saving the original bytes again resurrects A in D's visible slot.
-        store
+        current
             .supersede(LibraryKind::Rig, &"d".repeat(64), &"a".repeat(64))
             .unwrap();
         let view = CatalogStore::open(root.clone())

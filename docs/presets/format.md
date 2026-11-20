@@ -245,7 +245,8 @@ and a 100-native-instance document. This is document validation, not DSP capacit
 validates document declarations. `check_required_extensions` separately rejects
 unknown required capabilities. The mixed host reads `urn:oxidal:scenes:1`,
 `urn:oxidal:scenes:2` (effect settings), `urn:oxidal:scenes:3` (processor
-bypass) and `urn:oxidal:scenes:4` (native capture settings). Parsing neither reads
+bypass), `urn:oxidal:scenes:4` (native capture settings) and
+`urn:oxidal:scenes:5` (warm native inner bypass). Parsing neither reads
 resource files nor loads plugins. Native profile, role/state fidelity,
 installed plugin ports/features, scalar ranges and requested tail policy still
 require backend qualification before preparation. A valid document is not a
@@ -352,6 +353,26 @@ Library → Manage library exposes these actions separately from performance
 controls. Metadata supports up to 4096 changed labels/order/removal references
 within a 1 MiB file. This storage bound is not a limit on simultaneous NAM
 instances. Preset payload stores retain their existing admission limits.
+
+### Native inner-block bypass extension
+
+The required `urn:oxidal:scenes:5` extension retains the earlier scene records and
+adds `native_bypass` entries with a `node`, exact native `block` ID and boolean
+`value`. True means bypassed. Each scene specifies the same unique targets.
+There can be up to 128 outer and inner bypass targets combined. The combined
+32-control limit still applies to plugin and native scalar settings. Branch
+records carry their own gain controls. Versions 1–4 reject the new field.
+
+The worker resolves inner targets against the prepared NAM or IR in the actual
+native node. It reports saved defaults separately from prepared target IDs.
+Whole-native scenes keep a fixed calibration and stereo layout. Oversampled IR
+bypass retains the filter response of a separate dry resampling island.
+A version 5 extracted Amp/Cab pair can declare an optional `oversampling`
+factor of `1`, `2`, `4`, or `8` in its partition recipe. Omission means
+`1`. Both recipes must resolve to the same factor. Each role converts at
+its own host-facing ports so intervening host nodes receive the host rate.
+Legacy scene readers and pairs keep the existing 48 kHz/1× behavior.
+See [mixed rig scenes](../mixed-engine.md#warm-bypass-inside-a-native-tone).
 
 ### One performance set list
 

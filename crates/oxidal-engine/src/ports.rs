@@ -74,6 +74,12 @@ struct WarmBypass {
     scene_target: bool,
 }
 impl WarmBypass {
+    fn bytes(samples: usize) -> Option<usize> {
+        samples
+            .checked_mul(size_of::<f32>())?
+            .checked_add(size_of::<Gain>())
+    }
+
     fn new(
         bypassed: bool,
         scene_target: bool,
@@ -81,9 +87,7 @@ impl WarmBypass {
         used: &mut usize,
         budget: usize,
     ) -> Result<Self, String> {
-        *used = samples
-            .checked_mul(size_of::<f32>())
-            .and_then(|bytes| bytes.checked_add(size_of::<Gain>()))
+        *used = Self::bytes(samples)
             .and_then(|bytes| used.checked_add(bytes))
             .filter(|bytes| *bytes <= budget)
             .ok_or("Scene bypass exceeds host buffer budget")?;
@@ -246,6 +250,8 @@ pub struct PreparedPorts {
     output: usize,
     failed: bool,
     buffer_bytes: usize,
+    warm_bytes: usize,
+    native_scene5: bool,
     latency_frames: u32,
     /// Length of the group of independent native lanes starting at each
     /// position of `order` (0 inside or outside a group).
@@ -383,6 +389,30 @@ fn gates_of(
 }
 /// Cores beyond the render thread that lanes may use (the Pi 5 has four).
 const LANE_HELPERS: usize = 3;
+
+#[derive(Clone, Copy)]
+pub(crate) struct PreparationBudget {
+    pub(crate) host: usize,
+    pub(crate) warm: usize,
+}
+
+impl PreparationBudget {
+    pub(crate) fn standalone(bundle: &Bundle, host: usize) -> Self {
+        Self {
+            host,
+            warm: if bundle
+                .manifest()
+                .extensions
+                .contains_key(oxidal_presets::manifest::SCENES_INNER_BYPASS_EXTENSION)
+            {
+                crate::protocol::WARM_SCENE_BUDGET
+            } else {
+                usize::MAX
+            },
+        }
+    }
+}
+
 impl PreparedPorts {
     /// The caller supplies processors prepared from this same verified document.
     /// Bindings use instance IDs, not display names. Buffer admission is measured
@@ -394,6 +424,23 @@ impl PreparedPorts {
         frames: usize,
         buffer_budget: usize,
     ) -> Result<Self, String> {
+        Self::new_with_budget(
+            bundle,
+            processors,
+            rate,
+            frames,
+            PreparationBudget::standalone(bundle, buffer_budget),
+        )
+    }
+
+    pub(crate) fn new_with_budget(
+        bundle: &Bundle,
+        processors: BTreeMap<String, Processor>,
+        rate: f64,
+        frames: usize,
+        budget: PreparationBudget,
+    ) -> Result<Self, String> {
+        let buffer_budget = budget.host;
         let manifest = bundle.manifest();
         manifest.validate().map_err(|e| e.to_string())?;
         manifest
@@ -593,6 +640,10 @@ impl PreparedPorts {
                 }
             }
         }
+        let native_scene5 = manifest
+            .extensions
+            .contains_key(oxidal_presets::manifest::SCENES_INNER_BYPASS_EXTENSION);
+        let mut warm_bytes: usize = 0;
         if let Some(scenes) = &scenes {
             let first = &scenes.scenes[0];
             for node in &mut nodes {
@@ -602,13 +653,22 @@ impl PreparedPorts {
                         .native_controls
                         .iter()
                         .any(|target| target.node == node.id)
+                    && !first
+                        .native_bypass
+                        .iter()
+                        .any(|target| target.node == node.id)
                 {
                     continue;
                 }
+                let samples = node.channels * frames;
+                warm_bytes = WarmBypass::bytes(samples)
+                    .and_then(|bytes| warm_bytes.checked_add(bytes))
+                    .filter(|bytes| *bytes <= budget.warm)
+                    .ok_or("Warm scenes exceed the owner buffer budget")?;
                 node.scene_bypass = Some(WarmBypass::new(
                     node.bypassed,
                     scene_target,
-                    node.channels * frames,
+                    samples,
                     &mut buffer_bytes,
                     buffer_budget,
                 )?);
@@ -662,7 +722,7 @@ impl PreparedPorts {
         } else {
             None
         };
-        Ok(Self {
+        let mut graph = Self {
             nodes,
             order,
             waves,
@@ -674,10 +734,70 @@ impl PreparedPorts {
             output,
             failed: false,
             buffer_bytes,
+            warm_bytes,
+            native_scene5,
             latency_frames: latency[output],
             assets,
-        })
+        };
+        if native_scene5 {
+            let scene = scenes.as_ref().ok_or("Missing native scene definition")?;
+            let preparation = oxidal_tone3000::ScenePreparation {
+                base_fade_frames: scene.fade_ms * 48,
+                byte_budget: budget.warm - warm_bytes,
+            };
+            let mut groups = std::collections::BTreeMap::<&str, Vec<_>>::new();
+            for row in &scene.scenes[0].native_bypass {
+                groups
+                    .entry(&row.node)
+                    .or_default()
+                    .push(oxidal_tone3000::SceneEdit {
+                        block: &row.block,
+                        parameter: oxidal_tone3000::SceneParameter::Enabled,
+                        value: 0.0,
+                    });
+            }
+            let adapter = graph.native_scene_batch(&groups, Some(preparation))?;
+            graph.warm_bytes = graph
+                .warm_bytes
+                .checked_add(adapter)
+                .filter(|n| *n <= budget.warm)
+                .ok_or("Warm native scenes exceed the owner buffer budget")?;
+        }
+        Ok(graph)
     }
+
+    pub(crate) fn native_scene_batch(
+        &mut self,
+        edits: &std::collections::BTreeMap<&str, Vec<oxidal_tone3000::SceneEdit<'_>>>,
+        prepare: Option<oxidal_tone3000::ScenePreparation>,
+    ) -> Result<usize, String> {
+        if self.failed
+            || !self.native_scene5
+            || edits.keys().any(|id| {
+                !self
+                    .nodes
+                    .iter()
+                    .any(|n| n.id == **id && matches!(n.processor, Some(Processor::Native(_))))
+            })
+        {
+            return Err("Missing warm native scene processor".into());
+        }
+        let groups = self.nodes.iter_mut().filter_map(|n| {
+            let Some(Processor::Native(engine)) = &mut n.processor else {
+                return None;
+            };
+            Some((engine, edits.get(n.id.as_str())?.as_slice()))
+        });
+        oxidal_tone3000::Engine::scene_batch(groups, prepare).map_err(|e| e.to_string())
+    }
+
+    pub(crate) fn native_scene5(&self) -> bool {
+        self.native_scene5
+    }
+    pub(crate) fn warm_bytes(&self) -> usize {
+        self.warm_bytes
+    }
+
     pub(crate) fn lv2_state(
         &mut self,
         node: &str,
@@ -714,6 +834,17 @@ impl PreparedPorts {
         }
         Ok(())
     }
+    /// Confirm armed processors still own the DSP that their readback promises.
+    pub(crate) fn verify_warm_scene_health(&self) -> Result<(), String> {
+        if self.native_scene5 {
+            for node in &self.nodes {
+                if let Some(Processor::Native(engine)) = &node.processor {
+                    engine.scene_transitioning().map_err(|e| e.to_string())?;
+                }
+            }
+        }
+        Ok(())
+    }
     /// Reported processing delay plus host alignment, excluding device/transport.
     pub fn latency_frames(&self) -> u32 {
         self.latency_frames
@@ -744,7 +875,7 @@ impl PreparedPorts {
             }
         }
         self.samples.fill(0.0);
-        Ok(())
+        self.verify_warm_scene_health()
     }
     pub(crate) fn frames(&self) -> usize {
         self.frames
@@ -815,6 +946,23 @@ impl PreparedPorts {
         frames: u32,
         release: u32,
     ) -> Result<(), String> {
+        self.check_scene_gains(values, frames, release)?;
+        for value in values {
+            let node = self.nodes.iter_mut().find(|n| n.id == value.node).unwrap();
+            let gain = &mut node.gains[usize::from(value.port)];
+            // A path closes when its level falls, whatever its polarity.
+            let closing = (value.value as f32).abs() < gain.target.abs();
+            gain.set(value.value as f32, if closing { release } else { frames });
+        }
+        Ok(())
+    }
+
+    pub(crate) fn check_scene_gains(
+        &self,
+        values: &[oxidal_presets::manifest::SceneGain],
+        frames: u32,
+        release: u32,
+    ) -> Result<(), String> {
         if self.failed || frames == 0 || release == 0 {
             return Err("Invalid scene transition".into());
         }
@@ -833,13 +981,6 @@ impl PreparedPorts {
                 return Err("Invalid scene gain target".into());
             }
         }
-        for value in values {
-            let node = self.nodes.iter_mut().find(|n| n.id == value.node).unwrap();
-            let gain = &mut node.gains[usize::from(value.port)];
-            // A path closes when its level falls, whatever its polarity.
-            let closing = (value.value as f32).abs() < gain.target.abs();
-            gain.set(value.value as f32, if closing { release } else { frames });
-        }
         Ok(())
     }
     pub(crate) fn scene_transitioning(&self) -> bool {
@@ -848,6 +989,8 @@ impl PreparedPorts {
                 || n.scene_bypass
                     .as_ref()
                     .is_some_and(|b| b.mix.remaining != 0)
+                || (self.native_scene5 && matches!(&n.processor,
+                    Some(Processor::Native(engine)) if engine.scene_transitioning().unwrap_or(true)))
         }) || self.ramps.iter().any(ControlRamp::active)
     }
     pub(crate) fn check_scene_bypass(&self, values: &[SceneBypass]) -> Result<(), String> {
@@ -922,7 +1065,15 @@ impl PreparedPorts {
         &self,
         values: &[oxidal_presets::manifest::SceneControl],
     ) -> Result<(), String> {
-        self.scene_control_slots(values).map(|_| ())
+        let slots = self.scene_control_slots(values)?;
+        for &slot in slots.iter().take(values.len()) {
+            let ramp = &self.ramps[slot];
+            let Some(Processor::Lv2(plugin)) = &self.nodes[ramp.node].processor else {
+                return Err("Missing LV2 processor".into());
+            };
+            plugin.value(ramp.port)?;
+        }
+        Ok(())
     }
     fn scene_control_slots(
         &self,

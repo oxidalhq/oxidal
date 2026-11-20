@@ -73,6 +73,19 @@ impl Session {
         {
             return Err("Native authoring state conflict or model pending".into());
         }
+        if self.has_armed_native_node(&command.node)
+            && matches!(
+                &command.action,
+                AuthoringAction::Edit { .. }
+                    | AuthoringAction::Remove { .. }
+                    | AuthoringAction::SelectModel { .. }
+                    | AuthoringAction::Undo
+                    | AuthoringAction::Redo
+                    | AuthoringAction::Parameter { .. }
+            )
+        {
+            return Err("This native edit requires a rebuilt warm scene candidate".into());
+        }
         let orphaned = match &command.action {
             AuthoringAction::Remove { block_id } => {
                 self.protects_capture_target(&command.node, Some(block_id))
@@ -195,36 +208,149 @@ impl Session {
 }
 
 impl Session {
-    /// Isolated preparation only; callers must rebuild before processing PCM.
-    pub(crate) fn prepare_native_setting(
+    /// Apply an edit to an independent native engine. The receipt is not
+    /// eligible for PCM until a fresh resident set can re-arm its exact scene
+    /// targets and verify routing, recovery and the combined memory budget.
+    pub(crate) fn prepare_native_edit(
         &mut self,
         node: &str,
-        parameter: String,
-        value: f32,
+        operation: PreparedNativeEdit,
         root: &Path,
-    ) -> Result<(), String> {
+    ) -> Result<Recall, String> {
+        if matches!(&operation, PreparedNativeEdit::Authoring { action } if !matches!(
+            action,
+            AuthoringAction::Parameter { .. }
+                | AuthoringAction::Edit { .. }
+                | AuthoringAction::Remove { .. }
+                | AuthoringAction::SelectModel { .. }
+                | AuthoringAction::Undo
+                | AuthoringAction::Redo
+        )) {
+            return Err("Unsupported prepared native edit".into());
+        }
+
         let source = origin(self.source_revision(), node);
-        let receipt = self
-            .state
+        let mut recall = self.snapshot().recall();
+        let receipt = recall
             .working
             .iter()
             .find(|r| r.node == node)
             .map(|r| r.receipt.clone());
+        let frames = self.graph.frames();
+        let operation = match operation {
+            PreparedNativeEdit::Model { mut assignment } => {
+                super::models::validate_model_assignment(&self.bundle, node, &assignment)?;
+                let coordinate = recall
+                    .models
+                    .iter()
+                    .find(|m| m.node == node)
+                    .and_then(|m| m.assignments.iter().find(|a| a.target == assignment.target))
+                    .and_then(|a| a.insertion.clone())
+                    .or_else(|| {
+                        self.state
+                            .slots
+                            .iter()
+                            .find(|s| s.node == node)
+                            .and_then(|s| s.slots.iter().find(|s| s.target == assignment.target))
+                            .map(|s| s.position.clone())
+                    });
+                if assignment
+                    .insertion
+                    .as_ref()
+                    .is_some_and(|value| Some(value) != coordinate.as_ref())
+                {
+                    return Err("Model insertion coordinate differs from its owner".into());
+                }
+                assignment.insertion = coordinate;
+                PreparedNativeEdit::Model { assignment }
+            }
+            other => other,
+        };
         let Some(Processor::Native(engine)) = self.graph.processor_mut(node) else {
             return Err("Native node required".into());
         };
-        if engine.processing_role() != oxidal_tone3000::ProcessingRole::WholePreset {
+        let whole = engine.processing_role() == oxidal_tone3000::ProcessingRole::WholePreset;
+        if !whole && matches!(operation, PreparedNativeEdit::Authoring { .. }) {
             return Err("Whole-native node required".into());
         }
+
+        let mut candidate = engine.copy_for_edit().map_err(|e| e.to_string())?;
         let mut owner = oxidal_tone3000::working::Authoring::for_source(root, source, receipt);
-        let status = owner.prepare_parameter(engine, parameter, value)?;
-        let receipt = status.working.ok_or("Missing prepared working receipt")?;
-        self.state.working.retain(|r| r.node != node);
-        self.state.working.push(NodeWorking {
-            node: node.into(),
-            receipt,
-        });
-        self.state.models.retain(|r| r.node != node);
-        Ok(())
+        let status = match operation {
+            PreparedNativeEdit::Authoring {
+                action: AuthoringAction::Parameter { parameter, value },
+            } => Some(owner.prepare_parameter(&mut candidate, parameter, value)?),
+            PreparedNativeEdit::Authoring { action } => {
+                let required = self.state.scenes.as_ref().map_or_else(Vec::new, |scenes| {
+                    let first = &scenes.scenes[0];
+                    first
+                        .native_controls
+                        .iter()
+                        .filter(|row| row.node == node)
+                        .map(|row| row.parameter.clone())
+                        .chain(
+                            first
+                                .native_bypass
+                                .iter()
+                                .filter(|row| row.node == node)
+                                .map(|row| format!("block:{}:enabled", row.block)),
+                        )
+                        .collect()
+                });
+                let required: Vec<_> = required.iter().map(String::as_str).collect();
+                Some(owner.command_retaining(&mut candidate, action, &required)?)
+            }
+            PreparedNativeEdit::Model { assignment } => {
+                if !assignment.valid() {
+                    return Err("Invalid prepared model assignment".into());
+                }
+                let before = candidate.capture().map_err(|e| e.to_string())?;
+                oxidal_tone3000::model_preparation::restore(
+                    &mut candidate,
+                    root,
+                    std::slice::from_ref(&assignment),
+                    frames,
+                )
+                .map_err(|e| e.to_string())?;
+                if whole {
+                    Some(owner.record_external(&mut candidate, before)?)
+                } else {
+                    recall.models.retain(|r| r.node != node);
+                    recall.models.push(NodeModels {
+                        node: node.into(),
+                        assignments: vec![assignment],
+                    });
+                    None
+                }
+            }
+        };
+        if let Some(status) = status {
+            let receipt = status.working.ok_or("Missing prepared working receipt")?;
+            recall.working.retain(|r| r.node != node);
+            recall.working.push(NodeWorking {
+                node: node.into(),
+                receipt,
+            });
+            recall.models.retain(|r| r.node != node);
+        }
+        recall
+            .values
+            .retain(|row| !matches!(&row.target, Target::Native { node: id, .. } if id == node));
+        recall.values.extend(
+            native_controls(node, &mut candidate)?
+                .into_iter()
+                .map(|control| Value {
+                    target: control.target,
+                    value: control.value,
+                }),
+        );
+        if let Some(eq) = &mut recall.eq {
+            let row = eq
+                .iter_mut()
+                .find(|r| r.node == node)
+                .ok_or("Missing prepared native EQ row")?;
+            row.blocks = candidate.eq_snapshot().map_err(|e| e.to_string())?;
+        }
+        Ok(recall)
     }
 }

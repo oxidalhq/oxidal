@@ -468,7 +468,7 @@ fn scenes_read_both_versions_and_refuse_an_unknown_one_as_unsupported() {
     current.check_required_extensions().unwrap();
     assert_eq!(current.scenes().unwrap(), legacy.scenes().unwrap());
     // A version this reader does not know is unsupported, not invalid.
-    let future = scenes_as(scene_controls_manifest(), "urn:oxidal:scenes:5");
+    let future = scenes_as(scene_controls_manifest(), "urn:oxidal:scenes:6");
     assert_eq!(parse(&future).unwrap_err().to_string(), UNSUPPORTED_SCENES);
     // Even when only the required list names it.
     let mut named = scene_controls_manifest();
@@ -618,5 +618,66 @@ fn native_capture_scenes_require_version_four_and_complete_exact_targets() {
         let mut bad = base.clone();
         bad["extensions"][version]["initial_scene"] = starting;
         assert!(parse(&bad).is_err());
+    }
+}
+
+#[test]
+fn inner_bypass_needs_version_five_and_a_complete_bounded_bool_set() {
+    let key = SCENES_INNER_BYPASS_EXTENSION;
+    let mut bundle = fixture("mixed-delay");
+    bundle["requiredExtensions"] = json!([key]);
+    bundle["extensions"] = json!({key:{"fade_ms":25,"initial_scene":"dry","scenes":[
+        {"id":"dry","name":"Dry","gains":[],"native_bypass":[
+            {"node":"tone3000Node","block":"native:exact","value":true}]},
+        {"id":"wet","name":"Wet","gains":[],"native_bypass":[
+            {"node":"tone3000Node","block":"native:exact","value":false}]}
+    ]}});
+    let manifest = parse(&bundle).unwrap();
+    manifest.check_required_extensions().unwrap();
+    let scenes = Manifest::parse(&manifest.encode().unwrap())
+        .unwrap()
+        .scenes()
+        .unwrap()
+        .unwrap();
+    assert_eq!(scenes.initial_scene.as_deref(), Some("dry"));
+    assert!(scenes.scenes[0].native_bypass[0].value);
+    for rows in [
+        json!([]),
+        json!([{"node":"echo","block":"native:exact","value":false}]),
+        json!([{"node":"tone3000Node","block":"other","value":false}]),
+        json!([{"node":"tone3000Node","block":"é".repeat(65),"value":false}]),
+        json!([{"node":"tone3000Node","block":"native:exact","value":1}]),
+        json!(vec![
+            bundle["extensions"][key]["scenes"][1]["native_bypass"]
+                [0]
+            .clone();
+            2
+        ]),
+    ] {
+        let mut malformed = bundle.clone();
+        malformed["extensions"][key]["scenes"][1]["native_bypass"] = rows;
+        assert!(parse(&malformed).is_err());
+    }
+    let mut over = bundle.clone();
+    for scene in over["extensions"][key]["scenes"].as_array_mut().unwrap() {
+        scene["native_bypass"] = json!(
+            (0..MAX_SCENE_BYPASS)
+                .map(|i| json!({
+                    "node":"tone3000Node","block":format!("b{i}"),"value":true
+                }))
+                .collect::<Vec<_>>()
+        );
+        scene["bypass"] = json!([{"node":"echo","value":true}]);
+    }
+    assert!(parse(&over).is_err());
+    for old in [
+        SCENES_EXTENSION,
+        SCENES_CONTROLS_EXTENSION,
+        SCENES_BYPASS_EXTENSION,
+        SCENES_NATIVE_EXTENSION,
+    ] {
+        let mut older = scenes_as(scene_controls_manifest(), old);
+        older["extensions"][old]["scenes"][0]["native_bypass"] = json!([]);
+        assert!(parse(&older).is_err(), "{old}");
     }
 }

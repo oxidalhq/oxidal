@@ -743,6 +743,11 @@ fn render(
     let mut blocks = 0;
     let mut last_meter = Instant::now();
     let mut last_block = Instant::now();
+    #[cfg(feature = "audio-qualification")]
+    let mut qualification_clock = oxidal_audio::stream::QualificationClock::new(
+        config.input.period_frames,
+        config.input.sample_rate,
+    );
     while !stop.load(Ordering::Acquire) {
         if stream.step(|l, r| port.process(l, r).map_err(|e| e.to_string()))? == Step::Processed {
             last_block = Instant::now();
@@ -762,9 +767,8 @@ fn render(
             }
             // ALSA null has no clock; pace only that explicit software fixture.
             if null {
-                std::thread::sleep(Duration::from_secs_f64(
-                    f64::from(config.input.period_frames) / f64::from(config.input.sample_rate),
-                ));
+                #[cfg(feature = "audio-qualification")]
+                qualification_clock.wait();
             }
         } else if last_block.elapsed() > Duration::from_secs(2) {
             return Err("Audio device made no progress for two seconds".into());

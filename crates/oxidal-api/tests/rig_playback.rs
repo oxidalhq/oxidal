@@ -1245,3 +1245,184 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
     server.abort();
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[tokio::test]
+#[ignore = "requires a real Linux Mixed null worker and warm scene5 bundle"]
+async fn warm_native_candidate_refusal_keeps_pcm_and_valid_edit_rearms() {
+    let _worker_test = WORKER_TEST.lock().await;
+    let executable = std::path::PathBuf::from(std::env::var_os("OXIDAL_TEST_RIG_WORKER").unwrap());
+    assert_eq!(std::env::var("OXIDAL_RIG_QUALIFY_NULL").unwrap(), "1");
+    let source = BundleStore::new(std::env::var_os("OXIDAL_TEST_BUNDLE_ROOT").unwrap().into());
+    let revision =
+        std::fs::read_to_string(std::env::var_os("OXIDAL_TEST_RIG_REVISION_FILE").unwrap())
+            .unwrap();
+    let bundle = source.read(revision.trim()).unwrap();
+    let root = std::env::temp_dir().join(format!("oxidal-warm-rearm-http-{}", std::process::id()));
+    let store = BundleStore::new(root.join("presets/bundles"));
+    store.save(&bundle).unwrap();
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let (app, stopped) = router_with_shutdown(Config {
+        debug_socket: None,
+        device_socket: None,
+        simulator: false,
+        native_worker: None,
+        audio_worker: None,
+        graph_worker: None,
+        rig_worker: Some(executable.clone()),
+        mapping_path: root.join("mapping.json"),
+        preset_dir: root.join("presets"),
+        media_dir: None,
+        ui_dir: root.join("ui"),
+        shutdown: Some(signal),
+    })
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let c = Client::builder()
+        .timeout(Duration::from_secs(35))
+        .build()
+        .unwrap();
+    let legacy = apply(
+        &c,
+        &url,
+        json!({"kind":"start","settings":{
+            "revision":bundle.revision(),"stream":stream(),"recall":null
+        }}),
+    )
+    .await;
+    let node = legacy["control"]["authoring"][0]["node"].as_str().unwrap();
+    let row = legacy["control"]["controls"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| {
+            row["target"]["node"] == node
+                && row["target"]["parameter"]
+                    .as_str()
+                    .is_some_and(|p| p.starts_with("block:") && p.ends_with(":enabled"))
+        })
+        .unwrap();
+    let block = row["target"]["parameter"]
+        .as_str()
+        .unwrap()
+        .strip_prefix("block:")
+        .unwrap()
+        .strip_suffix(":enabled")
+        .unwrap();
+    let expected_oversampling = if legacy["control"]["authoring"][0]["status"]["settings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|setting| setting["target"] == "osEnabled" && setting["value"] == 1.0)
+    {
+        0.0
+    } else {
+        1.0
+    };
+    apply(&c, &url, json!({"kind":"stop"})).await;
+    let mut manifest = serde_json::to_value(bundle.manifest()).unwrap();
+    let key = oxidal_presets::manifest::SCENES_INNER_BYPASS_EXTENSION;
+    manifest["extensions"]
+        .as_object_mut()
+        .unwrap()
+        .retain(|name, _| !name.starts_with("urn:oxidal:scenes:"));
+    let extensions = manifest["requiredExtensions"].as_array_mut().unwrap();
+    extensions.retain(|name| !name.as_str().unwrap().starts_with("urn:oxidal:scenes:"));
+    extensions.push(json!(key));
+    let scene = |id, off| {
+        json!({"id":id,"name":id,"gains":[],
+        "native_bypass":[{"node":node,"block":block,"value":off}]})
+    };
+    manifest["extensions"][key] = json!({"fade_ms":25,"initial_scene":"dry",
+        "scenes":[scene("dry",true),scene("wet",false)]});
+    let bundle = oxidal_presets::Bundle::from_parts(
+        serde_json::to_vec(&manifest).unwrap(),
+        bundle
+            .manifest()
+            .resources
+            .iter()
+            .map(|r| (r.id.clone(), bundle.resource(&r.id).unwrap().to_owned()))
+            .collect(),
+    )
+    .unwrap();
+    let revision = store.save(&bundle).unwrap();
+    let before = apply(
+        &c,
+        &url,
+        json!({"kind":"start","settings":{
+            "revision":revision,"stream":stream(),"recall":null
+        }}),
+    )
+    .await;
+    let armed = before["control"]["native_bypass_armed"].clone();
+    let first = &armed.as_array().unwrap()[0];
+    let author = |state: &Value, action: Value| {
+        json!({"kind":"authoring","command":{
+            "node":first["node"],"session":state["control"]["session"],
+            "expected_revision":state["control"]["revision"],"action":action
+        }})
+    };
+    let old_pid = pids(&executable);
+    assert_eq!(old_pid.len(), 1);
+    let rejected = post(
+        &c,
+        &url,
+        &before,
+        author(&before, json!({"kind":"remove","block_id":first["block"]})),
+    )
+    .await;
+    assert_eq!(rejected.status(), 409);
+    let still_running = get(&c, &url, "rig-audio").await;
+    assert_eq!(pids(&executable), old_pid);
+    assert_eq!(
+        still_running["control"]["session"],
+        before["control"]["session"]
+    );
+    assert_eq!(
+        still_running["control"]["revision"],
+        before["control"]["revision"]
+    );
+    assert_eq!(
+        still_running["control"]["working"],
+        before["control"]["working"]
+    );
+    assert_eq!(still_running["control"]["native_bypass_armed"], armed);
+
+    let accepted = apply(
+        &c,
+        &url,
+        author(
+            &still_running,
+            json!({"kind":"parameter","parameter":"osEnabled","value":expected_oversampling}),
+        ),
+    )
+    .await;
+    assert_eq!(accepted["phase"], "starting");
+    let rearmed = phase(&c, &url, "running").await;
+    assert_ne!(rearmed["control"]["session"], before["control"]["session"]);
+    assert_eq!(rearmed["control"]["native_bypass_armed"], armed);
+    assert_eq!(
+        rearmed["control"]["native_bypass_defaults"],
+        before["control"]["native_bypass_defaults"]
+    );
+    assert_eq!(rearmed["control"]["working"].as_array().unwrap().len(), 1);
+    let settings = rearmed["control"]["authoring"][0]["status"]["settings"]
+        .as_array()
+        .unwrap();
+    assert!(settings.iter().any(
+        |setting| setting["target"] == "osEnabled" && setting["value"] == expected_oversampling
+    ));
+    let selected = apply(&c, &url, json!({"kind":"scene","command":{
+        "session":rearmed["control"]["session"],"expected_revision":rearmed["control"]["revision"],"scene":"wet",
+    }})).await;
+    assert_eq!(selected["control"]["scene"], "wet");
+
+    shutdown.send(true).unwrap();
+    tokio::time::timeout(Duration::from_secs(8), stopped.wait())
+        .await
+        .unwrap()
+        .unwrap();
+    server.abort();
+    std::fs::remove_dir_all(root).unwrap();
+}

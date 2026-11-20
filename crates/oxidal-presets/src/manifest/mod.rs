@@ -4,8 +4,9 @@
 mod scenes;
 pub use scenes::{
     MAX_SCENE_BYPASS, MAX_SCENE_CONTROLS, SCENES_BYPASS_EXTENSION, SCENES_CONTROLS_EXTENSION,
-    SCENES_EXTENSION, SCENES_NATIVE_EXTENSION, Scene, SceneBypass, SceneControl, SceneGain,
-    SceneNativeControl, Scenes, UNSUPPORTED_SCENES,
+    SCENES_EXTENSION, SCENES_INNER_BYPASS_EXTENSION, SCENES_NATIVE_EXTENSION, Scene, SceneBypass,
+    SceneControl, SceneGain, SceneNativeBypass, SceneNativeBypassKey, SceneNativeControl, Scenes,
+    UNSUPPORTED_SCENES,
 };
 mod strict;
 #[cfg(test)]
@@ -110,6 +111,7 @@ impl Manifest {
                 && key != SCENES_CONTROLS_EXTENSION
                 && key != SCENES_BYPASS_EXTENSION
                 && key != SCENES_NATIVE_EXTENSION
+                && key != SCENES_INNER_BYPASS_EXTENSION
                 && key != NATIVE_SETTINGS_EXTENSION
                 && key != GAIN_EXTENSION
         }) {
@@ -168,6 +170,13 @@ pub struct NativePartition {
     pub amp: String,
     pub cab: String,
     pub input: PartitionInput,
+    /// Native chain multiplier for scene5 partitions. Missing means 1×.
+    #[serde(
+        default,
+        deserialize_with = "optional",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub oversampling: Option<u8>,
     pub controls: BTreeMap<String, f64>,
     #[serde(
         default,

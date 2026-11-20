@@ -62,11 +62,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let model_root = std::env::var_os("OXIDAL_PRESET_DIR").map(std::path::PathBuf::from);
     let args: Vec<_> = std::env::args().skip(1).collect();
     if !args.is_empty() {
-        if args == ["--prepare-native-setting"] {
-            let request: PrepareNativeSetting =
+        if args == ["--prepare-native-edit"] {
+            let request: PrepareNativeEdit =
                 serde_json::from_slice(&frame(&mut std::io::stdin().lock())?)?;
             let world = World::discover()?;
-            let recall = oxidal_engine::prepare_native_setting(
+            let recall = oxidal_engine::prepare_native_edit(
                 &store,
                 &world,
                 request,
@@ -208,6 +208,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 };
                 let mut progress = Instant::now();
                 let mut published = Instant::now();
+                #[cfg(feature = "qualification")]
+                let mut qualification_clock = oxidal_audio::stream::QualificationClock::new(
+                    settings.stream.input.period_frames,
+                    settings.stream.input.sample_rate,
+                );
                 while !stop.load(Ordering::Acquire) {
                     let step = stream.step(|l, r| {
                         left.copy_from_slice(l);
@@ -228,10 +233,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                             published = Instant::now();
                         }
                         if null {
-                            std::thread::sleep(Duration::from_secs_f64(
-                                f64::from(settings.stream.input.period_frames)
-                                    / f64::from(settings.stream.input.sample_rate),
-                            ));
+                            #[cfg(feature = "qualification")]
+                            qualification_clock.wait();
                         }
                     } else if progress.elapsed() > Duration::from_secs(2) {
                         return Err("Rig PCM made no progress for two seconds".into());
@@ -282,7 +285,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             let primed = ready.load(Ordering::Acquire);
             if primed && !announced {
-                let control = snapshot(&shared.lock("announce"), &midi.status);
+                let rig = shared.lock("announce");
+                if !rig.healthy() {
+                    return Err("Rig failed before confirming startup".into());
+                }
+                let control = snapshot(&rig, &midi.status);
+                drop(rig);
                 responses.send(WorkerReply {
                     control,
                     telemetry: latest(),
@@ -315,6 +323,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             if switch_reply && !shared.lock("switch check").switching() {
                 let mut rig = shared.lock("switch reply");
+                if !rig.healthy() {
+                    return Err("Rig failed before confirming the preset switch".into());
+                }
                 let error = rig.take_switch_error();
                 let control = snapshot(&rig, &midi.status);
                 drop(rig);

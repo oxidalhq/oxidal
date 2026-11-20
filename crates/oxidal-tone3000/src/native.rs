@@ -15,7 +15,79 @@ impl std::fmt::Display for NativeError {
 impl std::error::Error for NativeError {}
 type Result<T> = std::result::Result<T, NativeError>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
+pub enum SceneParameter {
+    Enabled,
+    InputGain,
+    OutputGain,
+    Mix,
+}
+
+impl SceneParameter {
+    pub fn display(self, value: f32) -> String {
+        match self {
+            Self::Enabled => if value == 1.0 { "On" } else { "Off" }.into(),
+            Self::InputGain | Self::OutputGain => db_display((f64::from(value) - 0.5) * 48.0),
+            Self::Mix => format!("{:.1}%", value * 100.0),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct SceneEdit<'a> {
+    pub block: &'a str,
+    pub parameter: SceneParameter,
+    pub value: f32,
+}
+
+/// Extra warm state admitted for one graph before its render owner starts PCM.
+#[derive(Debug, Clone, Copy)]
+pub struct ScenePreparation {
+    /// Fade length in 48 kHz base frames. The adapter scales by its chain factor.
+    pub base_fade_frames: u32,
+    pub byte_budget: usize,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SceneBypassCandidate {
+    pub block: String,
+    pub value: bool,
+}
+
+#[repr(C)]
+struct SceneRow {
+    handle: *mut c_void,
+    block: *const c_char,
+    control: SceneParameter,
+    value: f32,
+}
+
 unsafe extern "C" {
+    fn oxidal_t3k_scene_candidates(
+        engine: *mut c_void,
+        out: *mut c_char,
+        capacity: usize,
+        written: *mut usize,
+    ) -> i32;
+    fn oxidal_t3k_scene_transitioning(engine: *mut c_void, result: *mut bool) -> i32;
+    fn oxidal_t3k_scene_batch(
+        rows: *const SceneRow,
+        count: usize,
+        fade: u32,
+        prepare: bool,
+        bytes: *mut usize,
+    ) -> i32;
+    fn oxidal_t3k_split_scene5(
+        engine: *mut c_void,
+        amp: *const c_char,
+        cab: *const c_char,
+        out: *mut c_char,
+        capacity: usize,
+        written: *mut usize,
+    ) -> i32;
+
     fn oxidal_t3k_defaults(engine: *mut c_void, size: f64, multi_core: bool) -> i32;
     fn oxidal_t3k_utility(
         engine: *mut c_void,
@@ -136,6 +208,12 @@ unsafe extern "C" {
         capacity: usize,
         written: *mut usize,
     ) -> i32;
+    fn oxidal_t3k_create_scene_stage(
+        rate: f64,
+        frames: i32,
+        role: i32,
+        result: *mut *mut c_void,
+    ) -> i32;
     fn oxidal_t3k_runtime(
         engine: *mut c_void,
         out: *mut c_char,
@@ -213,23 +291,50 @@ pub struct SplitStages {
     pub amp: State,
     pub cab: State,
     pub pitch: serde_json::Value,
+    scene5: bool,
 }
 
 impl SplitStages {
-    /// Prepare the paired processing roles on the current owner. This loads assets
-    /// and waits for readiness; call outside a streaming callback. The amp omits
-    /// the final DC blocker, which the cab applies once before the output controls.
-    /// The pair currently requires a 48 kHz host to avoid duplicated boundary
-    /// resampling. Whole-preset engines keep their existing sample-rate support.
-    /// Extracted external pitch still requires a separate upstream processor.
+    /// Prepare each role at the host rate. Legacy splits require 48 kHz.
     pub fn prepare(&self, rate: f64, frames: usize) -> Result<(Engine, Engine)> {
-        let mut amp = Engine::with_stage_role(rate, frames, ProcessingRole::Amp)?;
-        amp.restore(&self.amp)?;
-        amp.wait_ready()?;
-        let mut cab = Engine::with_stage_role(rate, frames, ProcessingRole::Cab)?;
-        cab.restore(&self.cab)?;
-        cab.wait_ready()?;
-        Ok((amp, cab))
+        self.prepare_at_factor(rate, frames, 1)
+    }
+
+    /// A scene5 pair owns independent host-facing boundaries, even with
+    /// another graph node routed between the two native stages.
+    pub fn prepare_at_factor(
+        &self,
+        rate: f64,
+        frames: usize,
+        factor: u8,
+    ) -> Result<(Engine, Engine)> {
+        let choice = match factor {
+            1 | 2 => 0.0,
+            4 => 0.5,
+            8 => 1.0,
+            _ => return Err(NativeError("Invalid partition oversampling factor".into())),
+        };
+        if !self.scene5 && factor != 1 {
+            return Err(NativeError("Oversampled partitions require scene5".into()));
+        }
+        let prepare = |role, state| -> Result<Engine> {
+            let mut engine = Engine::with_stage_role(rate, frames, role, self.scene5)?;
+            engine.restore(state)?;
+            if factor > 1 {
+                engine.set_normalized("osFactor", choice)?;
+                engine.set_normalized("osEnabled", 1.0)?;
+            }
+            if self.scene5 {
+                engine.prepare_stream()?;
+            } else {
+                engine.wait_ready()?;
+            }
+            Ok(engine)
+        };
+        Ok((
+            prepare(ProcessingRole::Amp, &self.amp)?,
+            prepare(ProcessingRole::Cab, &self.cab)?,
+        ))
     }
 }
 
@@ -326,9 +431,14 @@ impl Engine {
         self.role
     }
     pub fn new(rate: f64, frames: usize) -> Result<Self> {
-        Self::with_stage_role(rate, frames, ProcessingRole::WholePreset)
+        Self::with_stage_role(rate, frames, ProcessingRole::WholePreset, false)
     }
-    fn with_stage_role(rate: f64, frames: usize, role: ProcessingRole) -> Result<Self> {
+    fn with_stage_role(
+        rate: f64,
+        frames: usize,
+        role: ProcessingRole,
+        scene5: bool,
+    ) -> Result<Self> {
         if !rate.is_finite()
             || !(8000.0..=192000.0).contains(&rate)
             || !(1..=2048).contains(&frames)
@@ -340,6 +450,9 @@ impl Engine {
         checked(unsafe {
             match role {
                 ProcessingRole::WholePreset => oxidal_t3k_create(rate, frames as i32, &mut ptr),
+                role if scene5 => {
+                    oxidal_t3k_create_scene_stage(rate, frames as i32, role as i32, &mut ptr)
+                }
                 role => oxidal_t3k_create_stage(rate, frames as i32, role as i32, &mut ptr),
             }
         })?;
@@ -406,21 +519,37 @@ impl Engine {
         confirm: bool,
         external_pitch: bool,
     ) -> Result<SplitStages> {
+        self.split_with(amp, cab, false, |p, amp, cab, b, n, w| {
+            // SAFETY: split_with keeps all handles, C strings and outputs alive.
+            unsafe { oxidal_t3k_split(p, amp, cab, confirm, external_pitch, b, n, w) }
+        })
+    }
+
+    /// Scene5-only restore of a verified pair. Disabled blocks still load their assets.
+    pub fn split_scene5(&mut self, amp: &str, cab: &str) -> Result<SplitStages> {
+        self.split_with(amp, cab, true, |p, amp, cab, b, n, w| {
+            // SAFETY: split_with keeps all handles, C strings and outputs alive.
+            unsafe { oxidal_t3k_split_scene5(p, amp, cab, b, n, w) }
+        })
+    }
+
+    fn split_with(
+        &mut self,
+        amp: &str,
+        cab: &str,
+        scene5: bool,
+        split: impl FnOnce(
+            *mut c_void,
+            *const c_char,
+            *const c_char,
+            *mut c_char,
+            usize,
+            *mut usize,
+        ) -> i32,
+    ) -> Result<SplitStages> {
         let amp = string(amp)?;
         let cab = string(cab)?;
-        // SAFETY: owner handle and C strings outlive the bounded native operation.
-        let pitch = self.json(|p, b, n, w| unsafe {
-            oxidal_t3k_split(
-                p,
-                amp.as_ptr(),
-                cab.as_ptr(),
-                confirm,
-                external_pitch,
-                b,
-                n,
-                w,
-            )
-        })?;
+        let pitch = self.json(|p, b, n, w| split(p, amp.as_ptr(), cab.as_ptr(), b, n, w))?;
         let read = |stage| -> Result<State> {
             let mut length = 0;
             // SAFETY: null output requests the size of an adapter-produced cached state.
@@ -457,6 +586,7 @@ impl Engine {
             amp: read(0)?,
             cab: read(1)?,
             pitch,
+            scene5,
         })
     }
     /// Native input routing, persisted in instance state rather than preset files.
@@ -915,6 +1045,57 @@ impl Engine {
         }
         Ok(controls)
     }
+    pub fn scene_bypass_candidates(&mut self) -> Result<Vec<SceneBypassCandidate>> {
+        // SAFETY: only the live owner may export its bounded model catalog.
+        let rows = self.json(|p, b, n, w| unsafe { oxidal_t3k_scene_candidates(p, b, n, w) })?;
+        serde_json::from_value(rows).map_err(|e| NativeError(e.to_string()))
+    }
+
+    pub fn scene_transitioning(&self) -> Result<bool> {
+        let mut active = false;
+        // SAFETY: bounded owner-thread query with one writable bool.
+        checked(unsafe { oxidal_t3k_scene_transitioning(self.ptr.as_ptr(), &mut active) })?;
+        Ok(active)
+    }
+
+    /// The caller keeps exclusive render ownership for all processors in this batch.
+    /// Preparation reserves the bounded dry state off audio. None retargets live slots.
+    pub fn scene_batch<'a>(
+        groups: impl IntoIterator<Item = (&'a mut Self, &'a [SceneEdit<'a>])>,
+        prepare: Option<ScenePreparation>,
+    ) -> Result<usize> {
+        let mut names = Vec::new();
+        let mut rows = Vec::new();
+        for (engine, edits) in groups {
+            for edit in edits {
+                if names.len() >= 160 || edit.block.len() > 128 || edit.block.is_empty() {
+                    return Err(NativeError("Native scene batch exceeds its bounds".into()));
+                }
+                let name = string(edit.block)?;
+                rows.push(SceneRow {
+                    handle: engine.ptr.as_ptr(),
+                    block: name.as_ptr(),
+                    control: edit.parameter,
+                    value: edit.value,
+                });
+                names.push(name);
+            }
+        }
+        let mut bytes = prepare.map_or(0, |settings| settings.byte_budget);
+        // SAFETY: groups borrow exclusive owner handles. Names and row storage stay
+        // live during the bounded call. The adapter never retains these pointers.
+        checked(unsafe {
+            oxidal_t3k_scene_batch(
+                rows.as_ptr(),
+                rows.len(),
+                prepare.map_or(0, |settings| settings.base_fade_frames),
+                prepare.is_some(),
+                &mut bytes,
+            )
+        })?;
+        Ok(bytes)
+    }
+
     /// Experimental control-thread operation between PCM steps, not RT-qualified.
     pub fn set_live_control(&mut self, target: &str, value: f32) -> Result<()> {
         let controls = self.live_controls()?;
@@ -1016,6 +1197,16 @@ impl Engine {
             )
         })
     }
+    /// Copy the exact confirmed state into an isolated engine with the same
+    /// role and host geometry. Runtime scene arms are rebuilt separately.
+    pub fn copy_for_edit(&mut self) -> Result<Self> {
+        let state = self.capture()?;
+        let mut candidate = Self::with_stage_role(self.rate, self.frames, self.role, true)?;
+        candidate.restore(&state)?;
+        candidate.prepare_stream()?;
+        Ok(candidate)
+    }
+
     pub fn capture(&mut self) -> Result<State> {
         let mut length = 0;
         // SAFETY: null output requests an owned native snapshot and its bounded length.

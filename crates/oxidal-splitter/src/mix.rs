@@ -114,6 +114,18 @@ pub enum MixError {
 }
 
 impl MixRecipe {
+    pub fn stem_mut(&mut self, role: StemRole) -> Option<&mut StemMix> {
+        Some(match (self, role) {
+            (Self::Four { vocals, .. } | Self::Six { vocals, .. }, StemRole::Vocals) => vocals,
+            (Self::Four { drums, .. } | Self::Six { drums, .. }, StemRole::Drums) => drums,
+            (Self::Four { bass, .. } | Self::Six { bass, .. }, StemRole::Bass) => bass,
+            (Self::Four { other, .. } | Self::Six { other, .. }, StemRole::Other) => other,
+            (Self::Six { guitar, .. }, StemRole::Guitar) => guitar,
+            (Self::Six { piano, .. }, StemRole::Piano) => piano,
+            _ => return None,
+        })
+    }
+
     pub const fn mode(&self) -> SplitMode {
         match self {
             Self::Four { .. } => SplitMode::Four,

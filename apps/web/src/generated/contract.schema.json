@@ -1376,6 +1376,33 @@
               "format": "uint64",
               "minimum": 0
             },
+            "kind": {
+              "type": "string",
+              "const": "find_buffer"
+            },
+            "owner": {
+              "$ref": "#/$defs/AudioChangeOwner"
+            },
+            "session": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "owner",
+            "session",
+            "expected_revision"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "expected_revision": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
             "input": {
               "$ref": "#/$defs/AudioProbe"
             },
@@ -1485,6 +1512,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/AudioChangeHardware"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finder": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BufferFinderState"
             },
             {
               "type": "null"
@@ -2881,6 +2918,156 @@
         "name",
         "enabled",
         "partial"
+      ]
+    },
+    "BufferFinderPhase": {
+      "type": "string",
+      "enum": [
+        "running",
+        "cancelling",
+        "done",
+        "cancelled",
+        "failed"
+      ]
+    },
+    "BufferFinderState": {
+      "type": "object",
+      "properties": {
+        "candidate": {
+          "$ref": "#/$defs/BufferSetting"
+        },
+        "expected_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recommended": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BufferSetting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "session": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/BufferFinderPhase"
+        },
+        "total": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "trials": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BufferTrial"
+          }
+        }
+      },
+      "required": [
+        "session",
+        "expected_revision",
+        "state",
+        "trials",
+        "total",
+        "candidate"
+      ]
+    },
+    "BufferSetting": {
+      "type": "object",
+      "properties": {
+        "frames": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "periods": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "frames",
+        "periods"
+      ]
+    },
+    "BufferTrial": {
+      "type": "object",
+      "properties": {
+        "deadline_misses": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "elapsed_ms": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "frames": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "invalid_samples": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "outcome": {
+          "$ref": "#/$defs/BufferTrialOutcome"
+        },
+        "periods": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "xruns": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "frames",
+        "periods",
+        "outcome",
+        "elapsed_ms"
+      ]
+    },
+    "BufferTrialOutcome": {
+      "type": "string",
+      "enum": [
+        "clean",
+        "failed",
+        "unavailable"
       ]
     },
     "CalibrationAction": {
@@ -4468,6 +4655,12 @@
         },
         "name": {
           "type": "string"
+        },
+        "native_bypass": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SceneNativeBypass"
+          }
         },
         "native_controls": {
           "type": "array",
@@ -7015,6 +7208,16 @@
       "description": "The live stem mix: change it with `set_stem_mix` while it plays.",
       "type": "object",
       "properties": {
+        "mutedPart": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlayerPart"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "recipe": {
           "$ref": "#/$defs/MixRecipe"
         },
@@ -9671,18 +9874,90 @@
           "description": "New live mix for the cued stems.",
           "type": "object",
           "properties": {
+            "expected": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MixRecipe"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "kind": {
               "type": "string",
               "const": "set_stem_mix"
             },
             "recipe": {
               "$ref": "#/$defs/MixRecipe"
+            },
+            "split": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MediaId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "additionalProperties": false,
           "required": [
             "kind",
             "recipe"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "edit": {
+              "$ref": "#/$defs/StemEdit"
+            },
+            "kind": {
+              "type": "string",
+              "const": "edit_stem"
+            },
+            "role": {
+              "$ref": "#/$defs/StemRole"
+            },
+            "split": {
+              "$ref": "#/$defs/MediaId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "split",
+            "role",
+            "edit"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "set_muted_part"
+            },
+            "part": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PlayerPart"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "split": {
+              "$ref": "#/$defs/MediaId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "split"
           ]
         },
         {
@@ -9736,6 +10011,14 @@
       "additionalProperties": false,
       "required": [
         "order"
+      ]
+    },
+    "PlayerPart": {
+      "description": "Temporary performance mute, independent of the saved stem recipe.",
+      "type": "string",
+      "enum": [
+        "bass",
+        "guitar"
       ]
     },
     "PlayerRequest": {
@@ -10423,6 +10706,16 @@
         },
         "input": {
           "$ref": "#/$defs/PortablePartitionInput"
+        },
+        "oversampling": {
+          "description": "Native chain multiplier for scene5 partitions. Missing means 1×.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
         },
         "pair": {
           "type": "string"
@@ -12104,6 +12397,12 @@
         "name": {
           "type": "string"
         },
+        "native_bypass": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SceneNativeBypass"
+          }
+        },
         "native_controls": {
           "type": "array",
           "items": {
@@ -12226,6 +12525,15 @@
             }
           }
         },
+        "native_bypass": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SceneNativeBypass"
+            }
+          }
+        },
         "native_controls": {
           "type": "object",
           "additionalProperties": {
@@ -12342,6 +12650,43 @@
         "node",
         "port",
         "value"
+      ]
+    },
+    "SceneNativeBypass": {
+      "type": "object",
+      "properties": {
+        "block": {
+          "type": "string"
+        },
+        "node": {
+          "type": "string"
+        },
+        "value": {
+          "description": "True means bypassed.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "node",
+        "block",
+        "value"
+      ]
+    },
+    "SceneNativeBypassKey": {
+      "type": "object",
+      "properties": {
+        "block": {
+          "type": "string"
+        },
+        "node": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "node",
+        "block"
       ]
     },
     "SceneNativeControl": {
@@ -13133,6 +13478,26 @@
           "description": "Actual scalar values differ from the immutable source bundle.",
           "type": "boolean"
         },
+        "native_bypass_armed": {
+          "description": "The complete set of warm-prepared scene5 blocks, absent on older scenes.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/SceneNativeBypassKey"
+          }
+        },
+        "native_bypass_defaults": {
+          "description": "Confirmed saved-source booleans, present only as a complete catalog.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/SceneNativeBypass"
+          }
+        },
         "prepared": {
           "type": "array",
           "default": [],
@@ -13897,6 +14262,64 @@
       "required": [
         "connected",
         "events"
+      ]
+    },
+    "StemEdit": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "field": {
+              "type": "string",
+              "const": "mute"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "field",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "field": {
+              "type": "string",
+              "const": "solo"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "field",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "field": {
+              "type": "string",
+              "const": "gain"
+            },
+            "value": {
+              "type": "integer",
+              "format": "int16",
+              "maximum": 32767,
+              "minimum": -32768
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "field",
+            "value"
+          ]
+        }
       ]
     },
     "StemMix": {

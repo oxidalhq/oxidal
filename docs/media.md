@@ -162,6 +162,15 @@ reference [Roelands and Verhelst, 1993](https://www.isca-archive.org/eurospeech_
 
 ### Stem mix recipes
 
+The backing tool reads the same player snapshot as the full player. Its
+`edit_stem` command updates one mute, solo or gain on the named split. The
+device applies that field to the current recipe. A whole-recipe edit can supply
+the expected recipe and split so another viewer's intervening edit is refused.
+`set_muted_part` adds a temporary guitar or bass mute after the recipe gains.
+Clearing it reveals the current mix, including edits made while the part was
+muted. Choosing a new track or explicitly cueing stems clears this temporary
+mute. Moving the tool sends no player command.
+
 The song preparation crate defines separate four- and six-stem mix recipes.
 Each stem has stored mute, solo and gain in tenths of a decibel. The renderer
 reads aligned stereo chunks and applies a single whole-song attenuation when

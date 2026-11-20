@@ -24,6 +24,8 @@ pub const REQUEST_LIMIT: usize = 4 * 1024 * 1024;
 pub const REPLY_LIMIT: usize = 4 * 1024 * 1024;
 /// Host routing buffers only, separate from native/plugin memory.
 pub const BUFFER_BUDGET: usize = 64 * 1024 * 1024;
+#[cfg(feature = "native")]
+pub(crate) const WARM_SCENE_BUDGET: usize = 32 * 1024 * 1024;
 
 pub use oxidal_audio::midi::ControlTarget as Target;
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -165,6 +167,12 @@ pub struct Snapshot {
     /// Capture control defaults from the immutable saved bundle.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub capture_defaults: Vec<oxidal_presets::manifest::SceneNativeControl>,
+    /// Confirmed saved-source booleans, present only as a complete catalog.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_bypass_defaults: Option<Vec<oxidal_presets::manifest::SceneNativeBypass>>,
+    /// The complete set of warm-prepared scene5 blocks, absent on older scenes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_bypass_armed: Option<Vec<oxidal_presets::manifest::SceneNativeBypassKey>>,
     #[serde(default)]
     pub scene: Option<String>,
     #[serde(default)]
@@ -176,6 +184,36 @@ pub struct Snapshot {
 }
 impl Snapshot {
     pub fn valid_model_state(&self) -> bool {
+        use oxidal_presets::manifest::{MAX_SCENE_BYPASS, SceneNativeBypass};
+        if let Some(armed) = &self.native_bypass_armed {
+            let Some(scene) = self
+                .scenes
+                .as_ref()
+                .and_then(|scenes| scenes.scenes.first())
+            else {
+                return false;
+            };
+            if armed.len() != scene.native_bypass.len()
+                || armed.len() + scene.bypass.len() > MAX_SCENE_BYPASS
+                || armed.iter().enumerate().any(|(index, key)| {
+                    !SceneNativeBypass::valid_block(&key.block)
+                        || armed[..index].contains(key)
+                        || !scene
+                            .native_bypass
+                            .iter()
+                            .any(|row| row.node == key.node && row.block == key.block)
+                })
+            {
+                return false;
+            }
+        } else if self.scenes.as_ref().is_some_and(|scenes| {
+            scenes
+                .scenes
+                .iter()
+                .any(|scene| !scene.native_bypass.is_empty())
+        }) {
+            return false;
+        }
         let native = |node: &str| {
             self.controls
                 .iter()
@@ -586,11 +624,21 @@ mod tests {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct PrepareNativeSetting {
+pub struct PrepareNativeEdit {
     pub settings: StartRig,
     pub node: String,
-    pub parameter: String,
-    pub value: f32,
+    pub operation: PreparedNativeEdit,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum PreparedNativeEdit {
+    Authoring {
+        action: oxidal_audio::structure::AuthoringAction,
+    },
+    Model {
+        assignment: oxidal_audio::lifecycle::ModelAssignment,
+    },
 }
 
 impl Snapshot {

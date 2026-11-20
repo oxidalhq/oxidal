@@ -23,7 +23,177 @@
    parameters.removeParameterListener("osEnabled", this);
    parameters.removeParameterListener("osFactor", this);
    for (const auto& paramId : presetParameterIds())
-@@ -1982,7 +1986,9 @@
+@@ -612,6 +616,9 @@
+       block->irBaseRateIsland.prepare(chainOversampleFactor.load(),
+                                       juce::jmax(1, chainBaseBlockSize()));
+ 
++    if (block->sceneIrDry)
++      block->sceneIrDry->island.reset();
++
+     // Initialize per-block smoothers (input gain, output gain, mix, NAM
+     // normalization). The RT path only ever calls setTargetValue on these;
+     // reset() belongs here and in the model-apply path, never per block.
+@@ -619,11 +626,17 @@
+     block->outputGainSmoother.reset(chainRate, 0.05f);
+     block->mixSmoother.reset(chainRate, 0.05f);
+     block->namNormalizationSmoother.reset(chainRate, 0.05f);
+-    block->inputGainSmoother.setCurrentAndTargetValue(1.0f);   // updated on first process
+-    block->outputGainSmoother.setCurrentAndTargetValue(1.0f);  // updated on first process
++    const auto controls = block->oxidalSceneScalarMask;
++    block->inputGainSmoother.setCurrentAndTargetValue(controls & ChainBlock::SceneInputGain
++        ? juce::Decibels::decibelsToGain((block->inputGainNormalized - 0.5f) * 48.0f) : 1.0f);
++    block->outputGainSmoother.setCurrentAndTargetValue(controls & ChainBlock::SceneOutputGain
++        ? juce::Decibels::decibelsToGain((block->outputGainNormalized - 0.5f) * 48.0f) : 1.0f);
+     block->mixSmoother.setCurrentAndTargetValue(block->mixNormalized);
+     block->namNormalizationSmoother.setCurrentAndTargetValue(1.0f);
+-    block->wetFadeGain.reset(chainRate, kWetFadeSeconds);
++    if (block->oxidalWarmSceneFrames != 0)
++      block->wetFadeGain.reset(block->oxidalWarmSceneFrames);
++    else
++      block->wetFadeGain.reset(chainRate, kWetFadeSeconds);
+     block->wetFadeGain.setCurrentAndTargetValue(block->enabled ? 1.0f : 0.0f);
+     block->swapWetMuteGain.reset(chainRate, kWetFadeSeconds);
+     block->swapWetMuteGain.setCurrentAndTargetValue(1.0f);
+@@ -1050,13 +1063,16 @@
+   const float midDb = 3.0f * (cacheMidTone - 5.0f);
+   const float trebleDb = 2.0f * (cacheTrebleTone - 5.0f);
+ 
+-  *bassFilter.state = *juce::dsp::IIR::Coefficients<float>::makeLowShelf(
++  // The filters keep second-order coefficient storage from preparation.
++  // Assign the same JUCE coefficient arrays without heap-backed temporaries.
++  using Coefficients = juce::dsp::IIR::ArrayCoefficients<float>;
++  *bassFilter.state = Coefficients::makeLowShelf(
+       rate, clampBelowNyquist(rate, 150.0f), 0.707f,
+       juce::Decibels::decibelsToGain(bassDb));
+-  *midFilter.state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter(
++  *midFilter.state = Coefficients::makePeakFilter(
+       rate, clampBelowNyquist(rate, 425.0f), midDb < 0.0f ? 1.5f : 0.7f,
+       juce::Decibels::decibelsToGain(midDb));
+-  *trebleFilter.state = *juce::dsp::IIR::Coefficients<float>::makeHighShelf(
++  *trebleFilter.state = Coefficients::makeHighShelf(
+       rate, clampBelowNyquist(rate, 1800.0f), 0.707f,
+       juce::Decibels::decibelsToGain(trebleDb));
+ }
+@@ -1181,11 +1197,14 @@
+   // post-model gain stage below) while the last one keeps loudness normalization.
+   // Computed over the whole lane even for a partial range: a branched trunk
+   // is still one chain split around the tap, not two chains.
+-  int lastNamIndex = -1;
+-  for (int i = 0; i < static_cast<int>(blocks.size()); ++i) {
+-    const auto& b = blocks[i];
+-    if (b->type == ChainBlockType::NAM && b->loaded && b->enabled)
+-      lastNamIndex = i;
++  int lastNamIndex = oxidalSceneLastNam[&blocks == &lane(ChainSide::Left) ? 0 : 1];
++  if (lastNamIndex == -2) {
++    lastNamIndex = -1;
++    for (int i = 0; i < static_cast<int>(blocks.size()); ++i) {
++      const auto& b = blocks[i];
++      if (b->type == ChainBlockType::NAM && b->loaded && b->enabled)
++        lastNamIndex = i;
++    }
+   }
+ 
+   for (int idx = beginIdx; idx < endIdx; ++idx) {
+@@ -1211,7 +1230,21 @@
+     if (wetSilent)
+       block->swapFadeDone.store(true);  // a waiting requester may splice now
+ 
+-    if (!block->loaded || (!wantsWet && wetSilent)) {
++    const bool warmScene = block->oxidalWarmSceneFrames != 0;
++    if (warmScene && (!block->loaded
++        || (block->type == ChainBlockType::NAM && !block->namEngine)
++        || (block->type == ChainBlockType::IR && !block->convolverMono)))
++      oxidalSceneRenderFailed.store(true, std::memory_order_relaxed);
++    if (!block->loaded || (!warmScene && !wantsWet && wetSilent)) {
++      // A cold bypass can finish before a scalar glide. Settle inaudible
++      // scene controls so readiness cannot stay busy behind that bypass.
++      const auto controls = block->oxidalSceneScalarMask;
++      if (controls & ChainBlock::SceneInputGain)
++        block->inputGainSmoother.setCurrentAndTargetValue(block->inputGainSmoother.getTargetValue());
++      if (controls & ChainBlock::SceneOutputGain)
++        block->outputGainSmoother.setCurrentAndTargetValue(block->outputGainSmoother.getTargetValue());
++      if (controls & ChainBlock::SceneMix)
++        block->mixSmoother.setCurrentAndTargetValue(block->mixSmoother.getTargetValue());
+       // Not processing: park the block's meters at the floor. The EQ view can
+       // still be open, so keep its analyzer fed with the pass-through audio.
+       block->inputMeterDb.store(-60.0f);
+@@ -1229,6 +1262,19 @@
+     dryScratch.copyFrom(0, 0, buffer, 0, 0, numSamples);
+     if (numChannels > 1) {
+       dryScratch.copyFrom(1, 0, buffer, 1, 0, numSamples);
++    }
++
++    auto* alignedDry = block->sceneIrDry.get();
++    if (warmScene && block->type == ChainBlockType::IR) {
++      const int factor = chainOversampleFactor.load();
++      if ((factor == 1 && alignedDry) || (factor > 1 && (!alignedDry
++          || alignedDry->island.getFactor() != factor
++          || static_cast<size_t>(numSamples) > alignedDry->frames))) {
++        oxidalSceneRenderFailed.store(true, std::memory_order_relaxed);
++        continue;
++      }
++      if (alignedDry)
++        alignedDry->filter(dryScratch, numChannels, numSamples);
+     }
+ 
+     // Per-block input gain (0.5 == unity, ±24 dB), applied after the dry copy
+@@ -1365,6 +1411,8 @@
+         // next serializes the chain; string building/logging can't run here.
+         block->loaded = false;
+         block->rtProcessingFailed.store(true);
++        if (warmScene)
++          oxidalSceneRenderFailed.store(true, std::memory_order_relaxed);
+         bumpChainRevision();  // wake the UI poll so the flag is drained
+         buffer.copyFrom(0, 0, dryScratch, 0, 0, numSamples);
+         if (numChannels > 1) {
+@@ -1413,7 +1461,11 @@
+           }
+         }
+       } catch (const std::exception& e) {
+-        DBG("Error in IR processing for block " << block->id << ": " << e.what());
++        if (warmScene) {
++          oxidalSceneRenderFailed.store(true, std::memory_order_relaxed);
++        } else {
++          DBG("Error in IR processing for block " << block->id << ": " << e.what());
++        }
+       }
+     }
+ 
+@@ -1457,16 +1509,29 @@
+       const float wetGain = block->swapWetMuteGain.getNextValue() * cabPadGain;
+       const float outGain = block->outputGainSmoother.getNextValue();
+       const float fade = block->wetFadeGain.getNextValue();
+-      const float m = block->mixSmoother.getNextValue() * fade;
+-      const float postGain = 1.0f + (outGain - 1.0f) * fade;
++      const float mix = block->mixSmoother.getNextValue();
++      const float m = warmScene ? mix : mix * fade;
++      const float postGain = warmScene ? outGain : 1.0f + (outGain - 1.0f) * fade;
++      const auto output = [&](float dry, float wet, int ch) {
++        const float processed = (dry * (1.0f - m) + wet * m) * postGain;
++        if (!warmScene)
++          return processed;
++        // A dry endpoint must not hide invalid samples from its warm DSP.
++        if (!std::isfinite(processed))
++          oxidalSceneRenderFailed.store(true, std::memory_order_relaxed);
++        if (fade >= 1.0f)
++          return processed;
++        const float bypass = alignedDry ? alignedDry->samples[alignedDry->frames * ch + i] : dry;
++        return fade <= 0.0f ? bypass : bypass + (processed - bypass) * fade;
++      };
+       float wetL = buffer.getWritePointer(0)[i] * wetGain;
+       float dryL = dryScratch.getReadPointer(0)[i];
+-      buffer.getWritePointer(0)[i] = (dryL * (1.0f - m) + wetL * m) * postGain;
++      buffer.getWritePointer(0)[i] = output(dryL, wetL, 0);
+       blockOutputPeak = std::max(blockOutputPeak, std::abs(buffer.getWritePointer(0)[i]));
+       if (numChannels > 1) {
+         float wetR = buffer.getWritePointer(1)[i] * wetGain;
+         float dryR = dryScratch.getReadPointer(1)[i];
+-        buffer.getWritePointer(1)[i] = (dryR * (1.0f - m) + wetR * m) * postGain;
++        buffer.getWritePointer(1)[i] = output(dryR, wetR, 1);
+         blockOutputPeak = std::max(blockOutputPeak, std::abs(buffer.getWritePointer(1)[i]));
+       }
+     }
+@@ -1982,7 +2047,9 @@
    // ##########
    // DC blocker
    // ##########
@@ -34,7 +204,7 @@
      // ProcessorDuplicator runs an independent filter instance per channel, so a
      // single duplicator covers the whole (mono or stereo) buffer. Running a
      // second one here would high-pass every channel twice.
-@@ -2064,6 +2070,7 @@
+@@ -2064,6 +2131,7 @@
      outputMeterLevelL.store(peakToDb(peakL));
      outputMeterLevelR.store(peakToDb(peakR));
    }

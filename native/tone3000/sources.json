@@ -13,12 +13,14 @@
       "path": "plugin/include/Processor.h",
       "patch": "tone3000-Processor.h.patch",
       "before": "f394ff0050f2c9423d89363871f47cb811cd63df546dbd059063600811edd43e",
-      "after": "cf6612d20772b8aea5acdaf642414732643f19cf29e544f0581446a53e811969",
-      "patch_sha256": "1f54f08c7fc1bf0c8904382944b632a3301c4a321b84f7c39de69da804753b85",
+      "after": "0ec25a2121fbb99f6c25cc366dcaecb9c04f13778a32998d5d6f472634f056a8",
+      "patch_sha256": "fd275bff3f4fedf032359c934179d3dfceea11e0817df5cc2ec4cb15eba2da5d",
       "previous_after": [
         "4e066c42d6112c096836768c78f9adac881a34f1a1a1aecf882067d3c61a4939",
         "c2ceb28760f0a6264bab11d2947e6481e63588a6db54194b59cd04e4da6ad9a0",
-        "e07dbe0bb11e1f7eaa8ec0c2cb33996c816930e227a034f86e63eeecb3c0d32c"
+        "e07dbe0bb11e1f7eaa8ec0c2cb33996c816930e227a034f86e63eeecb3c0d32c",
+        "cf6612d20772b8aea5acdaf642414732643f19cf29e544f0581446a53e811969",
+        "2b79a4fafcc8f08a9565b93a04a91c47633803d8b3527f5148354244e24fe308"
       ]
     },
     {
@@ -26,10 +28,16 @@
       "path": "plugin/src/Processor.cpp",
       "patch": "tone3000-Processor.cpp.patch",
       "before": "83e4d870ab68c4a766f470823318d80df05be86b52501a24145c4758f02d94fe",
-      "after": "4700dd7433ccda72d7f3458a05f6e21fdce2561775726c61301057fe746e76e8",
-      "patch_sha256": "b95ac3b19a7beb4ac09470585a2c15991e482096b4d92ae2e55bca7fab6f9ae3",
+      "after": "08dffd3dfd3035d92e2a46ebdafbad3c4640d2b32bc00ec9b6f5021b85da4720",
+      "patch_sha256": "6c3fd31c97a8bf7c90862f82f7b2000b5456262684be3bb48fa122a2b34ef438",
       "previous_after": [
-        "08bf920fa94a75514b0a5325df5a0ba4751b951a5c241f240dcb62c25a6f152e"
+        "08bf920fa94a75514b0a5325df5a0ba4751b951a5c241f240dcb62c25a6f152e",
+        "4700dd7433ccda72d7f3458a05f6e21fdce2561775726c61301057fe746e76e8",
+        "4ec7b42d34a314873e9542a9fb34b5b514c52e04a32b1e8f8e82bd2e8d62792c",
+        "858eeed7a7c0dc1d8f450f1d62cc3ed8b41f3ccfe7c527d497ecef8ea63bd668",
+        "ea90bcf57e86f455e348af631a8f558b46e988e5c6c3e21806f0676b6c83bb92",
+        "91092832740ecefbf072a4d4c2e15c81143ef382f40aa281734bec1a3b517724",
+        "4973193334c5f8472e6a139e51c83ea1c63da08044c697373e5330ba07c133d1"
       ]
     },
     {
@@ -95,6 +103,34 @@
       "before": "b818e3cbfe5845609465a7512437a936841be85117ad97bce0d80054df2e2967",
       "after": "55e0a92b17ef40630fcf784c44eb6b81741f196932b2f2d829d842b1ac4bd43e",
       "patch_sha256": "d971c545d7eb5bf987fa5620c776757ccd77e9748f71491dbf93d8a0858ac18b"
+    },
+    {
+      "namespace": "tone3000",
+      "path": "plugin/include/ChainBlock.h",
+      "patch": "tone3000-ChainBlock.h.patch",
+      "before": "a462600d00b748d30b29978f3a33defd974dd84ebd18da204a0b8c791fbe81f0",
+      "after": "bf6b50d623a94ed4a6c2d5fd3a72d2b01c38f1dfc42521b090d3ac8ac9c6b79d",
+      "patch_sha256": "24f51a86c9d88df3f5f220fa9e28750f4a9fd05c7c325e4104dcbe1454f782f7",
+      "previous_after": [
+        "7ce40e7b9c82487bdfa30b1242547ed8388df76903846e279a4c462701d2bdf5",
+        "8719a28d43be5171ffeb93dbd20e032fed38c8c5b2f793fd0b781fddec9f1776"
+      ]
+    },
+    {
+      "namespace": "tone3000",
+      "path": "plugin/src/ProcessorChain.cpp",
+      "patch": "tone3000-ProcessorChain.cpp.patch",
+      "before": "9e496268542ccd7b4e517451a5665573c05b28e18679a71993ff7b263cafd384",
+      "after": "a12088624cdd58d1dce2c9db8187fd6f22435094147a3d37e38a75e4ebe641d5",
+      "patch_sha256": "d9a8098220b1edbae1f0b177be93cdf1f84813a1d45c2aea528c886fdac6b0b2"
+    },
+    {
+      "namespace": "tone3000",
+      "path": "plugin/include/ChainOversampler.h",
+      "patch": "tone3000-ChainOversampler.h.patch",
+      "before": "85bd267cae9818c39a9edebb37deb8147b86ab080dfa5ddffbe42ffa30cbdf49",
+      "after": "94c3f0e4192b6cf3f4d254ef93878a8e8e170b4b6ccfe72577b1f10ac41a0225",
+      "patch_sha256": "4dc4ae2df9b2fa97ed6f90490fbc8898eeb64c7a7ad7f99f554bfa97ae565556"
     }
   ],
   "addons": [

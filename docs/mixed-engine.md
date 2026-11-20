@@ -102,6 +102,47 @@ can report the complete list. Working changes and the startup scene can
 change the current controls without changing those saved defaults. A version 4
 preset can name its startup scene, which the worker applies before audio starts.
 
+### Warm bypass inside a native tone
+
+Version 5 scenes can switch a prepared NAM or IR inside a native block. The
+native processor keeps running the capture and its EQ and gains while its
+audible output fades to dry. Returning to the capture uses the history built
+while it was bypassed. An outer bypass on the same block also keeps the inner
+processors running.
+
+Version 5 reports the actual native fade and scalar glide. Reapplying settled
+controls leaves the scene ready. A scalar change on a cold, silent block settles
+immediately. A pending model preparation blocks a scene change without committing
+that preparation. If an armed block fails during rendering, the worker reports
+the failure and releases the audio stream.
+
+The worker distinguishes saved `native_bypass_defaults` from the live keys
+in `native_bypass_armed`. The same inner power controls work as warm
+adjustments once a version 5 scene preset has prepared them. Save keeps the
+confirmed power settings and scene definitions in the new preset. An extracted
+amp/cab pair keeps its exact source bytes.
+
+An armed lane keeps the same loaded NAM positions for calibration and IR
+channel selection while scenes change. At 1× the bypass endpoint uses the
+direct chain input. At 2×, 4×, and 8× an armed IR runs a second resampling
+island on its dry input. Both islands keep independent filter history. The
+bypass retains that filter response. The whole preset uses one host rate
+conversion for both endpoints. Arming counts all resident warm buffers
+against one 32 MiB limit before reserving the additional adapter storage.
+
+With version 5, extracted Amp and Cab each convert at their own host-facing
+ports. The two stages use the same optional oversampling factor and can have
+LV2 processing between them. Their separate conversion paths have their own
+delay and filter response. Legacy pairs still require 48 kHz at 1×.
+
+For an armed node, model replacement and whole-native structure, settings and
+Undo edits first build an isolated candidate. The device checks all dependent
+scene IDs and the resident memory budget while the current worker still owns
+audio. Removing an armed target is refused. After an accepted edit the device
+fades out the previous worker, starts the re-armed replacement and retains
+the previous working state if that startup fails. Pi timing and physical
+input/output still need qualification.
+
 ## Whole-native authoring and portable instance settings
 
 Whole-native blocks support live control and EQ edits, NAM and IR audition, and

@@ -1,6 +1,10 @@
 //! Resident prepared sessions share one continuous PCM owner. Construction and
 //! destruction happen before/after streaming; switching never loads a plugin.
-use crate::{Session, ports::Delay, protocol::*};
+use crate::{
+    Session,
+    ports::{Delay, PreparationBudget},
+    protocol::*,
+};
 use oxidal_lv2::World;
 use oxidal_presets::{BundleStore, manifest::Tails};
 
@@ -113,7 +117,21 @@ impl ResidentSet {
             revision: settings.revision.clone(),
             recall: settings.recall.clone(),
         };
-        for choice in std::iter::once(&active).chain(&settings.prepared) {
+        let choices = || std::iter::once(&active).chain(&settings.prepared);
+        let mut warm_remaining = usize::MAX;
+        for choice in choices() {
+            let manifest = store
+                .manifest(&choice.revision)
+                .map_err(|e| e.to_string())?;
+            if manifest
+                .extensions
+                .contains_key(oxidal_presets::manifest::SCENES_INNER_BYPASS_EXTENSION)
+            {
+                warm_remaining = WARM_SCENE_BUDGET;
+                break;
+            }
+        }
+        for choice in choices() {
             let bundle = store.read(&choice.revision).map_err(|e| e.to_string())?;
             let name = bundle.manifest().name.clone();
             let preserve = bundle
@@ -121,36 +139,21 @@ impl ResidentSet {
                 .oxidal
                 .as_ref()
                 .is_some_and(|host| host.recall.tails == Tails::Preserve);
-            let rows = choice
-                .recall
-                .as_ref()
-                .map(|r| r.working.as_slice())
-                .unwrap_or(&[]);
-            let working = match model_root {
-                Some(root) => Some((root, rows)),
-                None if rows.is_empty() => None,
-                None => return Err("Native working store unavailable".into()),
-            };
-            let mut session = Session::new_with_working(
+            let session = Session::new_from_recall(
                 bundle,
                 world,
                 f64::from(rate),
                 frames,
-                budget.saturating_sub(used),
-                working,
+                PreparationBudget {
+                    host: budget.saturating_sub(used),
+                    warm: warm_remaining,
+                },
+                model_root,
+                choice.recall.as_ref(),
             )?;
+            warm_remaining -= session.graph.warm_bytes();
             if session.channels() != (2, 2) {
                 return Err("Resident transport requires stereo logical ports".into());
-            }
-            if let Some(recall) = &choice.recall {
-                if recall.models.is_empty() {
-                    session.restore(recall)?;
-                } else {
-                    session.restore_with_models(
-                        recall,
-                        model_root.ok_or("Model asset store is unavailable")?,
-                    )?;
-                }
             }
             used = used
                 .checked_add(session.buffer_bytes())

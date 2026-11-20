@@ -244,6 +244,16 @@ impl Manifest {
                     n.role() != ProcessingRole::Whole && p.amp != p.cab,
                     "Partition needs an extracted role and distinct blocks",
                 )?;
+                if let Some(factor) = p.oversampling {
+                    require(
+                        matches!(factor, 1 | 2 | 4 | 8)
+                            && self
+                                .required_extensions
+                                .iter()
+                                .any(|id| id == SCENES_INNER_BYPASS_EXTENSION),
+                        "Partition oversampling requires scene5 and a supported factor",
+                    )?;
+                }
                 pairs.entry(&p.pair).or_default().push(n);
             }
         }
@@ -260,7 +270,8 @@ impl Manifest {
                     && a.profile == b.profile
                     && x.amp == y.amp
                     && x.cab == y.cab
-                    && x.input == y.input,
+                    && x.input == y.input
+                    && x.oversampling.unwrap_or(1) == y.oversampling.unwrap_or(1),
                 "Partition pair declarations disagree",
             )?;
         }

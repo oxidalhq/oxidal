@@ -507,44 +507,47 @@ impl Owner {
         self.phase(AudioPhase::Starting, None);
         Ok(())
     }
-    async fn prepare_native_setting(&mut self, command: AuthoringCommand) -> Result<(), String> {
+    async fn prepare_native_edit(
+        &mut self,
+        node: String,
+        session: &str,
+        revision: u64,
+        operation: PreparedNativeEdit,
+    ) -> Result<(), String> {
         let control = self
             .state
             .control
             .as_ref()
             .ok_or("Mixed audio is not running")?;
-        let oxidal_audio::structure::AuthoringAction::Parameter { parameter, value } =
-            command.action
-        else {
-            return Err("Prepared setting required".into());
-        };
         if self.state.phase != AudioPhase::Running
             || self.model_pending()
-            || command.session != control.session
-            || command.expected_revision != control.revision
-            || !control
-                .authoring
-                .iter()
-                .find(|r| r.node == command.node)
-                .is_some_and(|r| {
-                    r.status
-                        .settings
-                        .iter()
-                        .any(|p| p.target == parameter && p.accepts(value))
-                })
+            || control.scene_transitioning
+            || self.export.is_some()
+            || session != control.session
+            || revision != control.revision
+            || matches!(&operation, PreparedNativeEdit::Authoring { action:
+                oxidal_audio::structure::AuthoringAction::Parameter { parameter, value } }
+                if !control.authoring.iter().any(|entry| entry.node == node &&
+                    entry.status.settings.iter().any(|p| p.target == *parameter && p.accepts(*value))))
         {
-            return Err("Prepared native setting state conflict".into());
+            return Err("Prepared native edit state conflict".into());
         }
+        self.flush_trial_history().await?;
+        let baseline = self
+            .state
+            .control
+            .as_ref()
+            .ok_or("Mixed audio is not running")?
+            .revision;
         let previous = self
             .state
             .configured
             .clone()
             .ok_or("Missing mixed configuration")?;
-        let request = PrepareNativeSetting {
+        let request = PrepareNativeEdit {
             settings: previous.clone(),
-            node: command.node,
-            parameter,
-            value,
+            node,
+            operation,
         };
         let bytes = encode(&request)?;
         let root = std::fs::canonicalize(&self.root).map_err(|e| e.to_string())?;
@@ -552,7 +555,7 @@ impl Owner {
         let mut child = tokio::process::Command::new(
             self.executable.as_ref().ok_or("Mixed worker unavailable")?,
         )
-        .arg("--prepare-native-setting")
+        .arg("--prepare-native-edit")
         .env("OXIDAL_BUNDLE_STORE", &root)
         .env(
             "OXIDAL_PRESET_DIR",
@@ -598,6 +601,20 @@ impl Owner {
             let _ = child.wait().await;
         }
         let recall = result?;
+        let current = self.exchange(&WorkerRequest::Status).await?;
+        self.readback(current)?;
+        if self
+            .state
+            .control
+            .as_ref()
+            .is_none_or(|control| control.revision != baseline)
+            || self.state.phase != AudioPhase::Running
+        {
+            return Err("Playing rig changed during native preparation".into());
+        }
+        if let Some(reason) = self.protect.refuse(false) {
+            return Err(reason.into());
+        }
         let mut next = previous.clone();
         next.recall = Some(recall);
         next.validate()?;
@@ -1167,11 +1184,33 @@ impl Owner {
                 if self.state.phase != AudioPhase::Running {
                     return Err("Mixed audio is not running".into());
                 }
-                if matches!(
-                    command.action,
-                    oxidal_audio::structure::AuthoringAction::Parameter { .. }
-                ) {
-                    self.prepare_native_setting(command).await?;
+                use oxidal_audio::structure::AuthoringAction;
+                let armed = self
+                    .state
+                    .control
+                    .as_ref()
+                    .and_then(|control| control.native_bypass_armed.as_ref())
+                    .is_some_and(|rows| rows.iter().any(|row| row.node == command.node));
+                if matches!(command.action, AuthoringAction::Parameter { .. })
+                    || (armed
+                        && matches!(
+                            command.action,
+                            AuthoringAction::Edit { .. }
+                                | AuthoringAction::Remove { .. }
+                                | AuthoringAction::SelectModel { .. }
+                                | AuthoringAction::Undo
+                                | AuthoringAction::Redo
+                        ))
+                {
+                    self.prepare_native_edit(
+                        command.node,
+                        &command.session,
+                        command.expected_revision,
+                        PreparedNativeEdit::Authoring {
+                            action: command.action,
+                        },
+                    )
+                    .await?;
                     return Ok(());
                 }
                 let reply = match self.exchange(&WorkerRequest::Authoring { command }).await {
@@ -1409,6 +1448,25 @@ impl Owner {
             RigAudioAction::Model { command } => {
                 if self.state.phase != AudioPhase::Running {
                     return Err("Mixed audio is not running".into());
+                }
+                let armed = self
+                    .state
+                    .control
+                    .as_ref()
+                    .and_then(|control| control.native_bypass_armed.as_ref())
+                    .is_some_and(|rows| rows.iter().any(|row| row.node == command.node));
+                if armed
+                    && let oxidal_audio::lifecycle::ModelOperation::Prepare { assignment } =
+                        command.operation
+                {
+                    self.prepare_native_edit(
+                        command.node,
+                        &command.session,
+                        command.expected_revision,
+                        PreparedNativeEdit::Model { assignment },
+                    )
+                    .await?;
+                    return Ok(());
                 }
                 let reply = match self.exchange(&WorkerRequest::Model { command }).await {
                     Ok(r) => r,

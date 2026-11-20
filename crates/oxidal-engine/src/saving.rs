@@ -4,7 +4,10 @@ use crate::{Processor, Session, protocol::*};
 use oxidal_lv2::World;
 use oxidal_presets::{
     Bundle, BundleStore, LibraryOrigin,
-    manifest::{Manifest, Origin, Resource, ResourceKind, SCENES_NATIVE_EXTENSION},
+    manifest::{
+        Manifest, Origin, Resource, ResourceKind, SCENES_INNER_BYPASS_EXTENSION,
+        SCENES_NATIVE_EXTENSION,
+    },
 };
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -82,34 +85,22 @@ fn save_with_assets(
         .map_err(|e| e.to_string())?;
     let rate = f64::from(request.settings.stream.input.sample_rate);
     let frames = request.settings.stream.input.period_frames as usize;
-    let working = if request.recall.working.is_empty() {
-        None
-    } else {
-        Some((
-            model_root.ok_or("Native working store unavailable")?,
-            request.recall.working.as_slice(),
-        ))
-    };
-    let mut session = Session::new_with_working(
+    let mut session = Session::new_from_recall(
         original.clone(),
         world,
         rate,
         frames,
-        BUFFER_BUDGET,
-        working,
+        crate::ports::PreparationBudget::standalone(&original, BUFFER_BUDGET),
+        model_root,
+        Some(&request.recall),
     )?;
-    if request.recall.models.is_empty() {
-        session.restore(&request.recall)?;
-    } else {
-        session.restore_with_models(
-            &request.recall,
-            model_root.ok_or("Model asset store is unavailable")?,
-        )?;
-    }
     let confirmed = session.snapshot();
     let mut manifest = original.manifest().clone();
     manifest.name = request.name.clone();
-    if let Some(extension) = manifest.extensions.get_mut(SCENES_NATIVE_EXTENSION) {
+    for key in [SCENES_NATIVE_EXTENSION, SCENES_INNER_BYPASS_EXTENSION] {
+        let Some(extension) = manifest.extensions.get_mut(key) else {
+            continue;
+        };
         if let Some(scene) = &confirmed.scene {
             extension.insert(
                 "initial_scene".into(),
@@ -396,6 +387,10 @@ fn save_with_assets(
         .instances
         .iter()
         .any(|n| n.partition.is_some())
+        || bundle
+            .manifest()
+            .extensions
+            .contains_key(SCENES_INNER_BYPASS_EXTENSION)
     {
         let mut fresh = Session::new(bundle.clone(), world, rate, frames, BUFFER_BUDGET)?;
         let reopened = fresh.snapshot();
@@ -482,36 +477,32 @@ fn append(
 
 /// Prepare one whole-native instance away from the playing graph. Its receipt is
 /// admitted only by constructing a fresh graph (including latency compensation).
-pub fn prepare_native_setting(
+pub fn prepare_native_edit(
     store: &BundleStore,
     world: &World,
-    request: PrepareNativeSetting,
+    request: PrepareNativeEdit,
     root: &std::path::Path,
 ) -> Result<Recall, String> {
     request.settings.validate()?;
-    let bundle = store
-        .read(&request.settings.revision)
-        .map_err(|e| e.to_string())?;
-    let recall = &request
-        .settings
-        .recall
-        .as_ref()
-        .ok_or("Missing confirmed rig state")?;
-    let mut session = Session::new_with_working(
-        bundle,
-        world,
-        f64::from(request.settings.stream.input.sample_rate),
-        request.settings.stream.input.period_frames as usize,
-        BUFFER_BUDGET,
-        Some((root, &recall.working)),
-    )?;
-    if recall.models.is_empty() {
-        session.restore(recall)?;
-    } else {
-        session.restore_with_models(recall, root)?;
+    if request.settings.recall.is_none() {
+        return Err("Missing confirmed rig state".into());
     }
-    session.prepare_native_setting(&request.node, request.parameter, request.value, root)?;
-    Ok(session.snapshot().recall())
+    let mut resident = crate::ResidentSet::new_with_models(
+        store,
+        world,
+        &request.settings,
+        BUFFER_BUDGET,
+        Some(root),
+    )?;
+    let session = resident.active_mut();
+    let recall = session.prepare_native_edit(&request.node, request.operation, root)?;
+    drop(resident);
+    let mut settings = request.settings;
+    settings.recall = Some(recall.clone());
+    // Rebuild every resident, including authored graph latency and warm
+    // storage. Nothing has acquired PCM and no edit is confirmed yet.
+    crate::ResidentSet::new_with_models(store, world, &settings, BUFFER_BUDGET, Some(root))?;
+    Ok(recall)
 }
 
 #[cfg(test)]

@@ -4,7 +4,8 @@
 mod native;
 #[cfg(feature = "native")]
 pub use native::{
-    AudioPort, Engine, InputMode, NativeError, ProcessingRole, PumpPort, SplitStages, State,
+    AudioPort, Engine, InputMode, NativeError, ProcessingRole, PumpPort, SceneEdit, SceneParameter,
+    ScenePreparation, SplitStages, State,
 };
 
 #[cfg(feature = "native")]

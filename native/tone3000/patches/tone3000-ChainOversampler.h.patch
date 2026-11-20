@@ -1,0 +1,21 @@
+--- a/plugin/include/ChainOversampler.h
++++ b/plugin/include/ChainOversampler.h
+@@ -77,6 +77,18 @@
+     downOdd.fill({});
+   }
+ 
++  // Storage owned by an independently prepared resampling island.
++  static size_t requiredWorkBytes(size_t oversampledFrames) noexcept {
++    return 3 * kChannels * oversampledFrames * sizeof(float);
++  }
++
++  size_t allocatedWorkBytes() const noexcept {
++    size_t bytes = 0;
++    for (const auto& buffer : workBuffers)
++      bytes += buffer.samples.capacity() * sizeof(float);
++    return bytes;
++  }
++
+   int getFactor() const { return factor; }
+   bool isActive() const { return factor > 1; }
+ 

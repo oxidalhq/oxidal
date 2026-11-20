@@ -5,6 +5,8 @@ mod capture_scenes;
 mod partition;
 #[path = "qualify_mixed/portable.rs"]
 mod portable;
+#[path = "qualify_mixed/warm_scenes.rs"]
+mod warm_scenes;
 #[path = "qualify_mixed/worker.rs"]
 mod worker;
 use oxidal_engine::{PreparedRig, Processor};
@@ -67,6 +69,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         std::env::var("OXIDAL_LV2_EXTERNAL_DIR").unwrap_or_else(|_| "/usr/lib/lv2".into());
     let world = World::bundle(&Path::new(&bundles).join("amp-swh.lv2"))?;
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args == ["--warm-scenes"] {
+        return warm_scenes::qualify(&world, Path::new(&root));
+    }
     if args == ["--capture-partition"] {
         return partition::qualify(&world, Path::new(&root), true);
     }

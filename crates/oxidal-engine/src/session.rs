@@ -1,11 +1,13 @@
 //! One DSP owner with confirmed controls and guarded whole-native authoring.
-use crate::{PreparedPorts, Processor, protocol::*};
+use crate::loading::NativeRecovery;
+use crate::{PreparedPorts, Processor, ports::PreparationBudget, protocol::*};
 use oxidal_lv2::{ControlError, World};
 use oxidal_presets::{Bundle, manifest::NodeKind};
 use std::collections::BTreeSet;
 pub(crate) mod authoring;
 mod capture_scenes;
-mod models;
+pub(crate) mod models;
+mod native_scenes;
 
 pub(crate) const MAX_CAPTURE_DEFAULTS: usize = 512;
 const MAX_CAPTURE_DEFAULT_BYTES: usize = 128 * 1024;
@@ -46,8 +48,31 @@ impl Session {
         budget: usize,
         working: Option<(&std::path::Path, &[NodeWorking])>,
     ) -> Result<Self, String> {
-        let (mut graph, saved_before_working) =
-            PreparedPorts::load_for_session(&bundle, world, rate, frames, budget, working)?;
+        let budget = PreparationBudget::standalone(&bundle, budget);
+        Self::new_with_budget(
+            bundle,
+            world,
+            rate,
+            frames,
+            budget,
+            NativeRecovery {
+                working,
+                models: &[],
+            },
+        )
+    }
+
+    pub(crate) fn new_with_budget(
+        bundle: Bundle,
+        world: &World,
+        rate: f64,
+        frames: usize,
+        budget: PreparationBudget,
+        recovery: NativeRecovery<'_>,
+    ) -> Result<Self, String> {
+        let working = recovery.working;
+        let (mut graph, saved_before_working, native_bypass_defaults) =
+            PreparedPorts::load_for_session(&bundle, world, rate, frames, budget, recovery)?;
         let host = bundle
             .manifest()
             .oxidal
@@ -172,6 +197,7 @@ impl Session {
         let capture_defaults = capture_scenes::saved_defaults(
             &controls,
             working.map_or(&[], |(_, rows)| rows),
+            recovery.models,
             saved_before_working,
         );
         let state = Snapshot {
@@ -191,13 +217,25 @@ impl Session {
             buffer_bytes: graph.buffer_bytes(),
             latency_frames: graph.latency_frames(),
             prepared: Vec::new(),
-            models: Vec::new(),
+            models: recovery.models.to_vec(),
             working: working.map(|(_, rows)| rows.to_vec()).unwrap_or_default(),
             authoring,
             slots,
             model_change: None,
-            scenes,
             capture_defaults,
+            native_bypass_defaults: native_bypass_defaults.filter(|defaults| {
+                !defaults.is_empty()
+                    && serde_json::to_vec(defaults)
+                        .is_ok_and(|bytes| bytes.len() <= MAX_CAPTURE_DEFAULT_BYTES)
+            }),
+            native_bypass_armed: graph.native_scene5().then(|| {
+                scenes.as_ref().expect("prepared native scenes").scenes[0]
+                    .native_bypass
+                    .iter()
+                    .map(|row| row.key())
+                    .collect()
+            }),
+            scenes,
             scene: None,
             scene_transitioning: false,
             branches: Vec::new(),
@@ -225,6 +263,60 @@ impl Session {
         }
         Ok(result)
     }
+    pub(crate) fn new_from_recall(
+        bundle: Bundle,
+        world: &World,
+        rate: f64,
+        frames: usize,
+        budget: PreparationBudget,
+        model_root: Option<&std::path::Path>,
+        recall: Option<&Recall>,
+    ) -> Result<Self, String> {
+        let rows = recall.map_or(&[][..], |r| r.working.as_slice());
+        let working = match model_root {
+            Some(root) => Some((root, rows)),
+            None if rows.is_empty() => None,
+            None => return Err("Native working store unavailable".into()),
+        };
+        let scene5 = bundle
+            .manifest()
+            .extensions
+            .contains_key(oxidal_presets::manifest::SCENES_INNER_BYPASS_EXTENSION);
+        let models = if scene5 {
+            recall.map_or(&[][..], |r| r.models.as_slice())
+        } else {
+            &[]
+        };
+        if let Some(recall) = recall
+            && recall.source_revision != bundle.revision()
+        {
+            return Err("Recall revision differs".into());
+        }
+        let mut session = Self::new_with_budget(
+            bundle,
+            world,
+            rate,
+            frames,
+            budget,
+            NativeRecovery { working, models },
+        )?;
+        if let Some(recall) = recall {
+            if recall.models.is_empty() {
+                session.restore(recall)?;
+            } else if scene5 {
+                let mut controls = recall.clone();
+                controls.models.clear();
+                session.restore(&controls)?;
+            } else {
+                session.restore_with_models(
+                    recall,
+                    model_root.ok_or("Model asset store unavailable")?,
+                )?;
+            }
+        }
+        Ok(session)
+    }
+
     fn apply_initial_scene(&mut self) -> Result<(), String> {
         let Some(scene) = self
             .state
@@ -264,8 +356,9 @@ impl Session {
         if fits(self)? {
             return Ok(true);
         }
-        if self.state.capture_defaults.is_empty() {
-            return Ok(false);
+        self.state.native_bypass_defaults = None;
+        if fits(self)? {
+            return Ok(true);
         }
         self.state.capture_defaults.clear();
         fits(self)
@@ -302,6 +395,12 @@ impl Session {
                         capture_scenes::matches_control(c, value)
                             && c.value == f64::from(value.value as f32)
                     })
+                }) && scene.native_bypass.iter().all(|target| {
+                    let key = native_scenes::enabled_target(&target.node, &target.block);
+                    state
+                        .controls
+                        .iter()
+                        .any(|row| row.target == key && (row.value == 0.0) == target.value)
                 })
             };
             let selected = scenes
@@ -411,7 +510,11 @@ impl Session {
         if self.failed {
             return Err("Failed rig session".into());
         }
-        if let Err(error) = self.graph.verify_latency() {
+        if let Err(error) = self
+            .graph
+            .verify_latency()
+            .and_then(|()| self.graph.verify_warm_scene_health())
+        {
             self.failed = true;
             return Err(error);
         }
@@ -435,6 +538,10 @@ impl Session {
         if crate::render::render_thread_enabled()
             && let Err(error) = self.graph.verify_latency()
         {
+            self.failed = true;
+            return Err(error);
+        }
+        if let Err(error) = self.graph.verify_warm_scene_health() {
             self.failed = true;
             return Err(error);
         }
@@ -469,6 +576,12 @@ impl Session {
             .revision
             .checked_add(1)
             .ok_or("Rig revision exhausted")?;
+        if let Some((node, block)) = self.armed_edit(&command.target) {
+            let (node, block) = (node.to_owned(), block.to_owned());
+            self.set_native_bypass(index, &node, &block, command.value as f32)?;
+            self.state.revision = revision;
+            return Ok(());
+        }
         let result = self.set(index, command.value);
         // Native errors after admission may have changed DSP; never retain a
         // supposedly confirmed state or continue playback after an ambiguous result.
@@ -562,7 +675,10 @@ impl Session {
         let gains = scene.gains.clone();
         let controls = scene.controls.clone();
         let capture_controls = scene.native_controls.clone();
-        if !capture_controls.is_empty() && (self.gesture_pending() || self.measurement_pending()) {
+        let native_bypass = scene.native_bypass.clone();
+        if (!capture_controls.is_empty() || !native_bypass.is_empty())
+            && (self.gesture_pending() || self.measurement_pending())
+        {
             return Err(
                 "Finish the active native adjustment before selecting a capture scene".into(),
             );
@@ -576,9 +692,27 @@ impl Session {
         self.graph.check_scene_controls(&controls)?;
         self.graph.check_scene_bypass(&bypass)?;
         self.check_capture_scene(&capture_controls)?;
-        self.apply_mix(&gains, fade_ms, release_ms)?;
-        self.apply_scene_controls(&controls, fade_ms)?;
-        if let Err(error) = self.apply_capture_scene(&capture_controls) {
+        let scene5 = self.graph.native_scene5();
+        if scene5 {
+            self.state
+                .revision
+                .checked_add(1)
+                .ok_or("Rig revision exhausted")?;
+            self.graph.check_scene_gains(
+                &gains,
+                self.fade_frames(fade_ms),
+                self.fade_frames(release_ms),
+            )?;
+            self.apply_native_scene(&native_bypass, &capture_controls)?;
+        }
+        let applied = self
+            .apply_mix(&gains, fade_ms, release_ms)
+            .and_then(|()| self.apply_scene_controls(&controls, fade_ms));
+        if let Err(error) = applied {
+            self.failed |= scene5;
+            return Err(error);
+        }
+        if !scene5 && let Err(error) = self.apply_capture_scene(&capture_controls) {
             self.failed = true;
             return Err(error);
         }

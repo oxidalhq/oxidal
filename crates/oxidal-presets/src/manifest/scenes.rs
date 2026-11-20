@@ -16,12 +16,15 @@ pub const SCENES_CONTROLS_EXTENSION: &str = "urn:oxidal:scenes:2";
 pub const SCENES_BYPASS_EXTENSION: &str = "urn:oxidal:scenes:3";
 /// Scenes that also set capture controls on native nodes.
 pub const SCENES_NATIVE_EXTENSION: &str = "urn:oxidal:scenes:4";
+/// Scenes with independently armed warm bypass inside native processors.
+pub const SCENES_INNER_BYPASS_EXTENSION: &str = "urn:oxidal:scenes:5";
 const SCENES_PREFIX: &str = "urn:oxidal:scenes:";
-const SCENES_VERSIONS: [&str; 4] = [
+const SCENES_VERSIONS: [&str; 5] = [
     SCENES_EXTENSION,
     SCENES_CONTROLS_EXTENSION,
     SCENES_BYPASS_EXTENSION,
     SCENES_NATIVE_EXTENSION,
+    SCENES_INNER_BYPASS_EXTENSION,
 ];
 /// The refusal for a scenes version this reader does not know.
 pub const UNSUPPORTED_SCENES: &str = "Unsupported scenes format: this preset needs a newer Oxidal";
@@ -58,6 +61,8 @@ pub struct Scene {
     pub bypass: Vec<SceneBypass>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub native_controls: Vec<SceneNativeControl>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub native_bypass: Vec<SceneNativeBypass>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -101,11 +106,37 @@ impl SceneNativeControl {
         .then_some((block, parameter))
     }
 }
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct SceneNativeBypassKey {
+    pub node: String,
+    pub block: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct SceneNativeBypass {
+    pub node: String,
+    pub block: String,
+    /// True means bypassed.
+    pub value: bool,
+}
+impl SceneNativeBypass {
+    pub fn valid_block(id: &str) -> bool {
+        (1..=128).contains(&id.len()) && !id.chars().any(char::is_control)
+    }
+    pub fn key(&self) -> SceneNativeBypassKey {
+        SceneNativeBypassKey {
+            node: self.node.clone(),
+            block: self.block.clone(),
+        }
+    }
+}
 impl Manifest {
     /// Scenes are sonic data: require explicit support rather than allowing an
     /// older reader to silently discard their meaning. Initial mix remains the
     /// graph's gains, so Save/recovery use the existing confirmed scalar path.
-    /// Versions 1 through 4 are read; any other scenes version is
+    /// Versions 1 through 5 are read; any other scenes version is
     /// refused as unsupported rather than read as invalid.
     pub fn scenes(&self) -> Result<Option<Scenes>> {
         let bad = || Error::Invalid("Invalid prepared scene definitions");
@@ -134,9 +165,13 @@ impl Manifest {
                     .is_some_and(|rows| rows.iter().any(|row| row.get(field).is_some()))
             })
         };
-        if (!matches!(key, SCENES_BYPASS_EXTENSION | SCENES_NATIVE_EXTENSION) && uses("bypass"))
-            || (key != SCENES_NATIVE_EXTENSION
+        if (!matches!(
+            key,
+            SCENES_BYPASS_EXTENSION | SCENES_NATIVE_EXTENSION | SCENES_INNER_BYPASS_EXTENSION
+        ) && uses("bypass"))
+            || (!matches!(key, SCENES_NATIVE_EXTENSION | SCENES_INNER_BYPASS_EXTENSION)
                 && (uses("native_controls") || extension.contains_key("initial_scene")))
+            || (key != SCENES_INNER_BYPASS_EXTENSION && uses("native_bypass"))
         {
             return Err(bad());
         }
@@ -157,6 +192,7 @@ impl Manifest {
         let mut expected_controls = None;
         let mut expected_bypass = None;
         let mut expected_native = None;
+        let mut expected_inner = None;
         for scene in &definition.scenes {
             if !validation::id(&scene.id)
                 || !ids.insert(&scene.id)
@@ -165,7 +201,8 @@ impl Manifest {
                 || scene.name.chars().any(char::is_control)
                 || (scene.gains.is_empty()
                     && scene.bypass.is_empty()
-                    && scene.native_controls.is_empty())
+                    && scene.native_controls.is_empty()
+                    && scene.native_bypass.is_empty())
             {
                 return Err(bad());
             }
@@ -238,7 +275,7 @@ impl Manifest {
                 return Err(bad());
             }
             expected_controls = Some(controls);
-            if scene.bypass.len() > MAX_SCENE_BYPASS {
+            if scene.bypass.len() + scene.native_bypass.len() > MAX_SCENE_BYPASS {
                 return Err(bad());
             }
             let mut bypass = BTreeSet::new();
@@ -277,6 +314,26 @@ impl Manifest {
                 return Err(bad());
             }
             expected_native = Some(native);
+            let mut inner = BTreeSet::new();
+            for target in &scene.native_bypass {
+                if !SceneNativeBypass::valid_block(&target.block)
+                    || !host
+                        .graph
+                        .nodes
+                        .iter()
+                        .any(|n| n.id == target.node && n.kind == NodeKind::Tone3000)
+                    || !inner.insert((&target.node, &target.block))
+                {
+                    return Err(bad());
+                }
+            }
+            if expected_inner
+                .as_ref()
+                .is_some_and(|previous| previous != &inner)
+            {
+                return Err(bad());
+            }
+            expected_inner = Some(inner);
         }
         let mut branches = BTreeSet::new();
         let mut branch_targets = BTreeSet::new();
@@ -290,6 +347,7 @@ impl Manifest {
                 || !branch.controls.is_empty()
                 || !branch.bypass.is_empty()
                 || !branch.native_controls.is_empty()
+                || !branch.native_bypass.is_empty()
             {
                 return Err(bad());
             }

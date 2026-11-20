@@ -32,16 +32,21 @@
  
    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
    void releaseResources() override;
-@@ -521,6 +532,8 @@
+@@ -521,6 +532,13 @@
    static juce::PropertiesFile::Options uiPreferencesOptions();
  
  private:
 +  friend class OxidalModelPreparation;
++  friend class OxidalWarmScenes;
++  // -2 means the lane still uses legacy enabled-dependent topology.
++  std::array<int, 2> oxidalSceneLastNam{{-2, -2}};
++  size_t oxidalSceneArmedCount{0};
++  std::atomic<bool> oxidalSceneRenderFailed{false};
 +  OxidalProcessingRole oxidalProcessingRole = OxidalProcessingRole::WholePreset;
    // One chain of blocks. Two of these make up `lanes` (declared below).
    using Lane = std::vector<std::unique_ptr<ChainBlock>>;
  
-@@ -951,6 +964,8 @@
+@@ -951,6 +969,8 @@
    // post-chain image matrix, pre-pan), smoothed so knob moves glide instead
    // of stepping once per block. Audio thread only.
    juce::SmoothedValue<float> outputGainSmoother;

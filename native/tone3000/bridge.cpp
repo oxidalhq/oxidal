@@ -85,6 +85,7 @@ bool supportsSlim(const juce::var& runtime, const juce::String& id) {
   return false;
 }
 }
+#include "warm_scenes.h"
 EXPORT const char* oxidal_t3k_error() noexcept { return error.c_str(); }
 EXPORT int oxidal_t3k_create(double rate, int frames, void** result) noexcept {
   return guard([&] {
@@ -115,18 +116,19 @@ EXPORT int oxidal_t3k_defaults(void* ptr, double size, bool multiCore) noexcept 
 }
 // Separate entry point preserves whole-preset ABI and prevents stale libraries
 // from silently treating the new constructor arguments as the old signature.
-EXPORT int oxidal_t3k_create_stage(double rate, int frames, int role, void** result) noexcept {
+EXPORT int oxidal_t3k_create_scene_stage(double rate, int frames, int role, void** result) noexcept {
   if (role != 1 && role != 2)
     return guard([] { throw std::runtime_error("invalid native stage role"); });
-  // Whole presets own one host-to-chain resampling boundary. Until the mixed
-  // host owns that boundary, reject pairs that would resample between stages.
-  if (rate != kChainBaseSampleRate)
-    return guard([] { throw std::runtime_error("split stages require the 48000 Hz chain domain"); });
   const auto status = oxidal_t3k_create(rate, frames, result);
   if (status == 0)
     static_cast<Engine*>(*result)->processor.setOxidalProcessingRole(role == 1
         ? TONE3000Processor::OxidalProcessingRole::Amp : TONE3000Processor::OxidalProcessingRole::Cab);
   return status;
+}
+EXPORT int oxidal_t3k_create_stage(double rate, int frames, int role, void** result) noexcept {
+  if (rate != kChainBaseSampleRate)
+    return guard([] { throw std::runtime_error("split stages require the 48000 Hz chain domain"); });
+  return oxidal_t3k_create_scene_stage(rate, frames, role, result);
 }
 EXPORT int oxidal_t3k_destroy(void* ptr) noexcept {
   return guard([&] { auto& e = engine(ptr); delete &e; });
@@ -292,6 +294,8 @@ EXPORT int oxidal_t3k_process(void* ptr, float* left, float* right, size_t frame
     e.audio.copyFrom(1, 0, right, static_cast<int>(frames));
     juce::AudioBuffer<float> view(e.audio.getArrayOfWritePointers(), 2, static_cast<int>(frames));
     e.midi.clear(); e.processor.processBlock(view, e.midi);
+    if (OxidalWarmScenes::failed(e.processor))
+      throw std::runtime_error("An armed native scene block failed while rendering");
     for (size_t i = 0; i < frames; ++i)
       if (!std::isfinite(view.getSample(0, static_cast<int>(i))) || !std::isfinite(view.getSample(1, static_cast<int>(i))))
         throw std::runtime_error("nonfinite native output");
@@ -402,17 +406,27 @@ EXPORT int oxidal_t3k_save_preset(void* ptr, const char* name, unsigned char* ou
   });
 }
 
-EXPORT int oxidal_t3k_split(void* ptr, const char* amp, const char* cab, bool confirmAmp, bool externalPitch,
-                           char* out, size_t capacity, size_t* written) noexcept {
+static int split_native(void* ptr, const char* amp, const char* cab, bool confirmAmp, bool externalPitch,
+                        bool scene5, char* out, size_t capacity, size_t* written) noexcept {
   return guard([&] {
     auto& e = engine(ptr);
     if (!amp || !cab) throw std::runtime_error("Missing stage identity");
     // Prepare both states before publishing either; this never changes the playing/source processor.
-    auto candidate = oxidal::partition(e.processor, amp, cab, confirmAmp, externalPitch);
+    auto candidate = oxidal::partition(e.processor, amp, cab, confirmAmp, externalPitch, scene5);
     json(candidate.pitch, out, capacity, written);
     e.split = std::move(candidate);
   });
 }
+EXPORT int oxidal_t3k_split(void* ptr, const char* amp, const char* cab, bool confirmAmp, bool externalPitch,
+                            char* out, size_t capacity, size_t* written) noexcept {
+  return split_native(ptr, amp, cab, confirmAmp, externalPitch, false, out, capacity, written);
+}
+
+EXPORT int oxidal_t3k_split_scene5(void* ptr, const char* amp, const char* cab,
+                                   char* out, size_t capacity, size_t* written) noexcept {
+  return split_native(ptr, amp, cab, true, false, true, out, capacity, written);
+}
+
 EXPORT int oxidal_t3k_split_state(void* ptr, int stage, unsigned char* out, size_t capacity, size_t* written) noexcept {
   return guard([&] {
     auto& e = engine(ptr);

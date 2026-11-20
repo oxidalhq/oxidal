@@ -7,6 +7,23 @@ use oxidal_presets::{
 use oxidal_tone3000::{Engine, InputMode};
 use std::collections::BTreeMap;
 
+fn split(
+    bundle: &Bundle,
+    source: &mut Engine,
+    recipe: &NativePartition,
+) -> Result<oxidal_tone3000::SplitStages, String> {
+    let result = if bundle
+        .manifest()
+        .extensions
+        .contains_key(oxidal_presets::manifest::SCENES_INNER_BYPASS_EXTENSION)
+    {
+        source.split_scene5(&recipe.amp, &recipe.cab)
+    } else {
+        source.split_amp_cab(&recipe.amp, &recipe.cab, true, false)
+    };
+    result.map_err(|error| error.to_string())
+}
+
 pub(crate) fn prepare(
     bundle: &Bundle,
     rate: f64,
@@ -34,10 +51,9 @@ pub(crate) fn prepare(
             .partition
             .as_ref()
             .ok_or("Missing partition recipe")?;
-        if rate != 48000.0 {
-            return Err("Extracted stages require 48000 Hz".into());
-        }
-        let mut source = Engine::new(rate, frames).map_err(|e| e.to_string())?;
+        // Keep guarded extraction in its original source domain. The two
+        // derived processors are subsequently prepared at the real host rate.
+        let mut source = Engine::new(48000.0, frames).map_err(|e| e.to_string())?;
         source
             .load_preset(
                 bundle
@@ -59,10 +75,9 @@ pub(crate) fn prepare(
         // The recipe is an explicit classified-amp confirmation. All source,
         // asset, routing and processing guards run again on every restoration.
         // Pitch stays in the amp; external pitch is a separate capability.
-        let split = source
-            .split_amp_cab(&recipe.amp, &recipe.cab, true, false)
+        let (mut amp, mut cab) = split(bundle, &mut source, recipe)?
+            .prepare_at_factor(rate, frames, recipe.oversampling.unwrap_or(1))
             .map_err(|e| e.to_string())?;
-        let (mut amp, mut cab) = split.prepare(rate, frames).map_err(|e| e.to_string())?;
         apply(&mut amp, recipe)?;
         apply(
             &mut cab,
@@ -233,9 +248,7 @@ pub(crate) fn model_sources(
         source
             .set_normalized("osEnabled", 0.0)
             .map_err(|e| e.to_string())?;
-        source
-            .split_amp_cab(&recipe.amp, &recipe.cab, true, false)
-            .map_err(|e| e.to_string())?;
+        split(bundle, &mut source, recipe)?;
         result.insert(
             pair.into(),
             source.save_preset(name).map_err(|e| e.to_string())?,

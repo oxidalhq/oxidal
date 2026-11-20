@@ -83,7 +83,7 @@ inline void checkMonoCab(std::span<const uint8_t> bytes)
     }
 
 inline SplitState partition(TONE3000Processor& processor, const juce::String& ampId,
-                            const juce::String& cabId, bool confirmAmp, bool externalPitch) {
+                            const juce::String& cabId, bool confirmAmp, bool externalPitch, bool scene5) {
   require(confirmAmp, "Confirm an amp-head capture before splitting");
   require(ampId.isNotEmpty() && cabId.isNotEmpty() && ampId != cabId && ampId.length() <= 128 && cabId.length() <= 128,
           "Choose distinct amp and cab block IDs");
@@ -117,7 +117,7 @@ inline SplitState partition(TONE3000Processor& processor, const juce::String& am
     for (auto block : lane) {
       auto type = block.getProperty("type").toString();
       if (type == "insert") continue;
-      require(lane.hasType("ChainBlocks") && static_cast<bool>(block.getProperty("enabled", true)),
+      require(lane.hasType("ChainBlocks") && (scene5 || static_cast<bool>(block.getProperty("enabled", true))),
               "Split requires enabled blocks on the left serial lane");
       auto id = block.getProperty("id").toString();
       if (type == "nam" && !amp.isValid() && !cab.isValid() && id == ampId) amp = block;

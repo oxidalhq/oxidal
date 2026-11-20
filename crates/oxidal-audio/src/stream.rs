@@ -8,6 +8,38 @@ pub enum Step {
     Processed,
 }
 
+/// Monotonic pacing for the explicit ALSA-null fixture; hardware supplies its own clock.
+#[cfg(feature = "qualification")]
+#[derive(Debug)]
+pub struct QualificationClock {
+    period: std::time::Duration,
+    next: std::time::Instant,
+}
+#[cfg(feature = "qualification")]
+impl QualificationClock {
+    pub fn new(frames: u32, rate: u32) -> Self {
+        assert!(frames > 0 && rate > 0, "Validated stream timing required");
+        Self {
+            period: std::time::Duration::from_secs_f64(f64::from(frames) / f64::from(rate)),
+            next: std::time::Instant::now(),
+        }
+    }
+    pub fn wait(&mut self) {
+        let delay = self.delay_at(std::time::Instant::now());
+        if !delay.is_zero() {
+            std::thread::sleep(delay);
+        }
+    }
+    fn delay_at(&mut self, now: std::time::Instant) -> std::time::Duration {
+        self.next += self.period;
+        if now.saturating_duration_since(self.next) > self.period {
+            // Do not burst through a suspended VM's missing periods.
+            self.next = now;
+        }
+        self.next.saturating_duration_since(now)
+    }
+}
+
 #[derive(Debug)]
 pub struct Duplex {
     host: crate::tools::HostSignal,
@@ -443,6 +475,28 @@ mod tests {
             output_map: [0, 1],
             venue: None,
         }
+    }
+    #[cfg(feature = "qualification")]
+    #[test]
+    fn qualification_clock_accounts_for_processing_and_control_time_without_drift_or_catchup_bursts()
+     {
+        let start = std::time::Instant::now();
+        let mut clock = QualificationClock {
+            period: std::time::Duration::from_millis(100),
+            next: start,
+        };
+        let mut at = start;
+        for _ in 0..10 {
+            at += std::time::Duration::from_millis(20);
+            at += clock.delay_at(at);
+        }
+        assert_eq!(at.duration_since(start), std::time::Duration::from_secs(1));
+        let late = at + std::time::Duration::from_secs(5);
+        assert!(clock.delay_at(late).is_zero());
+        assert_eq!(
+            clock.delay_at(late + std::time::Duration::from_millis(1)),
+            std::time::Duration::from_millis(99)
+        );
     }
     #[test]
     fn a_re_prime_mid_stream_counts_once_and_audio_flows_again() {

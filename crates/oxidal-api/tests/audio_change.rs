@@ -1247,3 +1247,249 @@ async fn plugin_defaults_unverified_rollback_releases_the_worker() {
         .unwrap();
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[tokio::test]
+#[ignore = "requires real Native, Mixed and Effects workers, ALSA null and one minute per owner"]
+async fn buffer_finder_measures_without_viewers_and_restores_all_real_owners() {
+    let root = std::env::temp_dir().join(format!("oxidal-buffer-finder-{}", std::process::id()));
+    let mut full_clean_minute = false;
+    for (owner, path, variable) in [
+        ("native", "audio", "OXIDAL_TEST_AUDIO_WORKER"),
+        ("mixed", "rig-audio", "OXIDAL_TEST_RIG_WORKER"),
+        ("effects", "graph-audio", "OXIDAL_TEST_GRAPH_WORKER"),
+    ] {
+        let dir = root.join(owner);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut settings = settings(owner, &dir);
+        settings["stream"] = stream(2048);
+        settings["stream"]["input"]["periods"] = json!(2);
+        settings["stream"]["output"]["periods"] = json!(2);
+        let executable = PathBuf::from(std::env::var_os(variable).expect(variable));
+        let (shutdown, signal) = watch::channel(false);
+        let config = Config {
+            debug_socket: None,
+            device_socket: None,
+            native_worker: None,
+            simulator: false,
+            media_dir: None,
+            audio_worker: (owner == "native").then(|| executable.clone()),
+            rig_worker: (owner == "mixed").then(|| executable.clone()),
+            graph_worker: (owner == "effects").then(|| executable.clone()),
+            mapping_path: dir.join("mappings.json"),
+            preset_dir: dir.join("presets"),
+            ui_dir: dir.join("ui"),
+            shutdown: Some(signal),
+        };
+        let (app, stopped) = router_with_shutdown(config).unwrap();
+        command(&app, path, json!({"kind":"start","settings":settings}), 200).await;
+        phase(&app, path, "running").await;
+        if owner == "native" {
+            let saved = command(
+                &app,
+                path,
+                json!({"kind":"save_copy","name":"Finder working values"}),
+                200,
+            )
+            .await;
+            command(
+                &app,
+                path,
+                json!({"kind":"load_preset","preset_id":saved["saved_copy"],"owned":true}),
+                200,
+            )
+            .await;
+        }
+        let state = get(&app, path).await;
+        let edited = command(&app, path, scalar_action(owner, &state, true), 200).await;
+        let before = working_state(owner, &edited);
+        let find = |state: &Value| json!({"kind":"find_buffer","owner":owner,"session":state["session"],"expected_revision":state["revision"]});
+        let mut stale = find(&edited);
+        stale["expected_revision"] = json!(u64::MAX);
+        assert_eq!(
+            request(&app, "POST", "audio/change", Some(stale))
+                .await
+                .status(),
+            409
+        );
+        let started = value(
+            request(&app, "POST", "audio/change", Some(find(&edited))).await,
+            202,
+        )
+        .await;
+        let id = started["id"].clone();
+        assert_eq!(started["finder"]["state"], "running");
+        let proving = phase(&app, "audio/change", "proving").await;
+        assert!(proving["observed"]["frames"].as_u64().unwrap() > 0);
+        assert_eq!(
+            request(
+                &app,
+                "POST",
+                "audio/change",
+                Some(json!({"kind":"keep","id":id}))
+            )
+            .await
+            .status(),
+            409
+        );
+        assert_eq!(
+            request(&app, "POST", "audio/change", Some(find(&edited)))
+                .await
+                .status(),
+            409
+        );
+        let busy = get(&app, path).await;
+        command(&app, path, scalar_action(owner, &busy, false), 409).await;
+        eprintln!("{owner}: leaving the device finder without GETs or browsers for 63 seconds");
+        tokio::time::sleep(Duration::from_secs(63)).await;
+        let measured = get(&app, "audio/change").await;
+        let baseline = &measured["finder"]["trials"][0];
+        if baseline["outcome"] == "clean" {
+            assert!(
+                baseline["elapsed_ms"].as_u64().unwrap() >= 60000,
+                "{owner}: {baseline}"
+            );
+            assert_eq!(baseline["xruns"], 0);
+            assert_eq!(baseline["deadline_misses"], 0);
+            assert_eq!(baseline["invalid_samples"], 0);
+            full_clean_minute = true;
+        } else {
+            // A real deadline failure under host load must remain a refusal, not a fake clean result.
+            assert_eq!(baseline["outcome"], "failed", "{owner}: {measured}");
+            assert!(
+                ["xruns", "deadline_misses", "invalid_samples"]
+                    .iter()
+                    .any(|key| baseline[*key].as_u64().is_some_and(|value| value > 0)),
+                "{owner}: {baseline}"
+            );
+            assert!(
+                measured["finder"]["recommended"].is_null(),
+                "{owner}: {measured}"
+            );
+        }
+        if measured["finder"]["state"] == "running" {
+            let response = request(
+                &app,
+                "POST",
+                "audio/change",
+                Some(json!({"kind":"revert","id":id})),
+            )
+            .await;
+            if response.status() == 409 {
+                assert_eq!(get(&app, "audio/change").await["finder"]["state"], "done");
+            } else {
+                value(response, 202).await;
+            }
+        }
+        phase(&app, "audio/change", "reverted").await;
+        let until = tokio::time::Instant::now() + Duration::from_secs(10);
+        loop {
+            let view = get(&app, "audio/change").await;
+            if view["finder"]["state"] == "cancelled"
+                || view["finder"]["state"] == "done"
+                || view["finder"]["state"] == "failed"
+            {
+                break;
+            }
+            assert!(tokio::time::Instant::now() < until, "{owner}: {view}");
+            tokio::time::sleep(Duration::from_millis(40)).await;
+        }
+        let restored = phase(&app, path, "running").await;
+        assert_eq!(
+            restored["configured"]["stream"]["input"]["period_frames"],
+            2048
+        );
+        assert_eq!(restored["configured"]["stream"]["input"]["periods"], 2);
+        assert_eq!(
+            working_state(owner, &restored),
+            before,
+            "{owner}: finder lost working values"
+        );
+        assert!(!dir.join("presets/pending-audio-change.json").exists());
+
+        // Protect cancels the job without turning a tested candidate into a durable Keep.
+        let started = value(
+            request(&app, "POST", "audio/change", Some(find(&restored))).await,
+            202,
+        )
+        .await;
+        assert_eq!(
+            request(&app, "POST", "protect", Some(json!({"on":true})))
+                .await
+                .status(),
+            200
+        );
+        phase(&app, "audio/change", "reverted").await;
+        let until = tokio::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let view = get(&app, "audio/change").await;
+            if view["finder"]["state"] == "cancelled" {
+                break;
+            }
+            assert!(tokio::time::Instant::now() < until, "{view}");
+            tokio::time::sleep(Duration::from_millis(40)).await;
+        }
+        assert_eq!(
+            get(&app, path).await["configured"]["stream"]["input"]["period_frames"],
+            2048
+        );
+        assert_eq!(
+            request(&app, "POST", "protect", Some(json!({"on":false})))
+                .await
+                .status(),
+            200
+        );
+        assert_eq!(
+            request(
+                &app,
+                "POST",
+                "audio/change",
+                Some(json!({"kind":"keep","id":started["id"]}))
+            )
+            .await
+            .status(),
+            409
+        );
+
+        // Stop is ID-bound and must fence any subsequent candidate launch.
+        let current = get(&app, path).await;
+        let started = value(
+            request(&app, "POST", "audio/change", Some(find(&current))).await,
+            202,
+        )
+        .await;
+        value(
+            request(
+                &app,
+                "POST",
+                "audio/change",
+                Some(json!({"kind":"stop","id":started["id"]})),
+            )
+            .await,
+            202,
+        )
+        .await;
+        phase(&app, "audio/change", "reverted").await;
+        let current = get(&app, path).await;
+        assert_eq!(current["device_owned"], false, "{owner}");
+        assert_eq!(current["phase"], "stopped", "{owner}");
+        tokio::time::sleep(Duration::from_millis(350)).await;
+        assert_eq!(
+            get(&app, path).await["device_owned"],
+            false,
+            "{owner}: late finder launch"
+        );
+        eprintln!(
+            "{owner}: truthful measurement result, retained values, cancellation, Protect and Stop passed"
+        );
+        shutdown.send(true).unwrap();
+        tokio::time::timeout(Duration::from_secs(10), stopped.wait())
+            .await
+            .unwrap()
+            .unwrap();
+    }
+    assert!(
+        full_clean_minute,
+        "No actual worker completed a clean full minute; repeat on an idle qualification host"
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}

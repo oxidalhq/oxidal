@@ -15,6 +15,12 @@ export type AccountPhase = "disconnected" | "requesting" | "waiting" | "connecte
 export type AudioChangeRequest =
   | {
       expected_revision: number;
+      kind: "find_buffer";
+      owner: AudioChangeOwner;
+      session: string;
+    }
+  | {
+      expected_revision: number;
       input: AudioProbe;
       /**
        * @minItems 2
@@ -43,9 +49,11 @@ export type AudioChangeRequest =
       id: string;
       kind: "stop";
     };
+export type AudioChangeOwner = "native" | "mixed" | "effects";
 export type Direction = "capture" | "playback";
 export type SampleFormat = "s16" | "s24" | "s24_packed" | "s32" | "float";
-export type AudioChangeOwner = "native" | "mixed" | "effects";
+export type BufferFinderPhase = "running" | "cancelling" | "done" | "cancelled" | "failed";
+export type BufferTrialOutcome = "clean" | "failed" | "unavailable";
 export type AudioChangePhase = "idle" | "restarting" | "proving" | "reverting" | "kept" | "reverted" | "failed";
 export type AudioAction =
   | {
@@ -845,8 +853,21 @@ export type PlayerCommand =
       split: MediaId;
     }
   | {
+      expected?: MixRecipe | null;
       kind: "set_stem_mix";
       recipe: MixRecipe;
+      split?: MediaId | null;
+    }
+  | {
+      edit: StemEdit;
+      kind: "edit_stem";
+      role: StemRole;
+      split: MediaId;
+    }
+  | {
+      kind: "set_muted_part";
+      part?: PlayerPart | null;
+      split: MediaId;
     }
   | {
       db: number;
@@ -877,12 +898,29 @@ export type MixRecipe =
       piano: StemMix;
       vocals: StemMix;
     };
-export type Origin = "ui" | "midi" | "api";
-export type PlayerState = ("empty" | "ready" | "playing" | "paused" | "ended") | "interrupted" | "unavailable";
+export type StemEdit =
+  | {
+      field: "mute";
+      value: boolean;
+    }
+  | {
+      field: "solo";
+      value: boolean;
+    }
+  | {
+      field: "gain";
+      value: number;
+    };
 /**
  * The role from the split manifest, independent of the model's tensor order.
  */
 export type StemRole = "vocals" | "drums" | "bass" | "other" | "guitar" | "piano";
+/**
+ * Temporary performance mute, independent of the saved stem recipe.
+ */
+export type PlayerPart = "bass" | "guitar";
+export type Origin = "ui" | "midi" | "api";
+export type PlayerState = ("empty" | "ready" | "playing" | "paused" | "ended") | "interrupted" | "unavailable";
 export type RigAudioAction =
   | {
       command: PluginDefaultsCommand;
@@ -1266,6 +1304,7 @@ export interface AudioProbe {
 }
 export interface AudioChangeState {
   candidate?: AudioChangeHardware | null;
+  finder?: BufferFinderState | null;
   id?: string | null;
   message?: string | null;
   observed?: AudioChangeObservation | null;
@@ -1287,6 +1326,30 @@ export interface AudioChangeHardware {
    * @maxItems 2
    */
   output_map: [number, number];
+}
+export interface BufferFinderState {
+  candidate: BufferSetting;
+  expected_revision: number;
+  message?: string | null;
+  recommended?: BufferSetting | null;
+  session: string;
+  state: BufferFinderPhase;
+  total: number;
+  trials: BufferTrial[];
+}
+export interface BufferSetting {
+  frames: number;
+  periods: number;
+}
+export interface BufferTrial {
+  deadline_misses?: number | null;
+  elapsed_ms: number;
+  frames: number;
+  invalid_samples?: number | null;
+  outcome: BufferTrialOutcome;
+  periods: number;
+  reason?: string | null;
+  xruns?: number | null;
 }
 export interface AudioChangeObservation {
   deadline_misses?: number | null;
@@ -3171,6 +3234,7 @@ export interface PlayerSnapshot {
  * The live stem mix: change it with `set_stem_mix` while it plays.
  */
 export interface LiveStemMix {
+  mutedPart?: PlayerPart | null;
   recipe: MixRecipe;
   /**
    * Stems this split has, in display order.
@@ -3438,6 +3502,14 @@ export interface Snapshot3 {
    * Actual scalar values differ from the immutable source bundle.
    */
   modified: boolean;
+  /**
+   * The complete set of warm-prepared scene5 blocks, absent on older scenes.
+   */
+  native_bypass_armed?: SceneNativeBypassKey[] | null;
+  /**
+   * Confirmed saved-source booleans, present only as a complete catalog.
+   */
+  native_bypass_defaults?: SceneNativeBypass[] | null;
   prepared?: PreparedStatus[];
   revision: number;
   scene?: string | null;
@@ -3503,6 +3575,18 @@ export interface NodeModelChange {
   node: string;
   progress: ModelProgress;
 }
+export interface SceneNativeBypassKey {
+  block: string;
+  node: string;
+}
+export interface SceneNativeBypass {
+  block: string;
+  node: string;
+  /**
+   * True means bypassed.
+   */
+  value: boolean;
+}
 export interface PreparedStatus {
   error?: string | null;
   modified: boolean;
@@ -3533,6 +3617,7 @@ export interface Scene {
   gains: SceneGain[];
   id: string;
   name: string;
+  native_bypass?: SceneNativeBypass[];
   native_controls?: SceneNativeControl[];
 }
 export interface SceneBypass {
@@ -3656,6 +3741,10 @@ export interface PortableNativePartition {
   };
   eq?: BlockEqState[] | null;
   input: PortablePartitionInput;
+  /**
+   * Native chain multiplier for scene5 partitions. Missing means 1×.
+   */
+  oversampling?: number | null;
   pair: string;
   version: number;
 }
@@ -3742,6 +3831,9 @@ export interface SceneDraft {
   gains: {
     [k: string]: SceneGain2[];
   };
+  native_bypass?: {
+    [k: string]: SceneNativeBypass[];
+  };
   native_controls?: {
     [k: string]: SceneNativeControl[];
   };
@@ -3759,6 +3851,7 @@ export interface DraftScene {
   gains: SceneGain2[];
   id: string;
   name: string;
+  native_bypass?: SceneNativeBypass[];
   native_controls?: SceneNativeControl[];
 }
 /**

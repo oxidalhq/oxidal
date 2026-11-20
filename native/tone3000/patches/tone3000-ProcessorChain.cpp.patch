@@ -1,0 +1,14 @@
+--- a/plugin/src/ProcessorChain.cpp
++++ b/plugin/src/ProcessorChain.cpp
+@@ -1497,6 +1497,11 @@
+     return false;
+   }
+ 
++  // An armed power switch is owned by the scene session. Its batch path
++  // updates the endpoint without creating an entry in native Undo.
++  if (param == "enabled" && block->oxidalWarmSceneFrames != 0)
++    return false;
++
+   // Continuous params coalesce a whole knob drag into one undo step.
+   pushChainHistory(isContinuous ? "param:" + juce::String(blockId) + ":" + param
+                                 : juce::String());

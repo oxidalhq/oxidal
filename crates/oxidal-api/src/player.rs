@@ -20,7 +20,7 @@ use oxidal_audio::backing::{
     BackingCommand, BackingStatus, Click, LoopRange, MediaId, STEM_NAMES, StemMix as LiveStems,
 };
 use oxidal_audio::tools::HostUtility;
-use oxidal_splitter::{MixRecipe, StemRole};
+use oxidal_splitter::{MixRecipe, StemMix, StemRole};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -98,7 +98,39 @@ pub struct LiveStemMix {
     pub split: String,
     /// Stems this split has, in display order.
     pub roles: Vec<StemRole>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub muted_part: Option<PlayerPart>,
     pub recipe: MixRecipe,
+}
+
+/// Temporary performance mute, independent of the saved stem recipe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PlayerPart {
+    Bass,
+    Guitar,
+}
+
+impl PlayerPart {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Bass => "bass",
+            Self::Guitar => "guitar",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(
+    tag = "field",
+    content = "value",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum StemEdit {
+    Mute(bool),
+    Solo(bool),
+    Gain(i16),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -141,6 +173,19 @@ pub enum PlayerCommand {
     /// New live mix for the cued stems.
     SetStemMix {
         recipe: MixRecipe,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        split: Option<MediaId>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        expected: Option<MixRecipe>,
+    },
+    EditStem {
+        split: MediaId,
+        role: StemRole,
+        edit: StemEdit,
+    },
+    SetMutedPart {
+        split: MediaId,
+        part: Option<PlayerPart>,
     },
     SetLevel {
         db: f32,
@@ -199,6 +244,7 @@ struct Inner {
     click: Option<Click>,
     speed: Option<u16>,
     stems: Option<(LiveStems, MixRecipe)>,
+    muted_part: Option<PlayerPart>,
     level_db: f32,
     order: Vec<String>,
     reason: Option<String>,
@@ -247,6 +293,7 @@ impl Inner {
             notice: self.notice.clone(),
             underruns: self.underruns,
             stems: self.stems.map(|(stems, recipe)| LiveStemMix {
+                muted_part: self.muted_part,
                 source: stems.source.as_str().to_owned(),
                 split: stems.split.as_str().to_owned(),
                 roles: STEM_NAMES
@@ -321,6 +368,7 @@ impl Player {
             click: None,
             speed: None,
             stems: None,
+            muted_part: None,
             level_db: DEFAULT_LEVEL_DB,
             order: Vec::new(),
             reason: None,
@@ -472,6 +520,7 @@ fn live_mix(
 
 fn cue(inner: &mut Inner, manifest: &MediaManifest, rate: u32) {
     inner.stems = None;
+    inner.muted_part = None;
     inner.range = None;
     inner.click = None;
     inner.speed = None;
@@ -670,20 +719,18 @@ pub(crate) async fn apply(
     {
         return result.clone();
     }
-    let result = run(shared, &mut inner, &request).await;
-    if inner.recent.len() >= REMEMBERED_REQUESTS {
-        inner.recent.pop_front();
-    }
-    inner
-        .recent
-        .push_back((request.request_id.clone(), result.clone().map(|(s, _)| s)));
-    match result {
+    let result = match run(shared, &mut inner, &request).await {
         Ok((_, persist)) => {
             player.publish(&mut inner, persist).await;
             Ok(inner.snapshot())
         }
         Err(refusal) => Err(refusal),
+    };
+    if inner.recent.len() >= REMEMBERED_REQUESTS {
+        inner.recent.pop_front();
     }
+    inner.recent.push_back((request.request_id, result.clone()));
+    result
 }
 
 async fn run(
@@ -972,28 +1019,85 @@ async fn run(
                 inner.stems = previous;
                 return Err(error);
             }
+            inner.muted_part = None;
         }
-        PlayerCommand::SetStemMix { recipe } => {
+        PlayerCommand::SetStemMix {
+            recipe,
+            split,
+            expected,
+        } => {
             let Some((stems, current)) = inner.stems.as_mut() else {
                 return Err((StatusCode::CONFLICT, "Play a mix or its stems first".into()));
             };
+            if split.is_some_and(|split| split != stems.split)
+                || expected.is_some_and(|base| base != *current)
+            {
+                return Err((
+                    StatusCode::CONFLICT,
+                    "The live mix changed. Review the current stems.".into(),
+                ));
+            }
             if recipe.mode() != current.mode() {
                 return Err((
                     StatusCode::BAD_REQUEST,
                     "The mix does not match these stems".into(),
                 ));
             }
-            let mut gains = stem_gains(&recipe);
-            for (index, gain) in gains.iter_mut().enumerate() {
-                if stems.present & (1 << index) == 0 {
-                    *gain = 0.0;
+            apply_live_mix(shared, stems, recipe, inner.muted_part, inner.state).await?;
+            *current = recipe;
+        }
+        PlayerCommand::EditStem { split, role, edit } => {
+            let Some((stems, current)) = inner.stems.as_mut() else {
+                return Err((StatusCode::CONFLICT, "Play a mix or its stems first".into()));
+            };
+            if split != stems.split
+                || !STEM_NAMES
+                    .iter()
+                    .enumerate()
+                    .any(|(i, name)| *name == role.name() && stems.present & (1 << i) != 0)
+            {
+                return Err((
+                    StatusCode::CONFLICT,
+                    "The selected stem is unavailable".into(),
+                ));
+            }
+            let mut next = *current;
+            let row = next
+                .stem_mut(role)
+                .ok_or((StatusCode::CONFLICT, "The stem is missing".into()))?;
+            match edit {
+                StemEdit::Mute(value) => row.muted = value,
+                StemEdit::Solo(value) => row.solo = value,
+                StemEdit::Gain(value) => {
+                    *row = StemMix::new(value, row.muted, row.solo).ok_or((
+                        StatusCode::BAD_REQUEST,
+                        "Choose a stem level from -24 to +6 dB".into(),
+                    ))?
                 }
             }
-            stems.gains = gains;
-            *current = recipe;
-            if inner.state == PlayerState::Playing {
-                send(shared, BackingCommand::StemGains { gains }).await?;
+            apply_live_mix(shared, stems, next, inner.muted_part, inner.state).await?;
+            *current = next;
+        }
+        PlayerCommand::SetMutedPart { split, part } => {
+            let Some((stems, recipe)) = inner.stems.as_mut() else {
+                return Err((StatusCode::CONFLICT, "Play a mix or its stems first".into()));
+            };
+            if split != stems.split {
+                return Err((StatusCode::CONFLICT, "The cued split has changed".into()));
             }
+            if part.is_some_and(|part| {
+                !STEM_NAMES
+                    .iter()
+                    .enumerate()
+                    .any(|(i, name)| *name == part.name() && stems.present & (1 << i) != 0)
+            }) {
+                return Err((
+                    StatusCode::CONFLICT,
+                    "That part is missing from this split".into(),
+                ));
+            }
+            apply_live_mix(shared, stems, *recipe, part, inner.state).await?;
+            inner.muted_part = part;
         }
         PlayerCommand::SetLevel { db } | PlayerCommand::AdjustLevel { delta_db: db }
             if !db.is_finite() =>
@@ -1014,6 +1118,27 @@ async fn run(
         }
     }
     Ok((inner.snapshot(), persist))
+}
+
+async fn apply_live_mix(
+    shared: &Shared,
+    stems: &mut LiveStems,
+    recipe: MixRecipe,
+    part: Option<PlayerPart>,
+    state: PlayerState,
+) -> Result<(), Refusal> {
+    let mut gains = stem_gains(&recipe);
+    for (index, gain) in gains.iter_mut().enumerate() {
+        if stems.present & (1 << index) == 0 || part.is_some_and(|p| p.name() == STEM_NAMES[index])
+        {
+            *gain = 0.0;
+        }
+    }
+    if state == PlayerState::Playing {
+        send(shared, BackingCommand::StemGains { gains }).await?;
+    }
+    stems.gains = gains;
+    Ok(())
 }
 
 async fn set_level(shared: &Shared, inner: &mut Inner, db: f32) -> Result<(), Refusal> {

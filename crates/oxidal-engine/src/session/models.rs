@@ -3,6 +3,40 @@ use super::*;
 use oxidal_audio::lifecycle::{ModelOperation, ModelPhase, ModelProgress, valid_models};
 use std::path::Path;
 
+pub(crate) fn validate_model_assignment(
+    bundle: &Bundle,
+    node_id: &str,
+    assignment: &oxidal_audio::lifecycle::ModelAssignment,
+) -> Result<(), String> {
+    if let Some(instance) = bundle
+        .manifest()
+        .tone3000
+        .instances
+        .iter()
+        .find(|instance| {
+            bundle
+                .manifest()
+                .oxidal
+                .as_ref()
+                .unwrap()
+                .graph
+                .nodes
+                .iter()
+                .any(|node| node.id == node_id && node.instance.as_ref() == Some(&instance.id))
+        })
+        && let Some(recipe) = &instance.partition
+    {
+        let target = match instance.role() {
+            oxidal_presets::manifest::ProcessingRole::Amp => &recipe.amp,
+            oxidal_presets::manifest::ProcessingRole::Cab => &recipe.cab,
+            _ => return Err("Invalid model processing role".into()),
+        };
+        if assignment.target != *target || assignment.insertion.is_some() {
+            return Err("Extracted stages support only their existing model".into());
+        }
+    }
+    Ok(())
+}
 impl Session {
     pub fn model_pending(&self) -> bool {
         self.model_task.pending()
@@ -16,49 +50,17 @@ impl Session {
         }
         Ok(())
     }
-    fn validate_model_assignment(
-        &self,
-        node_id: &str,
-        assignment: &oxidal_audio::lifecycle::ModelAssignment,
-    ) -> Result<(), String> {
-        if let Some(instance) = self
-            .bundle
-            .manifest()
-            .tone3000
-            .instances
-            .iter()
-            .find(|instance| {
-                self.bundle
-                    .manifest()
-                    .oxidal
-                    .as_ref()
-                    .unwrap()
-                    .graph
-                    .nodes
-                    .iter()
-                    .any(|node| node.id == node_id && node.instance.as_ref() == Some(&instance.id))
-            })
-            && let Some(recipe) = &instance.partition
-        {
-            let target = match instance.role() {
-                oxidal_presets::manifest::ProcessingRole::Amp => &recipe.amp,
-                oxidal_presets::manifest::ProcessingRole::Cab => &recipe.cab,
-                _ => return Err("Invalid model processing role".into()),
-            };
-            if assignment.target != *target || assignment.insertion.is_some() {
-                return Err("Extracted stages support only their existing model".into());
-            }
-        }
-        Ok(())
-    }
     pub fn model_command(&mut self, mut command: ModelCommand, root: &Path) -> Result<(), String> {
+        if self.has_armed_native_node(&command.node) {
+            return Err("This model edit requires a rebuilt warm scene candidate".into());
+        }
         self.editable_model_node(&command.node)?;
         if !self.matches_cursor(&command.session, command.expected_revision) || !root.is_absolute()
         {
             return Err("Model session conflict or invalid asset store".into());
         }
         if let ModelOperation::Prepare { assignment } = &mut command.operation {
-            self.validate_model_assignment(&command.node, assignment)?;
+            validate_model_assignment(&self.bundle, &command.node, assignment)?;
             let current = self.state.models.iter().find(|m| m.node == command.node);
             let coordinate = current
                 .and_then(|m| m.assignments.iter().find(|a| a.target == assignment.target))
@@ -304,6 +306,9 @@ impl Session {
         let mut seen = BTreeSet::new();
         let store = oxidal_presets::ModelStore::new(root.join("audition-models"));
         for row in &recall.models {
+            if self.has_armed_native_node(&row.node) {
+                return Err("Warm scene model recovery requires a rebuilt candidate".into());
+            }
             self.editable_model_node(&row.node)?;
             if !seen.insert(&row.node)
                 || !valid_models(&row.assignments)
@@ -312,7 +317,7 @@ impl Session {
                 return Err("Invalid model recall catalog".into());
             }
             for assignment in &row.assignments {
-                self.validate_model_assignment(&row.node, assignment)?;
+                validate_model_assignment(&self.bundle, &row.node, assignment)?;
                 store.read(&assignment.asset).map_err(|e| e.to_string())?;
             }
         }

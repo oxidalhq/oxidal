@@ -11,7 +11,7 @@ const AMP: &str = "http://plugin.org.uk/swh-plugins/amp";
 fn edge(a: &str, ap: usize, b: &str, bp: usize) -> Value {
     json!({"from":{"node":a,"port":ap},"to":{"node":b,"port":bp}})
 }
-fn bundle(bytes: &[u8], amp: &str, cab: &str, input: &str, gain: f64) -> Result<Bundle> {
+pub(super) fn bundle(bytes: &[u8], amp: &str, cab: &str, input: &str, gain: f64) -> Result<Bundle> {
     let mut nodes = vec![
         json!({"id":"in","kind":"input","audioInputs":0,"audioOutputs":2}),
         json!({"id":"out","kind":"output","audioInputs":2,"audioOutputs":0}),

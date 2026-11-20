@@ -1,0 +1,52 @@
+--- a/plugin/include/ChainBlock.h
++++ b/plugin/include/ChainBlock.h
+@@ -133,6 +133,10 @@
+   // State flags
+   bool loaded;   // True when active model is loaded and ready
+   bool enabled;  // True when block is enabled in processing chain
++  // Runtime-only. Zero retains the original cold power switch.
++  int oxidalWarmSceneFrames{0};
++  enum SceneScalar { SceneInputGain = 1, SceneOutputGain = 2, SceneMix = 4 };
++  uint8_t oxidalSceneScalarMask{0};
+ 
+   // True when the last download/prepare of the active model failed (network
+   // down, tone3000.com unreachable, bad model data). The UI swaps its loading
+@@ -213,6 +217,38 @@
+   // nothing from oversampling; its CPU scales ~quadratically with the rate).
+   // Bypass (zero-cost) at factor 1. See ChainOversampler.h.
+   ChainOversampler irBaseRateIsland;
++
++  // An armed oversampled IR needs independent filter history for its dry
++  // endpoint. The block's ordinary Mix still uses the unfiltered input.
++  struct SceneIrDry {
++    SceneIrDry(int factor, int baseFrames)
++        : frames(static_cast<size_t>(factor) * static_cast<size_t>(baseFrames)),
++          samples(std::make_unique<float[]>(2 * frames)) {
++      island.prepare(factor, baseFrames);
++    }
++
++    static size_t requiredBytes(int factor, int baseFrames) noexcept {
++      const auto frames = static_cast<size_t>(factor) * static_cast<size_t>(baseFrames);
++      return sizeof(SceneIrDry) + frames * 2 * sizeof(float)
++          + ChainOversampler::requiredWorkBytes(frames);
++    }
++
++    size_t allocatedBytes() const noexcept {
++      return sizeof(SceneIrDry) + frames * 2 * sizeof(float) + island.allocatedWorkBytes();
++    }
++
++    void filter(const juce::AudioBuffer<float>& input, int channels, int count) noexcept {
++      float* pointers[2]{samples.get(), samples.get() + frames};
++      for (int ch = 0; ch < channels; ++ch)
++        std::copy_n(input.getReadPointer(ch), count, pointers[ch]);
++      island.processBaseRateIsland(pointers, channels, count, [](float* const*, int) {});
++    }
++
++    size_t frames;
++    std::unique_ptr<float[]> samples;
++    ChainOversampler island;
++  };
++  std::unique_ptr<SceneIrDry> sceneIrDry;
+   int irNumChannels{1};  // channels in the loaded IR file (1 or 2)
+   // Loaded IR length in base-rate samples (post trim + resample, read off
+   // the built engine). Feeds refreshIrTailLength / getTailLengthSeconds so

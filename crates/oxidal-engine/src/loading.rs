@@ -1,5 +1,5 @@
 //! Explicit bundle-to-backend preparation on the native owner, before streaming.
-use crate::{PreparedPorts, Processor};
+use crate::{PreparedPorts, Processor, ports::PreparationBudget};
 use oxidal_lv2::{Plugin, PluginInfo, World};
 use oxidal_presets::{
     Bundle,
@@ -8,6 +8,18 @@ use oxidal_presets::{
 use oxidal_tone3000::{Engine, InputMode};
 
 use crate::native_profile_id;
+use oxidal_presets::manifest::SceneNativeBypass;
+type PreparedSource = (
+    PreparedPorts,
+    Option<Vec<SceneNativeControl>>,
+    Option<Vec<SceneNativeBypass>>,
+);
+#[derive(Clone, Copy)]
+pub(crate) struct NativeRecovery<'a> {
+    pub(crate) working: Option<(&'a std::path::Path, &'a [crate::protocol::NodeWorking])>,
+    pub(crate) models: &'a [crate::protocol::NodeModels],
+}
+
 impl PreparedPorts {
     /// Load exact verified payloads and installed plugins. Discovery/instantiation
     /// must not overlap a running DSP callback from the same plugin library.
@@ -29,28 +41,40 @@ impl PreparedPorts {
         buffer_budget: usize,
         working: Option<(&std::path::Path, &[crate::protocol::NodeWorking])>,
     ) -> Result<Self, String> {
-        Self::load_bundle(bundle, world, rate, frames, buffer_budget, working, false)
-            .map(|(graph, _)| graph)
+        Self::load_bundle(
+            bundle,
+            world,
+            rate,
+            frames,
+            PreparationBudget::standalone(bundle, buffer_budget),
+            NativeRecovery {
+                working,
+                models: &[],
+            },
+            false,
+        )
+        .map(|(graph, _, _)| graph)
     }
     pub(crate) fn load_for_session(
         bundle: &Bundle,
         world: &World,
         rate: f64,
         frames: usize,
-        buffer_budget: usize,
-        working: Option<(&std::path::Path, &[crate::protocol::NodeWorking])>,
-    ) -> Result<(Self, Option<Vec<SceneNativeControl>>), String> {
-        Self::load_bundle(bundle, world, rate, frames, buffer_budget, working, true)
+        budget: PreparationBudget,
+        recovery: NativeRecovery<'_>,
+    ) -> Result<PreparedSource, String> {
+        Self::load_bundle(bundle, world, rate, frames, budget, recovery, true)
     }
     fn load_bundle(
         bundle: &Bundle,
         world: &World,
         rate: f64,
         frames: usize,
-        buffer_budget: usize,
-        working: Option<(&std::path::Path, &[crate::protocol::NodeWorking])>,
+        budget: PreparationBudget,
+        recovery: NativeRecovery<'_>,
         collect_defaults: bool,
-    ) -> Result<(Self, Option<Vec<SceneNativeControl>>), String> {
+    ) -> Result<PreparedSource, String> {
+        let working = recovery.working;
         let manifest = bundle.manifest();
         manifest.validate().map_err(|e| e.to_string())?;
         manifest
@@ -79,7 +103,7 @@ impl PreparedPorts {
             .ok_or("Port buffer size overflow")?;
         if samples
             .checked_mul(size_of::<f32>())
-            .is_none_or(|bytes| bytes > buffer_budget)
+            .is_none_or(|bytes| bytes > budget.host)
         {
             return Err("Port graph exceeds its host buffer budget".into());
         }
@@ -145,6 +169,15 @@ impl PreparedPorts {
         }
         let mut processors = crate::partition::prepare(bundle, rate, frames)?;
         let mut saved = collect_defaults.then(Vec::new);
+        let mut bypass = collect_defaults.then(Vec::new);
+        for node in &host.graph.nodes {
+            if let Some(Processor::Native(engine)) =
+                node.instance.as_ref().and_then(|id| processors.get_mut(id))
+                && let Some(defaults) = bypass.take()
+            {
+                bypass = saved_bypass(engine, &node.id, defaults);
+            }
+        }
         for native in &manifest.tone3000.instances {
             if native.partition.is_some() {
                 continue;
@@ -187,6 +220,16 @@ impl PreparedPorts {
                     return Err("Native instance setting readback differs".into());
                 }
             }
+            if let Some(defaults) = bypass.take() {
+                let node = host
+                    .graph
+                    .nodes
+                    .iter()
+                    .find(|n| n.instance.as_ref() == Some(&native.id))
+                    .ok_or("Missing native node")?;
+                engine.wait_ready().map_err(|e| e.to_string())?;
+                bypass = saved_bypass(&mut engine, &node.id, defaults);
+            }
             if let Some((root, rows)) = working {
                 let node = host
                     .graph
@@ -209,15 +252,76 @@ impl PreparedPorts {
             }
             processors.insert(native.id.clone(), Processor::Native(engine));
         }
+        // Restore verified model assignments before computing the fixed
+        // layout and arming inner slots. Their saved defaults came from the
+        // original engines, before recovery changed any asset or added IDs.
+        if !recovery.models.is_empty() {
+            let (root, working_rows) = working.ok_or("Model asset store unavailable")?;
+            for (index, row) in recovery.models.iter().enumerate() {
+                let instance = host
+                    .graph
+                    .nodes
+                    .iter()
+                    .find(|n| n.id == row.node)
+                    .and_then(|node| node.instance.as_deref())
+                    .ok_or("Missing native model recovery node")?;
+                let Some(Processor::Native(engine)) = processors.get_mut(instance) else {
+                    return Err("Missing native model recovery processor".into());
+                };
+                if row.assignments.is_empty()
+                    || !oxidal_audio::lifecycle::valid_models(&row.assignments)
+                    || recovery.models[..index]
+                        .iter()
+                        .any(|old| old.node == row.node)
+                {
+                    return Err("Invalid native model recovery catalog".into());
+                }
+                for assignment in &row.assignments {
+                    crate::session::models::validate_model_assignment(
+                        bundle, &row.node, assignment,
+                    )?;
+                }
+                if !working_rows.iter().any(|w| w.node == row.node)
+                    && let Some(defaults) = saved.take()
+                {
+                    saved = saved_before_working(engine, &row.node, defaults);
+                }
+                oxidal_tone3000::model_preparation::restore(engine, root, &row.assignments, frames)
+                    .map_err(|e| e.to_string())?;
+            }
+        }
         for plugin in &host.lv2 {
             processors.insert(
                 plugin.id.clone(),
                 Processor::Lv2(Plugin::new_ports(world, &plugin.plugin_uri, rate, frames)?),
             );
         }
-        let graph = Self::new(bundle, processors, rate, frames, buffer_budget)?;
-        Ok((graph, saved))
+        let graph = Self::new_with_budget(bundle, processors, rate, frames, budget)?;
+        Ok((graph, saved, bypass))
     }
+}
+
+fn saved_bypass(
+    engine: &mut Engine,
+    node: &str,
+    mut saved: Vec<SceneNativeBypass>,
+) -> Option<Vec<SceneNativeBypass>> {
+    for row in engine.scene_bypass_candidates().ok()? {
+        if saved.len() >= crate::session::MAX_CAPTURE_DEFAULTS
+            || !SceneNativeBypass::valid_block(&row.block)
+            || saved
+                .iter()
+                .any(|old| old.node == node && old.block == row.block)
+        {
+            return None;
+        }
+        saved.push(SceneNativeBypass {
+            node: node.into(),
+            block: row.block,
+            value: row.value,
+        });
+    }
+    Some(saved)
 }
 
 fn saved_before_working(

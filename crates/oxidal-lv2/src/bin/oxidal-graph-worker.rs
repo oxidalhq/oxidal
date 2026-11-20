@@ -160,6 +160,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut ready = false;
     let mut last_block = Instant::now();
     let mut expiry = Instant::now();
+    #[cfg(feature = "qualification")]
+    let mut qualification_clock = oxidal_audio::stream::QualificationClock::new(
+        settings.stream.input.period_frames,
+        settings.stream.input.sample_rate,
+    );
     while !stop.load(Ordering::Acquire) {
         if stream.step(|l, r| graph.process(l, r))? == Step::Processed {
             processed += u64::from(settings.stream.input.period_frames);
@@ -174,10 +179,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ready = true;
             }
             if null {
-                std::thread::sleep(Duration::from_secs_f64(
-                    f64::from(settings.stream.input.period_frames)
-                        / f64::from(settings.stream.input.sample_rate),
-                ));
+                #[cfg(feature = "qualification")]
+                qualification_clock.wait();
             }
         } else if last_block.elapsed() > Duration::from_secs(2) {
             return Err("Graph PCM made no progress for two seconds".into());

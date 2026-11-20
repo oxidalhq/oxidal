@@ -1322,3 +1322,92 @@ pub fn qualify_scenes(bundle: &Bundle, root: &Path, world: &World) -> Result<()>
     wait(&mut restored, 10)?;
     Ok(())
 }
+
+pub(super) fn qualify_warm_scenes(bundle: &Bundle, root: &Path) -> Result<()> {
+    let path = root.join("rigs");
+    let revision = BundleStore::new(path.clone()).save(bundle)?;
+    let start = StartRig {
+        midi: None,
+        prepared: vec![],
+        revision,
+        stream: stream(),
+        recall: None,
+    };
+    let mut child = spawn(&path, &root.join("worker"), false)?;
+    let received = replies(&mut child)?;
+    send(&mut child, &start)?;
+    let ready = received.recv_timeout(Duration::from_secs(15))??;
+    assert_eq!(ready.error, None);
+    assert_eq!(ready.control.scene.as_deref(), Some("dry"));
+    assert_eq!(ready.control.native_bypass_armed.as_ref().unwrap().len(), 2);
+    send(&mut child, &WorkerRequest::Protect { on: true })?;
+    assert_eq!(received.recv_timeout(Duration::from_secs(3))??.error, None);
+    send(
+        &mut child,
+        &WorkerRequest::Scene {
+            command: SceneCommand {
+                session: ready.control.session.clone(),
+                expected_revision: ready.control.revision,
+                scene: "cab".into(),
+                release_ms: None,
+            },
+        },
+    )?;
+    let selected = received.recv_timeout(Duration::from_secs(3))??;
+    assert_eq!(selected.error, None);
+    assert_eq!(selected.control.scene.as_deref(), Some("cab"));
+    assert_eq!(selected.control.revision, ready.control.revision + 1);
+    assert_eq!(
+        selected.control.native_bypass_defaults,
+        ready.control.native_bypass_defaults
+    );
+    let visible = selected.control.scenes.as_ref().unwrap();
+    for entry in &visible
+        .scenes
+        .iter()
+        .find(|s| s.id == "cab")
+        .unwrap()
+        .native_bypass
+    {
+        let target = Target::Native {
+            node: entry.node.clone(),
+            parameter: format!("block:{}:enabled", entry.block),
+        };
+        assert_eq!(
+            value(&selected.control, &target),
+            if entry.value { 0.0 } else { 1.0 }
+        );
+    }
+    send(
+        &mut child,
+        &WorkerRequest::Scene {
+            command: SceneCommand {
+                session: ready.control.session,
+                expected_revision: ready.control.revision,
+                scene: "wet".into(),
+                release_ms: None,
+            },
+        },
+    )?;
+    let stale = received.recv_timeout(Duration::from_secs(3))??;
+    assert!(stale.error.is_some());
+    assert_eq!(stale.control.revision, selected.control.revision);
+    let until = Instant::now() + Duration::from_secs(3);
+    loop {
+        send(&mut child, &WorkerRequest::Status)?;
+        let state = received.recv_timeout(Duration::from_secs(3))??;
+        assert_eq!(state.error, None);
+        if state.processed_frames > selected.processed_frames && !state.control.scene_transitioning
+        {
+            break;
+        }
+        assert!(Instant::now() < until, "Warm fade and PCM did not advance");
+        std::thread::sleep(Duration::from_millis(8));
+    }
+    drop(child.0.stdin.take());
+    wait(&mut child, 5)?;
+    println!(
+        "Warm v5: actual Mixed worker recalls with Protect, refuses stale cursors, and advances ALSA-null PCM"
+    );
+    Ok(())
+}

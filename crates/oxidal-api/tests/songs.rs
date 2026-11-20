@@ -446,6 +446,57 @@ async fn prepared_song_mixes_save_reopen_cue_and_export_both_stem_counts() {
     .await;
     assert_eq!(status, 200, "{state}");
     assert_eq!(state["stems"]["recipe"], live);
+    let split = player["stems"]["split"].clone();
+    for (id, command, part) in [
+        (
+            "perform-mute",
+            json!({"kind":"set_muted_part","split":split,"part":"guitar"}),
+            json!("guitar"),
+        ),
+        (
+            "other-viewer",
+            json!({"kind":"edit_stem","split":split,"role":"bass","edit":{"field":"gain","value":-35}}),
+            json!("guitar"),
+        ),
+        (
+            "perform-clear",
+            json!({"kind":"set_muted_part","split":split,"part":null}),
+            Value::Null,
+        ),
+    ] {
+        let (status, result) = json_request(
+            &app,
+            "POST",
+            "/player/commands",
+            json!({
+                "requestId":id,"origin":"ui","expectedCue":asset,"command":command
+            }),
+        )
+        .await;
+        assert_eq!(status, 200, "{result}");
+        if id == "other-viewer" {
+            live["bass"]["gain_tenths_db"] = (-35).into();
+        }
+        assert_eq!(result["stems"]["recipe"], live);
+        assert_eq!(result["stems"]["mutedPart"], part);
+    }
+    let (_, replay) = json_request(
+        &app,
+        "POST",
+        "/player/commands",
+        json!({
+            "requestId":"perform-clear","origin":"ui","expectedCue":asset,
+            "command":{"kind":"set_muted_part","split":split,"part":null}
+        }),
+    )
+    .await;
+    let (_, current) = json_request(&app, "GET", "/player", Value::Null).await;
+    assert_eq!(replay["revision"], current["revision"]);
+    let (status, _) = json_request(&app, "POST", "/player/commands", json!({
+        "requestId":"outdated-editor","origin":"ui","expectedCue":asset,
+        "command":{"kind":"set_stem_mix","recipe":live,"expected":player["stems"]["recipe"],"split":split}
+    })).await;
+    assert_eq!(status, 409);
     let four = json!({"mode":"four","vocals":levels,"drums":levels,"bass":levels,"other":levels});
     let (status, refused) = json_request(
         &app,
