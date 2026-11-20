@@ -1251,6 +1251,24 @@ it('opens the shared LV2 panel and keeps a live adjustment on the selected node 
         },
       };
     }
+    if (action.kind === 'restore_plugin_defaults') {
+      const control = live.control!;
+      live = {
+        ...live,
+        control: {
+          ...control,
+          revision: control.revision + 1,
+          modified: true,
+          controls: control.controls.map((c) =>
+            c.target.kind === 'lv2' &&
+            c.target.node === action.command.node &&
+            c.target.symbol !== 'hidden'
+              ? { ...c, value: 1, display: '1' }
+              : c,
+          ),
+        },
+      };
+    }
     return live;
   });
   fireEvent.click(await screen.findByRole('button', { name: 'dirt' }));
@@ -1320,6 +1338,27 @@ it('opens the shared LV2 panel and keeps a live adjustment on the selected node 
       value: 1,
     },
   });
+
+  fireEvent.click(
+    within(panel).getByRole('button', { name: 'Restore factory defaults' }),
+  );
+  await waitFor(() =>
+    expect(
+      within(panel).getByRole('button', { name: 'Adjust Wet level' }),
+    ).toHaveTextContent('1 dB'),
+  );
+  expect(rigAudioCommand).toHaveBeenLastCalledWith(expect.anything(), {
+    kind: 'restore_plugin_defaults',
+    command: { session: 'audio', expected_revision: 7, node: 'dirt' },
+  });
+  expect(
+    live.control!.controls.find(
+      (c) =>
+        c.target.kind === 'lv2' &&
+        c.target.node === 'dirt' &&
+        c.target.symbol === 'hidden',
+    )?.value,
+  ).toBe(1);
 
   fireEvent.click(screen.getByRole('button', { name: 'clean' }));
   const other = await screen.findByRole('region', { name: 'Verb controls' });

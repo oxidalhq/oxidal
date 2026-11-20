@@ -16,6 +16,7 @@ import {
   navigateMidi,
 } from './api';
 import { PerformPlayerRow } from './components/media/PerformPlayerRow';
+import { LinkedSheet } from './features/library/LinkedSheet';
 import { GuitarSwitch } from './GuitarSettings';
 import { friendlyError } from './lib/friendlyError';
 import { MasterLevel } from './MasterLevel';
@@ -472,6 +473,7 @@ export function PerformView({
             </div>
             <GuitarSwitch layout="compact" />
           </div>
+          <LinkedSheet stage />
           <PresetSteps
             disabled={disabled || !!switching}
             muted={audio?.monitoring?.output_muted ?? false}

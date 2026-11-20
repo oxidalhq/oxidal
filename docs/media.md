@@ -393,6 +393,25 @@ Library ▸ DI and reamps records the raw guitar and reamps it later.
 
 ## Chord sheets
 
+Open **Library → Songbook** to import, write, link and export sheets. Failed
+or conflicting saves keep your draft; read the latest saved text before
+choosing to replace it. A successful save is reported from the device's reply,
+even if the subsequent list refresh fails.
+
+The **Tools → Chord sheet** panel and Stage share the current sheet reader.
+The actual playing preset's link takes precedence over the cued backing
+track's link. Missing links and failed reads are explicit; previous text is
+labelled as a previous sheet. Opening, moving or reading a sheet never recalls
+a preset, cues a track or changes tempo. Add entry/version links when those
+identities are supported; preset and track links are available now.
+
+Phones show a sheet. Tablets can float it; wide screens can also pin it to
+either side. Closing remembers the last placement, while a fresh app session
+starts with tools closed. Floating geometry stays reachable after resizing.
+Text size, scroll speed and chord visibility are saved for this browser;
+scroll position survives moves during the session. E-paper provides page
+stepping and does not resume automatic scrolling when changing modes.
+
 A sheet stores its title, format and exact UTF-8 source on the device. The API
 accepts ChordPro, Markdown and plain text. Sources are limited to 64 KiB and
 permit tabs and line breaks. A sheet title can contain up to 120 characters.

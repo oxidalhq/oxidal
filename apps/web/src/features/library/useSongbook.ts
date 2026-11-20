@@ -21,6 +21,7 @@ import {
 import { DeviceError, friendlyError } from '../../lib/friendlyError';
 import { useSessionState } from '../../lib/sessionState';
 import { useWorkspaceState } from '../../workspaceMemory';
+import { SHEETS_CHANGED } from './sheetResolution';
 
 type Editor = { id: string | null; expected: string; value: SheetDraft };
 
@@ -88,6 +89,7 @@ export function useSongbook(connected: boolean) {
           if (read === reads.current && mounted.current) {
             setPage(result);
             setLinks(foundLinks);
+            window.dispatchEvent(new Event(SHEETS_CHANGED));
             setDamage(undefined);
             setError('');
           }

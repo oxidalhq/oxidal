@@ -123,3 +123,66 @@ test('songbook two viewers retain a stale draft and explicitly replace the revie
   ).toBeVisible();
   await other.close();
 });
+
+test('songbook dock remembers placement through close, rotation and reload without audio commands', async ({
+  page,
+}) => {
+  await page.goto('/#library/songbook');
+  await expect(
+    page.getByRole('button', { name: 'Tools', exact: true }),
+  ).toBeVisible();
+  const writes: string[] = [];
+  page.on('request', (request) => {
+    if (
+      request.method() === 'POST' &&
+      /\/api\/v1\/(audio|rig\/audio|graph\/audio|media\/player)(?:\/|$)/.test(
+        new URL(request.url()).pathname,
+      )
+    )
+      writes.push(request.url());
+  });
+  const open = async () => {
+    await page.getByRole('button', { name: 'Tools', exact: true }).click();
+    await page
+      .getByRole('menuitemcheckbox', { name: 'Chord sheet', exact: true })
+      .click();
+  };
+  await open();
+  await expect(
+    page.getByRole('heading', { name: 'Chord sheet', exact: true }),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page
+    .getByRole('button', { name: 'Float: Chord sheet', exact: true })
+    .click();
+  const panel = page.getByRole('region', {
+    name: 'Chord sheet tool',
+    exact: true,
+  });
+  await expect(panel).toHaveAttribute('data-place', 'float');
+  await panel
+    .getByRole('button', { name: 'Close Chord sheet', exact: true })
+    .click();
+  await open();
+  await expect(panel).toHaveAttribute('data-place', 'float');
+  await page.setViewportSize({ width: 393, height: 852 });
+  await expect(
+    page.getByRole('heading', { name: 'Chord sheet', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Float: Chord sheet', exact: true }),
+  ).toHaveCount(0);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(panel).toHaveAttribute('data-place', 'float');
+  const box = await panel.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(1280);
+  await page.reload();
+  await expect(
+    page.getByRole('region', { name: 'Chord sheet tool', exact: true }),
+  ).toHaveCount(0);
+  await open();
+  await expect(panel).toHaveAttribute('data-place', 'float');
+  expect(writes).toEqual([]);
+});

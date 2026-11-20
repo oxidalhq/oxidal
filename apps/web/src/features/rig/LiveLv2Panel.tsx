@@ -76,6 +76,21 @@ export function LiveLv2Panel({ rig, vm }: RigViewProps) {
         toggleLabel={`${selectedView.label} on`}
         onToggle={bypass && ((on) => setControl(bypass, on ? 0 : 1))}
         onControl={(symbol, value) => setControl(live.get(symbol), value)}
+        onRestoreDefaults={
+          plugin && state.phase === 'running' && state.control
+            ? () => {
+                if (disabled || !state.control) return;
+                void command({
+                  kind: 'restore_plugin_defaults',
+                  command: {
+                    session: state.control.session,
+                    expected_revision: state.control.revision,
+                    node: selected.id,
+                  },
+                });
+              }
+            : undefined
+        }
         onAdjust={(symbol) => {
           const control = live.get(symbol);
           if (control && !disabled) {

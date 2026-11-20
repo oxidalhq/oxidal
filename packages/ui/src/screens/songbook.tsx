@@ -1,12 +1,3 @@
-import {
-  DownloadSimple,
-  FilePlus,
-  Link,
-  MusicNotesSimple,
-  PencilSimple,
-  Plus,
-  Trash,
-} from '@phosphor-icons/react';
 import { useMemo, useRef, useState } from 'react';
 
 import { Button } from '../components/ui/button';
@@ -19,18 +10,13 @@ import {
   DialogHeader,
 } from '../components/ui/dialog';
 import { Segment, SegmentedControl } from '../components/ui/segmented';
+import { Label } from '../components/ui/text';
+import { formatOf, parseSong } from '../lib/song';
 import {
-  Sheet,
-  SheetBody,
-  SheetContent,
-  SheetFooter,
-  SheetHeader,
-} from '../components/ui/sheet';
-import { Eyebrow, Label } from '../components/ui/text';
-import { parseSong, type SongFormat } from '../lib/song';
-import { useMedia } from '../lib/use-media';
-import { LibraryList } from '../patterns/library-list';
-import { SheetViewer } from '../widgets/sheet-viewer';
+  type SheetDraft,
+  Songbook as SongbookView,
+  SongbookEditor,
+} from '../patterns/songbook';
 import {
   KIND_LABEL,
   type LinkKind,
@@ -39,12 +25,6 @@ import {
   SONGS,
   TARGETS,
 } from './songs.data';
-
-const FORMAT_LABEL: Record<SongFormat, string> = {
-  chordpro: 'ChordPro',
-  markdown: 'Markdown',
-  text: 'Text',
-};
 
 /** Link a song to a preset, a rig or a set list entry: a kind, then the target. */
 function LinkDialog({
@@ -113,103 +93,87 @@ function LinkDialog({
   );
 }
 
-/** Edit the words in a sheet: the format, the source, and a live preview below on laptops. */
-function EditSheet({
-  entry,
-  open,
-  onOpenChange,
-  onSave,
-}: {
-  entry: SongEntry;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSave: (source: string, format: SongFormat) => void;
-}) {
-  const [source, setSource] = useState(entry.source);
-  const [format, setFormat] = useState<SongFormat>(entry.format);
-  const song = useMemo(() => parseSong(source, format), [source, format]);
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        onOpenChange={onOpenChange}
-        className="md:w-[min(44rem,100vw)]"
-      >
-        <SheetHeader
-          title={`Edit ${song.title}`}
-          description="Chords in brackets for ChordPro, or on their own line above the words."
-        />
-        <SheetBody>
-          <SegmentedControl
-            value={format}
-            onValueChange={(v) => setFormat(v as SongFormat)}
-            aria-label="Format"
-            size="sm"
-          >
-            <Segment value="chordpro">ChordPro</Segment>
-            <Segment value="markdown">Markdown</Segment>
-            <Segment value="text">Text</Segment>
-          </SegmentedControl>
-          <label className="grid gap-1">
-            <span className="text-sm font-medium">Words and chords</span>
-            <textarea
-              value={source}
-              onChange={(e) => setSource(e.target.value)}
-              spellCheck={false}
-              rows={14}
-              className="min-h-48 rounded-lg border border-input bg-background p-3 font-mono text-sm leading-relaxed outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            />
-          </label>
-          <div className="hidden md:grid">
-            <Eyebrow className="mb-1">Preview</Eyebrow>
-            <SheetViewer song={song} size={1} className="h-72" />
-          </div>
-        </SheetBody>
-        <SheetFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => {
-              onSave(source, format);
-              onOpenChange(false);
-            }}
-          >
-            Save
-          </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-/**
- * Library › Songbook: lyrics and chord sheets, each linkable to a preset, a
- * rig or a set list entry. Import reads .txt, .md and ChordPro files; the
- * open song shows in the viewer beside the list on laptops and full width
- * on phones.
- */
+/** Fixture data supplies the same controlled Songbook used by the product. */
 export function Songbook() {
-  const [songs, setSongs] = useState(SONGS);
-  const [open, setOpen] = useState<string>('harbour');
+  const [songs, setSongs] =
+    useState<Array<SongEntry & { title?: string }>>(SONGS);
+  const [open, setOpen] = useState('harbour');
   const [query, setQuery] = useState('');
   const [linking, setLinking] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const wide = useMedia('(min-width: 64rem)');
-  const viewer = useRef<HTMLDivElement>(null);
-  const entry = songs.find((s) => s.id === open) ?? songs[0]!;
-  const song = useMemo(() => parseSong(entry.source, entry.format), [entry]);
-  const update = (id: string, change: Partial<SongEntry>) =>
+  const [editing, setEditing] = useState<{
+    id: string | null;
+    value: SheetDraft;
+  } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [notice, setNotice] = useState('');
+  const input = useRef<HTMLInputElement>(null);
+  const entry = songs.find((s) => s.id === open);
+  const song = useMemo(
+    () =>
+      entry && {
+        ...parseSong(entry.source, entry.format),
+        ...(entry.title && { title: entry.title }),
+      },
+    [entry],
+  );
+  const update = (id: string, change: Partial<SongEntry & { title: string }>) =>
     setSongs((all) => all.map((s) => (s.id === id ? { ...s, ...change } : s)));
+  const download = () => {
+    if (!entry) return;
+    const url = URL.createObjectURL(
+      new Blob([entry.source], { type: 'text/plain;charset=utf-8' }),
+    );
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${entry.id}.${entry.format === 'chordpro' ? 'cho' : entry.format === 'markdown' ? 'md' : 'txt'}`;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
-      <LibraryList
+    <>
+      <input
+        ref={input}
+        type="file"
+        accept=".txt,.md,.cho,.crd,.chordpro"
+        className="sr-only"
+        aria-label="Import chord sheet"
+        onChange={async (event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (!file) return;
+          try {
+            if (file.size > 65536)
+              throw new Error('Choose a text sheet of at most 64 KiB.');
+            const source = new TextDecoder('utf-8', {
+              fatal: true,
+              ignoreBOM: true,
+            }).decode(await file.arrayBuffer());
+            const format = formatOf(file.name);
+            setEditing({
+              id: null,
+              value: {
+                source,
+                format,
+                title: parseSong(source, format).title || file.name,
+              },
+            });
+          } catch {
+            setNotice('Choose a UTF-8 text sheet of at most 64 KiB.');
+          }
+        }}
+      />
+      <SongbookView
         items={songs.map((s) => {
           const parsed = parseSong(s.source, s.format);
           return {
             id: s.id,
-            title: parsed.title,
+            title: s.title ?? parsed.title,
             caption: [
-              FORMAT_LABEL[s.format],
+              s.format === 'chordpro'
+                ? 'ChordPro'
+                : s.format === 'markdown'
+                  ? 'Markdown'
+                  : 'Text',
               parsed.key && `Key ${parsed.key}`,
               s.links.length
                 ? s.links
@@ -221,82 +185,105 @@ export function Songbook() {
               .join(' · '),
           };
         })}
+        selected={open}
         query={query}
         onQuery={setQuery}
-        selected={open}
-        onOpen={(id) => {
-          setOpen(id);
-          // On a phone the sheet sits under the list: go to it.
-          if (!wide)
-            viewer.current?.scrollIntoView({
-              block: 'start',
-              behavior: 'smooth',
-            });
-        }}
-        layout="list"
-        tile={<MusicNotesSimple />}
-        noun={['song', 'songs']}
-        primary={
-          <>
-            <Button variant="outline">
-              <FilePlus /> Import…
-            </Button>
-            <Button>
-              <Plus /> New song
-            </Button>
-          </>
+        onOpen={setOpen}
+        onImport={() => input.current?.click()}
+        onNew={() =>
+          setEditing({
+            id: null,
+            value: { title: '', source: '', format: 'chordpro' },
+          })
         }
-        empty={{
-          title: 'No songs yet',
-          text: 'Import lyrics or chord sheets as text, Markdown or ChordPro, or write one.',
-        }}
+        onEdit={() =>
+          entry &&
+          song &&
+          setEditing({
+            id: entry.id,
+            value: {
+              title: song.title,
+              source: entry.source,
+              format: entry.format,
+            },
+          })
+        }
+        onLink={() => setLinking(true)}
+        onDownload={download}
+        onDelete={() => setDeleting(true)}
+        song={song}
+        size={entry?.size ?? 3}
+        onSize={(size) => entry && update(entry.id, { size })}
+        speed={entry?.speed ?? 4}
+        onSpeed={(speed) => entry && update(entry.id, { speed })}
+        linked={entry?.links.map((l) => `${KIND_LABEL[l.kind]} · ${l.label}`)}
+        notice={notice && <p role="status">{notice}</p>}
       />
-      <div
-        ref={viewer}
-        className="grid min-h-[32rem] scroll-mt-4 grid-rows-[auto_minmax(0,1fr)] gap-2 lg:h-[calc(100dvh-14rem)]"
-      >
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button size="sm" variant="outline" onClick={() => setLinking(true)}>
-            <Link /> Link to…
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
-            <PencilSimple /> Edit
-          </Button>
-          <Button size="sm" variant="outline">
-            <DownloadSimple /> Download
-          </Button>
-          <Button size="sm" variant="destructive">
-            <Trash /> Delete…
-          </Button>
-        </div>
-        <SheetViewer
-          song={song}
-          size={entry.size}
-          onSize={(size) => update(entry.id, { size })}
-          speed={entry.speed}
-          onSpeed={(speed) => update(entry.id, { speed })}
-          linked={entry.links.map((l) => `${KIND_LABEL[l.kind]} · ${l.label}`)}
-          className="min-h-0"
-        />
-      </div>
       <LinkDialog
         open={linking}
         onOpenChange={setLinking}
         onLink={(link) =>
+          entry &&
           update(entry.id, {
             links: [...entry.links.filter((l) => l.kind !== link.kind), link],
           })
         }
       />
       {editing && (
-        <EditSheet
-          key={entry.id}
-          entry={entry}
-          open={editing}
-          onOpenChange={setEditing}
-          onSave={(source, format) => update(entry.id, { source, format })}
+        <SongbookEditor
+          open
+          onOpenChange={(shown) => !shown && setEditing(null)}
+          value={editing.value}
+          onChange={(value) => setEditing({ ...editing, value })}
+          onSave={() => {
+            if (editing.id) update(editing.id, editing.value);
+            else {
+              const id = crypto.randomUUID();
+              setSongs((all) => [
+                ...all,
+                { id, ...editing.value, links: [], size: 3, speed: 4 },
+              ]);
+              setOpen(id);
+            }
+            setEditing(null);
+          }}
         />
       )}
-    </div>
+      <Dialog open={deleting} onOpenChange={setDeleting}>
+        <DialogContent size="sm">
+          <DialogHeader
+            title="Delete song?"
+            description={
+              entry?.links.length
+                ? 'Unlink this song before deleting it.'
+                : 'Remove this sheet from Songbook.'
+            }
+          />
+          <DialogBody>
+            {entry?.links.map((link) => (
+              <p key={`${link.kind}:${link.id}`}>
+                {KIND_LABEL[link.kind]} · {link.label}
+              </p>
+            ))}
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleting(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!entry || entry.links.length > 0}
+              onClick={() => {
+                setSongs((all) => all.filter((s) => s.id !== entry?.id));
+                setOpen('');
+                setDeleting(false);
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

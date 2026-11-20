@@ -570,6 +570,22 @@ export function GraphAuthor({
                   controls={liveLv2Controls(plugin, live)}
                   on
                   disabled={disabled || !!state.control!.edit}
+                  onRestoreDefaults={
+                    plugin && running
+                      ? () => {
+                          const owner = current.current?.control;
+                          if (!owner || disabled || owner.edit) return;
+                          void command({
+                            kind: 'restore_plugin_defaults',
+                            command: {
+                              session: owner.session,
+                              expected_revision: owner.revision,
+                              node: node.id,
+                            },
+                          });
+                        }
+                      : undefined
+                  }
                   onControl={(symbol, value) => {
                     const parameter = bySymbol.get(symbol);
                     const owner = current.current?.control;

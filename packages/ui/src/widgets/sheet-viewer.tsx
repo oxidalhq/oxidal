@@ -97,6 +97,10 @@ export function SheetViewer({
   onSpeed,
   linked,
   stage = false,
+  initialScroll = 0,
+  onScrollPosition,
+  chordsVisible,
+  onChordsVisible,
   className,
 }: {
   song: Song;
@@ -109,11 +113,23 @@ export function SheetViewer({
   /** What the song is linked to, shown as badges ("Preset · Rhythm section"). */
   linked?: string[];
   stage?: boolean;
+  /** Viewer-owned position retained when moving between sheet, float and pin. */
+  initialScroll?: number;
+  onScrollPosition?: (top: number) => void;
+  chordsVisible?: boolean;
+  onChordsVisible?: (visible: boolean) => void;
   className?: string;
 }) {
   const scroller = React.useRef<HTMLDivElement>(null);
+  const initialPosition = React.useRef(initialScroll);
+  React.useLayoutEffect(() => {
+    const element = scroller.current;
+    if (element) element.scrollTop = Math.max(0, initialPosition.current);
+  }, []);
   const [scrolling, setScrolling] = React.useState(false);
-  const [showChords, setShowChords] = React.useState(true);
+  const [localChords, setLocalChords] = React.useState(true);
+  const showChords = chordsVisible ?? localChords;
+  const setShowChords = onChordsVisible ?? setLocalChords;
   const motion = useMotion();
   const [previousMotion, setPreviousMotion] = React.useState(motion);
   if (previousMotion !== motion) {
@@ -215,6 +231,7 @@ export function SheetViewer({
       )}
       <div
         ref={scroller}
+        onScroll={(event) => onScrollPosition?.(event.currentTarget.scrollTop)}
         tabIndex={0}
         role="document"
         aria-label={`${song.title} words${chords && showChords ? ' and chords' : ''}`}

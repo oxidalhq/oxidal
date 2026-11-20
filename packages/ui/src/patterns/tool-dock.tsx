@@ -31,9 +31,10 @@ import {
   LauncherSlotContext,
   type ToolPlace,
   type ToolPlaces,
+  type ToolPosition,
 } from './dock-context';
 
-export type { ToolPlace, ToolPlaces } from './dock-context';
+export type { ToolPlace, ToolPlaces, ToolPosition } from './dock-context';
 
 export type DockTool = {
   id: string;
@@ -68,24 +69,77 @@ export function ToolDock({
   tools,
   places,
   onPlaces,
+  lastPlaces,
+  positions,
+  onPositions,
   children,
   className,
 }: {
   tools: DockTool[];
   places: ToolPlaces;
   onPlaces: (places: ToolPlaces) => void;
+  /** Last non-closed placement, independent of session open state. */
+  lastPlaces?: ToolPlaces;
+  positions?: Record<string, ToolPosition>;
+  onPositions?: (positions: Record<string, ToolPosition>) => void;
   children: React.ReactNode;
   className?: string;
 }) {
   const wide = useMedia('(min-width: 64rem)');
   const tablet = useMedia('(min-width: 48rem)');
-  const [spots, setSpots] = React.useState<
-    Record<string, { x: number; y: number }>
+  const [localSpots, setLocalSpots] = React.useState<
+    Record<string, ToolPosition>
   >({});
+  const spots = positions ?? localSpots;
   const [left, setLeft] = React.useState<HTMLElement | null>(null);
   const [right, setRight] = React.useState<HTMLElement | null>(null);
   const [float, setFloat] = React.useState<HTMLElement | null>(null);
 
+  const setSpot = (id: string, spot: ToolPosition) => {
+    const next = { ...spots, [id]: { ...spots[id], ...spot } };
+    if (onPositions) onPositions(next);
+    else setLocalSpots(next);
+  };
+  React.useEffect(() => {
+    const keepReachable = () => {
+      let changed = false;
+      const next = { ...spots };
+      for (const [id, spot] of Object.entries(spots)) {
+        const width = Math.max(
+          256,
+          Math.min(spot.width ?? 352, window.innerWidth - 16),
+        );
+        const height =
+          spot.height == null
+            ? undefined
+            : Math.max(160, Math.min(spot.height, window.innerHeight - 96));
+        const x = Math.max(8, Math.min(spot.x, window.innerWidth - width - 8));
+        const y = Math.max(8, Math.min(spot.y, window.innerHeight - 56));
+        if (
+          x !== spot.x ||
+          y !== spot.y ||
+          width !== spot.width ||
+          height !== spot.height
+        ) {
+          next[id] = { x, y, width, height };
+          changed = true;
+        }
+      }
+      if (changed) {
+        if (onPositions) onPositions(next);
+        else setLocalSpots(next);
+      }
+    };
+    let active = true;
+    window.addEventListener('resize', keepReachable);
+    queueMicrotask(() => {
+      if (active) keepReachable();
+    });
+    return () => {
+      active = false;
+      window.removeEventListener('resize', keepReachable);
+    };
+  }, [spots, onPositions]);
   const placeOf = (id: string): ToolPlace => places[id] ?? 'closed';
   const put = (id: string, place: ToolPlace) => {
     // One standing tool in a sheet at a time; on a phone, one tool at all.
@@ -127,14 +181,21 @@ export function ToolDock({
         }
       );
     },
-    setSpot: (id, spot) => setSpots((all) => ({ ...all, [id]: spot })),
+    setSpot,
   };
 
   const slot = React.useContext(LauncherSlotContext);
   /** The tools: one labelled menu in the shell's masthead, or a row above the page. */
   const launcher = (masthead: boolean) => {
     const toggle = (tool: DockTool) =>
-      put(tool.id, placeOf(tool.id) !== 'closed' ? 'closed' : 'sheet');
+      put(
+        tool.id,
+        placeOf(tool.id) !== 'closed'
+          ? 'closed'
+          : lastPlaces?.[tool.id] === 'closed'
+            ? 'sheet'
+            : (lastPlaces?.[tool.id] ?? 'sheet'),
+      );
     const open = tools.filter((t) => placeOf(t.id) !== 'closed').length;
     const quiet =
       'text-enclosure-foreground/70 hover:bg-enclosure-border hover:text-enclosure-foreground aria-[pressed=true]:bg-enclosure-border aria-[pressed=true]:text-enclosure-foreground';
@@ -426,6 +487,19 @@ function ToolPanel({
   const spot = dock.spotOf(id);
   const grab = React.useRef<{ x: number; y: number } | null>(null);
   const box = React.useRef<HTMLElement>(null);
+  React.useEffect(() => {
+    const element = box.current;
+    if (!float || !element || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      const width = Math.round(element.offsetWidth);
+      const height = Math.round(element.offsetHeight);
+      if (width !== spot.width || height !== spot.height)
+        dock.setSpot(id, { ...spot, width, height });
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [float, dock, id, spot]);
+
   const drag = {
     onPointerDown: (event: React.PointerEvent) => {
       if (!float || (event.target as HTMLElement).closest('button')) return;
@@ -462,7 +536,16 @@ function ToolPanel({
           // Drag its corner to resize it, within sensible limits.
           'fixed z-popover max-h-[calc(100dvh-6rem)] min-h-40 max-w-[calc(100vw-1rem)] min-w-64 resize overflow-auto border-foreground/30 shadow-raised',
       )}
-      style={float ? { left: spot.x, top: spot.y, width: WIDTH } : undefined}
+      style={
+        float
+          ? {
+              left: spot.x,
+              top: spot.y,
+              width: spot.width ?? WIDTH,
+              height: spot.height,
+            }
+          : undefined
+      }
     >
       <header
         {...drag}

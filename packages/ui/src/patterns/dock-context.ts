@@ -4,6 +4,13 @@ import * as React from 'react';
 export type ToolPlace = 'closed' | 'sheet' | 'float' | 'left' | 'right';
 export type ToolPlaces = Record<string, ToolPlace>;
 
+export type ToolPosition = {
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+};
+
 /** What the dock offers to anything that can be kept open (see `DockableSheet`). */
 export type Dock = {
   /** Wide enough to float. */
@@ -18,8 +25,8 @@ export type Dock = {
     right: HTMLElement | null;
     float: HTMLElement | null;
   };
-  spotOf: (id: string) => { x: number; y: number };
-  setSpot: (id: string, spot: { x: number; y: number }) => void;
+  spotOf: (id: string) => ToolPosition;
+  setSpot: (id: string, spot: ToolPosition) => void;
 };
 
 export const DockContext = React.createContext<Dock | null>(null);
