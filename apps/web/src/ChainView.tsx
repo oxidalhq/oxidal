@@ -7,6 +7,7 @@ import {
   useState,
 } from 'react';
 
+import { useFlip } from '@oxidal/design-system/lib/use-flip';
 import { ChainBlock } from '@oxidal/design-system/widgets/chain';
 
 import './ChainView.css';
@@ -47,6 +48,12 @@ export function ChainView({
   label: string;
 }) {
   const root = useRef<HTMLDivElement>(null);
+  useFlip(
+    root,
+    JSON.stringify(
+      lanes.map((lane) => [lane.id, ...lane.blocks.map((b) => b.id)]),
+    ),
+  );
   const drag = useDrag(root, disabled ? undefined : onMove);
   const block = (b: RigBlockVM, lane: number) =>
     b.empty ? (
@@ -238,6 +245,7 @@ export function RigTile({
       lifted={!!drag?.style}
       className={dropBefore ? 'outline-2 outline-brand' : undefined}
       data-tile={block.id}
+      data-flip={block.id}
       data-movable={drag ? true : undefined}
       data-lifted={drag?.style ? true : undefined}
       data-drop-before={dropBefore || undefined}
@@ -298,6 +306,7 @@ function useDrag(
   onMove?: (id: string, lane: number, before: string | null) => void,
 ) {
   type Press = {
+    pointerId: number;
     id: string;
     lane: number;
     x: number;
@@ -376,12 +385,16 @@ function useDrag(
       if (press.current?.live) e.preventDefault();
     };
     el.addEventListener('touchmove', hold, { passive: false });
-    return () => el.removeEventListener('touchmove', hold);
+    return () => {
+      el.removeEventListener('touchmove', hold);
+      window.clearTimeout(timer.current);
+      press.current = null;
+    };
   }, [root]);
   useEffect(() => {
     const move = (e: PointerEvent) => {
       const p = press.current;
-      if (!p) return;
+      if (!p || e.pointerId !== p.pointerId) return;
       const far = Math.hypot(e.clientX - p.x, e.clientY - p.y) > SLOP;
       if (!p.live) {
         if (!far) return;
@@ -401,12 +414,26 @@ function useDrag(
           before: at ? at.before : m.before,
         });
     };
-    const up = () => end(true);
-    const cancel = () => end(false);
+    const up = (e: PointerEvent) => {
+      if (press.current?.pointerId === e.pointerId) end(true);
+    };
+    const cancel = (e: PointerEvent) => {
+      if (press.current?.pointerId === e.pointerId) end(false);
+    };
+    const blur = () => {
+      if (press.current) end(false);
+    };
+    const escape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') blur();
+    };
+    window.addEventListener('blur', blur);
+    window.addEventListener('keydown', escape);
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', cancel);
     return () => {
+      window.removeEventListener('blur', blur);
+      window.removeEventListener('keydown', escape);
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', cancel);
@@ -416,9 +443,16 @@ function useDrag(
     active: !!moving,
     before: moving?.before,
     start(e: ReactPointerEvent, id: string, lane: number) {
-      if (!onMove || e.button !== 0) return;
+      if (!onMove || e.button !== 0 || press.current) return;
       dragged.current = false;
-      press.current = { id, lane, x: e.clientX, y: e.clientY, live: false };
+      press.current = {
+        pointerId: e.pointerId,
+        id,
+        lane,
+        x: e.clientX,
+        y: e.clientY,
+        live: false,
+      };
       window.clearTimeout(timer.current);
       if (e.pointerType === 'touch') {
         const at = { clientX: e.clientX, clientY: e.clientY };

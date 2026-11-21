@@ -11,6 +11,7 @@ import {
 } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { useFlip } from '@oxidal/design-system/lib/use-flip';
 
 import './RouteTree.css';
 import { RigTile } from '../ChainView';
@@ -69,6 +70,8 @@ type Props = {
 export function RouteTree(props: Props) {
   const { route, list, label = 'Signal chain' } = props;
   const root = useRef<HTMLDivElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  useFlip(scroller, JSON.stringify(route, ['split', 'branches']));
   const drag = useGapDrag(
     root,
     props.disabled || list ? undefined : props.onMove,
@@ -101,6 +104,7 @@ export function RouteTree(props: Props) {
       data-dragging={drag.active || undefined}
     >
       <div
+        ref={scroller}
         className="route-scroll"
         role="region"
         aria-label="Chain, scrolls sideways"
@@ -156,6 +160,7 @@ function RowSteps(
         className="route-gap"
         data-gap={open ? key : undefined}
         data-drop={drag.over === key || undefined}
+        data-drop-before={drag.over === key || undefined}
       >
         {open && (
           <button
@@ -261,6 +266,7 @@ function Block(props: Props & { drag: Drag; id: string }) {
     <div
       className="route-block"
       data-node={id}
+      data-flip={id}
       data-lifted={drag.moving === id || undefined}
       style={drag.offset(id)}
     >
@@ -431,7 +437,13 @@ function useGapDrag(
   root: RefObject<HTMLDivElement | null>,
   onMove?: (id: string, at: RouteAt) => void,
 ) {
-  type Press = { id: string; x: number; y: number; live: boolean };
+  type Press = {
+    pointerId: number;
+    id: string;
+    x: number;
+    y: number;
+    live: boolean;
+  };
   const press = useRef<Press | null>(null);
   const timer = useRef<number>(undefined);
   const dragged = useRef(false);
@@ -484,12 +496,16 @@ function useGapDrag(
       if (press.current?.live) e.preventDefault();
     };
     el.addEventListener('touchmove', hold, { passive: false });
-    return () => el.removeEventListener('touchmove', hold);
+    return () => {
+      el.removeEventListener('touchmove', hold);
+      window.clearTimeout(timer.current);
+      press.current = null;
+    };
   }, [root]);
   useEffect(() => {
     const move = (e: PointerEvent) => {
       const p = press.current;
-      if (!p) return;
+      if (!p || e.pointerId !== p.pointerId) return;
       if (!p.live) {
         if (Math.hypot(e.clientX - p.x, e.clientY - p.y) <= SLOP) return;
         // A finger that moves before the hold is a scroll, not a drag.
@@ -504,12 +520,26 @@ function useGapDrag(
         over: nearest(e.clientX, e.clientY),
       });
     };
-    const up = () => end(true);
-    const cancel = () => end(false);
+    const up = (e: PointerEvent) => {
+      if (press.current?.pointerId === e.pointerId) end(true);
+    };
+    const cancel = (e: PointerEvent) => {
+      if (press.current?.pointerId === e.pointerId) end(false);
+    };
+    const blur = () => {
+      if (press.current) end(false);
+    };
+    const escape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') blur();
+    };
+    window.addEventListener('blur', blur);
+    window.addEventListener('keydown', escape);
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', cancel);
     return () => {
+      window.removeEventListener('blur', blur);
+      window.removeEventListener('keydown', escape);
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', cancel);
@@ -520,9 +550,15 @@ function useGapDrag(
     moving: moving?.id,
     over: moving?.over ?? null,
     start(e: ReactPointerEvent, id: string) {
-      if (!onMove || e.button !== 0) return;
+      if (!onMove || e.button !== 0 || press.current) return;
       dragged.current = false;
-      press.current = { id, x: e.clientX, y: e.clientY, live: false };
+      press.current = {
+        pointerId: e.pointerId,
+        id,
+        x: e.clientX,
+        y: e.clientY,
+        live: false,
+      };
       window.clearTimeout(timer.current);
       if (e.pointerType === 'touch') {
         const at = { clientX: e.clientX, clientY: e.clientY };

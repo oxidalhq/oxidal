@@ -139,3 +139,27 @@ it('identifies the sounding lane while inactive lanes recede', () => {
     screen.getByRole('group', { name: 'Lead signal chain' }),
   ).toHaveAttribute('data-dim');
 });
+
+it('ignores a second pointer and cancels a lifted effect on Escape', () => {
+  const { flanger, onMove } = view();
+  fireEvent.pointerDown(flanger, {
+    button: 0,
+    pointerId: 3,
+    clientX: 116,
+    clientY: 30,
+    pointerType: 'mouse',
+  });
+  fireEvent.pointerMove(window, {
+    pointerId: 3,
+    clientX: 20,
+    clientY: 30,
+    pointerType: 'mouse',
+  });
+  fireEvent.pointerUp(window, { pointerId: 7 });
+  expect(onMove).not.toHaveBeenCalled();
+  expect(flanger).toHaveAttribute('data-lifted');
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(flanger).not.toHaveAttribute('data-lifted');
+  fireEvent.pointerUp(window, { pointerId: 3 });
+  expect(onMove).not.toHaveBeenCalled();
+});

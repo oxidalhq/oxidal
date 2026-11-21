@@ -68,13 +68,14 @@ export function GraphAuthor({
     sampleRate?: number;
   }>({ rig: emptyRig, bindings: [] });
   const [typedName, setName] = useState<string | null>(null);
-  const name =
-    typedName ??
-    (liveOnly || state?.phase === 'running'
-      ? (state?.configured?.name ??
-        library.find((item) => item.id === state?.saved_copy)?.preset.name ??
-        'New preset')
-      : 'New preset');
+  const [stopOpening, setStopOpening] = useState<GraphAudioState | null>(null);
+  const running = state?.phase === 'running';
+  const configured = state?.configured;
+  const playingName =
+    configured?.name ??
+    library.find((item) => item.id === configured?.library_id)?.preset.name ??
+    'Effects preset';
+  const name = typedName ?? (running ? playingName : 'New preset');
   const [catalog, setCatalog] = useState<Lv2Plugin[]>([]);
   const [picker, setPicker] = useState(false);
   const [selected, setSelected] = useState<string>();
@@ -144,13 +145,11 @@ export function GraphAuthor({
       scan.current?.abort();
     };
   }, [accept, liveOnly]);
-  const running = state?.phase === 'running';
-  const configured = state?.configured;
   const stream = configured?.stream ?? audio?.configured?.stream;
   const sampleRate = stream?.input.sample_rate ?? 48000;
   useEffect(() => {
-    onPlaying?.(running ? name : null);
-  }, [running, onPlaying, name]);
+    onPlaying?.(running ? playingName : null);
+  }, [running, onPlaying, playingName]);
   async function command(action: GraphAudioAction) {
     if (!current.current || sending.current) return;
     const session = current.current.session;
@@ -167,11 +166,33 @@ export function GraphAuthor({
       }
     } catch (cause) {
       if (alive.current)
-        setError(friendlyError(cause, 'build the effects chain'));
+        setError(
+          friendlyError(
+            cause,
+            action.kind === 'stop'
+              ? 'stop effects audio'
+              : 'build the effects chain',
+          ),
+        );
     } finally {
       sending.current = false;
       if (alive.current) setBusy(false);
     }
+  }
+  function stopAudio(opening: GraphAudioState) {
+    const latest = current.current;
+    if (
+      !latest ||
+      latest.session !== opening.session ||
+      latest.revision !== opening.revision ||
+      latest.control?.edit
+    ) {
+      setError(
+        'The playing session changed. Check the current preset before stopping audio.',
+      );
+      return;
+    }
+    void command({ kind: 'stop' });
   }
   async function loadCatalog() {
     scan.current?.abort();
@@ -398,10 +419,9 @@ export function GraphAuthor({
       aria-label="Effects authoring"
     >
       {liveOnly && running ? (
-        // The same header as native and mixed presets (7.15, 7.28).
         <div className="rig-performance-header">
           <div className="effects-preset-name">
-            <h2>{configured?.name ?? 'Effects preset'}</h2>
+            <h2>{playingName}</h2>
             <span className="caption" role="status">
               Effects preset ·{' '}
               {state.saved_copy ? 'saved copy' : 'live session'}
@@ -420,6 +440,12 @@ export function GraphAuthor({
         </div>
       )}
       {error && <p role="alert">{error}</p>}
+      {liveOnly && (
+        <p className="caption">
+          To open another effects preset, save any edits and stop audio. Then
+          choose Library → New preset → Effects chain composer → Saved presets.
+        </p>
+      )}
       {!liveOnly && !running && (
         <>
           <label className="field">
@@ -517,12 +543,39 @@ export function GraphAuthor({
             />
             <Button
               variant="outline"
-              disabled={disabled}
-              onClick={() => void command({ kind: 'stop' })}
+              disabled={disabled || !!state.control.edit}
+              onClick={() => {
+                if (!liveOnly || state.saved_copy) stopAudio(state);
+                else setStopOpening(state);
+              }}
             >
               <Stop aria-hidden="true" /> Stop audio
             </Button>
           </div>
+          {stopOpening && (
+            <AdjustmentDialog
+              title="Stop effects audio?"
+              onCancel={() => setStopOpening(null)}
+            >
+              <p>
+                You can resume this session after stopping. Save a copy first if
+                you want to keep this sound after opening another preset.
+              </p>
+              <div className="action-row">
+                <Button variant="outline" onClick={() => setStopOpening(null)}>
+                  Keep playing
+                </Button>
+                <Button
+                  onClick={() => {
+                    setStopOpening(null);
+                    stopAudio(stopOpening);
+                  }}
+                >
+                  Stop without saving
+                </Button>
+              </div>
+            </AdjustmentDialog>
+          )}
           {effects.map((node) => {
             if (node.id !== selectedEffect) return null;
             const binding = configured?.bindings.find(
