@@ -272,7 +272,9 @@ test('rig controls follow the actual session without example effects', async ({
   await expect(rig).toBeVisible();
   await expect(page.getByTestId('active-preset')).toHaveText('Amp only');
   await expect(rig.locator('[data-slot="chain-block"]')).toHaveCount(1);
-  await rig.getByRole('button', { name: 'My amp lv2', exact: true }).click();
+  await rig
+    .getByRole('button', { name: 'My amp Tone block', exact: true })
+    .click();
   await expect(
     rig.getByRole('button', {
       name: 'Adjust sounding My amp level',
@@ -4609,7 +4611,9 @@ test('live model comparison stays open, waits for application and rejects a chan
   });
   await page.goto('/#rig');
   const rig = page.getByRole('region', { name: 'Sounding rig' });
-  await rig.getByRole('button', { name: 'Current amp', exact: true }).click();
+  await rig
+    .getByRole('button', { name: 'Current amp Tone block', exact: true })
+    .click();
   await rig.getByRole('button', { name: 'Change model', exact: true }).click();
   const picker = page.getByRole('dialog', { name: 'Choose model' });
   await picker.getByRole('button', { name: /Comparison amp/ }).click();

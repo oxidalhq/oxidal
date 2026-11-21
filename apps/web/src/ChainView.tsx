@@ -241,6 +241,7 @@ export function RigTile({
       block={{
         id: block.id,
         label: block.label,
+        caption: block.caption,
         kind: block.kind === 'other' ? 'lv2' : block.kind,
         on: block.on,
         icon: block.face,

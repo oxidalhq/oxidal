@@ -883,6 +883,7 @@ export function LiveRig({
                   ? artwork.items
                   : []
                 ).find((item) => item.block_id === id)?.gear ?? '');
+            const kind = blockKind(gear);
             const showArtwork =
               chainView === 'artwork' &&
               !!state.configured &&
@@ -890,7 +891,8 @@ export function LiveRig({
             return {
               id,
               label: blockName(c.label),
-              kind: blockKind(gear),
+              kind,
+              caption: kind === 'lv2' ? 'Tone block' : undefined,
               on: c.value === 1,
               face: !showArtwork ? (
                 <GearIcon gear={gear} />
