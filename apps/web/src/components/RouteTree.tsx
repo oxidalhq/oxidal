@@ -1,7 +1,7 @@
 import { Plus } from '@phosphor-icons/react';
 import {
   type CSSProperties,
-  type KeyboardEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type RefObject,
@@ -293,7 +293,7 @@ function Block(props: Props & { drag: Drag; id: string }) {
             <span
               key={t.id}
               className="route-tile"
-              onKeyDown={(e: KeyboardEvent) => {
+              onKeyDown={(e: ReactKeyboardEvent) => {
                 const key = moveKey(e);
                 if (!key || !canMove || !props.onKey) return;
                 e.preventDefault();
@@ -319,7 +319,7 @@ function Block(props: Props & { drag: Drag; id: string }) {
   );
 }
 
-function moveKey(e: KeyboardEvent): MoveKey | null {
+function moveKey(e: ReactKeyboardEvent): MoveKey | null {
   if (!e.altKey) return null;
   return (
     (
