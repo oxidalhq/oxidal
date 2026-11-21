@@ -28,6 +28,7 @@ import { Switch } from '../components/ui/switch';
 import { Caption, Label, Title } from '../components/ui/text';
 import { Toggle } from '../components/ui/toggle';
 import { cn } from '../lib/cn';
+import { useVerticalRig } from '../lib/use-media';
 import type { BlockSource } from './block-source';
 import { SourceLine } from './block-source';
 import type { ChainBlockModel } from './chain';
@@ -77,6 +78,9 @@ export function BlockQuickEditor({
   onSource,
   onAll,
   onSwap,
+  visual,
+  renderSlider,
+  disabled,
   layout = 'popover',
   className,
 }: {
@@ -92,6 +96,9 @@ export function BlockQuickEditor({
    * readouts, so a thumb sets them without the keyboard taking the screen;
    * `popover` (laptops) draws drag-or-type fields in two columns.
    */
+  visual?: React.ReactNode;
+  renderSlider?: (control: BlockControl) => React.ReactNode;
+  disabled?: boolean;
   layout?: 'popover' | 'sheet';
   className?: string;
 }) {
@@ -101,7 +108,11 @@ export function BlockQuickEditor({
       <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2">
         <Led kind={block.kind} on={block.on} />
         <div className="grid min-w-0">
-          <Title as="h2" size="sm" className="truncate">
+          <Title
+            as={layout === 'sheet' ? 'div' : 'h2'}
+            size="sm"
+            className="truncate"
+          >
             {block.label}
           </Title>
           <Caption as="span" className="small-caps text-xs">
@@ -109,7 +120,12 @@ export function BlockQuickEditor({
           </Caption>
           {block.origin && <SourceLine source={block.origin} />}
         </div>
-        <Toggle size="sm" pressed={block.on} onPressedChange={onToggle}>
+        <Toggle
+          size="sm"
+          pressed={block.on}
+          onPressedChange={onToggle}
+          disabled={disabled}
+        >
           <span className="sr-only">{block.label} </span>
           <StableLabel
             value={block.on ? 'On' : 'Off'}
@@ -117,16 +133,19 @@ export function BlockQuickEditor({
           />
         </Toggle>
       </div>
-      <VisualControl
-        kind={block.kind}
-        role={block.role}
-        controls={block.controls}
-        onControl={onControl}
-        className={cn(
-          'h-20 rounded-lg border border-border bg-background px-2 py-1 text-foreground',
-          !block.on && 'text-muted-foreground',
-        )}
-      />
+      {visual ?? (
+        <VisualControl
+          kind={block.kind}
+          role={block.role}
+          controls={block.controls}
+          onControl={onControl}
+          disabled={disabled}
+          className={cn(
+            'h-20 rounded-lg border border-border bg-background px-2 py-1 text-foreground',
+            !block.on && 'text-muted-foreground',
+          )}
+        />
+      )}
       {block.kind === 'cab' && <IrFacts source={block.origin} />}
       {block.source && onSource && (
         <div className="grid gap-1">
@@ -145,18 +164,25 @@ export function BlockQuickEditor({
       {layout === 'sheet' ? (
         <div className="grid gap-4">
           {main.map((control) => (
-            <Slider
-              key={control.id}
-              label={control.label}
-              min={control.min}
-              max={control.max}
-              step={control.step ?? 0.5}
-              value={[control.value]}
-              onValueChange={([value]) =>
-                value !== undefined && onControl(control.id, value)
-              }
-              readout={`${control.value.toFixed(control.step && control.step >= 1 ? 0 : 1)}${control.unit ? ` ${control.unit}` : ''}`}
-            />
+            <React.Fragment key={control.id}>
+              {renderSlider ? (
+                renderSlider(control)
+              ) : (
+                <Slider
+                  key={control.id}
+                  label={control.label}
+                  min={control.min}
+                  max={control.max}
+                  step={control.step ?? 0.5}
+                  value={[control.value]}
+                  onValueChange={([value]) =>
+                    value !== undefined && onControl(control.id, value)
+                  }
+                  readout={`${control.value.toFixed(control.step && control.step >= 1 ? 0 : 1)}${control.unit ? ` ${control.unit}` : ''}`}
+                  disabled={disabled}
+                />
+              )}
+            </React.Fragment>
           ))}
         </div>
       ) : (
@@ -190,7 +216,12 @@ export function BlockQuickEditor({
         {block.unsaved ? <Badge tone="warning">Unsaved</Badge> : <span />}
         <span className="flex flex-wrap justify-end gap-1">
           {onSwap && (
-            <Button size="sm" variant="ghost" onClick={onSwap}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={onSwap}
+              disabled={disabled}
+            >
               <ArrowsLeftRight /> Change…
             </Button>
           )}
@@ -229,10 +260,18 @@ export function BlockFullEditor({
   block,
   onControl,
   onReset,
+  visual,
+  renderSlider,
+  disabled,
+  details,
 }: {
   block: BlockModel;
   onControl: (control: string, value: number) => void;
   onReset?: () => void;
+  visual?: React.ReactNode;
+  renderSlider?: (control: BlockControl) => React.ReactNode;
+  disabled?: boolean;
+  details?: React.ReactNode;
 }) {
   const groups = new Map<string, BlockControl[]>();
   for (const control of block.controls.filter((c) => !c.hidden)) {
@@ -242,13 +281,16 @@ export function BlockFullEditor({
   return (
     <div data-slot="block-full-editor" className="grid gap-5">
       {block.kind === 'cab' && <IrFacts source={block.origin} hint />}
-      <VisualControl
-        kind={block.kind}
-        role={block.role}
-        controls={block.controls}
-        onControl={onControl}
-        className="h-28 rounded-lg border border-border bg-background px-2 py-1"
-      />
+      {visual ?? (
+        <VisualControl
+          kind={block.kind}
+          role={block.role}
+          controls={block.controls}
+          onControl={onControl}
+          disabled={disabled}
+          className="h-28 rounded-lg border border-border bg-background px-2 py-1"
+        />
+      )}
       {[...groups.entries()].map(([group, controls]) => (
         <ControlGroup key={group} title={group}>
           {controls.map((control) =>
@@ -261,13 +303,19 @@ export function BlockFullEditor({
                 <Switch
                   aria-label={control.label}
                   checked={control.value >= 0.5}
+                  disabled={disabled}
                   onCheckedChange={(on) =>
                     onControl(control.id, on ? control.max : control.min)
                   }
                 />
               </label>
+            ) : renderSlider ? (
+              <React.Fragment key={control.id}>
+                {renderSlider(control)}
+              </React.Fragment>
             ) : (
               <Slider
+                disabled={disabled}
                 key={control.id}
                 label={control.label}
                 min={control.min}
@@ -283,6 +331,7 @@ export function BlockFullEditor({
           )}
         </ControlGroup>
       ))}
+      {details}
       {onReset && (
         <Button variant="outline" size="sm" className="w-fit" onClick={onReset}>
           <ArrowsClockwise /> Reset to saved
@@ -307,6 +356,13 @@ export function BlockEditor({
   onSource,
   onReset,
   onSwap,
+  visual,
+  fullVisual,
+  renderSlider,
+  disabled,
+  details,
+  fullOpen,
+  onFullOpenChange,
 }: {
   block: BlockModel | null;
   open: boolean;
@@ -317,20 +373,25 @@ export function BlockEditor({
   onSource?: (block: string, value: string | null) => void;
   onReset?: (block: string) => void;
   onSwap?: (block: string) => void;
+  visual?: React.ReactNode;
+  fullVisual?: React.ReactNode;
+  renderSlider?: (control: BlockControl) => React.ReactNode;
+  disabled?: boolean;
+  details?: React.ReactNode;
+  fullOpen?: boolean;
+  onFullOpenChange?: (open: boolean) => void;
 }) {
-  const [full, setFull] = React.useState(false);
-  const [phone, setPhone] = React.useState(false);
-  React.useEffect(() => {
-    const query = window.matchMedia('(max-width: 47.99rem)');
-    const update = () => setPhone(query.matches);
-    update();
-    query.addEventListener('change', update);
-    return () => query.removeEventListener('change', update);
-  }, []);
+  const [ownFull, setOwnFull] = React.useState(false);
+  const full = fullOpen ?? ownFull;
+  const setFull = onFullOpenChange ?? setOwnFull;
+  const phone = useVerticalRig();
   if (!block) return null;
   const quick = (
     <BlockQuickEditor
       block={block}
+      visual={visual}
+      renderSlider={renderSlider}
+      disabled={disabled}
       onControl={(control, value) => onControl(block.id, control, value)}
       onToggle={(on) => onToggle(block.id, on)}
       onSource={onSource ? (value) => onSource(block.id, value) : undefined}
@@ -395,6 +456,10 @@ export function BlockEditor({
           <SheetBody>
             <BlockFullEditor
               block={block}
+              visual={fullVisual}
+              renderSlider={renderSlider}
+              disabled={disabled}
+              details={details}
               onControl={(control, value) =>
                 onControl(block.id, control, value)
               }

@@ -3,8 +3,17 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
+import {
+  Card,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@oxidal/design-system/components/card';
 import { DialogFooter } from '@oxidal/design-system/components/dialog';
+import { NumberField } from '@oxidal/design-system/components/number-field';
 import { StateNotice } from '@oxidal/design-system/components/states';
+import { GuitarWorkspace } from '@oxidal/design-system/patterns/guitar-workspace';
+import { Meter } from '@oxidal/design-system/widgets/meter';
 
 import './MasterLevel.css';
 import './GuitarSettings.css';
@@ -31,6 +40,47 @@ const dbfs = (n: number) =>
 const clampTrim = (n: number) =>
   Math.min(TRIM.max, Math.max(TRIM.min, Math.round(n * 2) / 2));
 
+function GuitarTrimField({
+  value,
+  busy,
+  save,
+}: {
+  value: number;
+  busy: boolean;
+  save: (value: number) => void;
+}) {
+  const drag = useRef<number | null>(null);
+  const [preview, setPreview] = useState<number | null>(null);
+  return (
+    <NumberField
+      label="Input trim"
+      unit="dB"
+      value={preview ?? value}
+      min={-24}
+      max={24}
+      step={0.5}
+      fine={0.5}
+      disabled={busy}
+      onDragStart={() => {
+        drag.current = value;
+      }}
+      onChange={(next) => {
+        if (drag.current === null) save(next);
+        else {
+          drag.current = next;
+          setPreview(next);
+        }
+      }}
+      onDragEnd={(cancelled) => {
+        const next = drag.current;
+        drag.current = null;
+        setPreview(null);
+        if (!cancelled && next != null && next !== value) save(next);
+      }}
+    />
+  );
+}
+
 /**
  * Guitar profiles: a trim per guitar so every guitar reaches the rig at the
  * same level, and a noise gate set just above its own hiss. The trim is a plain
@@ -56,6 +106,7 @@ export function GuitarSettings() {
     until: number;
     peak: number;
   } | null>(null);
+  const [inputLevel, setInputLevel] = useState<number | null>(null);
   const [note, setNote] = useState('');
   const current = useRef(listening);
   function listen(next: typeof listening) {
@@ -68,6 +119,19 @@ export function GuitarSettings() {
   }
 
   useMonitorReadings(1000, (feed) => {
+    const snapshot = feed.snapshot;
+    const peaks =
+      snapshot?.audio?.input.flatMap((channel) =>
+        channel.peak_dbfs == null ? [] : [channel.peak_dbfs],
+      ) ?? [];
+    setInputLevel(
+      !feed.disconnected &&
+        snapshot?.audio_age_ms != null &&
+        snapshot.audio_age_ms < 3000 &&
+        peaks.length
+        ? Math.max(...peaks)
+        : null,
+    );
     const run = current.current;
     if (!run || profiles == null || profiles === 'unsupported') return;
     const input = feed.snapshot?.audio?.input ?? [];
@@ -146,360 +210,406 @@ export function GuitarSettings() {
     });
   const open = profiles.guitars.find((g) => g.id === editing?.id);
   const openTrim = open?.trim_db ?? 0;
+  const active = profiles.guitars.find(
+    (guitar) => guitar.id === profiles.active,
+  );
   return (
-    <ToolSection
-      title="Profiles"
-      scope="This unit · kept across presets, not saved in them"
-      label="Guitar profiles"
-      className="guitar-profiles"
+    <GuitarWorkspace
+      guitars={profiles.guitars.map((g) => ({
+        ...g,
+        caption: profiles.reference === g.id ? 'Level reference' : undefined,
+      }))}
+      active={profiles.active}
+      caption={active ? 'Selected for this rig' : undefined}
+      onSelect={busy ? undefined : (id) => edit({ active: id })}
+      onAdd={
+        !busy && profiles.guitars.length < 16
+          ? () => setNaming({ id: null, value: '' })
+          : undefined
+      }
+      trimControl={
+        active && (
+          <GuitarTrimField
+            key={active.id}
+            value={active.trim_db ?? 0}
+            busy={busy}
+            save={(value) => change(active.id, { trim_db: value })}
+          />
+        )
+      }
     >
-      <p className="caption">
-        Choose the guitar you are holding. Its trim and gate apply immediately
-        to every rig, and Levels follows the selected profile automatically —
-        there is no separate Levels run. Remeasure only after changing the
-        guitar&apos;s output or the interface input/gain.
-      </p>
-      {profiles.guitars.map((g) => {
-        const active = profiles.active === g.id;
-        const gate = gateFor({ ...profiles, active: g.id });
-        const strum =
-          g.peak_dbfs == null
-            ? 'Strum not measured.'
-            : `Measured strum ${dbfs(g.peak_dbfs)}.`;
-        const noise =
-          g.noise_dbfs == null
-            ? 'Noise not measured.'
-            : gate == null
-              ? `Noise ${dbfs(g.noise_dbfs)} · gate off.`
-              : `Noise ${dbfs(g.noise_dbfs)} · gate opens at ${dbfs(gate)}.`;
-        return (
-          <ToolRow
-            key={g.id}
-            title={g.name}
-            value={
-              <span className="guitar-profile-value">
-                {active && <Badge data-state="playing">Playing</Badge>}
-                {profiles.reference === g.id && <Badge>Level reference</Badge>}
-                <span>Trim {db(g.trim_db ?? 0)}</span>
-              </span>
-            }
-            detail={`${strum} ${noise} ${guitarVerificationDetail(g)}`}
-          >
-            {!active && (
+      <Card>
+        <CardHeader>
+          <CardTitle>Input level</CardTitle>
+        </CardHeader>
+        <Meter
+          label="Input"
+          value={inputLevel}
+          state={inputLevel == null ? 'unavailable' : 'live'}
+          size="lg"
+        />
+        {active && (
+          <CardFooter>
+            <Button
+              disabled={busy || !!listening}
+              onClick={() => {
+                setEditing({ id: active.id, kind: 'trim' });
+                start(active.id, 'strum');
+              }}
+            >
+              Start sound check
+            </Button>
+          </CardFooter>
+        )}
+      </Card>
+      <ToolSection
+        title="Calibration"
+        scope="This unit · kept across presets, not saved in them"
+        label="Guitar profiles"
+        className="guitar-profiles"
+      >
+        <p className="caption">
+          Choose the guitar you are holding. Its trim and gate apply immediately
+          to every rig, and Levels follows the selected profile automatically —
+          there is no separate Levels run. Remeasure only after changing the
+          guitar&apos;s output or the interface input/gain.
+        </p>
+        {profiles.guitars.map((g) => {
+          const active = profiles.active === g.id;
+          const gate = gateFor({ ...profiles, active: g.id });
+          const strum =
+            g.peak_dbfs == null
+              ? 'Strum not measured.'
+              : `Measured strum ${dbfs(g.peak_dbfs)}.`;
+          const noise =
+            g.noise_dbfs == null
+              ? 'Noise not measured.'
+              : gate == null
+                ? `Noise ${dbfs(g.noise_dbfs)} · gate off.`
+                : `Noise ${dbfs(g.noise_dbfs)} · gate opens at ${dbfs(gate)}.`;
+          return (
+            <ToolRow
+              key={g.id}
+              title={g.name}
+              value={
+                <span className="guitar-profile-value">
+                  {active && <Badge data-state="playing">Playing</Badge>}
+                  {profiles.reference === g.id && (
+                    <Badge>Level reference</Badge>
+                  )}
+                  <span>Trim {db(g.trim_db ?? 0)}</span>
+                </span>
+              }
+              detail={`${strum} ${noise} ${guitarVerificationDetail(g)}`}
+            >
+              {!active && (
+                <Button
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => edit({ active: g.id })}
+                >
+                  Use guitar
+                </Button>
+              )}
               <Button
                 variant="outline"
                 disabled={busy}
-                onClick={() => edit({ active: g.id })}
+                onClick={() => setEditing({ id: g.id, kind: 'trim' })}
               >
-                Use guitar
+                Trim
               </Button>
-            )}
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => setEditing({ id: g.id, kind: 'trim' })}
-            >
-              Trim
-            </Button>
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => setEditing({ id: g.id, kind: 'gate' })}
-            >
-              Gate
-            </Button>
-            <Button
-              variant="outline"
-              disabled={busy}
-              aria-label={`Manage ${g.name}`}
-              onClick={() => setManaging(g.id)}
-            >
-              Manage
-            </Button>
-          </ToolRow>
-        );
-      })}
-      {note && !editing && <p role="status">{note}</p>}
-      {profiles.guitars.length < 16 && (
-        <div className="action-row">
-          <Button
-            variant="outline"
-            disabled={busy}
-            onClick={() => setNaming({ id: null, value: '' })}
+              <Button
+                variant="outline"
+                disabled={busy}
+                onClick={() => setEditing({ id: g.id, kind: 'gate' })}
+              >
+                Gate
+              </Button>
+              <Button
+                variant="outline"
+                disabled={busy}
+                aria-label={`Manage ${g.name}`}
+                onClick={() => setManaging(g.id)}
+              >
+                Manage
+              </Button>
+            </ToolRow>
+          );
+        })}
+        {note && !editing && <p role="status">{note}</p>}
+        {open && editing?.kind === 'trim' && (
+          <AdjustmentDialog
+            title={`${open.name} trim`}
+            onCancel={() => setEditing(null)}
           >
-            <Plus aria-hidden="true" />
-            Add guitar
-          </Button>
-        </div>
-      )}
-      {open && editing?.kind === 'trim' && (
-        <AdjustmentDialog
-          title={`${open.name} trim`}
-          onCancel={() => setEditing(null)}
-        >
-          <div className="control-stack">
-            <div className="guitar-trim">
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="Trim down 0.5 dB"
-                disabled={busy || openTrim <= TRIM.min}
-                onClick={() =>
-                  change(open.id, {
-                    trim_db: clampTrim(openTrim - TRIM.step),
-                  })
-                }
-              >
-                <Minus aria-hidden="true" />
-              </Button>
-              <output aria-live="polite">{db(openTrim)}</output>
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="Trim up 0.5 dB"
-                disabled={busy || openTrim >= TRIM.max}
-                onClick={() =>
-                  change(open.id, {
-                    trim_db: clampTrim(openTrim + TRIM.step),
-                  })
-                }
-              >
-                <Plus aria-hidden="true" />
-              </Button>
-            </div>
-            <input
-              type="range"
-              min={TRIM.min}
-              max={TRIM.max}
-              step={TRIM.step}
-              aria-label={`${open.name} trim`}
-              className="ink-range ink-range-wide"
-              style={
-                {
-                  '--level': (openTrim - TRIM.min) / (TRIM.max - TRIM.min),
-                } as React.CSSProperties
-              }
-              value={openTrim}
-              disabled={busy}
-              onChange={(e) =>
-                change(open.id, { trim_db: clampTrim(Number(e.target.value)) })
-              }
-            />
-            <p className="caption">
-              {profiles.active === open.id
-                ? 'Changes apply as you play.'
-                : 'Choose Play this to hear changes.'}{' '}
-              Quieter pickups need more trim; hotter ones less.
-            </p>
-            <div className="action-row">
-              <Button
-                variant="outline"
-                disabled={busy || !!listening}
-                onClick={() => start(open.id, 'strum')}
-              >
-                {listening?.id === open.id && listening.kind === 'strum'
-                  ? 'Strum hard…'
-                  : 'Measure strum'}
-              </Button>
-              <Button
-                variant="ghost"
-                disabled={busy || openTrim === 0}
-                onClick={() => change(open.id, { trim_db: 0 })}
-              >
-                Reset to 0 dB
-              </Button>
-            </div>
-            <p className="caption">
-              Measure strum: volume fully up, six seconds of your loudest stage
-              strum. It matches this guitar to the first one you measured.
-            </p>
-            {note && <p role="status">{note}</p>}
-          </div>
-        </AdjustmentDialog>
-      )}
-      {open && editing?.kind === 'gate' && (
-        <AdjustmentDialog
-          title={`${open.name} gate`}
-          onCancel={() => setEditing(null)}
-        >
-          <div className="control-stack">
-            <p role="status">
-              {open.noise_dbfs == null
-                ? 'Not set up: measure the noise first.'
-                : `Noise ${open.noise_dbfs.toFixed(1)} dBFS · gate ${
-                    open.gate
-                      ? `opens at ${gateFor({ ...profiles, active: open.id })} dBFS`
-                      : 'off'
-                  }`}
-            </p>
-            <div className="action-row">
-              <Button
-                variant="outline"
-                disabled={busy || !!listening}
-                onClick={() => start(open.id, 'noise')}
-              >
-                {listening?.id === open.id && listening.kind === 'noise'
-                  ? 'Strings muted…'
-                  : 'Measure noise'}
-              </Button>
-              <Button
-                variant="outline"
-                aria-pressed={!!open.gate && open.noise_dbfs != null}
-                disabled={busy || open.noise_dbfs == null}
-                onClick={() => change(open.id, { gate: !open.gate })}
-              >
-                {open.gate ? 'Gate on' : 'Gate off'}
-              </Button>
-            </div>
-            <p className="caption">
-              Volume up, strings muted by your hand, on the noisiest pickup
-              (usually a single coil). The gate then opens 6 dB above that hiss
-              and stays quiet in every position.
-            </p>
-            {note && <p role="status">{note}</p>}
-          </div>
-        </AdjustmentDialog>
-      )}
-      {naming && (
-        <AdjustmentDialog
-          title={naming.id ? 'Rename guitar' : 'Add guitar'}
-          onCancel={() => setNaming(null)}
-        >
-          <form
-            className="form-grid"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const trimmed = naming.value.trim().slice(0, 40);
-              if (!trimmed) return;
-              if (naming.id) {
-                change(naming.id, { name: trimmed });
-              } else {
-                const id = `${
-                  trimmed
-                    .toLowerCase()
-                    .replace(/[^a-z0-9]+/g, '-')
-                    .replace(/^-|-$/g, '') || 'guitar'
-                }-${crypto.randomUUID().slice(0, 8)}`;
-                edit({
-                  guitars: [
-                    ...profiles.guitars,
-                    { id, name: trimmed, trim_db: 0, peak_dbfs: null },
-                  ],
-                  active: profiles.active ?? id,
-                });
-              }
-              setNaming(null);
-            }}
-          >
-            <label className="field">
-              Name
+            <div className="control-stack">
+              <div className="guitar-trim">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Trim down 0.5 dB"
+                  disabled={busy || openTrim <= TRIM.min}
+                  onClick={() =>
+                    change(open.id, {
+                      trim_db: clampTrim(openTrim - TRIM.step),
+                    })
+                  }
+                >
+                  <Minus aria-hidden="true" />
+                </Button>
+                <output aria-live="polite">{db(openTrim)}</output>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Trim up 0.5 dB"
+                  disabled={busy || openTrim >= TRIM.max}
+                  onClick={() =>
+                    change(open.id, {
+                      trim_db: clampTrim(openTrim + TRIM.step),
+                    })
+                  }
+                >
+                  <Plus aria-hidden="true" />
+                </Button>
+              </div>
               <input
-                autoFocus
-                maxLength={40}
-                placeholder="For example: Ibanez Jiva or Jericho · neck"
-                value={naming.value}
+                type="range"
+                min={TRIM.min}
+                max={TRIM.max}
+                step={TRIM.step}
+                aria-label={`${open.name} trim`}
+                className="ink-range ink-range-wide"
+                style={
+                  {
+                    '--level': (openTrim - TRIM.min) / (TRIM.max - TRIM.min),
+                  } as React.CSSProperties
+                }
+                value={openTrim}
+                disabled={busy}
                 onChange={(e) =>
-                  setNaming({ ...naming, value: e.target.value })
+                  change(open.id, {
+                    trim_db: clampTrim(Number(e.target.value)),
+                  })
                 }
               />
-            </label>
-            <Button type="submit" disabled={busy || !naming.value.trim()}>
-              {naming.id ? 'Rename' : 'Add guitar'}
-            </Button>
-          </form>
-        </AdjustmentDialog>
-      )}
-      {managing &&
-        (() => {
-          const guitar = profiles.guitars.find((g) => g.id === managing);
-          if (!guitar) return null;
-          return (
-            <AdjustmentDialog
-              title={guitar.name}
-              onCancel={() => setManaging(null)}
-            >
-              <div className="control-stack">
-                <p className="caption">
-                  Profile management does not change any presets.
-                </p>
+              <p className="caption">
+                {profiles.active === open.id
+                  ? 'Changes apply as you play.'
+                  : 'Choose Play this to hear changes.'}{' '}
+                Quieter pickups need more trim; hotter ones less.
+              </p>
+              <div className="action-row">
                 <Button
                   variant="outline"
-                  disabled={busy}
-                  onClick={() => {
-                    setManaging(null);
-                    setNaming({ id: guitar.id, value: guitar.name });
-                  }}
+                  disabled={busy || !!listening}
+                  onClick={() => start(open.id, 'strum')}
                 >
-                  Rename guitar
+                  {listening?.id === open.id && listening.kind === 'strum'
+                    ? 'Strum hard…'
+                    : 'Measure strum'}
                 </Button>
                 <Button
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => {
-                    setManaging(null);
-                    setRemoving(guitar.id);
-                  }}
+                  variant="ghost"
+                  disabled={busy || openTrim === 0}
+                  onClick={() => change(open.id, { trim_db: 0 })}
                 >
-                  Remove profile…
+                  Reset to 0 dB
                 </Button>
               </div>
-            </AdjustmentDialog>
-          );
-        })()}
-      {removing &&
-        (() => {
-          const guitar = profiles.guitars.find((g) => g.id === removing);
-          if (!guitar) return null;
-          const isActive = profiles.active === guitar.id;
-          const isReference = profiles.reference === guitar.id;
-          return (
-            <AdjustmentDialog
-              title={`Remove ${guitar.name}?`}
-              onCancel={() => setRemoving(null)}
+              <p className="caption">
+                Measure strum: volume fully up, six seconds of your loudest
+                stage strum. It matches this guitar to the first one you
+                measured.
+              </p>
+              {note && <p role="status">{note}</p>}
+            </div>
+          </AdjustmentDialog>
+        )}
+        {open && editing?.kind === 'gate' && (
+          <AdjustmentDialog
+            title={`${open.name} gate`}
+            onCancel={() => setEditing(null)}
+          >
+            <div className="control-stack">
+              <p role="status">
+                {open.noise_dbfs == null
+                  ? 'Not set up: measure the noise first.'
+                  : `Noise ${open.noise_dbfs.toFixed(1)} dBFS · gate ${
+                      open.gate
+                        ? `opens at ${gateFor({ ...profiles, active: open.id })} dBFS`
+                        : 'off'
+                    }`}
+              </p>
+              <div className="action-row">
+                <Button
+                  variant="outline"
+                  disabled={busy || !!listening}
+                  onClick={() => start(open.id, 'noise')}
+                >
+                  {listening?.id === open.id && listening.kind === 'noise'
+                    ? 'Strings muted…'
+                    : 'Measure noise'}
+                </Button>
+                <Button
+                  variant="outline"
+                  aria-pressed={!!open.gate && open.noise_dbfs != null}
+                  disabled={busy || open.noise_dbfs == null}
+                  onClick={() => change(open.id, { gate: !open.gate })}
+                >
+                  {open.gate ? 'Gate on' : 'Gate off'}
+                </Button>
+              </div>
+              <p className="caption">
+                Volume up, strings muted by your hand, on the noisiest pickup
+                (usually a single coil). The gate then opens 6 dB above that
+                hiss and stays quiet in every position.
+              </p>
+              {note && <p role="status">{note}</p>}
+            </div>
+          </AdjustmentDialog>
+        )}
+        {naming && (
+          <AdjustmentDialog
+            title={naming.id ? 'Rename guitar' : 'Add guitar'}
+            onCancel={() => setNaming(null)}
+          >
+            <form
+              className="form-grid"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const trimmed = naming.value.trim().slice(0, 40);
+                if (!trimmed) return;
+                if (naming.id) {
+                  change(naming.id, { name: trimmed });
+                } else {
+                  const id = `${
+                    trimmed
+                      .toLowerCase()
+                      .replace(/[^a-z0-9]+/g, '-')
+                      .replace(/^-|-$/g, '') || 'guitar'
+                  }-${crypto.randomUUID().slice(0, 8)}`;
+                  edit({
+                    guitars: [
+                      ...profiles.guitars,
+                      { id, name: trimmed, trim_db: 0, peak_dbfs: null },
+                    ],
+                    active: profiles.active ?? id,
+                  });
+                }
+                setNaming(null);
+              }}
             >
-              <div className="control-stack">
-                <p>
-                  This removes its trim, strum and noise measurements from this
-                  unit. Presets and other guitar profiles are not changed.
-                </p>
-                {(isActive || isReference) && (
+              <label className="field">
+                Name
+                <input
+                  autoFocus
+                  maxLength={40}
+                  placeholder="For example: Ibanez Jiva or Jericho · neck"
+                  value={naming.value}
+                  onChange={(e) =>
+                    setNaming({ ...naming, value: e.target.value })
+                  }
+                />
+              </label>
+              <Button type="submit" disabled={busy || !naming.value.trim()}>
+                {naming.id ? 'Rename' : 'Add guitar'}
+              </Button>
+            </form>
+          </AdjustmentDialog>
+        )}
+        {managing &&
+          (() => {
+            const guitar = profiles.guitars.find((g) => g.id === managing);
+            if (!guitar) return null;
+            return (
+              <AdjustmentDialog
+                title={guitar.name}
+                onCancel={() => setManaging(null)}
+              >
+                <div className="control-stack">
                   <p className="caption">
-                    {isActive
-                      ? 'The next guitar will become the selected profile. '
-                      : ''}
-                    {isReference
-                      ? 'The next measured guitar will become the level reference.'
-                      : ''}
+                    Profile management does not change any presets.
                   </p>
-                )}
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setRemoving(null)}>
-                    Keep guitar
-                  </Button>
                   <Button
-                    variant="destructive"
+                    variant="outline"
                     disabled={busy}
                     onClick={() => {
-                      const remaining = profiles.guitars.filter(
-                        (item) => item.id !== guitar.id,
-                      );
-                      edit({
-                        guitars: remaining,
-                        active: isActive
-                          ? (remaining[0]?.id ?? null)
-                          : profiles.active,
-                        reference: isReference ? null : profiles.reference,
-                      });
-                      setRemoving(null);
+                      setManaging(null);
+                      setNaming({ id: guitar.id, value: guitar.name });
                     }}
                   >
-                    Remove guitar
+                    Rename guitar
                   </Button>
-                </DialogFooter>
-              </div>
-            </AdjustmentDialog>
-          );
-        })()}
+                  <Button
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => {
+                      setManaging(null);
+                      setRemoving(guitar.id);
+                    }}
+                  >
+                    Remove profile…
+                  </Button>
+                </div>
+              </AdjustmentDialog>
+            );
+          })()}
+        {removing &&
+          (() => {
+            const guitar = profiles.guitars.find((g) => g.id === removing);
+            if (!guitar) return null;
+            const isActive = profiles.active === guitar.id;
+            const isReference = profiles.reference === guitar.id;
+            return (
+              <AdjustmentDialog
+                title={`Remove ${guitar.name}?`}
+                onCancel={() => setRemoving(null)}
+              >
+                <div className="control-stack">
+                  <p>
+                    This removes its trim, strum and noise measurements from
+                    this unit. Presets and other guitar profiles are not
+                    changed.
+                  </p>
+                  {(isActive || isReference) && (
+                    <p className="caption">
+                      {isActive
+                        ? 'The next guitar will become the selected profile. '
+                        : ''}
+                      {isReference
+                        ? 'The next measured guitar will become the level reference.'
+                        : ''}
+                    </p>
+                  )}
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setRemoving(null)}>
+                      Keep guitar
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      disabled={busy}
+                      onClick={() => {
+                        const remaining = profiles.guitars.filter(
+                          (item) => item.id !== guitar.id,
+                        );
+                        edit({
+                          guitars: remaining,
+                          active: isActive
+                            ? (remaining[0]?.id ?? null)
+                            : profiles.active,
+                          reference: isReference ? null : profiles.reference,
+                        });
+                        setRemoving(null);
+                      }}
+                    >
+                      Remove guitar
+                    </Button>
+                  </DialogFooter>
+                </div>
+              </AdjustmentDialog>
+            );
+          })()}
+      </ToolSection>
       <CaptureListening
         appliedTrim={
           profiles.guitars.find((guitar) => guitar.id === profiles.active)
@@ -511,7 +621,7 @@ export function GuitarSettings() {
           {error}
         </StateNotice>
       )}
-    </ToolSection>
+    </GuitarWorkspace>
   );
 }
 

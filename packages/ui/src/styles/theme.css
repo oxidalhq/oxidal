@@ -460,3 +460,16 @@
   animation: none !important;
   transition: none !important;
 }
+
+/* The compact type scale must still leave a 44 CSS pixel target for fingers. */
+@media (pointer: coarse) {
+  :root {
+    --spacing-touch: max(44px, 2.75rem);
+    --touch-target: max(44px, 2.75rem);
+  }
+  :root[data-display='stage'],
+  :root[data-display='sunlight'],
+  :root[data-display='epaper'] {
+    --touch-target: max(48px, 3rem);
+  }
+}

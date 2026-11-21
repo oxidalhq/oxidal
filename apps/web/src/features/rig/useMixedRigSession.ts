@@ -200,9 +200,15 @@ export function useMixedRigSession({
   const latest = useRef(0);
   const accept = useCallback((next: RigAudioState) => {
     if (!alive.current) return;
+    const previous = current.current;
     if (
-      current.current?.session === next.session &&
-      current.current.revision > next.revision
+      previous?.session === next.session &&
+      (previous.revision > next.revision ||
+        (previous.revision === next.revision &&
+          previous.control &&
+          next.control &&
+          previous.control.session === next.control.session &&
+          previous.control.revision > next.control.revision))
     )
       return;
     current.current = next;

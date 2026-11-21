@@ -262,10 +262,10 @@ test('rig controls follow the actual session without example effects', async ({
         toggle: true,
       },
       {
-        target: 'block:amp-one:level',
-        label: 'My amp level',
+        target: 'block:amp-one:inputGain',
+        label: 'My amp · left · inputGain',
         display: '-3 dB',
-        value: 0.4,
+        value: 0.4375,
         toggle: false,
       },
     ],
@@ -275,23 +275,33 @@ test('rig controls follow the actual session without example effects', async ({
   await expect(page.getByTestId('active-preset')).toHaveText('Amp only');
   await expect(rig.locator('[data-slot="chain-block"]')).toHaveCount(1);
   await rig.getByRole('button', { name: /^My amp Tone block(?: |$)/ }).click();
-  await expect(
-    rig.getByRole('button', {
-      name: 'Adjust sounding My amp level',
-    }),
-  ).toBeVisible();
-  await expect(page.getByText(/delay|reverb/i)).toHaveCount(0);
-  const selectedControl = rig.getByRole('button', {
-    name: 'Adjust sounding My amp level',
+  const selectedControl = page.getByRole('slider', {
+    name: /(?:My amp )?Input gain/,
   });
+  const phone = page.viewportSize()!.width < 768;
+  const closePhoneEditor = async () => {
+    if (phone) await page.keyboard.press('Escape');
+  };
+  const reopenPhoneEditor = async () => {
+    if (phone)
+      await rig
+        .getByRole('button', { name: /^My amp Tone block(?: |$)/ })
+        .click();
+  };
+  await expect(selectedControl).toBeVisible();
+  await expect(page.getByText(/delay|reverb/i)).toHaveCount(0);
   await expect(selectedControl).toBeInViewport();
+  await closePhoneEditor();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await selectSettingsSection(page, 'Display');
   await page.getByRole('button', { name: 'Rig', exact: true }).click();
+  await reopenPhoneEditor();
   await expect(selectedControl).toBeVisible();
+  await closePhoneEditor();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expectSettingsSection(page, 'Display');
   await page.getByRole('button', { name: 'Rig', exact: true }).click();
+  await reopenPhoneEditor();
   await page.screenshot({
     path: info.outputPath('rig-selected-block.png'),
     fullPage: true,
@@ -301,9 +311,17 @@ test('rig controls follow the actual session without example effects', async ({
     width: initialViewport.height,
     height: initialViewport.width,
   });
+  const verticalAfterRotation = await page.evaluate(
+    () => matchMedia('(max-width: 47.99rem)').matches,
+  );
+  if (verticalAfterRotation && !phone)
+    await rig
+      .getByRole('button', { name: /^My amp Tone block(?: |$)/ })
+      .click();
+  await expect(selectedControl).toBeVisible();
   await selectedControl.scrollIntoViewIfNeeded();
   await expect(selectedControl).toBeInViewport();
-  if (initialViewport.height >= 760) {
+  if (!verticalAfterRotation) {
     const chainBounds = (await rig.locator('.rig-chain-column').boundingBox())!;
     const inspectorBounds = (await rig
       .locator('.rig-inspector-column')
@@ -318,12 +336,19 @@ test('rig controls follow the actual session without example effects', async ({
     fullPage: true,
   });
   await page.setViewportSize(initialViewport);
+  await closePhoneEditor();
   const picker = rig.getByRole('button', { name: /^Playing preset/ });
   const retry = rig.getByRole('button', { name: 'Retry presets' });
   await expect(retry).toBeVisible();
   const pickerBox = (await picker.boundingBox())!;
   const retryBox = (await retry.boundingBox())!;
-  expect(retryBox.y).toBeGreaterThanOrEqual(pickerBox.y + pickerBox.height);
+  expect(
+    retryBox.y + retryBox.height <= pickerBox.y ||
+      retryBox.y >= pickerBox.y + pickerBox.height ||
+      retryBox.x + retryBox.width <= pickerBox.x ||
+      retryBox.x >= pickerBox.x + pickerBox.width,
+  ).toBe(true);
+  await expect(retry).toBeEnabled();
   expect(pickerBox.width).toBeGreaterThan(95);
   await expect(rig.getByRole('group', { name: 'Block position' })).toHaveCount(
     0,
@@ -353,10 +378,10 @@ test('rig controls follow the actual session without example effects', async ({
     .getByRole('button', { name: 'Connected icons', exact: true })
     .click();
   await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
-  await expect(rig.locator('.chain-view')).toHaveAttribute(
-    'data-chain-view',
-    'compact',
-  );
+  await expect(rig.locator('[data-slot="route"]')).toBeVisible();
+  await expect(
+    rig.locator('.chain-view[data-chain-view="artwork"]'),
+  ).toHaveCount(0);
   await rig.getByRole('button', { name: 'Save copy', exact: true }).click();
   const saveDialog = page.getByRole('dialog', { name: 'Save copy' });
   await expect(saveDialog.getByLabel('Name for sounding copy')).toHaveValue(
@@ -394,6 +419,7 @@ test('rig controls follow the actual session without example effects', async ({
       { target: 'slot-right', position: { lane: 1, index: 2 } },
     ],
   };
+  await rig.getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(rig.getByRole('button', { name: 'Add block' })).toBeVisible();
   await rig.getByRole('button', { name: 'Add block' }).click();
   await page
@@ -422,11 +448,7 @@ test('rig controls follow the actual session without example effects', async ({
   await expect(
     rig.getByRole('button', { name: 'Adjust sounding Output' }),
   ).toBeVisible();
-  await expect(
-    rig.getByRole('button', {
-      name: 'Adjust sounding My amp level',
-    }),
-  ).toHaveCount(0);
+  await expect(selectedControl).toHaveCount(0);
   audio = { ...audio, phase: 'stopped', controls: [] };
   await expect(rig).toHaveCount(0);
   await expect(
@@ -1576,8 +1598,8 @@ test('playback lifecycle keeps native authoring available after stop and restart
     expect(irFixture).toBeTruthy();
     const beforeModel = await (await request.get('/api/v1/audio')).json();
     await sounding.locator('[data-slot="chain-block"]').first().click();
-    await sounding
-      .getByRole('button', { name: 'Change model', exact: true })
+    await page
+      .getByRole('button', { name: /^Change(?: .+)?…$/ })
       .first()
       .click();
     const picker = page.getByRole('dialog', { name: 'Choose model' });
@@ -1616,8 +1638,10 @@ test('playback lifecycle keeps native authoring available after stop and restart
       beforeModel.models,
     );
     holdDownload = false;
-    await sounding
-      .getByRole('button', { name: 'Change model', exact: true })
+    if (portrait.width < 768)
+      await sounding.locator('[data-slot="chain-block"]').first().click();
+    await page
+      .getByRole('button', { name: /^Change(?: .+)?…$/ })
       .first()
       .click();
     await picker.getByRole('button', { name: /Audition fixture/ }).click();
@@ -4609,7 +4633,7 @@ test('live model comparison stays open, waits for application and rejects a chan
   await rig
     .getByRole('button', { name: /^Current amp Tone block(?: |$)/ })
     .click();
-  await rig.getByRole('button', { name: 'Change model', exact: true }).click();
+  await page.getByRole('button', { name: /^Change(?: .+)?…$/ }).click();
   const picker = page.getByRole('dialog', { name: 'Choose model' });
   await picker.getByRole('button', { name: /Comparison amp/ }).click();
   await picker.getByRole('button', { name: /Clean fixture/ }).click();

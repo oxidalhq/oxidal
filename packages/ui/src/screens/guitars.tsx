@@ -1,19 +1,22 @@
-import { Guitar, Plus } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
-import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
-import { List, ListRow } from '../components/ui/list-row';
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogHeader,
+} from '../components/ui/dialog';
 import { NumberField } from '../components/ui/number-field';
 import { StepProgress } from '../components/ui/states';
 import { Caption, Readout } from '../components/ui/text';
-import { PageHeading } from '../patterns/app-shell';
 import {
   EvenOutDemo,
   LevelMatchDemo,
   SoundCheckDemo,
 } from '../patterns/guitar-tools.demo';
+import { GuitarWorkspace } from '../patterns/guitar-workspace';
 import { CaptureReferencesDemo } from '../widgets/capture-listening.demo';
 import { Meter } from '../widgets/meter';
 import { GUITARS } from './fixtures';
@@ -24,6 +27,8 @@ import { GUITARS } from './fixtures';
  * loudness tools (Level match, Even out) as cards with one action each.
  */
 export function Guitars() {
+  const [guitars, setGuitars] = useState(GUITARS);
+  const [newName, setNewName] = useState<string | null>(null);
   const [active, setActive] = useState('g1');
   const [trim, setTrim] = useState(-6);
   const [level, setLevel] = useState(-20);
@@ -33,100 +38,94 @@ export function Guitars() {
     return () => clearInterval(timer);
   }, []);
   return (
-    <>
-      <PageHeading
-        eyebrow="Guitars"
-        title="Telecaster"
-        caption="Plugged in · single coils"
-        actions={
-          <Button variant="outline">
-            <Plus /> Add guitar
-          </Button>
-        }
-      />
-      <div className="grid items-start gap-4 px-page lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Your guitars</CardTitle>
-          </CardHeader>
-          <List>
-            {GUITARS.map((g) => (
-              <ListRow
-                key={g.id}
-                leading={<Guitar className="ml-2 size-5" />}
-                title={g.name}
-                caption={g.caption}
-                selected={g.id === active}
-                onClick={() => setActive(g.id)}
-                trailing={
-                  g.id === active ? (
-                    <Badge
-                      tone="live"
-                      className="border-background text-background"
-                    >
-                      Plugged in
-                    </Badge>
-                  ) : undefined
-                }
-              />
-            ))}
-          </List>
-          <div className="flex items-center justify-between gap-4">
-            <div className="grid gap-0.5">
-              <span className="text-sm font-medium">Input trim</span>
-              <Caption className="text-xs">
-                Applied before the rig for this guitar.
-              </Caption>
-            </div>
-            <NumberField
-              label="Input trim"
-              value={trim}
-              onChange={setTrim}
-              min={-24}
-              max={12}
-              step={0.5}
-              unit="dB"
-            />
-          </div>
-        </Card>
-        <div className="grid content-start gap-4">
-          <SoundCheckDemo />
-          <Card>
-            <CardHeader>
-              <CardTitle>Input level</CardTitle>
-              <Readout size="sm">{level.toFixed(1)} dB</Readout>
-            </CardHeader>
-            <Meter
-              label="Input"
-              value={level}
-              peak={level + 4}
-              size="lg"
-              showValue={false}
-            />
-            <Caption>
-              Play your loudest chord. The peak should land just under the hot
-              zone; Oxidal sets the trim from it.
-            </Caption>
-            {checking ? (
-              <StepProgress
-                label="Sound check"
-                steps={['Listening', 'Setting trim', 'Done']}
-                current={1}
-                onCancel={() => setChecking(false)}
-              />
-            ) : (
-              <CardFooter>
-                <Button onClick={() => setChecking(true)}>
-                  Start sound check
-                </Button>
-              </CardFooter>
-            )}
-          </Card>
-          <LevelMatchDemo />
-          <EvenOutDemo />
-          <CaptureReferencesDemo appliedTrim={trim} />
-        </div>
-      </div>
-    </>
+    <GuitarWorkspace
+      guitars={guitars}
+      onAdd={() => setNewName('')}
+      active={active}
+      onSelect={setActive}
+      caption={guitars.find((guitar) => guitar.id === active)?.caption}
+      trimControl={
+        <NumberField
+          label="Input trim"
+          value={trim}
+          onChange={setTrim}
+          min={-24}
+          max={24}
+          step={0.5}
+          unit="dB"
+        />
+      }
+    >
+      <Dialog
+        open={newName !== null}
+        onOpenChange={(open) => {
+          if (!open) setNewName(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader title="Add guitar" closeLabel="Close" />
+          <DialogBody>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const name = newName?.trim();
+                if (!name) return;
+                const id = crypto.randomUUID();
+                setGuitars([
+                  ...guitars,
+                  { id, name, caption: '', active: false },
+                ]);
+                setNewName(null);
+              }}
+            >
+              <label className="grid gap-1">
+                Guitar name
+                <input
+                  value={newName ?? ''}
+                  onChange={(e) => setNewName(e.target.value)}
+                  required
+                />
+              </label>
+              <Button type="submit" disabled={!newName?.trim()}>
+                Add
+              </Button>
+            </form>
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
+      <SoundCheckDemo />
+      <Card>
+        <CardHeader>
+          <CardTitle>Input level</CardTitle>
+          <Readout size="sm">{level.toFixed(1)} dB</Readout>
+        </CardHeader>
+        <Meter
+          label="Input"
+          value={level}
+          peak={level + 4}
+          size="lg"
+          showValue={false}
+        />
+        <Caption>
+          Play your loudest chord. The peak should land just under the hot zone;
+          Oxidal sets the trim from it.
+        </Caption>
+        {checking ? (
+          <StepProgress
+            label="Sound check"
+            steps={['Listening', 'Setting trim', 'Done']}
+            current={1}
+            onCancel={() => setChecking(false)}
+          />
+        ) : (
+          <CardFooter>
+            <Button onClick={() => setChecking(true)}>Start sound check</Button>
+          </CardFooter>
+        )}
+      </Card>
+      <LevelMatchDemo />
+      <EvenOutDemo />
+      <CaptureReferencesDemo appliedTrim={trim} />
+    </GuitarWorkspace>
   );
 }

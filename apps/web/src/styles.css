@@ -1,6 +1,5 @@
 @layer theme, base, legacy, components, utilities;
-@import 'tailwindcss';
-@import '@oxidal/design-system/styles/theme.css';
+@import '@oxidal/design-system/styles/index.css';
 @source '../../../packages/ui/src';
 
 @layer legacy {
@@ -1979,11 +1978,6 @@
     font-weight: 650;
     box-shadow: inset 0 -2px 0 var(--foreground);
   }
-  .selected-effect-heading {
-    font-size: var(--text-md);
-    overflow-wrap: anywhere;
-  }
-
   @media (max-height: 500px) and (orientation: landscape) {
     .page-heading {
       margin-bottom: 0.5rem;
@@ -1997,37 +1991,6 @@
     .live-rig {
       padding: 0;
     }
-  }
-
-  /* A compact signal strip opens one shared inspector; power stays one tap away. */
-
-  .effect-inspector {
-    border-top: 1px solid var(--border);
-    padding-top: 0.75rem;
-  }
-  .effect-inspector-heading {
-    display: grid;
-    grid-template-columns: 44px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  .effect-inspector-heading .eyebrow {
-    font-size: var(--text-sm);
-    font-weight: 500;
-    letter-spacing: normal;
-    text-transform: none;
-    color: var(--muted-foreground);
-  }
-  /* Change model sits on its own row under the name, never in the close column. */
-  .effect-inspector-heading > :nth-child(4) {
-    grid-column: 2 / -1;
-    justify-self: start;
-  }
-  .effect-inspector-heading h3 {
-    margin: 0.15rem 0;
-  }
-  .effect-inspector .artwork-entry {
-    max-width: 26rem;
   }
 
   .signal-artwork {
@@ -2993,39 +2956,6 @@
     }
     .live-rig .preset-picker-name {
       border: 0;
-    }
-    .native-block-dock {
-      grid-template-columns: minmax(12rem, 20rem) minmax(12rem, 1fr) minmax(
-          12rem,
-          17rem
-        );
-    }
-    .native-block-dock .effect-inspector {
-      grid-column: 1;
-      grid-row: 1;
-    }
-    .native-block-dock .effect-inspector-heading {
-      flex-wrap: wrap;
-    }
-    .native-block-dock .live-parameter-grid {
-      grid-column: 3;
-      grid-row: 1;
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 0.35rem;
-    }
-    .native-block-dock .live-value-trigger {
-      display: grid;
-      padding: 0.3rem;
-      min-width: 0;
-    }
-    .native-block-dock .native-eq-preview {
-      grid-column: 2;
-      grid-row: 1;
-      margin: 0;
-    }
-    .native-block-dock > details {
-      grid-column: 1/-1;
     }
   }
 

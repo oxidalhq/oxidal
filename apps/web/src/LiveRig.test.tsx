@@ -147,21 +147,18 @@ it('keeps bypass in the block detail, opens a single model inspector and retains
     screen.queryByRole('button', { name: 'Compact' }),
   ).not.toBeInTheDocument();
   expect(
-    screen.queryByRole('button', { name: 'Change model' }),
+    screen.queryByRole('button', { name: 'Change Amp…' }),
   ).not.toBeInTheDocument();
   fireEvent.click(
     screen.getByRole('button', { name: /^Amp (?:amp|Tone block) 0 dB$/i }),
   );
-  expect(screen.getAllByRole('button', { name: 'Change model' })).toHaveLength(
+  expect(screen.getAllByRole('button', { name: 'Change Amp…' })).toHaveLength(
     1,
   );
   expect(
     screen.queryByRole('button', { name: 'Enable Amp' }),
   ).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Amp on' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  expect(screen.getByRole('switch', { name: 'Block on' })).toBeChecked();
   fireEvent.click(screen.getByRole('button', { name: 'Preset actions' }));
   fireEvent.click(screen.getByRole('button', { name: 'Model artwork' }));
   expect(localStorage.getItem('oxidal-chain-view')).toBe('artwork');
@@ -220,7 +217,7 @@ it('restores valid block context across navigation but never carries it into a d
       name: /^Amp (?:amp|Tone block) 0 dB$/i,
     }),
   );
-  expect(screen.getByRole('button', { name: 'Change model' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Change Amp…' })).toBeVisible();
   view.rerender(
     <WorkspaceMemory.Provider value={memory}>
       <p>Settings</p>
@@ -231,7 +228,7 @@ it('restores valid block context across navigation but never carries it into a d
       <LiveRig {...props} />
     </WorkspaceMemory.Provider>,
   );
-  await screen.findByRole('button', { name: 'Change model' });
+  await screen.findByRole('button', { name: 'Change Amp…' });
   view.rerender(
     <WorkspaceMemory.Provider value={memory}>
       <p>Settings</p>
@@ -248,7 +245,7 @@ it('restores valid block context across navigation but never carries it into a d
   );
   await screen.findByRole('button', { name: /^Amp (?:amp|Tone block) 0 dB$/i });
   expect(
-    screen.queryByRole('button', { name: 'Change model' }),
+    screen.queryByRole('button', { name: 'Change Amp…' }),
   ).not.toBeInTheDocument();
   expect(playbackCommand).not.toHaveBeenCalled();
 });
@@ -426,4 +423,140 @@ it('resumes the stopped native working copy when its own row is chosen', async (
     expect(playbackCommand).toHaveBeenCalledWith(stopped, { kind: 'resume' }),
   );
   expect(playbackCommand).toHaveBeenCalledTimes(1);
+});
+
+it('edits a desktop block using the shared field and the native gesture cursor', async () => {
+  const begun = { ...opening, revision: opening.revision + 1 };
+  const confirmed = {
+    ...begun,
+    revision: begun.revision + 1,
+    modified: true,
+    controls: opening.controls.map((control) =>
+      control.target === 'block:amp:inputGain'
+        ? { ...control, value: 0.5 + 0.5 / 48, display: '+0.5 dB' }
+        : control,
+    ),
+  };
+  vi.mocked(playbackCommand)
+    .mockResolvedValueOnce(begun)
+    .mockResolvedValueOnce(confirmed);
+  const { container } = show();
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: /^Amp (?:amp|Tone block) 0 dB$/i,
+    }),
+  );
+  expect(
+    container.querySelector('[data-slot="block-panel-identity"]'),
+  ).toBeVisible();
+  expect(screen.getByText('Main line · 1 of 1')).toBeVisible();
+  const field = screen.getByRole('slider', { name: 'Amp Input gain' });
+  fireEvent.keyDown(field, { key: 'ArrowUp' });
+  await waitFor(() =>
+    expect(field).toHaveAttribute('aria-valuetext', '0.5 dB'),
+  );
+  expect(playbackCommand).toHaveBeenNthCalledWith(1, opening, {
+    kind: 'authoring',
+    action: {
+      kind: 'gesture',
+      edit: {
+        phase: 'begin',
+        token: expect.any(String),
+        owner: 'live',
+        target: 'block:amp:inputGain',
+      },
+    },
+  });
+  expect(playbackCommand).toHaveBeenNthCalledWith(2, begun, {
+    kind: 'authoring',
+    action: {
+      kind: 'gesture',
+      edit: expect.objectContaining({
+        phase: 'commit',
+        value: expect.closeTo(0.5 + 0.5 / 48, 6),
+      }),
+    },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Minimise controls' }));
+  expect(field).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Show controls' }));
+  fireEvent.click(screen.getByRole('button', { name: /All controls/ }));
+  expect(screen.getByRole('dialog', { name: 'Amp' })).toHaveAttribute(
+    'data-slot',
+    'sheet-content',
+  );
+  expect(screen.getByRole('slider', { name: 'Input gain' })).toBeVisible();
+});
+
+it('opens the shared phone block sheet with a scrim and commits its slider through native readback', async () => {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn((media: string) => ({
+      matches: media === '(max-width: 47.99rem)',
+      media,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+  const begun = { ...opening, revision: opening.revision + 1 };
+  const confirmed = {
+    ...begun,
+    revision: begun.revision + 1,
+    controls: opening.controls.map((control) =>
+      control.target === 'block:amp:inputGain'
+        ? { ...control, value: 0.5 + 0.5 / 48, display: '+0.5 dB' }
+        : control,
+    ),
+  };
+  vi.mocked(playbackCommand)
+    .mockResolvedValueOnce(begun)
+    .mockResolvedValueOnce(confirmed);
+  try {
+    const { container } = show();
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: /^Amp (?:amp|Tone block) 0 dB$/i,
+      }),
+    );
+    const sheet = await screen.findByRole('dialog', { name: 'Amp' });
+    expect(sheet).toHaveAttribute('data-side', 'bottom');
+    expect(document.querySelector('[data-slot="sheet-overlay"]')).toBeVisible();
+    expect(container.querySelector('.rig-sheet')).toBeNull();
+    const field = screen.getByRole('slider', { name: 'Input gain' });
+    fireEvent.keyDown(field, { key: 'ArrowRight' });
+    await waitFor(() => expect(field).toHaveAttribute('aria-valuenow', '0.5'));
+    expect(playbackCommand).toHaveBeenCalledTimes(2);
+    expect(playbackCommand).toHaveBeenLastCalledWith(begun, {
+      kind: 'authoring',
+      action: {
+        kind: 'gesture',
+        edit: expect.objectContaining({
+          phase: 'commit',
+          value: expect.closeTo(0.5 + 0.5 / 48, 6),
+        }),
+      },
+    });
+    const manualEditBegun = { ...confirmed, revision: confirmed.revision + 1 };
+    vi.mocked(playbackCommand)
+      .mockResolvedValueOnce(manualEditBegun)
+      .mockResolvedValueOnce({
+        ...manualEditBegun,
+        revision: manualEditBegun.revision + 1,
+      });
+    const exact = screen.getByRole('button', { name: 'Edit exact Input gain' });
+    expect(exact).toHaveTextContent('0.5 dB');
+    fireEvent.click(exact);
+    const editor = await screen.findByRole('dialog', { name: /inputGain/i });
+    fireEvent.click(within(editor).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(editor).not.toBeInTheDocument());
+    expect(playbackCommand).toHaveBeenLastCalledWith(manualEditBegun, {
+      kind: 'authoring',
+      action: {
+        kind: 'gesture',
+        edit: expect.objectContaining({ phase: 'cancel' }),
+      },
+    });
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

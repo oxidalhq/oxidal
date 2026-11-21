@@ -14,6 +14,8 @@ export { RelativeAdjustment } from './relative-adjustment';
 export function NumberField({
   value,
   onChange,
+  onDragStart,
+  onDragEnd,
   min = 0,
   max = 100,
   step = 1,
@@ -29,6 +31,9 @@ export function NumberField({
 }: {
   value: number;
   onChange: (value: number) => void;
+  /** A live editor can hold one device edit for the whole drag. */
+  onDragStart?: () => void;
+  onDragEnd?: (cancelled: boolean) => void;
   min?: number;
   max?: number;
   step?: number;
@@ -88,13 +93,18 @@ export function NumberField({
       const dx = event.clientX - drag.current.x;
       const dy = drag.current.y - event.clientY;
       const distance = Math.abs(dx) > Math.abs(dy) ? dx : dy;
-      if (Math.abs(distance) > 3) moved.current = true;
+      if (!moved.current && Math.abs(distance) > 3) {
+        moved.current = true;
+        onDragStart?.();
+      }
+      if (onDragStart && !moved.current) return;
       const unitStep = event.shiftKey ? fine : step;
       set(drag.current.start + (distance / sensitivity) * unitStep);
     },
     onPointerUp: (event: React.PointerEvent<HTMLButtonElement>) => {
       if (drag.current?.id !== event.pointerId) return;
       drag.current = null;
+      if (moved.current) onDragEnd?.(false);
       if (event.currentTarget.hasPointerCapture(event.pointerId))
         event.currentTarget.releasePointerCapture(event.pointerId);
     },
@@ -109,8 +119,11 @@ export function NumberField({
     drag.current = null;
     // Confirmed props may still show the starting value while the last
     // preview is in flight. Cancellation must explicitly restore that start.
-    if (moved.current && !disabled && Number.isFinite(gesture.start))
-      onChange(clamp(gesture.start));
+    if (moved.current) {
+      if (onDragEnd) onDragEnd(true);
+      else if (!disabled && Number.isFinite(gesture.start))
+        onChange(clamp(gesture.start));
+    }
     moved.current = true;
   }
 

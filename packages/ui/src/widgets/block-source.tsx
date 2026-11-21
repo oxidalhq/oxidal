@@ -266,14 +266,17 @@ export function SourceLine({
 export function SourcePicture({
   source,
   glyph,
+  pictureUrl,
   className,
 }: {
   source?: BlockSource;
   /** The glyph to fall back on; from the source when not given. */
   glyph?: GlyphKey;
+  pictureUrl?: string;
   className?: string;
 }) {
-  const image = source?.kind === 'tone3000' ? source.image : undefined;
+  const image =
+    pictureUrl ?? (source?.kind === 'tone3000' ? source.image : undefined);
   const [broken, setBroken] = React.useState<string | null>(null);
   return (
     <span

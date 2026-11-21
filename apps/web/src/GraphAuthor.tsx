@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { PluginPanel } from '@oxidal/design-system/patterns/plugin-panel';
+import { RigHeading } from '@oxidal/design-system/patterns/rig-heading';
 import {
   type EffectsPresetOption,
   EffectsPresetPicker,
@@ -510,64 +511,65 @@ export function GraphAuthor({
       aria-label="Effects authoring"
     >
       {liveOnly ? (
-        <div className="rig-performance-header">
-          <div className="effects-preset-name">
-            <p className="small-caps text-sm font-medium text-muted-foreground">
-              {running ? 'Playing' : 'Rig'}
-            </p>
-            <h2 className="sr-only">
-              {running ? playingName : 'Effects presets'}
-            </h2>
-            <EffectsPresetPicker
-              name={playingName}
-              current={state?.saved_copy ?? configured?.library_id}
-              items={library.map(({ id, preset }) => ({
-                id,
-                name: preset.name,
-                unavailable:
-                  preset.sample_rate === sampleRate
-                    ? undefined
-                    : `Uses ${preset.sample_rate} Hz · device is set to ${sampleRate} Hz`,
-              }))}
-              disabled={
-                disabled ||
-                starting ||
-                stopping ||
-                (running && !!state.control?.edit)
-              }
-              loading={libraryLoading}
-              stopped={!running}
-              edited={!state?.saved_copy}
-              onOpen={() => {
-                pickerOpening.current = current.current;
-                setLibraryLoading(true);
-                void refreshLibrary();
-              }}
-              onChoose={(item, source) =>
-                switchTo(
-                  item,
-                  source === 'list' ? pickerOpening.current : state,
-                )
-              }
-            />
-            <span className="caption" role="status">
-              {openingName
-                ? `Opening ${openingName}…`
-                : running
-                  ? state.saved_copy
-                    ? 'Effects preset · saved'
-                    : 'Effects preset · unsaved session'
-                  : starting
-                    ? 'Starting effects audio…'
-                    : stopping
-                      ? 'Stopping effects audio…'
-                      : state?.phase === 'failed'
-                        ? 'Effects audio could not start'
-                        : 'Effects audio stopped'}
-            </span>
-          </div>
+        <RigHeading
+          playing={running}
+          identity={
+            <div className="effects-preset-name">
+              <h2 className="sr-only">
+                {running ? playingName : 'Effects presets'}
+              </h2>
+              <EffectsPresetPicker
+                name={playingName}
+                current={state?.saved_copy ?? configured?.library_id}
+                items={library.map(({ id, preset }) => ({
+                  id,
+                  name: preset.name,
+                  unavailable:
+                    preset.sample_rate === sampleRate
+                      ? undefined
+                      : `Uses ${preset.sample_rate} Hz · device is set to ${sampleRate} Hz`,
+                }))}
+                disabled={
+                  disabled ||
+                  starting ||
+                  stopping ||
+                  (running && !!state.control?.edit)
+                }
+                loading={libraryLoading}
+                stopped={!running}
+                edited={!state?.saved_copy}
+                onOpen={() => {
+                  pickerOpening.current = current.current;
+                  setLibraryLoading(true);
+                  void refreshLibrary();
+                }}
+                onChoose={(item, source) =>
+                  switchTo(
+                    item,
+                    source === 'list' ? pickerOpening.current : state,
+                  )
+                }
+              />
+              <span className="caption" role="status">
+                {openingName
+                  ? `Opening ${openingName}…`
+                  : running
+                    ? state.saved_copy
+                      ? 'Effects preset · saved'
+                      : 'Effects preset · unsaved session'
+                    : starting
+                      ? 'Starting effects audio…'
+                      : stopping
+                        ? 'Stopping effects audio…'
+                        : state?.phase === 'failed'
+                          ? 'Effects audio could not start'
+                          : 'Effects audio stopped'}
+              </span>
+            </div>
+          }
+        >
           <StageControls connected={connected} compact />
-        </div>
+        </RigHeading>
       ) : (
         <div className="section-heading">
           <h2>{running ? 'Live controls' : 'New preset'}</h2>

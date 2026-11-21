@@ -7,6 +7,7 @@
 /* Base text and surfaces come from the tokens, never from utilities. */
 html,
 body,
+#root,
 #storybook-root {
   background: var(--background);
   color: var(--foreground);

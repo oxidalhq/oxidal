@@ -293,7 +293,7 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
   className,
 }: {
   route: Step<B>[];
-  onChange: (route: Step<B>[]) => void;
+  onChange?: (route: Step<B>[]) => void;
   selected?: string | null;
   onSelect: (id: string) => void;
   editing?: boolean;
@@ -317,7 +317,7 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
 }) {
   // The edits only move steps; blocks pass through unchanged, so the caller's block type is kept.
   const route = routeIn as unknown as Route;
-  const onChange = (next: Route) => onChangeIn(next as unknown as Step<B>[]);
+  const onChange = (next: Route) => onChangeIn?.(next as unknown as Step<B>[]);
   const phone = useVerticalRig();
   const vertical =
     orientation === 'vertical' || (orientation === 'auto' && phone);
@@ -391,7 +391,13 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
   React.useEffect(() => clear, []);
 
   const press = (id: string) => (event: React.PointerEvent) => {
-    if (disabled || activePointer.current !== null || event.button > 0) return;
+    if (
+      disabled ||
+      (!editing && !onAudition) ||
+      activePointer.current !== null ||
+      event.button > 0
+    )
+      return;
     activePointer.current = event.pointerId;
     held.current = false;
     grabbed.current = { x: event.clientX, y: event.clientY };

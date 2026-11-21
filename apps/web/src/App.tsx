@@ -573,21 +573,34 @@ function InstrumentApp() {
             slow={displayMode === 'epaper'}
           />
         )}
-        <div className="workspace-content px-page pt-4">
+        <div
+          className={
+            'workspace-content px-page' +
+            (view === 'rig' && !audioRunning ? ' pt-4' : '')
+          }
+        >
           <div
             className={
-              view === 'settings'
+              view === 'settings' ||
+              view === 'library' ||
+              view === 'monitor' ||
+              view === 'guitars'
                 ? 'contents'
                 : view === 'rig' && audioRunning
                   ? 'sr-only'
                   : 'page-heading'
             }
           >
-            {view === 'settings' ? (
+            {view === 'guitars' ? null : view === 'settings' ? (
               <PageHeading
                 eyebrow="Settings"
                 title="Settings"
-                className="px-0 pt-0 md:sr-only"
+                className="px-0 md:hidden"
+              />
+            ) : view === 'library' || view === 'monitor' ? (
+              <PageHeading
+                title={view === 'library' ? 'Library' : 'Levels'}
+                className="px-0"
               />
             ) : (
               <div>
@@ -598,13 +611,7 @@ function InstrumentApp() {
                       : developmentSimulator
                         ? 'Development simulator'
                         : 'Rig'
-                    : view === 'guitars'
-                      ? 'Guitars'
-                      : view === 'monitor'
-                        ? 'Levels'
-                        : view === 'library'
-                          ? 'Library'
-                          : 'Settings'}
+                    : 'Rig'}
                 </span>
                 <h1 data-testid="active-preset">
                   {view === 'rig'
@@ -620,13 +627,7 @@ function InstrumentApp() {
                             : state.preset === 'parallel'
                               ? 'Parallel rig'
                               : 'Serial rig'))
-                    : view === 'guitars'
-                      ? 'Your guitars'
-                      : view === 'monitor'
-                        ? 'Levels'
-                        : view === 'library'
-                          ? 'Library'
-                          : settingsLabels[settingsSection]}
+                    : settingsLabels[settingsSection]}
                 </h1>
               </div>
             )}
@@ -703,7 +704,9 @@ function InstrumentApp() {
           {!state ? (
             <Loading label="Connecting to Oxidal…" />
           ) : view === 'guitars' ? (
-            <GuitarSettings />
+            <div className="-mx-page">
+              <GuitarSettings />
+            </div>
           ) : view === 'monitor' ? (
             <FeatureBoundary name="Levels">
               <Suspense fallback={<Loading label="Loading Levels…" />}>
@@ -871,7 +874,7 @@ function InstrumentApp() {
             </>
           ) : (
             <SettingsPage
-              className="px-0"
+              className="px-0 pt-4"
               sections={settingsSections.map((id) => ({
                 id,
                 label: settingsLabels[id],

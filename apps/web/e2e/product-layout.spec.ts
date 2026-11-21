@@ -83,7 +83,7 @@ for (const mode of ['default', 'stage', 'sunlight', 'epaper'] as const)
                 main.getByRole('heading', {
                   name: surface.heading,
                   exact: true,
-                  level: 1,
+                  level: surface.route === 'guitars' ? 2 : 1,
                 }),
               ).toBeVisible();
             await expect

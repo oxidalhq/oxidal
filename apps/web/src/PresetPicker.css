@@ -211,3 +211,15 @@ ul.preset-picker-group {
   grid-template-columns: auto minmax(0, 1fr) 1.5rem;
   gap: 0.6rem;
 }
+
+/* The shell already provides the page inset used by the standalone Rig story. */
+.instrument-surface > [data-slot='rig-heading'],
+.native-signal-route {
+  margin-inline: calc(-1 * var(--spacing-page));
+}
+[data-slot='rig-heading'] .preset-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}

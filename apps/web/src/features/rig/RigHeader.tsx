@@ -11,7 +11,7 @@ import {
 import { useEffect, useRef } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
-import { Eyebrow } from '@oxidal/design-system/components/text';
+import { RigHeading } from '@oxidal/design-system/patterns/rig-heading';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { WAITING_FOR_DEVICE } from '../../lib/deviceWait';
@@ -99,24 +99,28 @@ export function RigHeader({ rig, vm }: RigViewProps) {
     !switching;
   return (
     <>
-      <Eyebrow>{running ? 'Playing' : 'Rig'}</Eyebrow>
-      <div className="rig-performance-header">
-        <RigPresetSelector
-          phase={state.phase}
-          current={{
-            key: revision
-              ? choiceKey({
-                  kind: 'scenes',
-                  revision,
-                })
-              : '',
-            name: matching?.manifest.name,
-            modified: !!changed,
-            refresh: revision,
-          }}
-          disabled={(waiting && !chooseFromStopped) || !!copyOnEdit}
-          onSelect={(choice) => void choose(choice)}
-        />
+      <RigHeading
+        playing={running}
+        identity={
+          <RigPresetSelector
+            heading
+            phase={state.phase}
+            current={{
+              key: revision
+                ? choiceKey({
+                    kind: 'scenes',
+                    revision,
+                  })
+                : '',
+              name: matching?.manifest.name,
+              modified: !!changed,
+              refresh: revision,
+            }}
+            disabled={(waiting && !chooseFromStopped) || !!copyOnEdit}
+            onSelect={(choice) => void choose(choice)}
+          />
+        }
+      >
         <StageControls connected={connected} compact />
         <Button
           aria-label="Perform view"
@@ -236,7 +240,7 @@ export function RigHeader({ rig, vm }: RigViewProps) {
             <span>Resume</span>
           </Button>
         )}
-      </div>
+      </RigHeading>
       {performSwitching && (
         <div className="rig-switching" role="status" aria-live="polite">
           <ArrowsClockwise aria-hidden="true" />

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 
 import { Caption } from '../components/ui/text';
+import { Screen } from '../screens/shell';
 import {
   BlockFullEditor,
   type BlockModel,
@@ -36,10 +37,14 @@ function Rig({
   initial,
   swap = false,
   name = 'Rhythm section',
+  scenes = SCENES,
+  meters = true,
 }: {
   initial: RigRoute;
   swap?: boolean;
   name?: string;
+  scenes?: typeof SCENES;
+  meters?: boolean;
 }) {
   const rig = useRigDemo(initial);
   const store = useModelDownloads(MODELS);
@@ -57,12 +62,12 @@ function Rig({
       onSaveVersion={rig.onSaveVersion}
       onSaveVersionAs={rig.onSaveVersionAs}
       onMakeDefault={rig.onMakeDefault}
-      scenes={SCENES}
+      scenes={scenes}
       activeScene={rig.scene}
       onScene={rig.onScene}
       sceneChanged={rig.sceneChanged}
-      levels={rig.levels}
-      inputLevel={rig.input}
+      levels={meters ? rig.levels : undefined}
+      inputLevel={meters ? rig.input : undefined}
       onAudition={rig.onAudition}
       onAdd={rig.onAdd}
       models={swap ? store.models : undefined}
@@ -75,8 +80,43 @@ function Rig({
   );
 }
 
-export const Serial: StoryObj = {
-  render: () => <Rig initial={SERIAL_ROUTE} />,
+export const Serial: StoryObj<typeof Rig> = {
+  args: {
+    initial: SERIAL_ROUTE,
+    name: 'Rhythm section',
+    scenes: SCENES,
+    meters: true,
+  },
+  render: ({ initial, name, scenes, meters }) => (
+    <Rig
+      key={JSON.stringify(initial)}
+      initial={initial}
+      name={name}
+      scenes={scenes}
+      meters={meters}
+    />
+  ),
+};
+/** Replay a device route in the approved screen shell for visual comparison. */
+export const DeviceRoute: StoryObj<typeof Rig> = {
+  args: {
+    initial: SERIAL_ROUTE,
+    name: 'Rhythm section',
+    scenes: [],
+    meters: false,
+  },
+  render: ({ initial, name, scenes, meters }) => (
+    <Screen destination="rig" playing={name} status="detailed">
+      <Rig
+        key={JSON.stringify(initial)}
+        initial={initial}
+        name={name}
+        scenes={scenes}
+        meters={meters}
+        swap
+      />
+    </Screen>
+  ),
 };
 export const SplitAndJoin: StoryObj = {
   name: 'Split, join, split again (QC style)',

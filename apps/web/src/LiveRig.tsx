@@ -1,23 +1,43 @@
 import {
-  ArrowLeft,
-  ArrowRight,
   CaretDown,
+  DotsThree,
   Lightning,
+  PencilSimple,
   Plus,
-  X,
 } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@oxidal/design-system/components/dropdown-menu';
 import { RelativeAdjustment as TouchAdjust } from '@oxidal/design-system/components/number-field';
-import { InlineFader } from '@oxidal/design-system/components/slider';
-import { Eyebrow } from '@oxidal/design-system/components/text';
-import { BlockDock } from '@oxidal/design-system/widgets/block-dock';
+import { InlineFader, Slider } from '@oxidal/design-system/components/slider';
+import { Switch } from '@oxidal/design-system/components/switch';
+import { Toggle } from '@oxidal/design-system/components/toggle';
+import { glyphFor } from '@oxidal/design-system/lib/block-glyphs';
+import { shortValue } from '@oxidal/design-system/lib/preview';
+import { useVerticalRig } from '@oxidal/design-system/lib/use-media';
+import { RigHeading } from '@oxidal/design-system/patterns/rig-heading';
+import {
+  BlockEditor,
+  type BlockModel,
+} from '@oxidal/design-system/widgets/block-editor';
+import { SourceCard } from '@oxidal/design-system/widgets/block-source';
+import { RouteView } from '@oxidal/design-system/widgets/route-view';
+import {
+  BlockPanelControl,
+  SelectedBlockPanel,
+} from '@oxidal/design-system/widgets/selected-block-panel';
 
 import './RigControls.css';
 import { AddBlockChooser } from './AddBlockChooser';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
+  artworkPath,
   type AssetArtwork,
   type AudioAction,
   type AudioState,
@@ -34,8 +54,7 @@ import {
 import { ArtworkDeck } from './AssetArtwork';
 import { BlockBandGains } from './BlockBandGains';
 import { BoostControl } from './BoostControl';
-import { ChainView, LedToggle } from './ChainView';
-import { MaybeSheet } from './components/RigSheet';
+import { ChainView } from './ChainView';
 import { EditQueue } from './editQueue';
 import { SaveSoundVersion } from './features/library/SaveSoundVersion';
 import { StageControls } from './features/stage/StageControls';
@@ -45,6 +64,7 @@ import { GuitarPicker } from './GuitarSettings';
 import { LevelMatch } from './LevelMatch';
 import { WAITING_FOR_DEVICE } from './lib/deviceWait';
 import { errorDetails, friendlyError } from './lib/friendlyError';
+import { gearLabel } from './lib/gearLabel';
 import { LiveEq } from './LiveEq';
 import { MasterLevel } from './MasterLevel';
 import { requestMidiAssignments } from './midiNavigation';
@@ -72,8 +92,8 @@ import { RigPresetSelector } from './RigPresetSelector';
 import { MidiControls } from './SceneMidi';
 import { SlotChooser } from './SlotChooser';
 import { type Placement, playingTone, presetWithEffect } from './slotEffects';
-import { ToneDetails } from './ToneDetails';
 import { TunerButton } from './TunerButton';
+import { useToneSource } from './useToneSource';
 import { useWorkspaceState } from './workspaceMemory';
 
 /** The sounding worker owns these controls; no simulator or offline editor writes. */
@@ -94,6 +114,7 @@ export function LiveRig({
   hideInactive?: boolean;
 }) {
   const [state, setState] = useState<AudioState | null>(null);
+  const [editingChain, setEditingChain] = useState(false);
   const [chainView, setChainView] = useState<'compact' | 'artwork'>(() => {
     try {
       return localStorage.getItem('oxidal-chain-view') === 'artwork'
@@ -161,6 +182,26 @@ export function LiveRig({
   // Session identity prevents remembered block IDs from selecting a different rig.
   const target =
     selection.session === state?.session ? selection.target : 'outputLevel';
+  const phone = useVerticalRig();
+  const [fullBlock, setFullBlock] = useState<string | null>(null);
+  const [quickBlock, setQuickBlock] = useState<string | null>(null);
+  // A closed phone sheet must not reopen on top of a different dialog
+  // when a desktop window is later resized back to phone width.
+  if (!phone && quickBlock !== null) setQuickBlock(null);
+  const [minimisedSession, setMinimisedSession] = useState<string | null>(null);
+  const selectedId = target.startsWith('block:')
+    ? target.split(':')[1]
+    : undefined;
+  const nativeLayout = state?.authoring?.layout;
+  const providerToneId =
+    [...(nativeLayout?.left ?? []), ...(nativeLayout?.right ?? [])].find(
+      (b) => b.id === selectedId && !b.insert,
+    )?.tone_id ?? null;
+  const { source: toneSource } = useToneSource(
+    state?.models?.some((model) => model.target === selectedId)
+      ? null
+      : providerToneId,
+  );
   function setTarget(next: string) {
     setSelection({ session: state?.session ?? '', target: next });
   }
@@ -824,28 +865,6 @@ export function LiveRig({
     ? 'right'
     : 'left';
   const orderedBlocks = state.authoring?.layout?.[selectedLane] ?? [];
-  /** Title for the controls sheet of the selected block (7.28). */
-  const selectedBlockView = selectedBlock
-    ? {
-        onClose: () => {
-          setTarget('outputLevel');
-          setGroup('tone');
-        },
-        label:
-          groups
-            .find((c) => c.target === `block:${selectedBlock}:enabled`)
-            ?.label.replace(/\s*·\s*enabled$/i, '') ?? 'Selected block',
-        detail:
-          state.authoring?.layout?.right.length && selectedLane === 'right'
-            ? 'Right chain'
-            : undefined,
-      }
-    : null;
-  const InspectorFrame = selectedBlock ? BlockDock : 'div';
-  /** The TONE3000 tone behind the selected block, when it has one. */
-  const selectedToneId =
-    orderedBlocks.find((b) => b.id === selectedBlock && !b.insert)?.tone_id ??
-    null;
   const chainLanes: RigLaneVM[] = (['left', 'right'] as const).flatMap(
     (lane) => {
       const layout = state.authoring?.layout;
@@ -900,7 +919,11 @@ export function LiveRig({
               id,
               label: blockName(c.label),
               kind,
-              caption: kind === 'other' ? 'Tone block' : undefined,
+              caption: gear
+                ? gearLabel(gear)
+                : kind === 'other'
+                  ? 'Tone block'
+                  : undefined,
               preview:
                 ['inputGain', 'outputGain']
                   .map(
@@ -908,6 +931,11 @@ export function LiveRig({
                       state.controls.find(
                         (item) => item.target === `block:${id}:${gain}`,
                       )?.display,
+                  )
+                  .map((value) =>
+                    value?.endsWith(' dB')
+                      ? shortValue({ value: parseFloat(value), unit: 'dB' })
+                      : value,
                   )
                   .filter(Boolean)
                   .join(' · ') || undefined,
@@ -930,6 +958,408 @@ export function LiveRig({
       ];
     },
   );
+  const selectNativeBlock = (id: string) => {
+    const prefix = `block:${id}:`;
+    setTarget(
+      state.controls.find(
+        (item) => item.target.startsWith(prefix) && !item.toggle,
+      )?.target ?? `block:${id}:enabled`,
+    );
+    setDraft(null);
+    setFullBlock(null);
+    setQuickBlock(phone ? id : null);
+    if (!phone) revealInspector();
+  };
+  const selectedEnabled = groups.find(
+    (item) => item.target === `block:${selectedBlock}:enabled`,
+  );
+  const selectedModel = state.models?.find(
+    (item) => item.target === selectedBlock,
+  );
+  const selectedArtwork =
+    !selectedModel &&
+    artwork?.id === artworkId &&
+    artwork?.owned === artworkOwned
+      ? artwork?.items.find((item) => item.block_id === selectedBlock)
+      : undefined;
+  const selectedControls = state.controls.filter(
+    (item) =>
+      selectedBlock &&
+      item.target.startsWith(`block:${selectedBlock}:`) &&
+      !item.target.endsWith(':enabled'),
+  );
+  const selectedEq = state.eq?.find((row) => row.block_id === selectedBlock);
+  const selectedName = selectedEnabled ? blockName(selectedEnabled.label) : '';
+  const selectedCaption =
+    toneSource?.kind === 'tone3000' && toneSource.gear
+      ? toneSource.gear
+      : selectedArtwork?.gear
+        ? gearLabel(selectedArtwork.gear)
+        : 'Tone block';
+  const isDb = (target: string) => /:(?:inputGain|outputGain)$/.test(target);
+  const normalize = (target: string, value: number) =>
+    isDb(target) ? value / 48 + 0.5 : value / 100;
+  const blockFields = selectedControls.map((item) => {
+    const db = isDb(item.target);
+    const value = draft?.target === item.target ? draft.value : item.value;
+    return {
+      id: item.target,
+      label: shortControlLabel(item.label),
+      toggle: item.toggle,
+      min: db ? -24 : 0,
+      max: db ? 24 : item.toggle ? 1 : 100,
+      unit: db ? 'dB' : item.toggle ? '' : '%',
+      step: db ? 0.5 : 1,
+      main: !item.toggle,
+      value: item.toggle
+        ? value
+        : Number((db ? (value - 0.5) * 48 : value * 100).toFixed(1)),
+    };
+  });
+  function previewBlockValue(id: string, value: number) {
+    const item = selectedControls.find((control) => control.target === id);
+    if (!item || adjusting || (draft && draft.target !== id)) return;
+    if (!adjustment.current) {
+      setTarget(id);
+      openAdjustment(item, true);
+    }
+    if (adjustment.current) {
+      const normalized = normalize(id, value);
+      latestValue.current = normalized;
+      setDraft((old) =>
+        old?.target === id ? { ...old, value: normalized } : old,
+      );
+      adjustment.current.preview(normalized);
+    }
+  }
+  function commitBlockSlider(id: string, value: number) {
+    if (adjusting || (draft && draft.target !== id)) return;
+    const normalized = normalize(id, value);
+    if (adjustment.current) {
+      latestValue.current = normalized;
+      void finishAdjustment(false);
+    } else void apply(id, normalized);
+  }
+  const laneBlocks =
+    chainLanes
+      .find((lane) => lane.id === selectedLane)
+      ?.blocks.filter((block) => !block.empty) ?? [];
+  const position = laneBlocks.findIndex((block) => block.id === selectedBlock);
+  const flattened = chainLanes.flatMap((lane) =>
+    lane.blocks.filter((block) => !block.empty),
+  );
+  const adjacent = flattened.findIndex((block) => block.id === selectedBlock);
+  const previousBlock = adjacent > 0 ? flattened[adjacent - 1] : undefined;
+  const nextBlock = adjacent >= 0 ? flattened[adjacent + 1] : undefined;
+  function changeBlockModel() {
+    if (selectedBlock && state)
+      setPicker({
+        target: selectedBlock,
+        name: selectedEnabled
+          ? blockName(selectedEnabled.label)
+          : 'Selected block',
+        opening: state,
+      });
+  }
+  function editBlockEq(blockId: string) {
+    if (!state) return null;
+    return (
+      <LiveEq
+        key={`${state.session}:${blockId}`}
+        state={state}
+        blockId={blockId}
+        send={(current, edit) =>
+          playbackCommand(current, {
+            kind: 'authoring',
+            action: { kind: 'eq', block_id: blockId, edit },
+          })
+        }
+        gesture={(current, edit) =>
+          playbackCommand(current, {
+            kind: 'authoring',
+            action: { kind: 'gesture', edit },
+          })
+        }
+        disabled={!connected || busy || !!draft || modelPending}
+        onEditing={setEqEditing}
+        onChange={(next) => {
+          generation.current += 1;
+          setState((old) =>
+            old?.session === next.session && old.revision > next.revision
+              ? old
+              : next,
+          );
+        }}
+      />
+    );
+  }
+  const artDetails = selectedBlock &&
+    (selectedModel || (state.configured && !state.configured.draft)) && (
+      <details className="disclosure">
+        <summary>Model information &amp; offline images</summary>
+        {selectedModel ? (
+          <ArtworkDeck model id={selectedModel.asset} />
+        ) : (
+          state.configured && (
+            <ArtworkDeck
+              key={`${state.configured.preset_id}:${selectedBlock}`}
+              id={state.configured.preset_id}
+              owned={state.configured.owned}
+              blockId={selectedBlock}
+            />
+          )
+        )}
+      </details>
+    );
+  const selectedKind = flattened.find(
+    (block) => block.id === selectedBlock,
+  )?.kind;
+  const blockModel: BlockModel | null =
+    selectedBlock && selectedEnabled
+      ? {
+          id: selectedBlock,
+          label: selectedName,
+          caption: selectedCaption,
+          kind:
+            !selectedKind || selectedKind === 'other' ? 'lv2' : selectedKind,
+          on: selectedEnabled.value === 1,
+          origin: toneSource,
+          controls: blockFields,
+        }
+      : null;
+  const fullSelected = !!selectedBlock && fullBlock === selectedBlock;
+  function setNativeFull(open: boolean) {
+    if (!open && adjustment.current && !adjusting) void finishAdjustment(true);
+    setFullBlock(open ? (selectedBlock ?? null) : null);
+  }
+  const blockActions = selectedBlock && orderedBlocks.length > 1 && (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={disabled || !!draft}
+          aria-label={`More for ${selectedName}`}
+        >
+          <DotsThree />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {([-1, 1] as const).map((direction) => {
+          const order = movedBlockOrder(
+            orderedBlocks,
+            selectedBlock,
+            direction,
+          );
+          return (
+            <DropdownMenuItem
+              key={direction}
+              disabled={!order}
+              onSelect={() => {
+                if (order)
+                  void author({
+                    kind: 'edit',
+                    edit: {
+                      kind: 'reorder',
+                      lane: selectedLane,
+                      block_ids: order,
+                    },
+                  });
+              }}
+            >
+              {direction === -1 ? 'Move earlier' : 'Move later'}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+  const sharedEditor = blockModel && selectedEnabled && (
+    <BlockEditor
+      key={`${state.session}:${selectedBlock}`}
+      block={blockModel}
+      open={phone && quickBlock === selectedBlock}
+      onOpenChange={(open) => {
+        if (!open && adjustment.current && !adjusting)
+          void finishAdjustment(true);
+        setQuickBlock(open ? (selectedBlock ?? null) : null);
+      }}
+      anchor={null}
+      fullOpen={fullSelected}
+      onFullOpenChange={setNativeFull}
+      disabled={disabled}
+      onControl={(_block, id, value) => void apply(id, value)}
+      onToggle={(_block, on) => void apply(selectedEnabled.target, on ? 1 : 0)}
+      onSwap={changeBlockModel}
+      visual={
+        selectedEq && (
+          <BlockBandGains
+            bands={selectedEq.eq.bands}
+            enabled={selectedEq.eq.enabled}
+            compact
+            onOpen={() => {
+              setQuickBlock(null);
+              setNativeFull(true);
+            }}
+          />
+        )
+      }
+      fullVisual={selectedEq && editBlockEq(selectedEq.block_id)}
+      details={
+        <>
+          {phone && blockActions}
+          {toneSource && (
+            <details className="disclosure">
+              <summary>Source details</summary>
+              <SourceCard source={toneSource} />
+            </details>
+          )}
+          {artDetails}
+        </>
+      }
+      renderSlider={(control) => (
+        <Slider
+          label={control.label}
+          min={control.min}
+          max={control.max}
+          step={control.step}
+          value={[control.value]}
+          disabled={disabled || (!!draft && draft.target !== control.id)}
+          readout={
+            <button
+              type="button"
+              className="relative min-h-0 border-0 bg-transparent p-0 before:absolute before:-inset-x-1 before:-top-2 before:-bottom-0.5 before:content-['']"
+              aria-label={`Edit exact ${control.label}`}
+              aria-haspopup="dialog"
+              disabled={disabled || !!draft}
+              onClick={() => {
+                const item = selectedControls.find(
+                  ({ target }) => target === control.id,
+                );
+                if (!item) return;
+                setTarget(control.id);
+                openAdjustment(item);
+              }}
+            >
+              {control.value.toFixed(control.step && control.step >= 1 ? 0 : 1)}
+              {control.unit ? ` ${control.unit}` : ''}
+            </button>
+          }
+          onValueChange={([value]) => {
+            if (value !== undefined) previewBlockValue(control.id, value);
+          }}
+          onValueCommit={([value]) => {
+            if (value !== undefined) commitBlockSlider(control.id, value);
+          }}
+          onPointerCancel={() => void finishAdjustment(true)}
+        />
+      )}
+    />
+  );
+  const desktopBlock =
+    !phone && selectedBlock && selectedEnabled ? (
+      <SelectedBlockPanel
+        title={selectedName}
+        caption={selectedCaption}
+        position={
+          position < 0
+            ? ''
+            : `${chainLanes.length < 2 ? 'Main line' : selectedLane === 'right' ? 'Right chain' : 'Left chain'} · ${position + 1} of ${laneBlocks.length}`
+        }
+        source={toneSource}
+        glyph={
+          selectedArtwork?.gear ? glyphFor(selectedArtwork.gear) : undefined
+        }
+        pictureUrl={
+          selectedArtwork?.key &&
+          selectedArtwork.cached &&
+          state.configured &&
+          !selectedModel
+            ? artworkPath(
+                state.configured.preset_id,
+                state.configured.owned,
+                selectedArtwork.key,
+              )
+            : undefined
+        }
+        on={selectedEnabled.value === 1}
+        onPrevious={
+          !disabled && !draft && previousBlock
+            ? () => selectNativeBlock(previousBlock.id)
+            : undefined
+        }
+        onNext={
+          !disabled && !draft && nextBlock
+            ? () => selectNativeBlock(nextBlock.id)
+            : undefined
+        }
+        onMinimise={() => setMinimisedSession(state.session)}
+        minimised={minimisedSession === state.session}
+        onExpand={() => setMinimisedSession(null)}
+        preview={selectedControls
+          .filter((item) => !item.toggle)
+          .slice(0, 4)
+          .map((item) => `${shortControlLabel(item.label)} ${item.display}`)
+          .join(' · ')}
+        renderSwitch={(id) => (
+          <Switch
+            id={id}
+            checked={selectedEnabled.value === 1}
+            disabled={disabled || !!draft}
+            onCheckedChange={(on) =>
+              void apply(selectedEnabled.target, on ? 1 : 0)
+            }
+          />
+        )}
+        onChange={changeBlockModel}
+        changeDisabled={disabled || !!draft}
+        onAllControls={() => setNativeFull(true)}
+        controlCount={selectedControls.length}
+        actions={blockActions}
+        visual={
+          selectedEq ? (
+            <BlockBandGains
+              bands={selectedEq.eq.bands}
+              enabled={selectedEq.eq.enabled}
+              onOpen={() => setNativeFull(true)}
+            />
+          ) : null
+        }
+        controls={blockFields
+          .filter((field) => field.main)
+          .slice(0, 4)
+          .map((field) => (
+            <BlockPanelControl
+              key={field.id}
+              caption={field.label}
+              field={{
+                label: `${selectedName} ${field.label}`,
+                value: field.value,
+                min: field.min,
+                max: field.max,
+                unit: field.unit,
+                step: field.step,
+                fine: 0.1,
+                disabled: disabled || (!!draft && draft.target !== field.id),
+                onDragStart: () => {
+                  const item = selectedControls.find(
+                    (control) => control.target === field.id,
+                  );
+                  if (item) {
+                    setTarget(field.id);
+                    openAdjustment(item, true);
+                  }
+                },
+                onDragEnd: (cancelled) => void finishAdjustment(cancelled),
+                onChange: (value) => {
+                  if (adjustment.current) previewBlockValue(field.id, value);
+                  else void apply(field.id, normalize(field.id, value));
+                },
+              }}
+            />
+          ))}
+      />
+    ) : null;
   if (performance)
     return (
       <>
@@ -975,19 +1405,23 @@ export function LiveRig({
       className="instrument-surface live-rig space-y-3"
       aria-label="Sounding rig"
     >
-      <Eyebrow>Playing</Eyebrow>
-      <div className="rig-performance-header">
-        <RigPresetSelector
-          phase={state.phase}
-          current={{
-            key: tone3000Key(state),
-            name: state.preset_name,
-            modified: state.modified,
-            refresh: state.saved_copy,
-          }}
-          disabled={disabled || !!draft || !!picker || !!state.copy_on_edit}
-          onSelect={(choice) => void recall(choice)}
-        />
+      <RigHeading
+        playing={state.phase === 'running'}
+        identity={
+          <RigPresetSelector
+            heading
+            phase={state.phase}
+            current={{
+              key: tone3000Key(state),
+              name: state.preset_name,
+              modified: state.modified,
+              refresh: state.saved_copy,
+            }}
+            disabled={disabled || !!draft || !!picker || !!state.copy_on_edit}
+            onSelect={(choice) => void recall(choice)}
+          />
+        }
+      >
         <StageControls connected={connected} compact />
         <Button
           variant="outline"
@@ -1026,7 +1460,15 @@ export function LiveRig({
             <CaretDown aria-hidden="true" />
           </Button>
         </div>
-      </div>
+        <Toggle
+          size="sm"
+          pressed={editingChain}
+          onPressedChange={setEditingChain}
+          disabled={disabled || !!draft}
+        >
+          <PencilSimple /> Edit
+        </Toggle>
+      </RigHeading>
       {state.copy_on_edit && (
         <div
           className="rounded-md border border-border bg-card p-3"
@@ -1072,38 +1514,40 @@ export function LiveRig({
       )}
       <div className="rig-workspace" data-inspecting={!!selectedBlock}>
         <div className="rig-chain-column">
-          <div className="chain-bar">
-            <h3>Chain</h3>
-            {!!state.slots?.length && (
+          {editingChain && (
+            <div className="chain-bar">
+              <h3>Chain</h3>
+              {!!state.slots?.length && (
+                <Button
+                  variant="ghost"
+                  aria-label="Add block"
+                  disabled={disabled || !!draft}
+                  onClick={() => setAdding(true)}
+                >
+                  <Plus aria-hidden="true" />
+                  Add
+                </Button>
+              )}
               <Button
                 variant="ghost"
-                aria-label="Add block"
-                disabled={disabled || !!draft}
-                onClick={() => setAdding(true)}
+                aria-label="Undo change"
+                title="Undo the last chain edit"
+                disabled={disabled || !!draft || !state.authoring?.can_undo}
+                onClick={() => void author({ kind: 'undo' })}
               >
-                <Plus aria-hidden="true" />
-                Add
+                Undo
               </Button>
-            )}
-            <Button
-              variant="ghost"
-              aria-label="Undo change"
-              title="Undo the last chain edit"
-              disabled={disabled || !!draft || !state.authoring?.can_undo}
-              onClick={() => void author({ kind: 'undo' })}
-            >
-              Undo
-            </Button>
-            <Button
-              variant="ghost"
-              aria-label="Redo change"
-              title="Redo the last undone chain edit"
-              disabled={disabled || !!draft || !state.authoring?.can_redo}
-              onClick={() => void author({ kind: 'redo' })}
-            >
-              Redo
-            </Button>
-          </div>
+              <Button
+                variant="ghost"
+                aria-label="Redo change"
+                title="Redo the last undone chain edit"
+                disabled={disabled || !!draft || !state.authoring?.can_redo}
+                onClick={() => void author({ kind: 'redo' })}
+              >
+                Redo
+              </Button>
+            </div>
+          )}
           {adding && (
             <AddBlockChooser
               onCancel={() => setAdding(false)}
@@ -1250,24 +1694,48 @@ export function LiveRig({
               )}
             </AdjustmentDialog>
           )}
-          <ChainView
-            label="Sounding tone blocks"
-            appearance={chainView}
-            disabled={disabled || !!draft || making}
-            onAdd={(target) => setSlot(target)}
-            selected={selectedBlock}
-            onSelect={(id) => {
-              const prefix = `block:${id}:`;
-              setTarget(
-                state.controls.find(
-                  (item) => item.target.startsWith(prefix) && !item.toggle,
-                )?.target ?? `block:${id}:enabled`,
-              );
-              setDraft(null);
-              revealInspector();
-            }}
-            lanes={chainLanes}
-          />
+          {editingChain || chainView === 'artwork' ? (
+            <ChainView
+              label="Sounding tone blocks"
+              appearance={chainView}
+              disabled={disabled || !!draft || making}
+              onAdd={(target) => setSlot(target)}
+              selected={selectedBlock}
+              onSelect={selectNativeBlock}
+              lanes={chainLanes}
+            />
+          ) : (
+            <div className="native-signal-route" data-chain-view={chainView}>
+              {chainLanes.map((lane) => (
+                <div key={lane.id}>
+                  {chainLanes.length > 1 && (
+                    <span className="small-caps">{lane.input}</span>
+                  )}
+                  <RouteView
+                    label={
+                      chainLanes.length > 1
+                        ? lane.id + ' signal chain'
+                        : 'Sounding tone blocks'
+                    }
+                    route={lane.blocks
+                      .filter((block) => !block.empty)
+                      .map((block) => ({
+                        id: block.id,
+                        label: block.label,
+                        kind: block.kind === 'other' ? 'lv2' : block.kind,
+                        caption: block.caption,
+                        icon: block.face,
+                        preview: block.preview,
+                        on: block.on,
+                      }))}
+                    selected={selectedBlock}
+                    disabled={disabled || !!draft || making}
+                    onSelect={selectNativeBlock}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
           {making && <p role="status">Making a preset with that effect…</p>}
           {slot && state.configured && (
             <SlotChooser
@@ -1445,174 +1913,48 @@ export function LiveRig({
           tabIndex={-1}
           aria-label="Sound controls"
         >
-          <MaybeSheet sheet={selectedBlockView}>
-            <InspectorFrame
-              className={selectedBlock ? 'native-block-dock' : undefined}
-              {...(selectedBlock
-                ? {
-                    bypassed:
-                      groups.find(
-                        (c) => c.target === `block:${selectedBlock}:enabled`,
-                      )?.value === 0,
-                  }
-                : {})}
-            >
-              {!selectedBlock && (
-                <div className="control-navigation" aria-label="Control groups">
-                  {(
-                    [
-                      ['tone', 'Tone'],
-                      ['gate', 'Gate'],
-                      ['pitch', 'Pitch'],
-                      ['stereo', 'Stereo'],
-                    ] as const
+          {desktopBlock}
+          {sharedEditor}
+          {!selectedBlock && (
+            <>
+              <div className="control-navigation" aria-label="Control groups">
+                {(
+                  [
+                    ['tone', 'Tone'],
+                    ['gate', 'Gate'],
+                    ['pitch', 'Pitch'],
+                    ['stereo', 'Stereo'],
+                  ] as const
+                )
+                  .filter(([id]) =>
+                    state.controls.some(
+                      (c) =>
+                        !c.target.startsWith('block:') &&
+                        controlGroup(c.target) === id,
+                    ),
                   )
-                    .filter(([id]) =>
-                      state.controls.some(
-                        (c) =>
-                          !c.target.startsWith('block:') &&
-                          controlGroup(c.target) === id,
-                      ),
-                    )
-                    .map(([id, label]) => (
-                      <Button
-                        key={id}
-                        variant="ghost"
-                        aria-pressed={!selectedBlock && group === id}
-                        disabled={disabled || !!draft}
-                        onClick={() => {
-                          setGroup(id);
-                          setTarget(
-                            state.controls.find(
-                              (c) =>
-                                !c.target.startsWith('block:') &&
-                                controlGroup(c.target) === id,
-                            )!.target,
-                          );
-                          setDraft(null);
-                        }}
-                      >
-                        {label}
-                      </Button>
-                    ))}
-                </div>
-              )}
-              {selectedBlock && (
-                <div className="effect-inspector" aria-label="Selected effect">
-                  <div className="effect-inspector-heading">
+                  .map(([id, label]) => (
                     <Button
-                      size="icon"
+                      key={id}
                       variant="ghost"
-                      aria-label="Show rig controls"
+                      aria-pressed={!selectedBlock && group === id}
+                      disabled={disabled || !!draft}
                       onClick={() => {
-                        setTarget('outputLevel');
-                        setGroup('tone');
+                        setGroup(id);
+                        setTarget(
+                          state.controls.find(
+                            (c) =>
+                              !c.target.startsWith('block:') &&
+                              controlGroup(c.target) === id,
+                          )!.target,
+                        );
+                        setDraft(null);
                       }}
                     >
-                      <X aria-hidden="true" />
+                      {label}
                     </Button>
-                    <div className="min-w-0">
-                      <span className="eyebrow">
-                        {selectedLane === 'left' ? 'Left' : 'Right'} chain ·
-                        selected block
-                      </span>
-                      <h3 className="selected-effect-heading">
-                        {groups
-                          .find(
-                            (c) =>
-                              c.target === `block:${selectedBlock}:enabled`,
-                          )
-                          ?.label.replace(
-                            /(?: · (?:left|right))? · enabled$/,
-                            '',
-                          )}
-                      </h3>
-                    </div>
-                    {(() => {
-                      const enabled = groups.find(
-                        (c) => c.target === `block:${selectedBlock}:enabled`,
-                      );
-                      return (
-                        enabled && (
-                          <LedToggle
-                            on={enabled.value === 1}
-                            label={`${blockName(enabled.label)} on`}
-                            disabled={disabled}
-                            onToggle={() =>
-                              void apply(
-                                enabled.target,
-                                enabled.value === 1 ? 0 : 1,
-                              )
-                            }
-                          />
-                        )
-                      );
-                    })()}
-                    <Button
-                      aria-label="Change model"
-                      title="Choose another model"
-                      variant="outline"
-                      disabled={disabled || !!draft}
-                      onClick={() =>
-                        setPicker({
-                          target: selectedBlock,
-                          name:
-                            groups.find(
-                              (c) =>
-                                c.target === `block:${selectedBlock}:enabled`,
-                            )?.label ?? 'Selected block',
-                          opening: state,
-                        })
-                      }
-                    >
-                      Change model
-                    </Button>
-                  </div>
-                  {selectedToneId != null && (
-                    <ToneDetails compact toneId={selectedToneId} />
-                  )}
-                  {orderedBlocks.length > 1 && (
-                    <div
-                      className="action-row"
-                      role="group"
-                      aria-label="Block position"
-                    >
-                      {([-1, 1] as const).map((direction) => {
-                        const order = movedBlockOrder(
-                          orderedBlocks,
-                          selectedBlock,
-                          direction,
-                        );
-                        return (
-                          <Button
-                            key={direction}
-                            variant="ghost"
-                            disabled={disabled || !!draft || !order}
-                            onClick={() => {
-                              if (order)
-                                void author({
-                                  kind: 'edit',
-                                  edit: {
-                                    kind: 'reorder',
-                                    lane: selectedLane,
-                                    block_ids: order,
-                                  },
-                                });
-                            }}
-                          >
-                            {direction === -1 ? (
-                              <ArrowLeft aria-hidden="true" />
-                            ) : (
-                              <ArrowRight aria-hidden="true" />
-                            )}
-                            {direction === -1 ? 'Move earlier' : 'Move later'}
-                          </Button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
+                  ))}
+              </div>
               <div
                 className="live-parameter-grid"
                 aria-label="Sounding controls"
@@ -1620,16 +1962,8 @@ export function LiveRig({
                 {state.controls
                   .filter(
                     (item) =>
-                      !item.target.endsWith(':enabled') &&
-                      (selectedTarget.startsWith('block:')
-                        ? item.target.startsWith(
-                            selectedTarget.slice(
-                              0,
-                              selectedTarget.lastIndexOf(':') + 1,
-                            ),
-                          )
-                        : !item.target.startsWith('block:') &&
-                          controlGroup(item.target) === group),
+                      !item.target.startsWith('block:') &&
+                      controlGroup(item.target) === group,
                   )
                   .map((item) => (
                     <button
@@ -1687,71 +2021,8 @@ export function LiveRig({
                     </button>
                   ))}
               </div>
-              {state.eq
-                ?.filter((row) =>
-                  selectedTarget.startsWith(`block:${row.block_id}:`),
-                )
-                .map((row) => (
-                  <BlockBandGains
-                    key={row.block_id}
-                    bands={row.eq.bands}
-                    enabled={row.eq.enabled}
-                  >
-                    <LiveEq
-                      key={`${state.session}:${row.block_id}`}
-                      state={state}
-                      blockId={row.block_id}
-                      send={(current, edit) =>
-                        playbackCommand(current, {
-                          kind: 'authoring',
-                          action: { kind: 'eq', block_id: row.block_id, edit },
-                        })
-                      }
-                      gesture={(current, edit) =>
-                        playbackCommand(current, {
-                          kind: 'authoring',
-                          action: { kind: 'gesture', edit },
-                        })
-                      }
-                      disabled={!connected || busy || !!draft || modelPending}
-                      onEditing={setEqEditing}
-                      onChange={(next) => {
-                        generation.current += 1;
-                        setState((old) =>
-                          old?.session === next.session &&
-                          old.revision > next.revision
-                            ? old
-                            : next,
-                        );
-                      }}
-                    />
-                  </BlockBandGains>
-                ))}
-              {selectedBlock &&
-                (state.models?.some((m) => m.target === selectedBlock) ||
-                  (state.configured && !state.configured.draft)) && (
-                  <details className="disclosure">
-                    <summary>Model information &amp; offline images</summary>
-                    {state.models?.find((m) => m.target === selectedBlock) ? (
-                      <ArtworkDeck
-                        model
-                        id={
-                          state.models.find((m) => m.target === selectedBlock)!
-                            .asset
-                        }
-                      />
-                    ) : state.configured && !state.configured.draft ? (
-                      <ArtworkDeck
-                        key={`${state.configured.preset_id}:${selectedBlock}`}
-                        id={state.configured.preset_id}
-                        owned={state.configured.owned}
-                        blockId={selectedBlock}
-                      />
-                    ) : null}
-                  </details>
-                )}
-            </InspectorFrame>
-          </MaybeSheet>
+            </>
+          )}
         </div>
       </div>
       {/* Output row under the chain (7.28). */}

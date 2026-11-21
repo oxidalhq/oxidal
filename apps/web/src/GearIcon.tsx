@@ -4,20 +4,10 @@ import {
 } from '@oxidal/design-system/lib/block-glyphs';
 import { BlockGlyph } from '@oxidal/design-system/widgets/block-glyph';
 
-const gearLabels: Record<string, string> = {
-  amp: 'Amp head',
-  combo: 'Combo amp',
-  'amp-cab': 'Amp + cab',
-  'full-rig': 'Amp + cab',
-  cab: 'Cabinet',
-  pedal: 'Pedal',
-  outboard: 'Outboard',
-  space: 'Space',
-  experimental: 'Experimental',
-  ir: 'Impulse response',
-};
+import { gearLabel } from './lib/gearLabel';
+
 export function GearLabel({ gear }: { gear: string }) {
-  return gearLabels[gear] ?? (gear || 'Model');
+  return gearLabel(gear);
 }
 /**
  * Oxidal block glyph. Captures use their provider gear type; LV2 effects fall back

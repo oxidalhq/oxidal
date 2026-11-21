@@ -407,7 +407,7 @@ export function Library({
   );
   if (composer)
     return (
-      <section className="instrument-surface" aria-label="Library">
+      <section className="min-w-0" aria-label="Library">
         <Button variant="ghost" onClick={() => setComposer(null)}>
           ← Back to Library
         </Button>
@@ -497,17 +497,13 @@ export function Library({
     );
   }
   return (
-    <section className="instrument-surface" aria-label="Library">
+    <section className="min-w-0" aria-label="Library">
       <Workspace
         label="Library"
         className="px-0"
-        sections={LIBRARY_SECTIONS.map(({ id, label, icon }) => ({
-          id,
-          label,
-          icon,
-        }))}
+        sections={LIBRARY_SECTIONS}
         current={section}
-        showTitle={false}
+        showTitle={['mine', 'tone3000', 'oxidal', 'tones'].includes(section)}
         onSelect={(id) => {
           if (sections.includes(id as Section)) setSection(id as Section);
         }}
@@ -616,7 +612,7 @@ export function Library({
               category={category}
               details={details}
               origin="mine"
-              title="Mine"
+              title=""
               onDetails={(id, name) => setPreview({ kind: 'rig', id, name })}
               onEdit={(revision) => setEditing({ revision })}
               onManage={(action, entry) => setMineDialog({ action, ...entry })}
@@ -682,9 +678,6 @@ export function Library({
                 {viewToggle}
               </>,
             )}
-            <div className="section-heading">
-              <h2>TONE3000</h2>
-            </div>
             {busy && !presets.length ? (
               <StateNotice kind="loading" title="Reading TONE3000 presets…" />
             ) : !originalsShown.length ? (

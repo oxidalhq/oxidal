@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { Loading } from '@oxidal/design-system/components/states';
+import { Title } from '@oxidal/design-system/components/text';
 import {
   PresetNameButton,
   PresetSteps,
@@ -50,10 +51,12 @@ export function RigPresetSelector({
   phase,
   disabled,
   onSelect,
+  heading = false,
   pads = false,
   all = false,
 }: {
   phase?: AudioPhase;
+  heading?: boolean;
   pads?: boolean;
   /** With pads: every preset on one scrolling page, with the steps first. */
   all?: boolean;
@@ -362,29 +365,35 @@ export function RigPresetSelector({
     id: item.kind === 'scenes' ? item.revision : item.id,
     name: item.name,
   });
-  return (
-    <div className="preset-picker" aria-label="Preset navigation">
-      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
-        <PresetNameButton
-          name={name}
-          label={
-            unconfirmed
-              ? lastRunning
-                ? 'Last playing preset'
-                : preparing
-                  ? 'Preparing preset'
-                  : 'Unavailable preset'
-              : phase === 'stopped'
-                ? 'Choose preset to play'
-                : undefined
-          }
-          className="preset-picker-name"
-          disabled={disabled || preparing || (loading && !items.length)}
-          onOpen={() => {
-            setQuery('');
-            setOpen(true);
-          }}
-        >
+  const nameButton = (
+    <PresetNameButton
+      name={name}
+      label={
+        unconfirmed
+          ? lastRunning
+            ? 'Last playing preset'
+            : preparing
+              ? 'Preparing preset'
+              : 'Unavailable preset'
+          : phase === 'stopped'
+            ? 'Choose preset to play'
+            : undefined
+      }
+      className={
+        heading
+          ? 'inline-flex min-h-touch max-w-full items-center gap-2'
+          : 'preset-picker-name'
+      }
+      disabled={disabled || preparing || (loading && !items.length)}
+      onOpen={() => {
+        setQuery('');
+        setOpen(true);
+      }}
+    >
+      {heading ? (
+        <span className="truncate">{name}</span>
+      ) : (
+        <>
           {playingNumber > 0 && (
             <span className="preset-picker-number">{playingNumber}</span>
           )}{' '}
@@ -421,7 +430,20 @@ export function RigPresetSelector({
                   : ''}
             </span>
           </span>
-        </PresetNameButton>
+        </>
+      )}
+    </PresetNameButton>
+  );
+  return (
+    <div className="preset-picker" aria-label="Preset navigation">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
+        {heading ? (
+          <Title size="md" className="truncate" aria-label={name}>
+            {nameButton}
+          </Title>
+        ) : (
+          nameButton
+        )}
         <PresetSteps
           previous={previous?.name}
           next={next?.name}
@@ -429,6 +451,9 @@ export function RigPresetSelector({
           onStep={(direction) => choose(direction < 0 ? previous : next)}
         />
       </div>
+      {heading && playing.modified && (
+        <span className="text-xs text-brand">Edited</span>
+      )}
       {backingPreset && (
         <CueLinkedMix preset={backingPreset} scope="rig" disabled={disabled} />
       )}

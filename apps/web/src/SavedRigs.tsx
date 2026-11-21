@@ -306,7 +306,7 @@ export function SavedRigs({
   return (
     <section className="library-scenes" aria-label="Saved rigs">
       <div className="section-heading">
-        <h2>{title}</h2>
+        {title && <h2>{title}</h2>}
         <Button
           variant="ghost"
           aria-pressed={choosing}

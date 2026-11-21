@@ -1,12 +1,9 @@
 import {
   ArrowCounterClockwise,
   ArrowDown,
-  ArrowsLeftRight,
   ArrowUp,
-  CaretDown,
   CaretLeft,
   CaretRight,
-  CaretUp,
   ClockCounterClockwise,
   Faders,
   GitFork,
@@ -20,14 +17,13 @@ import * as React from 'react';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { useConfirm } from '../components/ui/confirm';
-import { NumberField } from '../components/ui/number-field';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '../components/ui/popover';
 import { Switch } from '../components/ui/switch';
-import { Caption, Eyebrow, Label, Title } from '../components/ui/text';
+import { Caption, Title } from '../components/ui/text';
 import { Toggle } from '../components/ui/toggle';
 import { glyphForBlock } from '../lib/block-glyphs';
 import { cn } from '../lib/cn';
@@ -59,13 +55,12 @@ import {
 } from '../lib/scene';
 import { sceneColour } from '../lib/scene-colours';
 import { useRemembered } from '../lib/use-remembered';
-import { BlockDock } from '../widgets/block-dock';
 import {
   BlockEditor,
   BlockFullEditor,
   type BlockModel,
 } from '../widgets/block-editor';
-import { SourceCard, SourceLine, SourcePicture } from '../widgets/block-source';
+import { SourceCard } from '../widgets/block-source';
 import { ChangeScope } from '../widgets/change-scope';
 import { IrFacts } from '../widgets/ir-facts';
 import { MidiTarget } from '../widgets/midi';
@@ -73,6 +68,11 @@ import { RouteView } from '../widgets/route-view';
 import { SceneChange, type SceneChangeSettings } from '../widgets/scene-change';
 import { SceneEditor, type SceneModel } from '../widgets/scene-editor';
 import { type Scene, ScenePads } from '../widgets/scene-pad';
+import {
+  BlockPanelControl,
+  blockPanelVisualClass,
+  SelectedBlockPanel,
+} from '../widgets/selected-block-panel';
 import {
   ChangeList,
   CompareToggle,
@@ -83,6 +83,7 @@ import { VisualControl } from '../widgets/visual-control';
 import { BlockActions } from './block-actions';
 import { BlockChooser, type EffectChoice } from './block-chooser';
 import type { ToneCatalogue } from './model-browser';
+import { RigHeading } from './rig-heading';
 import {
   type BlockType,
   type ModelChoice,
@@ -545,47 +546,26 @@ export function RigSurface({
   };
 
   const main = block ? block.controls.filter((c) => c.main).slice(0, 4) : [];
-  const blockSwitch = block && (
-    <MidiTarget
-      id={`${block.id}:on`}
-      label={`${block.label} · on/off`}
-      kind="switch"
-      group="Blocks"
-      onMidi={(m) =>
-        (m.kind === 'pc' || m.value > 0) && toggle(block.id, !block.on)
-      }
-    >
-      <Switch
-        id={`on-${block.id}`}
-        aria-label={minimised ? `${block.label} on` : undefined}
-        checked={block.on}
-        onCheckedChange={(on) => toggle(block.id, on)}
-        disabled={reading}
-      />
-    </MidiTarget>
-  );
-  const stepButtons = block && (
-    <>
-      <Button
-        size="icon-sm"
-        variant="ghost"
-        aria-label="Previous block"
-        disabled={blocks.indexOf(block) <= 0}
-        onClick={() => stepTo(-1)}
+  const blockSwitch = (id: string, labelled = false) =>
+    block && (
+      <MidiTarget
+        id={`${block.id}:on`}
+        label={`${block.label} · on/off`}
+        kind="switch"
+        group="Blocks"
+        onMidi={(m) =>
+          (m.kind === 'pc' || m.value > 0) && toggle(block.id, !block.on)
+        }
       >
-        <CaretLeft />
-      </Button>
-      <Button
-        size="icon-sm"
-        variant="ghost"
-        aria-label="Next block"
-        disabled={blocks.indexOf(block) >= blocks.length - 1}
-        onClick={() => stepTo(1)}
-      >
-        <CaretRight />
-      </Button>
-    </>
-  );
+        <Switch
+          id={id}
+          aria-label={labelled ? undefined : `${block.label} on`}
+          checked={block.on}
+          onCheckedChange={(on) => toggle(block.id, on)}
+          disabled={reading}
+        />
+      </MidiTarget>
+    );
 
   return (
     <section
@@ -593,105 +573,98 @@ export function RigSurface({
       aria-label="Rig"
       className={cn('grid grid-cols-[minmax(0,1fr)] gap-2', className)}
     >
-      <header className="grid gap-2 px-page pt-3">
-        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
-          <div className="grid min-w-0 gap-1">
-            <Eyebrow>{playing ? 'Playing' : 'Rig'}</Eyebrow>
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <Title size="md" className="truncate" aria-label={presetName}>
-                {presetTitle ?? presetName}
-              </Title>
-              {presetSteps}
-              <VersionPicker
-                presetName={presetName}
-                versions={versions}
-                current={currentVersion}
-                changes={changes.length}
-                onSelect={onVersion}
-                onSave={onSaveVersion}
-                onSaveAs={onSaveVersionAs}
-                onMakeDefault={onMakeDefault}
-                onDiscard={
-                  onDiscard ??
-                  (() => {
-                    onRoute(saved);
-                    if (savedSceneSettings) setSceneModels(savedSceneSettings);
-                  })
-                }
-              />
-              <ChangeScope
-                scope={scope}
-                sceneName={scenes[activeIndex]?.name ?? 'This scene'}
-                sceneColour={
-                  activeIndex >= 0
-                    ? (scenes[activeIndex]?.colour ?? sceneColour(activeIndex))
-                    : undefined
-                }
-                onScope={setScope}
-                onEditScenes={() => setSceneEditor(true)}
-              />
-              {reading && (
-                <Badge tone="selected">Hearing the saved version</Badge>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {changes.length > 0 && (
-              <>
-                <CompareToggle value={compare} onChange={setCompare} />
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button size="sm" variant="outline">
-                      <ClockCounterClockwise /> {changes.length}{' '}
-                      {changes.length === 1 ? 'change' : 'changes'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-96">
-                    <ChangeList
-                      changes={changes}
-                      onRevert={(change) =>
-                        change.kind === 'value' &&
-                        control(change.block, change.control, change.from)
-                      }
-                    />
-                  </PopoverContent>
-                </Popover>
-              </>
+      <RigHeading
+        playing={playing}
+        identity={
+          <>
+            <Title size="md" className="truncate" aria-label={presetName}>
+              {presetTitle ?? presetName}
+            </Title>
+            {presetSteps}
+            <VersionPicker
+              presetName={presetName}
+              versions={versions}
+              current={currentVersion}
+              changes={changes.length}
+              onSelect={onVersion}
+              onSave={onSaveVersion}
+              onSaveAs={onSaveVersionAs}
+              onMakeDefault={onMakeDefault}
+              onDiscard={
+                onDiscard ??
+                (() => {
+                  onRoute(saved);
+                  if (savedSceneSettings) setSceneModels(savedSceneSettings);
+                })
+              }
+            />
+            <ChangeScope
+              scope={scope}
+              sceneName={scenes[activeIndex]?.name ?? 'This scene'}
+              sceneColour={
+                activeIndex >= 0
+                  ? (scenes[activeIndex]?.colour ?? sceneColour(activeIndex))
+                  : undefined
+              }
+              onScope={setScope}
+              onEditScenes={() => setSceneEditor(true)}
+            />
+            {reading && (
+              <Badge tone="selected">Hearing the saved version</Badge>
             )}
-            <Toggle
-              size="sm"
-              pressed={showScenes}
-              onPressedChange={setShowScenes}
-            >
-              <SquaresFour /> Scenes
-            </Toggle>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={reading || !scenes.length}
-              onClick={() => setSceneEditor(true)}
-            >
-              Edit scenes
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!onTuner}
-              onClick={onTuner}
-            >
-              <MusicNote /> Tuner
-            </Button>
-            <Toggle
-              size="sm"
-              pressed={editing}
-              onPressedChange={setEditing}
-              disabled={reading}
-            >
-              <PencilSimple /> Edit
-            </Toggle>
-          </div>
-        </div>
-      </header>
+          </>
+        }
+      >
+        {changes.length > 0 && (
+          <>
+            <CompareToggle value={compare} onChange={setCompare} />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button size="sm" variant="outline">
+                  <ClockCounterClockwise /> {changes.length}{' '}
+                  {changes.length === 1 ? 'change' : 'changes'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-96">
+                <ChangeList
+                  changes={changes}
+                  onRevert={(change) =>
+                    change.kind === 'value' &&
+                    control(change.block, change.control, change.from)
+                  }
+                />
+              </PopoverContent>
+            </Popover>
+          </>
+        )}
+        <Toggle size="sm" pressed={showScenes} onPressedChange={setShowScenes}>
+          <SquaresFour /> Scenes
+        </Toggle>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={reading || !scenes.length}
+          onClick={() => setSceneEditor(true)}
+        >
+          Edit scenes
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!onTuner}
+          onClick={onTuner}
+        >
+          <MusicNote /> Tuner
+        </Button>
+        <Toggle
+          size="sm"
+          pressed={editing}
+          onPressedChange={setEditing}
+          disabled={reading}
+        >
+          <PencilSimple /> Edit
+        </Toggle>
+      </RigHeading>
 
       {showScenes && (
         <div className="grid gap-2 px-page">
@@ -771,97 +744,40 @@ export function RigSurface({
         </div>
       )}
 
-      {block && !editing && minimised && (
-        <div
-          data-slot="block-dock"
-          data-minimised
-          className="sticky bottom-0 z-strip hidden px-page pt-1 pb-3 md:block"
-        >
-          <section
-            aria-label={`${block.label} controls`}
-            className={cn(
-              'flex items-center gap-3 rounded-xl border border-foreground/70 bg-raised px-3 py-2 shadow-raised',
-              !block.on && 'border-dashed',
-            )}
-          >
-            <SourcePicture
-              source={block.origin}
-              glyph={glyphForBlock(block)}
-              className="size-10"
-            />
-            <div className="grid min-w-0 shrink-0 gap-0.5">
-              <Title as="h2" size="sm" className="truncate">
-                {block.label}
-              </Title>
-              <Caption as="span" className="truncate small-caps text-xs">
-                {block.caption ?? block.kind}
-              </Caption>
-            </div>
-            <span className="min-w-0 flex-1 truncate font-mono text-sm tabular-nums max-lg:hidden">
-              {main
-                .map((c) => `${c.label} ${c.value}${c.unit ?? ''}`)
-                .join(' · ')}
-            </span>
-            <span className="ml-auto flex shrink-0 items-center gap-1">
-              {stepButtons}
-              {blockSwitch}
-              <Button
-                size="sm"
-                variant="outline"
-                className="ml-2"
-                onClick={() => setMinimised(false)}
-              >
-                <CaretUp /> Show controls
-              </Button>
-            </span>
-          </section>
-        </div>
-      )}
-
-      {block && !editing && !minimised && (
+      {block && !editing && (
         <div
           data-slot="block-dock"
           className="sticky bottom-0 z-strip hidden px-page pt-1 pb-3 md:block"
         >
-          <BlockDock
-            aria-label={`${block.label} controls`}
-            bypassed={!block.on}
-          >
-            <div className="grid content-start gap-2.5">
-              <div className="grid gap-1.5">
-                <div className="flex items-center gap-1">
-                  <Eyebrow className="min-w-0 flex-1 truncate">
-                    {whereOf(shown, block.id)}
-                  </Eyebrow>
-                  {stepButtons}
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="Minimise controls"
-                    title="Minimise, to see more of the rig"
-                    onClick={() => setMinimised(true)}
-                  >
-                    <CaretDown />
-                  </Button>
-                </div>
-                <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
-                  <SourcePicture
-                    source={block.origin}
-                    glyph={glyphForBlock(block)}
-                    className="size-16"
-                  />
-                  <div className="grid min-w-0 gap-0.5">
-                    <Title as="h2" size="sm" className="truncate">
-                      {block.label}
-                    </Title>
-                    <Caption as="span" className="truncate small-caps text-xs">
-                      {block.caption ?? block.kind}
-                    </Caption>
-                    {block.origin && <SourceLine source={block.origin} />}
-                  </div>
-                </div>
-              </div>
-              {sceneModel && sceneValueCount(sceneModel, block.id) > 0 && (
+          <SelectedBlockPanel
+            title={block.label}
+            caption={block.caption ?? block.kind}
+            position={whereOf(shown, block.id)}
+            source={block.origin}
+            glyph={glyphForBlock(block)}
+            on={block.on}
+            onPrevious={
+              blocks.indexOf(block) > 0 ? () => stepTo(-1) : undefined
+            }
+            onNext={
+              blocks.indexOf(block) < blocks.length - 1
+                ? () => stepTo(1)
+                : undefined
+            }
+            onMinimise={() => setMinimised(true)}
+            minimised={minimised}
+            onExpand={() => setMinimised(false)}
+            preview={main
+              .map((c) => `${c.label} ${c.value}${c.unit ?? ''}`)
+              .join(' · ')}
+            renderSwitch={(id) => blockSwitch(id, true)}
+            onChange={canSwap ? () => openSwap(block.id) : undefined}
+            changeDisabled={reading}
+            onAllControls={() => setFull(true)}
+            controlCount={block.controls.length}
+            beforeBypass={
+              sceneModel &&
+              sceneValueCount(sceneModel, block.id) > 0 && (
                 <div
                   data-slot="scene-values"
                   className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed border-foreground px-3 py-1.5"
@@ -887,17 +803,10 @@ export function RigSurface({
                     Use the preset's values
                   </Button>
                 </div>
-              )}
-              <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-1.5">
-                <label
-                  htmlFor={`on-${block.id}`}
-                  className="text-sm font-medium"
-                >
-                  {block.on ? 'Block on' : 'Bypassed'}
-                </label>
-                {blockSwitch}
-              </div>
-              {ready.length > 1 && (
+              )
+            }
+            modelStepper={
+              ready.length > 1 && (
                 <div
                   role="group"
                   aria-label={`Try another ${kindOf(block) === 'cab' ? 'cab' : kindOf(block) === 'pedal' ? 'pedal' : 'amp'} model`}
@@ -952,61 +861,41 @@ export function RigSurface({
                     <ArrowCounterClockwise />
                   </Button>
                 </div>
-              )}
-              <div className="flex flex-wrap gap-2">
-                {canSwap && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={reading}
-                    onClick={() => openSwap(block.id)}
-                    aria-label={`Change ${block.label}…`}
-                  >
-                    <ArrowsLeftRight /> Change…
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setFull(true)}
-                >
-                  <Faders /> All controls · {block.controls.length}
-                </Button>
-                <BlockActions
-                  block={block}
-                  route={route}
-                  onRoute={onRoute}
-                  onDuplicate={() => duplicate(block)}
-                  onRemove={() => removeBlock(block)}
-                  disabled={reading}
-                />
-              </div>
-            </div>
-            <div className="min-w-0">
-              <VisualControl
-                kind={block.kind}
-                role={block.role}
-                controls={block.controls}
-                onControl={(c, v) => control(block.id, c, v)}
+              )
+            }
+            actions={
+              <BlockActions
+                block={block}
+                route={route}
+                onRoute={onRoute}
+                onDuplicate={() => duplicate(block)}
+                onRemove={() => removeBlock(block)}
                 disabled={reading}
-                className={cn(
-                  'h-32 rounded-lg border border-border bg-background px-2 py-1 text-foreground',
-                  !block.on && 'text-muted-foreground',
-                )}
               />
-              {block.kind === 'cab' && (
-                <IrFacts source={block.origin} hint className="pt-2" />
-              )}
-            </div>
-            <div className="grid grid-cols-2 content-start gap-x-3 gap-y-2">
-              {main.map((c) => (
-                <div key={c.id} className="grid gap-0.5">
-                  <Label
-                    as="span"
-                    className="small-caps text-xs text-muted-foreground"
-                  >
-                    {c.label}
-                  </Label>
+            }
+            visual={
+              <>
+                <VisualControl
+                  kind={block.kind}
+                  role={block.role}
+                  controls={block.controls}
+                  onControl={(c, v) => control(block.id, c, v)}
+                  disabled={reading}
+                  className={cn(
+                    blockPanelVisualClass,
+                    !block.on && 'text-muted-foreground',
+                  )}
+                />
+                {block.kind === 'cab' && (
+                  <IrFacts source={block.origin} hint className="pt-2" />
+                )}
+              </>
+            }
+            controls={main.map((c) => (
+              <BlockPanelControl
+                key={c.id}
+                caption={c.label}
+                wrap={(field) => (
                   <MidiTarget
                     id={`${block.id}:${c.id}`}
                     label={`${block.label} · ${c.label}`}
@@ -1021,24 +910,24 @@ export function RigSurface({
                       )
                     }
                   >
-                    <NumberField
-                      className="w-full"
-                      label={`${block.label} ${c.label}`}
-                      value={c.value}
-                      min={c.min}
-                      max={c.max}
-                      step={c.step ?? 0.5}
-                      fine={(c.step ?? 0.5) / 5}
-                      unit={c.unit}
-                      digits={c.step && c.step >= 1 ? 0 : 1}
-                      disabled={reading}
-                      onChange={(value) => control(block.id, c.id, value)}
-                    />
+                    {field}
                   </MidiTarget>
-                </div>
-              ))}
-            </div>
-          </BlockDock>
+                )}
+                field={{
+                  label: `${block.label} ${c.label}`,
+                  value: c.value,
+                  min: c.min,
+                  max: c.max,
+                  step: c.step ?? 0.5,
+                  fine: (c.step ?? 0.5) / 5,
+                  unit: c.unit,
+                  digits: c.step && c.step >= 1 ? 0 : 1,
+                  disabled: reading,
+                  onChange: (value) => control(block.id, c.id, value),
+                }}
+              />
+            ))}
+          />
         </div>
       )}
 
