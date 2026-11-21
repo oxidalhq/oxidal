@@ -272,7 +272,7 @@ test('rig controls follow the actual session without example effects', async ({
   await expect(rig).toBeVisible();
   await expect(page.getByTestId('active-preset')).toHaveText('Amp only');
   await expect(rig.locator('[data-slot="chain-block"]')).toHaveCount(1);
-  await rig.getByRole('button', { name: 'My amp', exact: true }).click();
+  await rig.getByRole('button', { name: 'My amp lv2', exact: true }).click();
   await expect(
     rig.getByRole('button', {
       name: 'Adjust sounding My amp level',
