@@ -110,7 +110,7 @@ pub async fn artwork(
     }
 }
 
-async fn discover(worker: PathBuf, sample_rate: u32) -> Result<PluginCatalog, String> {
+pub(super) async fn discover(worker: PathBuf, sample_rate: u32) -> Result<PluginCatalog, String> {
     let bytes = worker_output(worker, "--catalog", sample_rate.to_string(), CATALOG_LIMIT).await?;
     let mut catalog: PluginCatalog =
         serde_json::from_slice(&bytes).map_err(|_| "Invalid LV2 discovery response")?;

@@ -12,7 +12,7 @@ use axum::{
 };
 use oxidal_audio::lifecycle::AudioPhase;
 use oxidal_lv2::protocol::*;
-use std::{path::PathBuf, process::Stdio, sync::Arc, time::Duration};
+use std::{collections::BTreeSet, path::PathBuf, process::Stdio, sync::Arc, time::Duration};
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
     process::{Child, ChildStdin, ChildStdout},
@@ -269,11 +269,24 @@ impl Owner {
         settings.stream.levels = self.levels.current();
         settings.stream.venue = self.levels.venue();
         settings.validate()?;
-        if let Some(id) = &settings.library_id {
-            oxidal_presets::GraphStore::new(self.preset_root.clone())
+        let saved_copy = if let Some(id) = &settings.library_id {
+            let saved = oxidal_presets::GraphStore::new(self.preset_root.clone())
                 .read(id)
                 .map_err(|e| e.to_string())?;
-        }
+            settings.recall.as_ref().and_then(|recall| {
+                let working = oxidal_presets::GraphPreset {
+                    version: 1,
+                    name: settings.name.clone().unwrap_or_default(),
+                    sample_rate: settings.stream.input.sample_rate,
+                    bindings: settings.bindings.clone(),
+                    rig: settings.rig.clone(),
+                    recall: recall.clone(),
+                };
+                (working.revision().ok().as_ref() == Some(&saved.id)).then_some(saved.id)
+            })
+        } else {
+            None
+        };
         if self.worker.is_some() {
             return Err("Stop graph audio before changing its configuration".into());
         }
@@ -329,6 +342,7 @@ impl Owner {
             Ok(reply) if reply.error.is_none() && reply.processed_frames > 0 => {
                 self.worker.as_mut().unwrap()._permit = reserved.take();
                 self.readback(reply);
+                self.state.saved_copy = saved_copy;
                 self.phase(AudioPhase::Running, None);
                 Ok(())
             }
@@ -344,6 +358,143 @@ impl Owner {
         }
         result
     }
+    async fn recall_saved(
+        &mut self,
+        id: String,
+        discard_changes: bool,
+        expected_revision: u64,
+    ) -> Result<(), String> {
+        let change = self.change.clone();
+        let _operation = change.operation().map_err(str::to_owned)?;
+        let previous = self
+            .state
+            .configured
+            .clone()
+            .ok_or("Set up effects audio before recalling a preset")?;
+        let was_running = self.state.phase == AudioPhase::Running;
+        if !matches!(
+            self.state.phase,
+            AudioPhase::Running | AudioPhase::Stopped | AudioPhase::Failed
+        ) || (!was_running && self.worker.is_some())
+        {
+            return Err("Wait for effects audio to settle before recalling a preset".into());
+        }
+        if was_running && self.state.saved_copy.as_deref() == Some(&id) {
+            return Ok(());
+        }
+        self.check_recall_safety(discard_changes, was_running)?;
+        let saved = oxidal_presets::GraphStore::new(self.preset_root.clone())
+            .read(&id)
+            .map_err(|error| format!("Saved effects preset unavailable: {error}"))?;
+        let rate = previous.stream.input.sample_rate;
+        if saved.preset.sample_rate != rate {
+            return Err(format!(
+                "This effects preset uses {} Hz; the current device uses {rate} Hz",
+                saved.preset.sample_rate
+            ));
+        }
+        let candidate = StartGraph {
+            library_id: Some(saved.id),
+            name: Some(saved.preset.name),
+            recall: Some(saved.preset.recall),
+            stream: previous.stream.clone(),
+            rig: saved.preset.rig,
+            bindings: saved.preset.bindings,
+        };
+        candidate.validate()?;
+        if !candidate.bindings.is_empty() {
+            let executable = self.executable.clone().ok_or("Graph worker unavailable")?;
+            let catalog = crate::plugins::discover(executable, rate).await?;
+            check_recall_plugins(&candidate, &catalog)?;
+        } else if candidate
+            .recall
+            .as_ref()
+            .is_some_and(|recall| !recall.values.is_empty())
+        {
+            return Err("Saved effects controls no longer match the installed plugins".into());
+        }
+        if was_running {
+            // Force a readback: an expired adjustment or worker-side change
+            // can invalidate the browser cursor during dependency discovery.
+            self.poll().await;
+        }
+        if self.state.revision != expected_revision {
+            return Err("Effects session changed; refresh before switching".into());
+        }
+        if let Some(reason) = self.protect.refuse(false) {
+            return Err(reason.into());
+        }
+        self.check_recall_safety(discard_changes, was_running)?;
+        let saved_copy = self.state.saved_copy.clone();
+        let previous_control = self.state.control.clone();
+        let mut reserved = if was_running {
+            self.checkpoint();
+            self.phase(AudioPhase::Stopping, None);
+            match self.release_reserved().await {
+                Ok(reservation) => reservation,
+                Err(error) => {
+                    self.phase(AudioPhase::Failed, Some(error.clone()));
+                    return Err(error);
+                }
+            }
+        } else {
+            None
+        };
+        if let Err(error) = self.start_reserved(candidate, &mut reserved).await {
+            if was_running {
+                match self.start_reserved(previous.clone(), &mut reserved).await {
+                    Ok(()) => {
+                        self.state.saved_copy = saved_copy;
+                        let message = format!(
+                            "Effects preset could not start; previous sound restored: {error}"
+                        );
+                        self.phase(AudioPhase::Running, Some(message.clone()));
+                        return Err(message);
+                    }
+                    Err(recovery) => {
+                        self.state.configured = Some(previous);
+                        self.state.control = None;
+                        self.state.saved_copy = saved_copy;
+                        let message = format!(
+                            "Effects preset could not start: {error}; previous sound could not restart: {recovery}"
+                        );
+                        self.phase(AudioPhase::Failed, Some(message.clone()));
+                        return Err(message);
+                    }
+                }
+            }
+            self.state.configured = Some(previous);
+            self.state.control = previous_control;
+            self.state.saved_copy = saved_copy;
+            self.phase(AudioPhase::Failed, Some(error.clone()));
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn check_recall_safety(&self, discard_changes: bool, running: bool) -> Result<(), String> {
+        if running {
+            self.check_trial_admission()?;
+            if let Some(monitor) = self.state.telemetry.as_ref().and_then(|t| t.monitoring) {
+                if monitor.output_muted {
+                    return Err("Unmute before switching effects presets. The effects worker restarts when switching.".into());
+                }
+                if monitor
+                    .capture
+                    .is_some_and(|capture| !capture.finished && !capture.discarded)
+                {
+                    return Err("Finish the recording before switching effects presets".into());
+                }
+            }
+        }
+        if self.state.saved_copy.is_none() && !discard_changes {
+            return Err(
+                "Save the current effects preset or confirm switching without saving".into(),
+            );
+        }
+        Ok(())
+    }
+
     async fn request(&mut self, request: OwnerRequest<GraphAudioCommand>) -> Reply {
         match request {
             OwnerRequest::Tempo {
@@ -491,6 +642,9 @@ impl Owner {
         }
         if command.session != self.state.session || command.expected_revision != self.state.revision
         {
+            if matches!(command.action, GraphAudioAction::RecallSaved { .. }) {
+                return Err("Effects session changed; refresh before switching".into());
+            }
             return Err("graph_audio_state_conflict; refresh status".into());
         }
         // A player's command takes over from any automatic start.
@@ -675,6 +829,13 @@ impl Owner {
             }
             GraphAudioAction::Start { settings } => {
                 self.start(*settings).await?;
+            }
+            GraphAudioAction::RecallSaved {
+                id,
+                discard_changes,
+            } => {
+                self.recall_saved(id, discard_changes, command.expected_revision)
+                    .await?;
             }
             GraphAudioAction::Stop => {
                 self.checkpoint();
@@ -861,6 +1022,43 @@ impl Owner {
         }
     }
 }
+fn check_recall_plugins(
+    settings: &StartGraph,
+    catalog: &oxidal_lv2::PluginCatalog,
+) -> Result<(), String> {
+    let mut targets = BTreeSet::new();
+    for binding in &settings.bindings {
+        let plugin = catalog
+            .plugins
+            .iter()
+            .find(|plugin| plugin.uri == binding.uri)
+            .ok_or_else(|| format!("Required effect is not installed: {}", binding.uri))?;
+        if let Some(reason) = &plugin.unsupported {
+            return Err(format!("{} is unavailable: {reason}", plugin.name));
+        }
+        targets.extend(
+            plugin
+                .ports
+                .iter()
+                .filter(|port| port.control && port.input)
+                .map(|port| format!("{}.{}", binding.node, port.symbol)),
+        );
+    }
+    let recall = settings
+        .recall
+        .as_ref()
+        .ok_or("Saved effects controls are missing")?;
+    if targets.len() != recall.values.len()
+        || recall
+            .values
+            .iter()
+            .any(|value| !targets.contains(&value.target))
+    {
+        return Err("Saved effects controls no longer match the installed plugins".into());
+    }
+    Ok(())
+}
+
 impl GraphPlayback {
     pub fn new(
         config: &Config,

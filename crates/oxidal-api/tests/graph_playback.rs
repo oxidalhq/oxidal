@@ -849,3 +849,170 @@ async fn record_a_di_then_reamp_it_through_the_locked_rig() {
     server.abort();
     let _ = std::fs::remove_dir_all(root);
 }
+
+#[cfg(unix)]
+#[tokio::test]
+#[ignore = "runs against the real Linux graph worker and ALSA null"]
+async fn saved_graph_recall_checks_dependencies_and_recovers_live_edits() {
+    use oxidal_lv2::protocol::{GraphRecall, StartGraph};
+    use oxidal_presets::{GraphPreset, GraphStore};
+    use std::os::unix::fs::PermissionsExt;
+
+    let worker = std::env::var("OXIDAL_TEST_GRAPH_WORKER").unwrap();
+    assert_eq!(std::env::var("OXIDAL_GRAPH_QUALIFY_NULL").unwrap(), "1");
+    let root = std::env::temp_dir().join(format!("oxidal-graph-recall-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let wrapper = root.join("graph-worker");
+    let fault = root.join("fail-next-start");
+    let quote = |text: &str| format!("'{}'", text.replace('\'', "'\"'\"'"));
+    std::fs::write(
+        &wrapper,
+        format!(
+            "#!/bin/sh\nif [ \"$#\" -eq 0 ] && [ -f {fault} ]; then rm {fault}; exit 75; fi\nexec {worker} \"$@\"\n",
+            fault = quote(fault.to_str().unwrap()),
+            worker = quote(&worker)
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let config = Config {
+        debug_socket: None,
+        device_socket: None,
+        graph_worker: Some(wrapper),
+        rig_worker: None,
+        audio_worker: None,
+        native_worker: None,
+        simulator: true,
+        mapping_path: root.join("mappings.json"),
+        preset_dir: root.join("presets"),
+        media_dir: None,
+        ui_dir: root.join("ui"),
+        shutdown: Some(signal),
+    };
+    let store = GraphStore::new(config.preset_dir.join("graphs"));
+    let (app, stopped) = router_with_shutdown(config).unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let c = Client::builder()
+        .timeout(Duration::from_secs(35))
+        .build()
+        .unwrap();
+    let startup = settings();
+    let mut state = get(&c, &url, "graph-audio").await;
+    apply(
+        &c,
+        &url,
+        &mut state,
+        json!({"kind":"start","settings":startup}),
+    )
+    .await;
+    assert_eq!(state["phase"], "running");
+    let controls = serde_json::from_value(state["control"].clone()).unwrap();
+    let settings: StartGraph = serde_json::from_value(startup).unwrap();
+    let target = GraphPreset {
+        version: 1,
+        name: "Open saved effects".into(),
+        sample_rate: 48000,
+        rig: settings.rig,
+        bindings: settings.bindings,
+        recall: GraphRecall::from_snapshot(&controls).unwrap(),
+    };
+    let valid = store.save(target.clone()).unwrap();
+    let wrong_rate = store
+        .save(GraphPreset {
+            sample_rate: 44100,
+            ..target.clone()
+        })
+        .unwrap();
+    let mut missing_plugin = target;
+    missing_plugin.bindings[0].uri = "urn:qualification:missing-effect".into();
+    let missing = store.save(missing_plugin).unwrap();
+
+    let opening = state.clone();
+    let change = control(
+        &state,
+        json!({"type":"set","target":"amp.gain","value":0.27}),
+    );
+    apply(&c, &url, &mut state, change).await;
+    let live = state["control"]["parameters"].clone();
+    assert_ne!(live, opening["control"]["parameters"]);
+    let recall = |id: &str, discard_changes: bool| {
+        json!({
+            "kind": "recall_saved", "id": id, "discard_changes": discard_changes
+        })
+    };
+
+    for (cursor, action, message) in [
+        (&opening, recall(&valid.id, true), "Effects session changed"),
+        (&state, recall(&valid.id, false), "confirm switching"),
+        (&state, recall(&wrong_rate.id, true), "44100 Hz"),
+        (
+            &state,
+            recall(&missing.id, true),
+            "Required effect is not installed",
+        ),
+    ] {
+        let refused = send(&c, &url, cursor, action).await;
+        assert_eq!(refused.status(), 409);
+        assert!(refused.text().await.unwrap().contains(message));
+        assert_eq!(
+            get(&c, &url, "graph-audio").await["control"]["session"],
+            state["control"]["session"]
+        );
+    }
+
+    let mute = |enabled: bool| json!({"kind":"host_utility","command":{"kind":"output_mute","enabled":enabled}});
+    apply(&c, &url, &mut state, mute(true)).await;
+    let refused = send(&c, &url, &state, recall(&valid.id, true)).await;
+    assert_eq!(refused.status(), 409);
+    assert!(
+        refused
+            .text()
+            .await
+            .unwrap()
+            .contains("Unmute before switching")
+    );
+    assert_eq!(
+        get(&c, &url, "graph-audio").await["control"]["session"],
+        state["control"]["session"]
+    );
+    apply(&c, &url, &mut state, mute(false)).await;
+
+    std::fs::write(&fault, "").unwrap();
+    let refused = send(&c, &url, &state, recall(&valid.id, true)).await;
+    assert_eq!(refused.status(), 409);
+    let detail = refused.text().await.unwrap();
+    assert!(detail.contains("previous sound restored"), "{detail}");
+    let recovered = get(&c, &url, "graph-audio").await;
+    assert_eq!(recovered["phase"], "running");
+    assert_ne!(recovered["control"]["session"], state["control"]["session"]);
+    assert_eq!(recovered["control"]["parameters"], live);
+    assert_eq!(
+        recovered["configured"]["library_id"],
+        state["configured"]["library_id"]
+    );
+    assert_eq!(recovered["saved_copy"], Value::Null);
+
+    state = recovered;
+    apply(&c, &url, &mut state, recall(&valid.id, true)).await;
+    assert_eq!(state["phase"], "running");
+    assert_eq!(state["saved_copy"], valid.id);
+    assert_eq!(state["configured"]["name"], "Open saved effects");
+    let worker_session = state["control"]["session"].clone();
+    apply(&c, &url, &mut state, recall(&valid.id, false)).await;
+    assert_eq!(state["control"]["session"], worker_session);
+    apply(&c, &url, &mut state, json!({"kind":"stop"})).await;
+    apply(&c, &url, &mut state, recall(&valid.id, false)).await;
+    assert_eq!(state["phase"], "running");
+    assert_ne!(state["control"]["session"], worker_session);
+
+    shutdown.send_replace(true);
+    tokio::time::timeout(Duration::from_secs(5), stopped.wait())
+        .await
+        .unwrap()
+        .unwrap();
+    server.abort();
+    std::fs::remove_dir_all(root).unwrap();
+}

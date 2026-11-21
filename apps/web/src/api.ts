@@ -642,7 +642,9 @@ const lv2CatalogValidator = ajv.compile<Contract['lv2_catalog']>({
   $ref: '#/$defs/PluginCatalog',
 });
 export async function graphAudioState(): Promise<GraphAudioState> {
-  const body = await presetResponse(await fetch('/api/v1/graph-audio'));
+  const body = await presetResponse(
+    await fetch('/api/v1/graph-audio', { cache: 'no-store' }),
+  );
   if (!graphStateValidator(body)) throw new Error('Incompatible graph state');
   return body;
 }

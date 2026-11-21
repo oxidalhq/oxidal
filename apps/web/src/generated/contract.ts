@@ -600,6 +600,11 @@ export type GraphAudioAction =
       settings: StartGraph;
     }
   | {
+      discard_changes: boolean;
+      id: string;
+      kind: "recall_saved";
+    }
+  | {
       kind: "stop";
     }
   | {

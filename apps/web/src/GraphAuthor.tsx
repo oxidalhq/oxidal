@@ -3,6 +3,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { PluginPanel } from '@oxidal/design-system/patterns/plugin-panel';
+import {
+  type EffectsPresetOption,
+  EffectsPresetPicker,
+} from '@oxidal/design-system/widgets/effects-preset-picker';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { rigAudioState } from './api';
@@ -28,7 +32,7 @@ import { ControlEditor } from './ControlEditor';
 import { SaveSoundVersion } from './features/library/SaveSoundVersion';
 import { StageControls } from './features/stage/StageControls';
 import { GearIcon } from './GearIcon';
-import { friendlyError } from './lib/friendlyError';
+import { deviceSentence, friendlyError } from './lib/friendlyError';
 import { lv2Control } from './lv2Control';
 import { liveLv2Controls, lv2PluginView } from './lv2PluginPanel';
 import { ModelPicker } from './ModelPicker';
@@ -50,16 +54,26 @@ export function GraphAuthor({
   connected,
   liveOnly = false,
   onPlaying,
+  onPresent,
+  otherPlaying = false,
+  otherPresent = false,
   onOpenRig,
+  onBrowseLibrary,
 }: {
   connected: boolean;
   liveOnly?: boolean;
   onPlaying?: (name: string | null) => void;
+  onPresent?: (present: boolean) => void;
+  otherPlaying?: boolean;
+  otherPresent?: boolean;
   onOpenRig?: () => void;
+  onBrowseLibrary?: () => void;
 }) {
   const [state, setState] = useState<GraphAudioState | null>(null);
   const [audio, setAudio] = useState<AudioState | null>(null);
   const [library, setLibrary] = useState<SavedGraph[]>([]);
+  const [libraryLoading, setLibraryLoading] = useState(true);
+  const libraryRequest = useRef(0);
   const [draft, setDraft] = useState<{
     libraryId?: string;
     rig: GraphSettings['rig'];
@@ -69,8 +83,21 @@ export function GraphAuthor({
   }>({ rig: emptyRig, bindings: [] });
   const [typedName, setName] = useState<string | null>(null);
   const [stopOpening, setStopOpening] = useState<GraphAudioState | null>(null);
+  const [switchOpening, setSwitchOpening] = useState<{
+    item: EffectsPresetOption;
+    state: GraphAudioState;
+  } | null>(null);
+  const [openingName, setOpeningName] = useState('');
+  const pickerOpening = useRef<GraphAudioState | null>(null);
   const running = state?.phase === 'running';
+  const starting = state?.phase === 'starting';
+  const stopping = state?.phase === 'stopping';
   const configured = state?.configured;
+  const [seenRunning, setSeenRunning] = useState(false);
+  if (running && !seenRunning) setSeenRunning(true);
+  const ownsRig = running || (seenRunning && !otherPlaying && !!configured);
+  const showRig =
+    ownsRig || (!otherPlaying && !otherPresent && !!configured?.name);
   const playingName =
     configured?.name ??
     library.find((item) => item.id === configured?.library_id)?.preset.name ??
@@ -107,6 +134,22 @@ export function GraphAuthor({
     },
     [],
   );
+  const refreshLibrary = useCallback(() => {
+    const request = ++libraryRequest.current;
+    return graphLibrary()
+      .then((items) => {
+        if (alive.current && libraryRequest.current === request)
+          setLibrary(items);
+      })
+      .catch((cause: unknown) => {
+        if (alive.current && libraryRequest.current === request)
+          setError(friendlyError(cause, 'read saved effects presets'));
+      })
+      .finally(() => {
+        if (alive.current && libraryRequest.current === request)
+          setLibraryLoading(false);
+      });
+  }, []);
   useEffect(() => {
     alive.current = true;
     let active = true;
@@ -118,7 +161,7 @@ export function GraphAuthor({
           graphAudioState(),
           playbackState(),
         ]);
-        if (active && request === generation.current) {
+        if (active && !sending.current && request === generation.current) {
           accept(next);
           setAudio(native);
         }
@@ -130,54 +173,102 @@ export function GraphAuthor({
       }
     };
     void tick();
-    void graphLibrary()
-      .then((items) => {
-        if (active) setLibrary(items);
-      })
-      .catch((cause: unknown) => {
-        if (active && !liveOnly)
-          setError(friendlyError(cause, 'read installed effects'));
-      });
+    void refreshLibrary();
     return () => {
       active = false;
       alive.current = false;
       clearTimeout(timer);
       scan.current?.abort();
     };
-  }, [accept, liveOnly]);
+  }, [accept, liveOnly, refreshLibrary]);
   const stream = configured?.stream ?? audio?.configured?.stream;
   const sampleRate = stream?.input.sample_rate ?? 48000;
   useEffect(() => {
     onPlaying?.(running ? playingName : null);
   }, [running, onPlaying, playingName]);
-  async function command(action: GraphAudioAction) {
-    if (!current.current || sending.current) return;
-    const session = current.current.session;
+  useEffect(() => {
+    if (liveOnly) onPresent?.(ownsRig);
+  }, [liveOnly, onPresent, ownsRig]);
+  useEffect(() => () => onPresent?.(false), [onPresent]);
+  async function command(action: GraphAudioAction, targetName?: string) {
+    const opening = current.current;
+    if (!opening || sending.current) return;
     generation.current += 1;
     sending.current = true;
     setBusy(true);
     setError('');
+    if (targetName) setOpeningName(targetName);
     try {
-      const next = await graphAudioCommand(current.current, action);
-      accept(next, session);
-      if (action.kind === 'save_copy' || action.kind === 'save_version') {
-        const items = await graphLibrary();
-        if (alive.current) setLibrary(items);
+      const next = await graphAudioCommand(opening, action);
+      accept(next, opening.session);
+      if (
+        action.kind === 'recall_saved' &&
+        next.phase === 'running' &&
+        next.configured?.library_id === action.id
+      ) {
+        setName(null);
       }
+      if (action.kind === 'save_copy' || action.kind === 'save_version')
+        await refreshLibrary();
     } catch (cause) {
+      if (action.kind === 'recall_saved' || action.kind === 'restart') {
+        // A refusal or failed start can include a recovered worker and new
+        // cursors. Read that outcome before presenting another action.
+        try {
+          accept(await graphAudioState());
+        } catch {
+          // The normal poll will reconnect if the immediate read also fails.
+        }
+      }
       if (alive.current)
         setError(
-          friendlyError(
-            cause,
-            action.kind === 'stop'
-              ? 'stop effects audio'
-              : 'build the effects chain',
-          ),
+          action.kind === 'recall_saved'
+            ? deviceSentence(cause, 'open the effects preset')
+            : friendlyError(
+                cause,
+                action.kind === 'restart'
+                  ? 'resume effects audio'
+                  : action.kind === 'stop'
+                    ? 'stop effects audio'
+                    : 'build the effects chain',
+              ),
         );
     } finally {
+      generation.current += 1;
       sending.current = false;
-      if (alive.current) setBusy(false);
+      if (alive.current) {
+        setBusy(false);
+        setOpeningName('');
+      }
     }
+  }
+  function switchTo(
+    item: EffectsPresetOption,
+    opening: GraphAudioState | null,
+    discard = false,
+  ) {
+    const latest = current.current;
+    if (sending.current || !connected) return;
+    if (
+      !opening ||
+      !latest ||
+      latest.session !== opening.session ||
+      latest.revision !== opening.revision ||
+      (latest.phase === 'running' && latest.control?.edit)
+    ) {
+      setError(
+        'The effects session changed. Review the playing preset and try again.',
+      );
+      return;
+    }
+    if (!discard && !latest.saved_copy) {
+      setSwitchOpening({ item, state: opening });
+      return;
+    }
+    void command(
+      { kind: 'recall_saved', id: item.id, discard_changes: discard },
+      item.name,
+    );
   }
   function stopAudio(opening: GraphAudioState) {
     const latest = current.current;
@@ -405,7 +496,7 @@ export function GraphAuthor({
         onBack={() => setMixedDraft(null)}
       />
     );
-  if (liveOnly && !running) return null;
+  if (liveOnly && !showRig) return null;
   const disabled =
     !connected || busy || !state || state.phase === 'unavailable';
   const active = running ? configured : draft;
@@ -418,13 +509,58 @@ export function GraphAuthor({
       className={liveOnly ? 'panel space-y-3' : 'space-y-3'}
       aria-label="Effects authoring"
     >
-      {liveOnly && running ? (
+      {liveOnly ? (
         <div className="rig-performance-header">
           <div className="effects-preset-name">
-            <h2>{playingName}</h2>
+            <h2 className="sr-only">
+              {running ? playingName : 'Effects presets'}
+            </h2>
+            <EffectsPresetPicker
+              name={playingName}
+              current={state?.saved_copy ?? configured?.library_id}
+              items={library.map(({ id, preset }) => ({
+                id,
+                name: preset.name,
+                unavailable:
+                  preset.sample_rate === sampleRate
+                    ? undefined
+                    : `Uses ${preset.sample_rate} Hz · device is set to ${sampleRate} Hz`,
+              }))}
+              disabled={
+                disabled ||
+                starting ||
+                stopping ||
+                (running && !!state.control?.edit)
+              }
+              loading={libraryLoading}
+              stopped={!running}
+              edited={!state?.saved_copy}
+              onOpen={() => {
+                pickerOpening.current = current.current;
+                setLibraryLoading(true);
+                void refreshLibrary();
+              }}
+              onChoose={(item, source) =>
+                switchTo(
+                  item,
+                  source === 'list' ? pickerOpening.current : state,
+                )
+              }
+            />
             <span className="caption" role="status">
-              Effects preset ·{' '}
-              {state.saved_copy ? 'saved copy' : 'live session'}
+              {openingName
+                ? `Opening ${openingName}…`
+                : running
+                  ? state.saved_copy
+                    ? 'Effects preset · saved'
+                    : 'Effects preset · unsaved session'
+                  : starting
+                    ? 'Starting effects audio…'
+                    : stopping
+                      ? 'Stopping effects audio…'
+                      : state?.phase === 'failed'
+                        ? 'Effects audio could not start'
+                        : 'Effects audio stopped'}
             </span>
           </div>
           <StageControls connected={connected} compact />
@@ -439,12 +575,34 @@ export function GraphAuthor({
           )}
         </div>
       )}
-      {error && <p role="alert">{error}</p>}
-      {liveOnly && (
-        <p className="caption">
-          To open another effects preset, save any edits and stop audio. Then
-          choose Library → New preset → Effects chain composer → Saved presets.
-        </p>
+      {(error || (liveOnly && state?.phase === 'failed' && state.error)) && (
+        <p role="alert">{error || state?.error}</p>
+      )}
+      {switchOpening && (
+        <AdjustmentDialog
+          title="Switch effects preset?"
+          onCancel={() => setSwitchOpening(null)}
+        >
+          <p>
+            Save the current effects sound first to keep these changes, or
+            switch to {switchOpening.item.name} without saving.
+          </p>
+          <div className="action-row">
+            <Button variant="outline" onClick={() => setSwitchOpening(null)}>
+              Keep current sound
+            </Button>
+            <Button
+              disabled={disabled}
+              onClick={() => {
+                const { item, state: opening } = switchOpening;
+                setSwitchOpening(null);
+                switchTo(item, opening, true);
+              }}
+            >
+              Switch without saving
+            </Button>
+          </div>
+        </AdjustmentDialog>
       )}
       {!liveOnly && !running && (
         <>
@@ -735,38 +893,45 @@ export function GraphAuthor({
       )}
       {!running && (
         <div className="action-row">
-          <Button
-            disabled={
-              disabled ||
-              !stream ||
-              audio?.device_owned ||
-              (draft.sampleRate !== undefined &&
-                draft.sampleRate !== sampleRate)
-            }
-            onClick={() => {
-              if (stream)
-                void command({
-                  kind: 'start',
-                  settings: {
-                    name: name.trim(),
-                    library_id: draft.libraryId ?? null,
-                    stream,
-                    rig: draft.rig,
-                    bindings: draft.bindings,
-                    recall: draft.recall ?? null,
-                  },
-                });
-            }}
-          >
-            Audition preset
-          </Button>
+          {!liveOnly && (
+            <Button
+              disabled={
+                disabled ||
+                !stream ||
+                audio?.device_owned ||
+                (draft.sampleRate !== undefined &&
+                  draft.sampleRate !== sampleRate)
+              }
+              onClick={() => {
+                if (stream)
+                  void command({
+                    kind: 'start',
+                    settings: {
+                      name: name.trim(),
+                      library_id: draft.libraryId ?? null,
+                      stream,
+                      rig: draft.rig,
+                      bindings: draft.bindings,
+                      recall: draft.recall ?? null,
+                    },
+                  });
+              }}
+            >
+              Audition preset
+            </Button>
+          )}
           {configured && (
             <Button
               variant="outline"
-              disabled={disabled || audio?.device_owned}
+              disabled={disabled || audio?.device_owned || starting || stopping}
               onClick={() => void command({ kind: 'restart' })}
             >
               Resume effects
+            </Button>
+          )}
+          {liveOnly && onBrowseLibrary && (
+            <Button variant="ghost" onClick={onBrowseLibrary}>
+              Browse Library
             </Button>
           )}
           {!stream && <p>Choose an audio device in Audio setup first.</p>}

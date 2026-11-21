@@ -231,6 +231,10 @@ pub enum GraphAudioAction {
     Start {
         settings: Box<StartGraph>,
     },
+    RecallSaved {
+        id: String,
+        discard_changes: bool,
+    },
     Stop,
     Restart,
     SaveCopy {

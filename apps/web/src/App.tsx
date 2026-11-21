@@ -141,6 +141,7 @@ function InstrumentApp() {
   const screen = useScreenSession();
   const [playingName, setPlayingName] = useState<string | null>(null);
   const [graphName, setGraphName] = useState<string | null>(null);
+  const [graphPresent, setGraphPresent] = useState(false);
   const [mixedPresent, setMixedPresent] = useState(false);
   const [mixedName, setMixedName] = useState<string | null>(null);
   const audioRunning =
@@ -706,7 +707,7 @@ function InstrumentApp() {
                   setSettingsSection('audio');
                 }}
                 hideInactive={
-                  developmentSimulator || graphName !== null || mixedPresent
+                  developmentSimulator || graphPresent || mixedPresent
                 }
               />
               <Suspense fallback={<Loading label="Loading the rig…" />}>
@@ -715,7 +716,9 @@ function InstrumentApp() {
                     connected={connected}
                     onPlaying={setMixedName}
                     onPresent={setMixedPresent}
-                    otherPlaying={playingName !== null || graphName !== null}
+                    otherPlaying={
+                      playingName !== null || graphName !== null || graphPresent
+                    }
                   />
                 </FeatureBoundary>
                 <FeatureBoundary name="the effects rig">
@@ -723,6 +726,10 @@ function InstrumentApp() {
                     connected={connected}
                     liveOnly
                     onPlaying={setGraphName}
+                    onPresent={setGraphPresent}
+                    onBrowseLibrary={() => setView('library')}
+                    otherPlaying={playingName !== null || mixedName !== null}
+                    otherPresent={mixedPresent}
                   />
                 </FeatureBoundary>
               </Suspense>

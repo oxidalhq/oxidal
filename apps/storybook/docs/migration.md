@@ -129,7 +129,8 @@ at the same versions.
 | `features/rig/PathLevel`, `PathLevelsDialog`                                                                                                                                        | Split popover in `widgets/route-view`                                                                                            |
 | `features/rig/SceneEditor`, `SceneEditorControls`, `SceneEditorMenu`; `ScenePads.tsx`, `SceneChange.tsx`                                                                            | `widgets/scene-editor`, `widgets/scene-manager`, `widgets/scene-pad`, `widgets/scene-change`, `lib/scene`                        |
 | `NativeAuthoring.tsx`, `NativeTools.tsx`, `NativeSplitDialog.tsx`                                                                                                                   | `patterns/nam-block`                                                                                                             |
-| `RigComposer.tsx`, `GraphAuthor.tsx`                                                                                                                                                | `patterns/rig-surface` (editing a preset without playing it)                                                                     |
+| `RigComposer.tsx`, offline `GraphAuthor.tsx`                                                                                                                                        | `patterns/rig-surface` (editing a preset without playing it)                                                                     |
+| Live `GraphAuthor.tsx`                                                                                                                                                              | `widgets/effects-preset-picker` reuses `widgets/preset-steps` in the Effects preset switching story                              |
 
 ## Stylesheets
 
@@ -207,6 +208,13 @@ story or exported component.
 | Set-list version/starting-scene/track/sheet entries                  | Connected                        | Performance order stores stable occurrence IDs with independently chosen versions, starting scenes and media.                                                    | Use Library to edit a specific occurrence.                                          |
 | Audio Keep/Revert countdown                                          | Connected                        | The device owns the confirmation deadline and restoration when the browser closes.                                                                               | Verify the chosen hardware settings on the physical interface.                      |
 | Editable looping DI as live input                                    | Finite renders available         | Levels can compare two finite renders of the same DI with browser-only loudness compensation. Editable looping DI as live rig input remains open.                | Open Loudness in Levels to audition completed renders.                              |
+
+The **Effects preset switching** story shows the chooser and Previous/Next for
+an effects-only Rig. The device checks the playing revision, Protect, edits,
+sample rate and installed plugins. A failed start attempts to restore the
+previous working sound and leaves the chooser available. The worker restarts
+during recall, so an audible gap remains to be measured on the physical
+interface. Unmute or finish an active DI recording before switching.
 
 ## Runtime contract corrections before screen integration
 
