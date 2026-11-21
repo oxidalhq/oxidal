@@ -29,6 +29,22 @@ pub struct EffectPack {
     pub qualification: String,
 }
 
+impl EffectPack {
+    /// Older device services omit the file status. Use the same fixed source as the download.
+    pub async fn check_copyright(&mut self) {
+        if self.installed
+            && self.copyright_available.is_none()
+            && let Some(spec) = SPECS.iter().find(|spec| spec.id == self.id)
+        {
+            self.copyright_available = Some(
+                installed::package_copyright(spec.package.into())
+                    .await
+                    .is_some(),
+            );
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PackJob {
@@ -231,13 +247,7 @@ impl Manager {
         for pack in &mut packs {
             pack.version = installed_version(&pack.package).await;
             pack.installed = pack.version.is_some();
-            if pack.installed
-                && installed::package_copyright(pack.package.clone())
-                    .await
-                    .is_some()
-            {
-                pack.copyright_available = Some(true);
-            }
+            pack.check_copyright().await;
         }
         PackState {
             available,

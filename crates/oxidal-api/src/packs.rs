@@ -49,6 +49,9 @@ async fn dispatch(shared: Arc<Shared>, command: Command) -> Response {
         Ok(reply) => match (reply.packs, reply.error) {
             (Some(mut packs), None) => {
                 packs.audio_running = running;
+                for pack in &mut packs.packs {
+                    pack.check_copyright().await;
+                }
                 ([(header::CACHE_CONTROL, "no-store")], Json(packs)).into_response()
             }
             (_, Some(error)) => failure(StatusCode::CONFLICT, &error),
