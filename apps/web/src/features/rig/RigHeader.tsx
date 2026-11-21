@@ -220,7 +220,7 @@ export function RigHeader({ rig, vm }: RigViewProps) {
             onClick={() => void command({ kind: 'restart' })}
           >
             <Play aria-hidden="true" />
-            <span className="phone-hidden">Resume</span>
+            <span>Resume</span>
           </Button>
         )}
       </div>

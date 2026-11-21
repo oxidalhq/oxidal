@@ -460,7 +460,13 @@ test('mixed rig authoring: scene grid saves block On/Off in version 3 and reopen
   ];
   Object.assign(document.oxidal, {
     lv2: [
-      { id: 'echo', pluginUri: 'urn:oxidal:plugin:echo#mono', controls: {} },
+      {
+        id: 'echo',
+        pluginUri: 'urn:oxidal:plugin:echo#mono',
+        controls: {},
+        assets: [],
+        requiredFeatures: [],
+      },
     ],
   });
   Object.assign(document.extensions['urn:oxidal:authoring'], {

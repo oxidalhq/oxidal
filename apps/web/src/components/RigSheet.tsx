@@ -55,7 +55,7 @@ export function RigSheet({
       <header className="rig-sheet-header">
         <span className="rig-sheet-handle" aria-hidden="true" />
         <div className="rig-sheet-title">
-          <strong>{title}</strong>
+          <strong title={title}>{title}</strong>
           {detail && <span className="caption">{detail}</span>}
         </div>
         {open && actions}

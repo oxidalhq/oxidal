@@ -4790,8 +4790,11 @@ test('mixed rig authoring presents parallel routing and guarded Save on small sc
     expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   }
   await rig.locator('[data-node="amp-a"] button').click();
-  const selected = rig.locator('[aria-label="Selected block"]');
-  const title = selected.locator('.selected-block-title');
+  const selected = rig.getByRole('region', {
+    name: 'Block controls',
+    exact: true,
+  });
+  const title = selected.locator('.rig-sheet-title strong');
   const titleBox = (await title.boundingBox())!;
   expect(titleBox.width).toBeGreaterThan(160);
   expect(titleBox.height).toBeLessThan(100);
@@ -4799,7 +4802,7 @@ test('mixed rig authoring presents parallel routing and guarded Save on small sc
   if ((page.viewportSize()?.width ?? 0) <= 600) {
     const arrange = selected.getByRole('group', { name: 'Arrange' });
     const toggleBox = (await selected
-      .getByRole('button', { name: /readable name on$/ })
+      .getByRole('switch', { name: /readable name on$/ })
       .boundingBox())!;
     expect(toggleBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
     if (await arrange.count()) {
@@ -4969,18 +4972,24 @@ test('mixed rig authoring keeps a long selected block name on its own row beside
   for (const width of [345, 690, 930]) {
     await page.setViewportSize({ width, height: 900 });
     await rig.getByRole('button', { name: long, exact: true }).click();
-    const selected = rig.locator('[aria-label="Selected block"]');
+    const selected = rig.getByRole('region', {
+      name: 'Block controls',
+      exact: true,
+    });
     const routing = selected.getByRole('group', {
       name: `Routing for ${long}`,
     });
     for (const name of ['Split here', 'Add path', 'Copy path', 'Remove path'])
       await expect(routing.getByRole('button', { name })).toBeVisible();
-    const title = selected.locator('.selected-block-title');
+    const title = selected.locator('.rig-sheet-title strong');
     const titleBox = (await title.boundingBox())!;
-    const selectedBox = (await selected.boundingBox())!;
+    const toggleBox = (await selected
+      .getByRole('button', { name: 'Hide controls' })
+      .boundingBox())!;
     const routingBox = (await routing.boundingBox())!;
     // Its own row, the panel's full width, one line high, never per letter.
-    expect(titleBox.width).toBeGreaterThan(selectedBox.width - 2);
+    expect(titleBox.width).toBeGreaterThan(160);
+    expect(toggleBox.x - titleBox.x - titleBox.width).toBeCloseTo(8, 0);
     expect(titleBox.height).toBeLessThan(48);
     expect(routingBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
     await expect(title).toHaveCSS('text-overflow', 'ellipsis');
@@ -5053,6 +5062,7 @@ test('playback lifecycle distinguishes loading and offers readable buffer choice
   const group = page.getByRole('region', { name: 'Adjust current session' });
   const buffer = group.getByRole('combobox', {
     name: 'Session buffer',
+    exact: true,
   });
   await buffer.click();
   await page.getByRole('option', { name: '256', exact: true }).click();
@@ -5987,7 +5997,10 @@ test('mixed rig authoring splits inside scene lanes and asks before removing a p
   await page.goto('/#rig');
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
   const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
-  const selected = rig.locator('[aria-label="Selected block"]');
+  const selected = rig.getByRole('region', {
+    name: 'Block controls',
+    exact: true,
+  });
   await rig.getByRole('button', { name: 'Echo', exact: true }).click();
   const routing = selected.getByRole('group', { name: 'Routing for Echo' });
   await expect(routing).toContainText('Scene 2 · Lead');
@@ -6059,7 +6072,10 @@ test('mixed rig authoring builds a split and changes a level with buttons only o
     0,
   );
   await list.getByRole('button', { name: 'Echo', exact: true }).click();
-  const selected = rig.locator('[aria-label="Selected block"]');
+  const selected = rig.getByRole('region', {
+    name: 'Block controls',
+    exact: true,
+  });
   await selected.getByRole('button', { name: 'Split here' }).click();
   await expect.poll(() => unit.published.length).toBe(1);
   expect(unit.route()).toMatchObject([{ branches: [['echo'], []] }, 'verb']);
@@ -6107,7 +6123,10 @@ test('mixed rig authoring moves blocks across paths by keys, buttons and drag', 
   await page.goto('/#rig');
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
   const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
-  const selected = rig.locator('[aria-label="Selected block"]');
+  const selected = rig.getByRole('region', {
+    name: 'Block controls',
+    exact: true,
+  });
   const epaper = info.project.name === 'boox-air3c';
   // Keyboard: Alt+Down moves the focused block to the path below.
   if (!epaper) {

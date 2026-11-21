@@ -454,7 +454,7 @@ function VenueView({ owner }: { owner: Owner }) {
       data-locked={locked || undefined}
     >
       <div>
-        <h2 id={titleId} tabIndex={-1}>
+        <h2 id={titleId} data-venue-edit-heading tabIndex={-1}>
           Venue EQ
         </h2>
         <p className="caption">

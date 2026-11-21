@@ -127,7 +127,11 @@ export function LeaveDialog({
       onCancel={onKeep}
       // Back on the editor, not on the tab that asked to leave: focusing a
       // settings tab would ask again.
-      returnFocus={() => document.getElementById('venue-title')}
+      returnFocus={() =>
+        Array.from(
+          document.querySelectorAll<HTMLElement>('[data-venue-edit-heading]'),
+        ).find((heading) => heading.getClientRects().length > 0) ?? null
+      }
     >
       <p>
         &ldquo;{name}&rdquo; has changes you haven&apos;t saved. You&apos;re

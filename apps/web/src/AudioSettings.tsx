@@ -172,6 +172,7 @@ export function AudioSettings({ connected }: { connected: boolean }) {
   }
   return (
     <Tabs
+      activationMode="manual"
       value={tab}
       onValueChange={(value) => {
         if (value === 'device' || value === 'output' || value === 'engine')

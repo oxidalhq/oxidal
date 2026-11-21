@@ -130,7 +130,10 @@ function VoiceTile({
 function MiniChain({ sound }: { sound: Pick<OxidalSound, 'blocks'> }) {
   const shown = sound.blocks.slice(0, 6);
   return (
-    <span aria-hidden="true" className="inline-flex items-center">
+    <span
+      aria-hidden="true"
+      className="inline-flex max-w-full flex-wrap items-center gap-y-1"
+    >
       {shown.map((b, i) => (
         <span key={`${b.label}-${i}`} className="inline-flex items-center">
           {i > 0 && <span className="h-px w-2 bg-wire" />}
@@ -280,7 +283,7 @@ export function SoundRecipeRow({
         aria-label={selectLabel}
         aria-pressed={active}
         onClick={onSelect}
-        className="grid min-w-0 gap-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-ring"
+        className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-ring"
       >
         <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
           <span className="font-display text-lg leading-tight font-semibold">
