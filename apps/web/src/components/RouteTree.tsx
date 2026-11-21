@@ -12,6 +12,7 @@ import {
 
 import { Button } from '@oxidal/design-system/components/button';
 import { useFlip } from '@oxidal/design-system/lib/use-flip';
+import { useVerticalRig } from '@oxidal/design-system/lib/use-media';
 
 import './RouteTree.css';
 import { RigTile } from '../ChainView';
@@ -70,6 +71,7 @@ type Props = {
 export function RouteTree(props: Props) {
   const { route, list, label = 'Signal chain' } = props;
   const root = useRef<HTMLDivElement>(null);
+  const vertical = useVerticalRig();
   const scroller = useRef<HTMLDivElement>(null);
   useFlip(scroller, JSON.stringify(route, ['split', 'branches']));
   const drag = useGapDrag(
@@ -99,6 +101,7 @@ export function RouteTree(props: Props) {
     <div
       ref={root}
       className="route-canvas"
+      data-orientation={vertical ? 'vertical' : 'horizontal'}
       role="group"
       aria-label={label}
       data-dragging={drag.active || undefined}
@@ -107,8 +110,10 @@ export function RouteTree(props: Props) {
         ref={scroller}
         className="route-scroll"
         role="region"
-        aria-label="Chain, scrolls sideways"
-        tabIndex={0}
+        aria-label={
+          vertical ? 'Chain, input to output' : 'Chain, scrolls sideways'
+        }
+        tabIndex={vertical ? undefined : 0}
       >
         <div className="route-row">
           <span className="route-port">IN</span>

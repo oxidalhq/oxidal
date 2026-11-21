@@ -1,5 +1,5 @@
 /* The rig canvas: blocks on a wire, a + in every gap, splits stack
-   their paths with a caption each. It scrolls sideways on every width. */
+   their paths with a caption each. Phone routes read down the page. */
 .route-canvas {
   min-width: 0;
 }
@@ -144,4 +144,55 @@ span.route-empty {
 }
 .route-list li {
   line-height: 1.6;
+}
+
+.route-canvas[data-orientation='vertical'] {
+  .route-scroll {
+    overflow: visible;
+  }
+  .route-row,
+  .route-block {
+    width: 100%;
+    min-width: 0;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .route-port {
+    align-self: flex-start;
+    margin-inline-start: 0.75rem;
+  }
+  .route-gap {
+    width: 3.25rem;
+    min-height: 1.25rem;
+  }
+  .route-gap:has(.route-gap-add) {
+    min-height: var(--touch-target);
+  }
+  .route-gap::before {
+    inset: 0 auto 0 50%;
+    border: 0;
+    border-inline-start: 1px solid var(--wire);
+  }
+  .route-tile,
+  .route-tile > button {
+    width: 100%;
+  }
+  .route-tile[data-movable] {
+    touch-action: pan-y;
+  }
+  .route-split {
+    min-width: 0;
+    padding-inline-start: 0.75rem;
+    border-inline-end: 0;
+  }
+  .route-path {
+    min-width: 0;
+  }
+  .route-path-caption {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .route-empty {
+    align-self: flex-start;
+  }
 }

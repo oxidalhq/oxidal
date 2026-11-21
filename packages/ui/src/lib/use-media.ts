@@ -34,3 +34,8 @@ export function useMotion(): boolean {
   }, []);
   return !reduced && !epaper;
 }
+
+/** Phone-sized Rig routes read from input to output down the screen. */
+export function useVerticalRig() {
+  return useMedia('(max-width: 47.99rem)');
+}

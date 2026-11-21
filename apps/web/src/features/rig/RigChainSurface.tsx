@@ -128,13 +128,15 @@ export function RigChainSurface({ rig, vm }: RigViewProps) {
           disabled={locked}
         />
         <p className="caption">
-          {!editing
-            ? 'Select a block to edit it. This preset’s routing is shown here but cannot be rearranged.'
-            : !selected
-              ? 'Select a block to edit it. Tap + between blocks to add an effect or split the chain there.'
-              : epaper
-                ? 'Select a block, then use Move and Path to move it.'
-                : 'Tap + to add an effect or split there. Drag a block to move it, within or across paths, or press Alt and an arrow key.'}
+          {!running
+            ? 'Resume audio to hear this chain and edit its blocks.'
+            : !editing
+              ? 'Select a block to edit it. This preset’s routing is shown here but cannot be rearranged.'
+              : !selected
+                ? 'Select a block to edit it. Tap + between blocks to add an effect or split the chain there.'
+                : epaper
+                  ? 'Select a block, then use Move and Path to move it.'
+                  : 'Tap + to add an effect or split there. Drag a block to move it, within or across paths, or press Alt and an arrow key.'}
         </p>
       </div>
       {running && routeSplits.length > 0 && (

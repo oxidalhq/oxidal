@@ -310,7 +310,7 @@ export function Chain({
       element.scrollIntoView({
         block: 'nearest',
         inline: 'nearest',
-        behavior: 'smooth',
+        behavior: 'instant',
       });
   }, [selected]);
 

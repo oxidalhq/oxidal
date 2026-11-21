@@ -180,3 +180,30 @@ it('holding a block hears the rig without it, and a short tap selects', () => {
   fireEvent.click(amp);
   expect(select).toHaveBeenCalledWith('amp');
 });
+
+it('cancels a lifted route block without committing a move', () => {
+  vi.useFakeTimers();
+  const change = vi.fn();
+  render(
+    <RouteView
+      editing
+      route={SERIAL_ROUTE}
+      onChange={change}
+      onSelect={() => {}}
+      orientation="horizontal"
+    />,
+  );
+  const echo = screen.getByRole('button', { name: /^Echo .* Off/ });
+  for (const cancel of ['escape', 'pointer'] as const) {
+    fireEvent.pointerDown(echo, { pointerId: 4 });
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
+    expect(echo).toHaveAttribute('data-lifted', 'true');
+    if (cancel === 'escape') fireEvent.keyDown(window, { key: 'Escape' });
+    else fireEvent.pointerCancel(echo, { pointerId: 4 });
+    expect(echo).not.toHaveAttribute('data-lifted');
+    fireEvent.pointerUp(echo, { pointerId: 4 });
+    expect(change).not.toHaveBeenCalled();
+  }
+});

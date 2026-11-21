@@ -163,3 +163,42 @@ it('ignores a second pointer and cancels a lifted effect on Escape', () => {
   fireEvent.pointerUp(window, { pointerId: 3 });
   expect(onMove).not.toHaveBeenCalled();
 });
+
+it('uses the vertical drop position on a phone regardless of finger position across the tile', () => {
+  vi.useFakeTimers();
+  vi.stubGlobal('matchMedia', () => ({
+    matches: true,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }));
+  try {
+    const { onMove, flanger } = view();
+    document
+      .querySelectorAll<HTMLElement>('[data-tile]')
+      .forEach((element, index) => {
+        element.getBoundingClientRect = () =>
+          ({
+            left: 0,
+            right: 300,
+            top: 90 * index,
+            bottom: 90 * index + 64,
+          }) as DOMRect;
+      });
+    fireEvent.pointerDown(flanger, {
+      button: 0,
+      clientX: 260,
+      clientY: 120,
+      pointerType: 'touch',
+    });
+    act(() => vi.advanceTimersByTime(400));
+    fireEvent.pointerMove(window, {
+      clientX: 260,
+      clientY: 12,
+      pointerType: 'touch',
+    });
+    fireEvent.pointerUp(window);
+    expect(onMove).toHaveBeenCalledWith('flanger', 0, 'amp');
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

@@ -8,6 +8,7 @@ import {
 } from 'react';
 
 import { useFlip } from '@oxidal/design-system/lib/use-flip';
+import { useVerticalRig } from '@oxidal/design-system/lib/use-media';
 import { ChainBlock } from '@oxidal/design-system/widgets/chain';
 
 import './ChainView.css';
@@ -54,7 +55,9 @@ export function ChainView({
       lanes.map((lane) => [lane.id, ...lane.blocks.map((b) => b.id)]),
     ),
   );
-  const drag = useDrag(root, disabled ? undefined : onMove);
+  const phone = useVerticalRig();
+  const vertical = phone && appearance !== 'artwork';
+  const drag = useDrag(root, vertical, disabled ? undefined : onMove);
   const block = (b: RigBlockVM, lane: number) =>
     b.empty ? (
       onAdd && (
@@ -111,6 +114,7 @@ export function ChainView({
         data-dragging={drag.active || undefined}
         aria-label={label}
         data-chain-view={appearance}
+        data-orientation={vertical ? 'vertical' : 'horizontal'}
       >
         <span className="chain-port">IN</span>
         <div className="chain-parallel-lanes">
@@ -158,6 +162,7 @@ export function ChainView({
       data-dragging={drag.active || undefined}
       aria-label={label}
       data-chain-view={appearance}
+      data-orientation={vertical ? 'vertical' : 'horizontal'}
     >
       {lanes.map((lane, index) => (
         <div
@@ -298,10 +303,11 @@ const HOLD_MS = 350;
 /**
  * Pointer dragging for chain tiles. A mouse or pen drags once it moves past a
  * few pixels; a finger holds first, so a swipe still scrolls the chain. The
- * drop lands before the tile under the pointer's x, in the lane under its y.
+ * drop uses the position along the visible lane's axis.
  */
 function useDrag(
   root: React.RefObject<HTMLDivElement | null>,
+  vertical: boolean,
   onMove?: (id: string, lane: number, before: string | null) => void,
 ) {
   type Press = {
@@ -336,7 +342,7 @@ function useDrag(
     const row = rows.reduce<HTMLElement | undefined>((best, r) => {
       const d = (el: HTMLElement) => {
         const b = el.getBoundingClientRect();
-        return Math.abs(y - (b.top + b.bottom) / 2);
+        return Math.max(b.top - y, 0, y - b.bottom);
       };
       return !best || d(r) < d(best) ? r : best;
     }, undefined);
@@ -346,7 +352,7 @@ function useDrag(
     );
     const next = tiles.find((t) => {
       const b = t.getBoundingClientRect();
-      return x < (b.left + b.right) / 2;
+      return vertical ? y < (b.top + b.bottom) / 2 : x < (b.left + b.right) / 2;
     });
     return {
       lane: Number(row.dataset.lane),

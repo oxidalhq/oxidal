@@ -46,7 +46,7 @@ import { Footswitches, type StageState } from '../widgets/footswitches';
 import { Meter } from '../widgets/meter';
 import { MidiTarget } from '../widgets/midi';
 import { SheetViewer } from '../widgets/sheet-viewer';
-import { type StompAssignment,StompSwitch } from '../widgets/stomp-group';
+import { type StompAssignment, StompSwitch } from '../widgets/stomp-group';
 import { Transport, type TransportState } from '../widgets/transport';
 import { TunerFace } from '../widgets/tuner-face';
 import { CaptureSceneSheet } from './capture-scene-sheet';

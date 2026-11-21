@@ -25,6 +25,7 @@ import {
   type Step,
 } from '../lib/route';
 import { useFlip } from '../lib/use-flip';
+import { useVerticalRig } from '../lib/use-media';
 import { ChainBlock, type ChainBlockModel, ChainPort } from './chain';
 
 export type RouteBlock = ChainBlockModel;
@@ -32,19 +33,6 @@ export type Route = Step<RouteBlock>[];
 
 const HOLD_MS = 320;
 const SILENT_DB = -60;
-
-/** True below `md`: the chain runs top to bottom so a phone never scrolls sideways. */
-function usePhone() {
-  const [phone, setPhone] = React.useState(false);
-  React.useEffect(() => {
-    const query = window.matchMedia('(max-width: 47.99rem)');
-    const update = () => setPhone(query.matches);
-    update();
-    query.addEventListener('change', update);
-    return () => query.removeEventListener('change', update);
-  }, []);
-  return phone;
-}
 
 function fraction(db: number) {
   return Math.min(1, Math.max(0, (db + 60) / 60));
@@ -330,7 +318,7 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
   // The edits only move steps; blocks pass through unchanged, so the caller's block type is kept.
   const route = routeIn as unknown as Route;
   const onChange = (next: Route) => onChangeIn(next as unknown as Step<B>[]);
-  const phone = usePhone();
+  const phone = useVerticalRig();
   const vertical =
     orientation === 'vertical' || (orientation === 'auto' && phone);
   const root = React.useRef<HTMLDivElement>(null);
@@ -365,6 +353,7 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
   }, [vertical]);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const held = React.useRef(false);
+  const activePointer = React.useRef<number | null>(null);
   const [lifted, setLifted] = React.useState<string | null>(null);
   const grabbed = React.useRef({ x: 0, y: 0 });
   const [heard, setHeard] = React.useState<string | null>(null);
@@ -402,22 +391,21 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
   React.useEffect(() => clear, []);
 
   const press = (id: string) => (event: React.PointerEvent) => {
-    if (disabled) return;
+    if (disabled || activePointer.current !== null || event.button > 0) return;
+    activePointer.current = event.pointerId;
     held.current = false;
     grabbed.current = { x: event.clientX, y: event.clientY };
-    const element = event.currentTarget as HTMLElement;
     const pointer = event.pointerId;
     timer.current = setTimeout(() => {
       held.current = true;
       if (editing) {
         setLifted(id);
-        root.current?.setPointerCapture(pointer);
+        root.current?.setPointerCapture?.(pointer);
       } else {
         setHeard(id);
         onAudition?.(id);
       }
     }, HOLD_MS);
-    void element;
   };
   const release = () => {
     clear();
@@ -431,6 +419,28 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
     lifted
       ? root.current?.querySelector<HTMLElement>(`[data-flip="${lifted}"]`)
       : null;
+  const cancel = () => {
+    release();
+    activePointer.current = null;
+    const node = dragged();
+    if (node) node.style.translate = '';
+    setLifted(null);
+    setTarget(null);
+  };
+  React.useEffect(() => {
+    const blur = () => {
+      if (activePointer.current !== null) cancel();
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') blur();
+    };
+    window.addEventListener('blur', blur);
+    window.addEventListener('keydown', escape);
+    return () => {
+      window.removeEventListener('blur', blur);
+      window.removeEventListener('keydown', escape);
+    };
+  });
   const drop = () => {
     // Glide from where the finger left the block to where it lands.
     flip.snapshot();
@@ -473,9 +483,9 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
       <span
         className="contents"
         onPointerDown={press(step.id)}
-        onPointerUp={release}
-        onPointerCancel={release}
-        onPointerLeave={() => !lifted && release()}
+        onPointerLeave={(event) => {
+          if (!lifted && activePointer.current === event.pointerId) cancel();
+        }}
       >
         <ChainBlock
           block={step}
@@ -756,7 +766,18 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
       aria-label={label}
       tabIndex={vertical ? undefined : 0}
       onPointerMove={(event) => {
-        if (!lifted) return;
+        if (activePointer.current !== event.pointerId) return;
+        if (!lifted) {
+          if (
+            !held.current &&
+            Math.hypot(
+              event.clientX - grabbed.current.x,
+              event.clientY - grabbed.current.y,
+            ) > 8
+          )
+            cancel();
+          return;
+        }
         // The lifted block follows the finger.
         const node = dragged();
         if (node)
@@ -766,7 +787,18 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
           ?.closest<HTMLElement>('[data-drop]');
         setTarget(under?.dataset.drop ?? null);
       }}
-      onPointerUp={() => lifted && drop()}
+      onPointerUp={(event) => {
+        if (activePointer.current !== event.pointerId) return;
+        activePointer.current = null;
+        release();
+        if (lifted) drop();
+      }}
+      onPointerCancel={(event) => {
+        if (activePointer.current === event.pointerId) cancel();
+      }}
+      onLostPointerCapture={(event) => {
+        if (activePointer.current === event.pointerId) cancel();
+      }}
       className={cn(
         vertical
           ? 'relative grid min-w-0 gap-0 px-page py-2'
