@@ -369,6 +369,11 @@ test('monitor shows redacted control audit with filters and reload persistence',
   await page.goto('/#rig');
   await page.getByRole('button', { name: 'Levels', exact: true }).click();
   await selectWorkspaceSection(page, 'Levels', 'Diagnostics');
+  const recent = page.getByRole('list', { name: 'Audit log entries' });
+  await page.getByRole('radio', { name: 'Refused' }).click();
+  await expect(recent).toContainText('Wi-Fi / device');
+  await expect(recent).toContainText('Refused');
+  await page.getByRole('radio', { name: 'All', exact: true }).click();
   await page.getByText('Control audit', { exact: true }).click();
   const panel = page.getByRole('region', { name: 'Control request history' });
   await expect(panel.getByText(/Accepted means/)).toBeVisible();

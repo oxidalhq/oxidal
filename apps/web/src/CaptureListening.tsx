@@ -28,25 +28,17 @@ export function CaptureListening({
   appliedTrim: number | null;
   audition?: boolean;
 }) {
-  const [references, setReferences] = useState(false);
   const [listening, setListening] = useState(false);
   return (
     <div className="grid gap-4">
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          aria-expanded={references}
-          onClick={() => setReferences(!references)}
-        >
-          {references ? 'Close capture references' : 'Capture references'}
-        </Button>
-        {audition && !listening && (
+      <ReferenceTool appliedTrim={appliedTrim} />
+      {audition && !listening && (
+        <div>
           <Button variant="outline" onClick={() => setListening(true)}>
             Open browser audition
           </Button>
-        )}
-      </div>
-      {references && <ReferenceTool appliedTrim={appliedTrim} />}
+        </div>
+      )}
       {listening && <AuditionTool onClose={() => setListening(false)} />}
     </div>
   );

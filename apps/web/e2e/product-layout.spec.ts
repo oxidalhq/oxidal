@@ -237,6 +237,9 @@ test('Library and Levels sections stay reachable by touch and keyboard on the Fo
   const levels = workspaceSectionPicker(page, 'Levels');
   await expectWorkspaceSection(page, 'Levels', 'Loudness');
   await expect(
+    page.getByRole('heading', { name: 'Capture references' }),
+  ).toBeVisible();
+  await expect(
     page.getByRole('button', { name: 'Open browser audition' }),
   ).toBeVisible();
   await levels.tap();
