@@ -18,6 +18,7 @@ import { RigHeader } from './features/rig/RigHeader';
 import { SceneEditor } from './features/rig/SceneEditor';
 import { SelectedBlockPanel } from './features/rig/SelectedBlockPanel';
 import { SelectedModelControls } from './features/rig/SelectedModelControls';
+import { StompControls } from './features/rig/StompControls';
 import { useMixedRigSession } from './features/rig/useMixedRigSession';
 import { GuitarPicker } from './GuitarSettings';
 import { friendlyError } from './lib/friendlyError';
@@ -107,17 +108,25 @@ export function MixedRig(props: {
           onEdit={() => setPerforming(false)}
           scenes={
             !!state.control?.scenes?.scenes.length && (
-              <ScenePads
-                scenes={state.control.scenes.scenes}
-                active={state.control.scene}
-                fading={!!state.control.scene_transitioning}
-                disabled={waiting}
-                onSelect={(scene) => void recallScene(scene)}
-              />
+              <>
+                <ScenePads
+                  scenes={state.control.scenes.scenes}
+                  active={state.control.stomp_scene ?? state.control.scene}
+                  canRecallActive={
+                    !!state.control.stomp_scene &&
+                    state.control.stomp_scene !== state.control.scene
+                  }
+                  fading={!!state.control.scene_transitioning}
+                  disabled={waiting}
+                  onSelect={(scene) => void recallScene(scene)}
+                />
+                <StompControls rig={rig} vm={vm} stage />
+              </>
             )
           }
           selector={
             <RigPresetSelector
+              phase={state.phase}
               current={{
                 key: revision
                   ? choiceKey({
@@ -147,6 +156,7 @@ export function MixedRig(props: {
     >
       <RigHeader rig={rig} vm={vm} />
       <SceneEditor rig={rig} vm={vm} />
+      <StompControls rig={rig} vm={vm} />
       <RecoveryNotice message={state.recovery_error} />
       {(error || readError || state.error) && (
         <p role="alert" className="error">

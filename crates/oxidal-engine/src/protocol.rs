@@ -58,6 +58,42 @@ pub struct BranchCommand {
     pub branch: String,
     pub enabled: bool,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct StompGroupCommand {
+    pub session: String,
+    pub expected_revision: u64,
+    pub group: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct StompGroupState {
+    pub id: String,
+    pub name: String,
+    pub nodes: Vec<String>,
+    /// All targets are on.
+    pub enabled: bool,
+    /// Some targets are on and others are off.
+    pub partial: bool,
+}
+impl StompGroupState {
+    pub(crate) fn read_enabled(&self, controls: &[Control]) -> (bool, bool) {
+        let count = self
+            .nodes
+            .iter()
+            .filter(|node| {
+                controls.iter().any(|control| {
+                    matches!(&control.target, Target::Bypass { node: target } if target == *node)
+                        && control.value == 0.0
+                })
+            })
+            .count();
+        let enabled = count == self.nodes.len();
+        (enabled, count > 0 && !enabled)
+    }
+}
 pub const REQUEST_LIMIT: usize = 4 * 1024 * 1024;
 pub const REPLY_LIMIT: usize = 4 * 1024 * 1024;
 /// Host routing buffers only, separate from native/plugin memory.
@@ -217,12 +253,45 @@ pub struct Snapshot {
     pub scene_transitioning: bool,
     #[serde(default)]
     pub branches: Vec<BranchState>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub stomp_groups: Vec<StompGroupState>,
+    /// Last named scene selected, even when its saved bypass differs from the live group.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stomp_scene: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub branch_sleep: Option<BranchSleepState>,
     #[serde(default)]
     pub midi: oxidal_audio::midi::Status,
 }
 impl Snapshot {
+    pub fn valid_stomp_state(&self) -> bool {
+        if self.stomp_groups.is_empty() {
+            return self.stomp_scene.is_none();
+        }
+        let Some(scenes) = &self.scenes else {
+            return false;
+        };
+        let Some(first) = scenes.scenes.first() else {
+            return false;
+        };
+        self.stomp_groups.len() <= oxidal_presets::manifest::MAX_STOMP_GROUPS
+            && self.stomp_scene.as_ref().is_none_or(|id| scenes.scenes.iter().any(|s| &s.id == id))
+            && self.stomp_groups.iter().enumerate().all(|(i, group)| {
+                oxidal_presets::manifest::StompGroup {
+                    id: group.id.clone(),
+                    name: group.name.clone(),
+                    nodes: group.nodes.clone(),
+                }.valid()
+                    && self.stomp_groups[..i].iter().all(|old| old.id != group.id)
+                    && group.nodes.iter().all(|node| {
+                        first.bypass.iter().any(|target| &target.node == node)
+                            && self.controls.iter().any(|c| {
+                                matches!(&c.target, Target::Bypass { node: target } if target == node)
+                            })
+                    })
+                    && group.read_enabled(&self.controls) == (group.enabled, group.partial)
+            })
+    }
     pub fn valid_branch_sleep_state(&self) -> bool {
         let Some(state) = &self.branch_sleep else {
             return true;
@@ -495,6 +564,9 @@ pub enum WorkerRequest {
     Branch {
         command: BranchCommand,
     },
+    StompGroup {
+        command: StompGroupCommand,
+    },
     BranchSleep {
         command: BranchSleepCommand,
     },
@@ -615,6 +687,9 @@ pub enum RigAudioAction {
     },
     Branch {
         command: BranchCommand,
+    },
+    StompGroup {
+        command: StompGroupCommand,
     },
     BranchSleep {
         command: BranchSleepCommand,
@@ -774,6 +849,12 @@ impl Snapshot {
             return Err("MIDI binding refers to an unavailable branch".into());
         }
         for binding in &settings.parameter_bindings {
+            if let Target::StompGroup { group } = &binding.target {
+                if !allow_unavailable && !self.stomp_groups.iter().any(|item| &item.id == group) {
+                    return Err("MIDI binding refers to an unavailable stomp group".into());
+                }
+                continue;
+            }
             let Some(control) = self.controls.iter().find(|c| c.target == binding.target) else {
                 if allow_unavailable {
                     continue;

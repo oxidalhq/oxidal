@@ -196,6 +196,7 @@ fn save_with_assets(
     for control in &confirmed.controls {
         match &control.target {
             Target::Native { .. } => (),
+            Target::StompGroup { .. } => return Err("Stomp groups are not scalar controls".into()),
             Target::Lv2 { node, symbol } => {
                 let node = host
                     .graph

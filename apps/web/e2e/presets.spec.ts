@@ -434,12 +434,10 @@ test('rig controls follow the actual session without example effects', async ({
   ).toBeVisible();
   await expect(page.getByText(/delay|reverb/i)).toHaveCount(0);
   // A URL cannot enable development controls on an appliance without the capability.
-  await page.route('**/api/v1/health', async (route) => {
-    const response = await route.fetch();
-    await route.fulfill({
-      json: { ...(await response.json()), midi_transport: 'unavailable' },
-    });
-  });
+  const health = await (await request.get('/api/v1/health')).json();
+  await page.route('**/api/v1/health', (route) =>
+    route.fulfill({ json: { ...health, midi_transport: 'unavailable' } }),
+  );
   await page.goto('/?development=simulator');
   await expect(
     page.getByRole('heading', { name: 'Audio stopped', exact: true }),

@@ -528,14 +528,12 @@ export function useMixedRigSession({
     setError('');
     try {
       let next: RigAudioState;
+      const target = action.kind === 'control' ? action.command.target : null;
       if (
         action.kind === 'control' &&
-        action.command.target.kind === 'native' &&
-        current.current.control?.authoring?.some(
-          (r) => r.node === action.command.target.node,
-        )
+        target?.kind === 'native' &&
+        current.current.control?.authoring?.some((r) => r.node === target.node)
       ) {
-        const target = action.command.target;
         const token = crypto.randomUUID();
         let cursor = current.current;
         cursor = await rigAudioCommand(cursor, {
@@ -794,6 +792,8 @@ export function useMixedRigSession({
       const live = cursor.controls.find(
         (c) =>
           c.target.kind === target.kind &&
+          'node' in c.target &&
+          'node' in target &&
           c.target.node === target.node &&
           (c.target.kind === 'merge'
             ? target.kind === 'merge' && c.target.port === target.port
@@ -878,6 +878,7 @@ export function useMixedRigSession({
       name: string;
       profile: string;
     }) => RigPublish,
+    { discoverPlugins = true }: { discoverPlugins?: boolean } = {},
   ) {
     const { changed } = view!;
     const run = async () => {
@@ -894,7 +895,7 @@ export function useMixedRigSession({
           if (c.target.kind === 'lv2')
             (live[c.target.node] ??= {})[c.target.symbol] = c.value;
         const [plugins, library, catalog] = await Promise.all([
-          installedLv2(rate),
+          discoverPlugins ? installedLv2(rate) : [],
           rigLibrary(),
           libraryCatalog(),
         ]);
@@ -1069,10 +1070,11 @@ export function useMixedRigSession({
     latest.current = opening;
     setEdit({ control, value: opening });
     setError('');
+    const target = control.target;
     const native =
-      control.target.kind === 'native' &&
-      cursor.control?.authoring?.some((r) => r.node === control.target.node)
-        ? control.target
+      target.kind === 'native' &&
+      cursor.control?.authoring?.some((r) => r.node === target.node)
+        ? target
         : null;
     const token = crypto.randomUUID();
     const ready = native

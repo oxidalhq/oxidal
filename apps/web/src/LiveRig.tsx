@@ -908,6 +908,7 @@ export function LiveRig({
           knobs={knobStrip}
           selector={
             <RigPresetSelector
+              phase={state.phase}
               current={{
                 key: tone3000Key(state),
                 name: state.preset_name,
@@ -931,6 +932,7 @@ export function LiveRig({
     >
       <div className="rig-performance-header">
         <RigPresetSelector
+          phase={state.phase}
           current={{
             key: tone3000Key(state),
             name: state.preset_name,

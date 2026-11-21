@@ -91,7 +91,10 @@ fn pids(executable: &Path) -> Vec<u32> {
 #[tokio::test]
 #[ignore = "pnpm native:check supplies the actual Linux mixed worker and ALSA null"]
 async fn scene_bypass_survives_mixed_worker_restart_and_independent_save() {
-    use oxidal_presets::{Bundle, manifest::SCENES_BYPASS_EXTENSION};
+    use oxidal_presets::{
+        Bundle,
+        manifest::{SCENES_BYPASS_EXTENSION, STOMP_GROUPS_EXTENSION},
+    };
     let _worker_test = WORKER_TEST.lock().await;
     let executable = std::path::PathBuf::from(std::env::var_os("OXIDAL_TEST_RIG_WORKER").unwrap());
     assert_eq!(std::env::var("OXIDAL_RIG_QUALIFY_NULL").unwrap(), "1");
@@ -102,11 +105,11 @@ async fn scene_bypass_survives_mixed_worker_restart_and_independent_save() {
     let manifest = json!({
         "format":"oxidal.preset","formatVersion":1,"id":"9496ae91-9955-477a-ad67-5f0ffa6a049a",
         "name":"Scene bypass","tone3000":{"instances":[]},"resources":[],
-        "requiredExtensions":[SCENES_BYPASS_EXTENSION],
+        "requiredExtensions":[SCENES_BYPASS_EXTENSION,STOMP_GROUPS_EXTENSION],
         "extensions":{SCENES_BYPASS_EXTENSION:{"fade_ms":40,"scenes":[
             {"id":"wet","name":"Wet","gains":[],"bypass":[{"node":"amp","value":false}]},
             {"id":"dry","name":"Dry","gains":[],"bypass":[{"node":"amp","value":true}]}
-        ]}},
+        ]},STOMP_GROUPS_EXTENSION:{"groups":[{"id":"amp-toggle","name":"Amp switch","nodes":["amp"]}]}},
         "oxidal":{"graph":{"nodes":[
             {"id":"in","kind":"input","audioInputs":0,"audioOutputs":2},
             {"id":"amp","kind":"lv2","audioInputs":1,"audioOutputs":1,"instance":"amp","bypassed":false},
@@ -153,12 +156,54 @@ async fn scene_bypass_survives_mixed_worker_restart_and_independent_save() {
     let bypass = json!({"kind":"bypass","node":"amp"});
     assert_eq!(control(&running, &bypass), 0.0);
     assert_eq!(running["control"]["scene"], "wet");
-    let wet_session = running["control"]["session"].clone();
+    assert_eq!(running["control"]["stomp_groups"][0]["enabled"], true);
+    let with_midi = apply(&client, &url, json!({"kind":"midi","settings":{
+        "input":"hw:Fixture,0,0","channel":1,"bindings":[],"branch_bindings":[],
+        "parameter_bindings":[{"controller":41,"mode":"toggle","target":{"kind":"stomp_group","group":"amp-toggle"}}]
+    }})).await;
+    let set_protect = |on| {
+        client
+            .post(format!("{url}/protect"))
+            .json(&json!({"on": on}))
+            .send()
+    };
+    assert!(set_protect(true).await.unwrap().status().is_success());
+    let action = json!({"kind":"stomp_group","command":{
+        "session":with_midi["control"]["session"],"expected_revision":with_midi["control"]["revision"],"group":"amp-toggle"
+    }});
+    let toggled = apply(&client, &url, action.clone()).await;
+    assert_eq!(toggled["control"]["stomp_scene"], "wet");
+    assert_eq!(control(&toggled, &bypass), 1.0);
+    assert_eq!(toggled["control"]["stomp_groups"][0]["enabled"], false);
+    let current = get(&client, &url, "rig-audio").await;
+    let stale = post(&client, &url, &current, action).await;
+    assert_eq!(stale.status(), 409);
+    let current = get(&client, &url, "rig-audio").await;
+    assert_eq!(
+        current["control"]["revision"],
+        toggled["control"]["revision"]
+    );
+    assert_eq!(control(&current, &bypass), 1.0);
+    assert!(set_protect(false).await.unwrap().status().is_success());
+    let toggled_by_midi = apply(
+        &client,
+        &url,
+        json!({"kind":"midi_test","message":{
+            "kind":"control","channel":1,"controller":41,"value":127
+        }}),
+    )
+    .await;
+    assert_eq!(control(&toggled_by_midi, &bypass), 0.0);
+    assert_eq!(
+        toggled_by_midi["control"]["stomp_groups"][0]["enabled"],
+        true
+    );
+    let wet_session = toggled_by_midi["control"]["session"].clone();
     let selected = apply(
         &client,
         &url,
         json!({"kind":"scene","command":{
-            "session":wet_session,"expected_revision":running["control"]["revision"],"scene":"dry"
+            "session":wet_session,"expected_revision":toggled_by_midi["control"]["revision"],"scene":"dry"
         }}),
     )
     .await;
@@ -169,6 +214,10 @@ async fn scene_bypass_survives_mixed_worker_restart_and_independent_save() {
     assert_ne!(restarted["control"]["session"], wet_session);
     assert_eq!(restarted["control"]["scene"], "dry");
     assert_eq!(control(&restarted, &bypass), 1.0);
+    assert_eq!(
+        restarted["configured"]["midi"]["parameter_bindings"][0]["target"]["group"],
+        "amp-toggle"
+    );
 
     apply(
         &client,
@@ -206,6 +255,12 @@ async fn scene_bypass_survives_mixed_worker_restart_and_independent_save() {
     .await;
     assert_eq!(reopened["control"]["scene"], "dry");
     assert_eq!(control(&reopened, &bypass), 1.0);
+    assert_eq!(reopened["control"]["stomp_groups"][0]["id"], "amp-toggle");
+    assert_eq!(
+        reopened["configured"]["midi"]["parameter_bindings"],
+        json!([]),
+        "an independent Save copy keeps the portable group and starts without a device mapping"
+    );
     let versions = format!("presets/catalog/rig/{saved}/versions");
     let family = get(&client, &url, &versions).await;
     apply(&client,&url,json!({"kind":"save_version","name":"Sounding scene revision","target":{
@@ -231,6 +286,28 @@ async fn scene_bypass_survives_mixed_worker_restart_and_independent_save() {
     assert_eq!(
         store.read(&published).unwrap().manifest().name,
         "Sounding scene revision"
+    );
+    let mut revision_manifest = manifest;
+    revision_manifest["name"] = json!("Same rig with a changed name");
+    let revised = client
+        .post(format!("{url}/presets/rigs"))
+        .json(&json!({
+            "manifest_json": revision_manifest.to_string(),
+            "resources": {},
+            "source": {"kind":"rig","id":revision}
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert!(revised.status().is_success(), "{revised:?}");
+    let revised = revised.json::<Value>().await.unwrap();
+    let map = get(&client, &url, "midi/map").await;
+    let mappings = map["entries"].as_array().unwrap();
+    assert_eq!(mappings.len(), 1);
+    assert_eq!(mappings[0]["entry"]["id"], revised["revision"]);
+    assert_eq!(
+        mappings[0]["parameter_bindings"][0]["target"]["group"],
+        "amp-toggle"
     );
     shutdown.send(true).unwrap();
     tokio::time::timeout(Duration::from_secs(5), stopped.wait())

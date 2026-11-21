@@ -195,6 +195,19 @@ impl Session {
             }
         }
         let scenes = bundle.manifest().scenes().map_err(|e| e.to_string())?;
+        let stomp_groups = bundle
+            .manifest()
+            .stomp_groups()
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .map(|group| StompGroupState {
+                id: group.id,
+                name: group.name,
+                nodes: group.nodes,
+                enabled: false,
+                partial: false,
+            })
+            .collect();
         if let Some(scenes) = &scenes {
             capture_scenes::check_targets(&controls, &scenes.scenes[0].native_controls)?;
         }
@@ -243,6 +256,8 @@ impl Session {
             scene: None,
             scene_transitioning: false,
             branches: Vec::new(),
+            stomp_groups,
+            stomp_scene: None,
             branch_sleep: None,
             midi: Default::default(),
         };
@@ -267,6 +282,9 @@ impl Session {
             capture_fade_remaining: 0,
         };
         result.apply_initial_scene()?;
+        if !result.state.stomp_groups.is_empty() && result.state.scene.is_none() {
+            result.state.scene = result.snapshot().scene;
+        }
         if !result.reply_fits()? {
             return Err("Rig controls exceed IPC byte budget".into());
         }
@@ -409,6 +427,12 @@ impl Session {
     }
     pub fn snapshot(&self) -> Snapshot {
         let mut state = self.state.clone();
+        if !state.stomp_groups.is_empty() {
+            state.stomp_scene.clone_from(&state.scene);
+            for group in &mut state.stomp_groups {
+                (group.enabled, group.partial) = group.read_enabled(&state.controls);
+            }
+        }
         state.modified = self.is_modified();
         state.scene_transitioning = self.graph.scene_transitioning()
             || self.capture_fade_remaining > 0
@@ -880,6 +904,66 @@ impl Session {
         self.state.scene = None;
         Ok(())
     }
+    /// Toggle all declared warm bypass targets together and keep other values.
+    pub fn stomp_group(&mut self, command: StompGroupCommand) -> Result<(), String> {
+        if !self.matches_cursor(&command.session, command.expected_revision) {
+            return Err("rig_control_conflict; refresh status".into());
+        }
+        if self.failed
+            || self.model_pending()
+            || self.gesture_pending()
+            || self.measurement_pending()
+            || self.sleep_pending.is_some()
+        {
+            return Err("Rig is not ready for a stomp group change".into());
+        }
+        let group = self
+            .state
+            .stomp_groups
+            .iter()
+            .find(|group| group.id == command.group)
+            .ok_or("Unknown rig stomp group")?;
+        let bypass = group.read_enabled(&self.state.controls).0;
+        let controls = group
+            .nodes
+            .iter()
+            .map(|node| {
+                self.state
+                    .controls
+                    .iter()
+                    .position(|control| matches!(&control.target, Target::Bypass { node: target } if node == target))
+                    .ok_or("Stomp group bypass control is unavailable")
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let targets: Vec<_> = group
+            .nodes
+            .iter()
+            .map(|node| oxidal_presets::manifest::SceneBypass {
+                node: node.clone(),
+                value: bypass,
+            })
+            .collect();
+        self.graph.check_warm_bypass_targets(&targets)?;
+        let fade = self.fade_frames(
+            self.state
+                .scenes
+                .as_ref()
+                .ok_or("Rig has no scenes")?
+                .fade_ms,
+        );
+        let revision = self
+            .state
+            .revision
+            .checked_add(1)
+            .ok_or("Rig revision exhausted")?;
+        self.graph.scene_bypass(&targets, fade);
+        for index in controls {
+            self.state.controls[index].value = f64::from(u8::from(bypass));
+            self.state.controls[index].display = if bypass { "On" } else { "Off" }.into();
+        }
+        self.state.revision = revision;
+        Ok(())
+    }
     /// Shared hardware/test dispatch: MIDI never owns a second copy of mix state.
     /// True means a mapped trigger was accepted, including an unchanged target.
     pub fn midi_message(
@@ -889,7 +973,9 @@ impl Session {
     ) -> Result<bool, String> {
         if let Some(scene) = settings.scene(message) {
             let cursor = self.snapshot();
-            if cursor.scene.as_deref() != Some(scene) {
+            if cursor.scene.as_deref() != Some(scene)
+                || (!cursor.stomp_groups.is_empty() && cursor.stomp_scene.as_deref() != Some(scene))
+            {
                 self.select_scene(SceneCommand {
                     session: cursor.session,
                     expected_revision: cursor.revision,
@@ -919,6 +1005,16 @@ impl Session {
             return Ok(true);
         }
         if let Some((binding, raw)) = settings.parameter(message) {
+            if let Target::StompGroup { group } = &binding.target {
+                if raw >= 64 {
+                    self.stomp_group(StompGroupCommand {
+                        session: self.state.session.clone(),
+                        expected_revision: self.state.revision,
+                        group: group.clone(),
+                    })?;
+                }
+                return Ok(true);
+            }
             let control = self
                 .state
                 .controls
@@ -1156,6 +1252,7 @@ impl Session {
         let c = &mut self.state.controls[index];
         match &c.target {
             Target::Native { .. } => unreachable!("handled above"),
+            Target::StompGroup { .. } => return Err("Stomp groups are not scalar controls".into()),
             Target::Lv2 { node, symbol } => {
                 // The edit wins over a scene ramp still running on this control.
                 self.graph.cancel_control_ramp(node, symbol);

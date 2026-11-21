@@ -12356,6 +12356,23 @@
           "type": "object",
           "properties": {
             "command": {
+              "$ref": "#/$defs/StompGroupCommand"
+            },
+            "kind": {
+              "type": "string",
+              "const": "stomp_group"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "command": {
               "$ref": "#/$defs/BranchSleepCommand"
             },
             "kind": {
@@ -14346,6 +14363,19 @@
         "source_revision": {
           "type": "string"
         },
+        "stomp_groups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StompGroupState"
+          }
+        },
+        "stomp_scene": {
+          "description": "Last named scene selected, even when its saved bypass differs from the live group.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "working": {
           "type": "array",
           "items": {
@@ -15211,6 +15241,61 @@
         "upload"
       ]
     },
+    "StompGroupCommand": {
+      "type": "object",
+      "properties": {
+        "expected_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "group": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "expected_revision",
+        "group"
+      ]
+    },
+    "StompGroupState": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "All targets are on.",
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "partial": {
+          "description": "Some targets are on and others are off.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "nodes",
+        "enabled",
+        "partial"
+      ]
+    },
     "StopRequest": {
       "type": "object",
       "properties": {
@@ -15638,6 +15723,23 @@
             "kind",
             "node",
             "port"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "group": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "stomp_group"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "group"
           ]
         }
       ]

@@ -23,6 +23,7 @@ pub enum ControlTarget {
     Lv2 { node: String, symbol: String },
     Bypass { node: String },
     Merge { node: String, port: usize },
+    StompGroup { group: String },
 }
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -144,6 +145,7 @@ impl ControlTarget {
             | Self::Lv2 { node, .. }
             | Self::Bypass { node }
             | Self::Merge { node, .. } => node,
+            Self::StompGroup { group } => group,
         };
         if node.is_empty()
             || node.len() > 64
@@ -168,7 +170,7 @@ impl ControlTarget {
                         .all(|b| b.is_ascii_alphanumeric() || b == b'_')
             }
             Self::Merge { port, .. } => *port < 64,
-            Self::Bypass { .. } => true,
+            Self::Bypass { .. } | Self::StompGroup { .. } => true,
         }
     }
 }
@@ -281,6 +283,8 @@ impl Settings {
         }
         for (index, binding) in self.parameter_bindings.iter().enumerate() {
             if !binding.target.valid()
+                || (matches!(binding.target, ControlTarget::StompGroup { .. })
+                    && binding.mode != ControlMode::Toggle)
                 || binding.controller > 127
                 || matches!(binding.controller, 0 | 32)
                 || self
@@ -776,9 +780,12 @@ pub fn dispatch_protected(
     if protected
         && settings.scene(message).is_none()
         && settings.branch(message).is_none()
-        && settings
-            .parameter(message)
-            .is_some_and(|(binding, _)| !matches!(binding.target, ControlTarget::Bypass { .. }))
+        && settings.parameter(message).is_some_and(|(binding, _)| {
+            !matches!(
+                binding.target,
+                ControlTarget::Bypass { .. } | ControlTarget::StompGroup { .. }
+            )
+        })
     {
         return Err("Protect is on. Turn Protect off to change this parameter.".into());
     }

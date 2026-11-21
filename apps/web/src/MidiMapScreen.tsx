@@ -145,6 +145,8 @@ const targetFallback = (
       return `${words(target.node)} bypass`;
     case 'merge':
       return `${words(target.node)} input ${target.port + 1}`;
+    case 'stomp_group':
+      return `Stomp group · ${words(target.group)}`;
   }
 };
 const testValue = (mode: MapEntry['parameter_bindings'][number]['mode']) =>
@@ -1293,12 +1295,19 @@ export function MidiMapScreen({
               )
             : new Map<string, string>();
           const controlNames = isCurrent
-            ? new Map(
-                activeControl?.controls.map((control) => [
-                  targetKey(control.target),
-                  control.label,
-                ]) ?? [],
-              )
+            ? new Map<string, string>([
+                ...(activeControl?.controls.map(
+                  (control) =>
+                    [targetKey(control.target), control.label] as const,
+                ) ?? []),
+                ...(activeControl?.stomp_groups?.map(
+                  (group) =>
+                    [
+                      targetKey({ kind: 'stomp_group', group: group.id }),
+                      `Stomp group · ${group.name}`,
+                    ] as const,
+                ) ?? []),
+              ])
             : new Map<string, string>();
           const recallConflict =
             group.slot >= 0 &&

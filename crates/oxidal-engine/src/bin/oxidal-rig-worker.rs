@@ -441,6 +441,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 WorkerRequest::Control { .. } => "control",
                 WorkerRequest::RestorePluginDefaults { .. } => "restore plugin defaults",
                 WorkerRequest::Scene { .. } => "scene",
+                WorkerRequest::StompGroup { .. } => "stomp group",
                 WorkerRequest::Branch { .. } => "branch",
                 WorkerRequest::BranchSleep { .. } => "sleeping branches",
                 WorkerRequest::Eq { .. } => "eq",
@@ -520,6 +521,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
 
                 WorkerRequest::Scene { command } => rig.active_mut().select_scene(command).err(),
+                WorkerRequest::StompGroup { command } => {
+                    if rig.switching() {
+                        Some("Wait for the prepared preset switch to finish".into())
+                    } else {
+                        rig.active_mut().stomp_group(command).err()
+                    }
+                }
                 WorkerRequest::Branch { command } => rig.active_mut().set_branch(command).err(),
                 WorkerRequest::BranchSleep { command } => {
                     rig.active_mut().set_branch_sleep(command).err()

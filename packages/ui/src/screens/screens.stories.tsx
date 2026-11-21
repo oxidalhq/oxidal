@@ -38,6 +38,9 @@ RigPlaying.play = async ({ canvasElement }) => {
   await expect(
     canvas.getByRole('heading', { name: 'Echo lead' }),
   ).toBeVisible();
+  await expect(
+    canvas.queryByRole('button', { name: 'Edit Wet switch' }),
+  ).toBeNull();
   const current = within(canvas.getByRole('group', { name: 'Switch preset' }));
   await expect(
     current.getByRole('button', { name: 'Next preset' }),
@@ -47,6 +50,22 @@ RigPlaying.play = async ({ canvasElement }) => {
   );
   await expect(
     canvas.getByRole('heading', { name: 'Rhythm section' }),
+  ).toBeVisible();
+  await userEvent.click(
+    canvas.getByRole('button', { name: 'Playing preset: Rhythm section' }),
+  );
+  const dialog = within(
+    within(canvasElement.ownerDocument.body).getByRole('dialog', {
+      name: 'Choose a preset',
+    }),
+  );
+  await userEvent.type(
+    dialog.getByRole('searchbox', { name: 'Find a preset' }),
+    'lead',
+  );
+  await userEvent.click(dialog.getByRole('button', { name: 'Echo lead' }));
+  await expect(
+    canvas.getByRole('heading', { name: 'Echo lead' }),
   ).toBeVisible();
 };
 
@@ -138,7 +157,14 @@ export const StageSheet: StoryObj = {
 
 StagePerform.play = async ({ canvasElement }) => {
   const canvas = within(canvasElement);
+  await userEvent.click(canvas.getByRole('button', { name: 'Wet · Off' }));
+  await expect(
+    canvas.getByRole('button', { name: 'Wet · On' }),
+  ).toHaveAttribute('aria-pressed', 'true');
   await userEvent.click(canvas.getByRole('button', { name: /^B Crunch/ }));
+  await expect(
+    canvas.getByRole('button', { name: 'Wet · Off' }),
+  ).toHaveAttribute('aria-pressed', 'false');
   await expect(await canvas.findByText(/Scene · Crunch/)).toBeVisible();
   await userEvent.click(canvas.getByRole('button', { name: /^D Next/ }));
   await expect(

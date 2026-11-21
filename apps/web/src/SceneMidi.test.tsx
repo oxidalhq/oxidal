@@ -127,6 +127,57 @@ async function open() {
     expect(screen.getByLabelText('Parameter CC 1')).toHaveValue(20),
   );
 }
+it('learns a CC for a named live stomp group in toggle mode', async () => {
+  const user = userEvent.setup();
+  const current = state();
+  current.control!.stomp_groups = [
+    {
+      id: 'wet-group',
+      name: 'Wet',
+      nodes: ['echo', 'bloom'],
+      enabled: false,
+      partial: false,
+    },
+  ];
+  const onCommand = vi.fn(async () => {});
+  const view = render(
+    <SceneMidi state={current} disabled={false} onCommand={onCommand} />,
+  );
+  await open();
+  await user.click(screen.getByLabelText('MIDI parameter 1'));
+  await user.click(screen.getByRole('option', { name: 'Stomp group · Wet' }));
+  const behavior = screen.getByLabelText('Parameter behavior 1');
+  expect(behavior).toBeDisabled();
+  expect(behavior).toHaveTextContent('Toggle on press');
+  await user.click(screen.getByRole('button', { name: 'Learn CC 1' }));
+  expect(screen.getByText('Press the stomp footswitch')).toBeInTheDocument();
+  current.control!.midi = {
+    connected: true,
+    events: 11,
+    last: { kind: 'control', channel: 2, controller: 41, value: 127 },
+    error: null,
+  };
+  view.rerender(
+    <SceneMidi state={{ ...current }} disabled={false} onCommand={onCommand} />,
+  );
+  expect(screen.getByLabelText('Parameter CC 1')).toHaveValue(41);
+  expect(onCommand).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button', { name: 'Apply MIDI' }));
+  expect(onCommand).toHaveBeenCalledWith(
+    expect.objectContaining({
+      kind: 'midi',
+      settings: expect.objectContaining({
+        parameter_bindings: [
+          {
+            controller: 41,
+            mode: 'toggle',
+            target: { kind: 'stomp_group', group: 'wet-group' },
+          },
+        ],
+      }),
+    }),
+  );
+});
 it('learns only a fresh CC on the selected channel and keeps the first result until Apply', async () => {
   const current = state();
   const command = vi.fn(async () => {});

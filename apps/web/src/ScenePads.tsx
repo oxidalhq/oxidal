@@ -26,6 +26,7 @@ function typing(target: EventTarget | null) {
 export function ScenePads({
   scenes,
   active,
+  canRecallActive = false,
   fading,
   disabled,
   onSelect,
@@ -34,6 +35,8 @@ export function ScenePads({
 }: {
   scenes: Scene[];
   active: string | null | undefined;
+  /** A manual override can be reset by pressing the last recalled scene again. */
+  canRecallActive?: boolean;
   fading: boolean;
   disabled: boolean;
   onSelect: (id: string) => void;
@@ -50,9 +53,15 @@ export function ScenePads({
   };
   useEffect(() => release, []);
   // Latest props for the key handler without re-registering it every render.
-  const latest = useRef({ scenes, active, disabled, onSelect });
+  const latest = useRef({
+    scenes,
+    active,
+    canRecallActive,
+    disabled,
+    onSelect,
+  });
   useEffect(() => {
-    latest.current = { scenes, active, disabled, onSelect };
+    latest.current = { scenes, active, canRecallActive, disabled, onSelect };
   });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -64,9 +73,11 @@ export function ScenePads({
       )
         return;
       const index = Number(e.key) - 1;
-      const { scenes, active, disabled, onSelect } = latest.current;
+      const { scenes, active, canRecallActive, disabled, onSelect } =
+        latest.current;
       const scene = Number.isInteger(index) ? scenes[index] : undefined;
-      if (!scene || disabled || scene.id === active) return;
+      if (!scene || disabled || (scene.id === active && !canRecallActive))
+        return;
       e.preventDefault();
       onSelect(scene.id);
     };
@@ -112,7 +123,7 @@ export function ScenePads({
                   held.current = null;
                   return;
                 }
-                if (scene.id !== active) onSelect(scene.id);
+                if (scene.id !== active || canRecallActive) onSelect(scene.id);
               }}
               {...(onMenu && {
                 onPointerDown: () => {

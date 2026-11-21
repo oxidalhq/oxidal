@@ -199,7 +199,13 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
           onMenu={setMenu}
           scenes={state.control.scenes.scenes}
           active={
-            state.control.branch_sleep?.active_scene ?? state.control.scene
+            state.control.branch_sleep?.active_scene ??
+            state.control.stomp_scene ??
+            state.control.scene
+          }
+          canRecallActive={
+            !!state.control.stomp_scene &&
+            state.control.stomp_scene !== state.control.scene
           }
           fading={!!state.control.scene_transitioning}
           disabled={waiting}
@@ -414,12 +420,11 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
                         id: `scene-${crypto.randomUUID().slice(0, 8)}`,
                         name: label,
                         gains: editingSceneGains,
-                        bypass: state.control?.controls
-                          .filter((c) => c.target.kind === 'bypass')
-                          .map((c) => ({
-                            node: c.target.node,
-                            value: c.value === 1,
-                          })),
+                        bypass: state.control?.controls.flatMap((c) =>
+                          c.target.kind === 'bypass'
+                            ? [{ node: c.target.node, value: c.value === 1 }]
+                            : [],
+                        ),
                         ...(values.length ? { controls: values } : {}),
                         ...(nativeNow.length
                           ? {

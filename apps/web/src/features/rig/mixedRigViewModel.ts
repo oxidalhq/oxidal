@@ -179,7 +179,9 @@ export function mixedRigViewModel({
     (p) => p.id === selected?.instance,
   )?.pluginUri;
   const controls = oxidalEffectControls(
-    state.control?.controls.filter((c) => c.target.node === selected?.id) ?? [],
+    state.control?.controls.filter(
+      (c) => 'node' in c.target && c.target.node === selected?.id,
+    ) ?? [],
     selectedPluginUri,
   ).map((c) => {
     // A guarded stage has exactly one source block; its selected tile supplies

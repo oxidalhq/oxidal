@@ -150,6 +150,8 @@ function withPreview(route: RigRoute): RigRoute {
 export function RigSurface({
   presetName,
   presetSteps,
+  presetTitle,
+  stompControls,
   playing = false,
   route,
   saved,
@@ -190,6 +192,8 @@ export function RigSurface({
 }: {
   presetName: string;
   presetSteps?: React.ReactNode;
+  presetTitle?: React.ReactNode;
+  stompControls?: React.ReactNode;
   playing?: boolean;
   /** The route as edited (what plays). */
   route: RigRoute;
@@ -593,8 +597,8 @@ export function RigSurface({
           <div className="grid min-w-0 gap-1">
             <Eyebrow>{playing ? 'Playing' : 'Rig'}</Eyebrow>
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <Title size="md" className="truncate">
-                {presetName}
+              <Title size="md" className="truncate" aria-label={presetName}>
+                {presetTitle ?? presetName}
               </Title>
               {presetSteps}
               <VersionPicker
@@ -704,6 +708,7 @@ export function RigSurface({
         </div>
       )}
 
+      {stompControls}
       <RouteView
         route={withPreview(shown)}
         onChange={change}

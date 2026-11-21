@@ -487,6 +487,43 @@ fn scenes_read_both_versions_and_refuse_an_unknown_one_as_unsupported() {
 }
 
 #[test]
+fn stomp_groups_round_trip_only_with_prepared_scene_targets() {
+    let parse = |value: &Value| Manifest::parse(&serde_json::to_vec(value).unwrap());
+    let key = STOMP_GROUPS_EXTENSION;
+    let mut value = scenes_as(scene_controls_manifest(), SCENES_BYPASS_EXTENSION);
+    for scene in value["extensions"][SCENES_BYPASS_EXTENSION]["scenes"]
+        .as_array_mut()
+        .unwrap()
+    {
+        scene["bypass"] = json!([{"node":"fx","value":false}]);
+    }
+    let wet = json!({"id":"wet_fx-1","name":"Wet","nodes":["fx"]});
+    value["extensions"][key] = json!({"groups":[wet.clone()]});
+    assert!(parse(&value).is_err(), "must be marked required");
+    value["requiredExtensions"] = json!([SCENES_BYPASS_EXTENSION, key]);
+    let parsed = parse(&value).unwrap();
+    parsed.check_required_extensions().unwrap();
+    let reopened = Manifest::parse(&parsed.encode().unwrap()).unwrap();
+    assert_eq!(
+        reopened.stomp_groups().unwrap(),
+        parsed.stomp_groups().unwrap()
+    );
+    for groups in [
+        json!([]),
+        json!([wet, wet]),
+        json!([{"id":"bad space","name":"Wet","nodes":["fx"]}]),
+        json!([{"id":"wet","name":" Wet","nodes":["fx"]}]),
+        json!([{"id":"wet","name":"Wet","nodes":["fx","fx"]}]),
+        json!([{"id":"wet","name":"Wet","nodes":["in"]}]),
+        json!([{"id":"wet","name":"Wet","nodes":["fx","gone"]}]),
+    ] {
+        let mut invalid = value.clone();
+        invalid["extensions"][key]["groups"] = groups;
+        assert!(parse(&invalid).is_err());
+    }
+}
+
+#[test]
 fn scene_bypass_requires_version_three_and_a_complete_processor_target_set() {
     let parse = |value: &Value| Manifest::parse(&serde_json::to_vec(value).unwrap());
     let key = SCENES_BYPASS_EXTENSION;

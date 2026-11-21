@@ -13,7 +13,9 @@ pub use sleep::{
     MAX_SLEEP_BRANCHES, RigSleepPlan, SLEEP_BRANCHES_EXTENSION, SleepBranch, SleepBranches,
     SleepSendBoundary,
 };
+mod stomp;
 mod strict;
+pub use stomp::{MAX_STOMP_GROUPS, STOMP_GROUPS_EXTENSION, StompGroup};
 #[cfg(test)]
 mod tests;
 mod validation;
@@ -95,6 +97,7 @@ impl Manifest {
         self.shape()?;
         self.semantics()?;
         self.scenes()?;
+        self.stomp_groups()?;
         self.sleep_branches()?;
         self.native_settings()?;
         crate::LibraryOrigin::from_manifest(self)?;
@@ -118,6 +121,7 @@ impl Manifest {
                 && key != SCENES_BYPASS_EXTENSION
                 && key != SCENES_NATIVE_EXTENSION
                 && key != SCENES_INNER_BYPASS_EXTENSION
+                && key != STOMP_GROUPS_EXTENSION
                 && key != SLEEP_BRANCHES_EXTENSION
                 && key != NATIVE_SETTINGS_EXTENSION
                 && key != GAIN_EXTENSION

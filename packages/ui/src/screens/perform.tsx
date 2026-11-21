@@ -46,9 +46,15 @@ import { Footswitches, type StageState } from '../widgets/footswitches';
 import { Meter } from '../widgets/meter';
 import { MidiTarget } from '../widgets/midi';
 import { SheetViewer } from '../widgets/sheet-viewer';
+import { type StompAssignment,StompSwitch } from '../widgets/stomp-group';
 import { Transport, type TransportState } from '../widgets/transport';
 import { TunerFace } from '../widgets/tuner-face';
 import { CaptureSceneSheet } from './capture-scene-sheet';
+import {
+  CAPTURE_ROUTE,
+  CAPTURE_STOMP_KEY,
+  CAPTURE_WET,
+} from './four-captures.fixtures';
 import { FRIDAY_SET } from './perform.data';
 import { PlayerSheet } from './sheets';
 import { SONGS } from './songs.data';
@@ -104,6 +110,22 @@ export function Perform({
           : false),
     },
   };
+  const [stomp] = useRemembered<StompAssignment | null>(
+    CAPTURE_STOMP_KEY,
+    CAPTURE_WET,
+  );
+  const sceneIndex = editor.scenes.findIndex((s) => s.id === scene);
+  const sceneValue = (node: string, index: number) =>
+    editor.scenes[index]?.on[node] ??
+    CAPTURE_ROUTE.find((b) => b.id === node)?.on ??
+    false;
+  const groupOn =
+    stomp?.nodes.filter(
+      (node) => blockOverrides[node] ?? sceneValue(node, sceneIndex),
+    ).length ?? 0;
+  const nextScene = (sceneIndex + 1) % editor.scenes.length;
+  const nextOn =
+    stomp?.nodes.filter((node) => sceneValue(node, nextScene)).length ?? 0;
   const selectScene = (id: string) => {
     setBlockOverrides({});
     setScene(id);
@@ -314,6 +336,33 @@ export function Perform({
         active={scene}
         onSelect={selectScene}
       />
+      {index === 0 && stomp && (
+        <StompSwitch
+          name={stomp.name}
+          enabled={groupOn === stomp.nodes.length}
+          partial={groupOn > 0 && groupOn < stomp.nodes.length}
+          disabled={false}
+          next={
+            editor.scenes[nextScene]
+              ? editor.scenes[nextScene]!.name +
+                ' recall · ' +
+                (nextOn === 0
+                  ? 'Off'
+                  : nextOn === stomp.nodes.length
+                    ? 'On'
+                    : 'Mixed')
+              : undefined
+          }
+          onPress={() =>
+            setBlockOverrides((all) => ({
+              ...all,
+              ...Object.fromEntries(
+                stomp.nodes.map((n) => [n, groupOn !== stomp.nodes.length]),
+              ),
+            }))
+          }
+        />
+      )}
       {/* What is playing. */}
       <div className="grid justify-items-center gap-0.5 text-center">
         <Eyebrow

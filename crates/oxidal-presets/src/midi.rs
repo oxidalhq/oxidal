@@ -20,6 +20,7 @@ struct Saved<'a> {
     retain_source: bool,
     branches: &'a [String],
     blocks: &'a [(String, u8)],
+    stomp_groups: &'a [String],
 }
 
 const LIMIT: u64 = 16 * 1024 * 1024;
@@ -1011,11 +1012,22 @@ impl MidiMapStore {
                 (node.id.clone(), u8::try_from(gains).unwrap_or(u8::MAX))
             })
             .collect::<Vec<_>>();
-        if retain_source {
-            self.follow_version(source, target, &scenes, &branches, &blocks)?;
-        } else {
-            self.follow_save(source, target, &scenes, &branches, &blocks)?;
-        }
+        let stomp_groups = manifest
+            .stomp_groups()?
+            .into_iter()
+            .map(|group| group.id)
+            .collect::<Vec<_>>();
+        self.carry(
+            source,
+            target,
+            &scenes,
+            Some(Saved {
+                branches: &branches,
+                blocks: &blocks,
+                stomp_groups: &stomp_groups,
+                retain_source,
+            }),
+        )?;
         Ok(())
     }
 
@@ -1046,6 +1058,7 @@ impl MidiMapStore {
             Some(Saved {
                 branches,
                 blocks,
+                stomp_groups: &[],
                 retain_source: false,
             }),
         )
@@ -1068,6 +1081,7 @@ impl MidiMapStore {
             Some(Saved {
                 branches,
                 blocks,
+                stomp_groups: &[],
                 retain_source: true,
             }),
         )
@@ -1097,7 +1111,10 @@ impl MidiMapStore {
             .bindings
             .retain(|binding| known.contains(&binding.scene));
         if let Some(Saved {
-            branches, blocks, ..
+            branches,
+            blocks,
+            stomp_groups,
+            ..
         }) = &saved
         {
             mapping
@@ -1109,6 +1126,7 @@ impl MidiMapStore {
                     | ControlTarget::Lv2 { node, .. }
                     | ControlTarget::Bypass { node } => (node, None),
                     ControlTarget::Merge { node, port } => (node, Some(*port)),
+                    ControlTarget::StompGroup { group } => return stomp_groups.contains(group),
                 };
                 blocks.iter().any(|(id, inputs)| {
                     id == node && port.is_none_or(|port| port < usize::from(*inputs))

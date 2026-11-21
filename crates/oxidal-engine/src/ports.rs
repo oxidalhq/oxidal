@@ -1052,13 +1052,19 @@ impl PreparedPorts {
         }) || self.ramps.iter().any(ControlRamp::active)
     }
     pub(crate) fn check_scene_bypass(&self, values: &[SceneBypass]) -> Result<(), String> {
+        if values.len()
+            != self
+                .nodes
+                .iter()
+                .filter(|n| n.scene_bypass.as_ref().is_some_and(|b| b.scene_target))
+                .count()
+        {
+            return Err("Invalid scene bypass target".into());
+        }
+        self.check_warm_bypass_targets(values)
+    }
+    pub(crate) fn check_warm_bypass_targets(&self, values: &[SceneBypass]) -> Result<(), String> {
         if self.failed
-            || values.len()
-                != self
-                    .nodes
-                    .iter()
-                    .filter(|n| n.scene_bypass.as_ref().is_some_and(|b| b.scene_target))
-                    .count()
             || values.iter().enumerate().any(|(i, value)| {
                 values[..i].iter().any(|v| v.node == value.node)
                     || !self.nodes.iter().any(|n| {
@@ -1071,7 +1077,7 @@ impl PreparedPorts {
         }
         Ok(())
     }
-    /// Apply bypass targets already checked by `check_scene_bypass`.
+    /// Apply already checked warm bypass targets at the same stream position.
     pub(crate) fn scene_bypass(&mut self, values: &[SceneBypass], frames: u32) {
         for value in values {
             let node = self.nodes.iter_mut().find(|n| n.id == value.node).unwrap();

@@ -64,3 +64,20 @@ it('ignores number keys while typing or while disabled', () => {
   fireEvent.keyDown(window, { key: '2' });
   expect(onSelect).not.toHaveBeenCalled();
 });
+
+it('reapplies the last named scene by touch or keyboard after a manual stomp change', () => {
+  const onSelect = vi.fn();
+  render(
+    <ScenePads
+      scenes={scenes}
+      active="a"
+      canRecallActive
+      disabled={false}
+      fading={false}
+      onSelect={onSelect}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Scene 1: Clean' }));
+  fireEvent.keyDown(window, { key: '1' });
+  expect(onSelect.mock.calls).toEqual([['a'], ['a']]);
+});

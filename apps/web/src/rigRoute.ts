@@ -9,7 +9,12 @@ import {
   validateStages,
 } from './rigDraft';
 import { readBlock } from './rigEdit';
-import { readScenes, sealScenes } from './sceneFormat';
+import {
+  readScenes,
+  rigStompGroups,
+  sealScenes,
+  writeStompGroups,
+} from './sceneFormat';
 
 /**
  * The general routing model (7.26): a chain of blocks where a split holds any
@@ -891,10 +896,20 @@ export function buildSceneRoute(
   // Scene settings of an effect that was removed or replaced go with it, as
   // `keepScenes` does for presets without scene lanes.
   const effects = new Set(host.lv2.map((l) => l.id));
-  const scenes = readScenes<{ scenes?: { controls?: { node: string }[] }[] }>(
-    manifest,
+  writeStompGroups(manifest, rigStompGroups(document.manifest));
+  const processors = new Set(
+    host.graph.nodes
+      .filter((n) => n.kind === 'lv2' || n.kind === 'tone3000')
+      .map((n) => n.id),
   );
+  const scenes = readScenes<{
+    scenes?: { controls?: { node: string }[]; bypass?: { node: string }[] }[];
+  }>(manifest);
   for (const item of scenes?.scenes ?? []) {
+    if (item.bypass) {
+      item.bypass = item.bypass.filter((row) => processors.has(row.node));
+      if (!item.bypass.length) delete item.bypass;
+    }
     if (!item.controls) continue;
     item.controls = item.controls.filter((c) => effects.has(c.node));
     if (!item.controls.length) delete item.controls;

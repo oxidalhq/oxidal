@@ -1,6 +1,38 @@
-import { CaretLeft, CaretRight } from '@phosphor-icons/react';
+import { CaretDown, CaretLeft, CaretRight } from '@phosphor-icons/react';
+import type { ReactNode } from 'react';
 
 import { Button } from '../components/ui/button';
+
+export function PresetNameButton({
+  name,
+  label = 'Playing preset',
+  disabled,
+  className,
+  onOpen,
+  children,
+}: {
+  name: string;
+  label?: string;
+  disabled?: boolean;
+  className?: string;
+  onOpen: () => void;
+  children?: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className={className}
+      aria-label={`${label}: ${name}`}
+      aria-haspopup="dialog"
+      title={name}
+      disabled={disabled}
+      onClick={onOpen}
+    >
+      {children ?? name}
+      <CaretDown aria-hidden="true" />
+    </button>
+  );
+}
 
 /** Quick recall leaves the chain in view. The caller supplies confirmed neighbours. */
 export function PresetSteps({

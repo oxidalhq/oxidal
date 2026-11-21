@@ -90,6 +90,7 @@ export function RigHeader({ rig, vm }: RigViewProps) {
     <>
       <div className="rig-performance-header">
         <RigPresetSelector
+          phase={state.phase}
           current={{
             key: revision
               ? choiceKey({

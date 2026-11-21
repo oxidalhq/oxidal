@@ -1,4 +1,4 @@
-import { amp, cab, delay, drive } from '../patterns/rig.fixtures';
+import { amp, cab, delay, drive, reverb } from '../patterns/rig.fixtures';
 import type { SceneModel } from '../widgets/scene-editor';
 
 const captures = [
@@ -8,11 +8,15 @@ const captures = [
   amp('dirt', 'AC30 dirt', 'ac30'),
 ].map((block, i) => ({ ...block, caption: 'Full rig · NAM', on: i === 0 }));
 
+export const CAPTURE_STOMP_KEY = 'oxidal.demo.capture-stomp';
+export const CAPTURE_WET = { id: 'wet', name: 'Wet', nodes: ['echo', 'bloom'] };
+
 export const CAPTURE_ROUTE = [
   drive('ts9'),
   ...captures,
   { ...cab('cab', 'Optional cabinet', 'gb412'), on: false },
   delay('echo'),
+  reverb('bloom', 'Reverb · Hall'),
 ];
 
 export const CAPTURE_SCENES: SceneModel[] = [
@@ -29,6 +33,7 @@ export const CAPTURE_SCENES: SceneModel[] = [
     ),
     ts9: i >= 2,
     echo: i === 2,
+    bloom: i === 2,
     cab: false,
   },
   levels: {},

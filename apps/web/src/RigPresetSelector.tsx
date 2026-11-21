@@ -1,14 +1,12 @@
-import {
-  ArrowsClockwise,
-  CaretDown,
-  CaretLeft,
-  CaretRight,
-} from '@phosphor-icons/react';
+import { ArrowsClockwise, CaretLeft, CaretRight } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { Loading } from '@oxidal/design-system/components/states';
-import { PresetSteps } from '@oxidal/design-system/widgets/preset-steps';
+import {
+  PresetNameButton,
+  PresetSteps,
+} from '@oxidal/design-system/widgets/preset-steps';
 
 import './PresetPicker.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
@@ -19,6 +17,7 @@ import {
   saveReadySound,
   unsavedReadySounds,
 } from './features/library/oxidal/readySounds';
+import type { AudioPhase } from './generated/contract';
 import { friendlyError } from './lib/friendlyError';
 import { useSessionState } from './lib/sessionState';
 import {
@@ -48,11 +47,13 @@ const SOURCES: [Source, string][] = [
  */
 export function RigPresetSelector({
   current: playing,
+  phase,
   disabled,
   onSelect,
   pads = false,
   all = false,
 }: {
+  phase?: AudioPhase;
   pads?: boolean;
   /** With pads: every preset on one scrolling page, with the steps first. */
   all?: boolean;
@@ -119,7 +120,18 @@ export function RigPresetSelector({
       active = false;
     };
   }, [refresh, playing.refresh]);
-  const selected = playing.key;
+  const [lastRunning, setLastRunning] = useState<{
+    key: string;
+    name?: string | null;
+  } | null>(null);
+  useEffect(() => {
+    if (phase === 'running')
+      setLastRunning({ key: playing.key, name: playing.name });
+  }, [phase, playing.key, playing.name]);
+  const preparing = phase === 'starting';
+  const unconfirmed = preparing || phase === 'failed';
+  const displayed = unconfirmed && lastRunning ? lastRunning : playing;
+  const selected = displayed.key;
   /** The Library set list, in its order. */
   const setList = items.filter((item) => item.inSetList);
   const inSource = (item: Choice, source: Source) =>
@@ -302,7 +314,7 @@ export function RigPresetSelector({
   const current = pickerItems[index];
   const name =
     current?.name ??
-    playing.name ??
+    displayed.name ??
     (loading ? 'Loading presets…' : 'Unsaved preset');
   /** Set-list number (1-based) of a preset, or 0 when it is not in the set list. */
   const number = (item: Choice | undefined) =>
@@ -349,14 +361,20 @@ export function RigPresetSelector({
   return (
     <div className="preset-picker" aria-label="Preset navigation">
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
-        <button
-          type="button"
+        <PresetNameButton
+          name={name}
+          label={
+            unconfirmed
+              ? lastRunning
+                ? 'Last playing preset'
+                : preparing
+                  ? 'Preparing preset'
+                  : 'Unavailable preset'
+              : undefined
+          }
           className="preset-picker-name"
-          aria-label={`Playing preset: ${name}`}
-          aria-haspopup="dialog"
-          title={name}
-          disabled={disabled || (loading && !items.length)}
-          onClick={() => {
+          disabled={disabled || preparing || (loading && !items.length)}
+          onOpen={() => {
             setQuery('');
             setOpen(true);
           }}
@@ -382,7 +400,13 @@ export function RigPresetSelector({
               )}
             </span>
             <span className="preset-picker-meta">
-              {current ? choiceSummary(current) : 'Not saved yet'}
+              {unconfirmed
+                ? preparing
+                  ? 'Preparing sound…'
+                  : 'Audio failed'
+                : current
+                  ? choiceSummary(current)
+                  : 'Not saved yet'}
               {playingNumber > 0
                 ? ` · Set list ${playingNumber} of ${setList.length}`
                 : current
@@ -390,12 +414,11 @@ export function RigPresetSelector({
                   : ''}
             </span>
           </span>
-          <CaretDown aria-hidden="true" />
-        </button>
+        </PresetNameButton>
         <PresetSteps
           previous={previous?.name}
           next={next?.name}
-          disabled={disabled || loading}
+          disabled={disabled || loading || preparing}
           onStep={(direction) => choose(direction < 0 ? previous : next)}
         />
       </div>

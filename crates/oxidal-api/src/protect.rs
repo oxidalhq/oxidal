@@ -122,6 +122,7 @@ pub fn rig(action: &RigAudioAction, phase: AudioPhase) -> bool {
         RigAudioAction::Scene { command } => command.native_bypass_preview.is_none(),
         RigAudioAction::Switch { .. }
         | RigAudioAction::Branch { .. }
+        | RigAudioAction::StompGroup { .. }
         | RigAudioAction::Save { .. } => true,
         RigAudioAction::Control { command } => matches!(command.target, Target::Bypass { .. }),
         RigAudioAction::Restart => phase == AudioPhase::Failed,

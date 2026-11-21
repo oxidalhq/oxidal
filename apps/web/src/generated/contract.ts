@@ -286,6 +286,10 @@ export type Target2 =
       kind: "merge";
       node: string;
       port: number;
+    }
+  | {
+      group: string;
+      kind: "stomp_group";
     };
 export type Message =
   | {
@@ -1019,6 +1023,10 @@ export type RigAudioAction =
   | {
       command: BranchCommand;
       kind: "branch";
+    }
+  | {
+      command: StompGroupCommand;
+      kind: "stomp_group";
     }
   | {
       command: BranchSleepCommand;
@@ -3650,6 +3658,11 @@ export interface BranchCommand {
   expected_revision: number;
   session: string;
 }
+export interface StompGroupCommand {
+  expected_revision: number;
+  group: string;
+  session: string;
+}
 export interface BranchSleepCommand {
   enabled: boolean;
   expected_revision: number;
@@ -3721,6 +3734,11 @@ export interface Snapshot3 {
   session: string;
   slots?: NodeSlots[];
   source_revision: string;
+  stomp_groups?: StompGroupState[];
+  /**
+   * Last named scene selected, even when its saved bypass differs from the live group.
+   */
+  stomp_scene?: string | null;
   working?: NodeWorking[];
 }
 export interface NodeAuthoring {
@@ -3850,6 +3868,19 @@ export interface SceneGain {
 export interface NodeSlots {
   node: string;
   slots: NativeSlot[];
+}
+export interface StompGroupState {
+  /**
+   * All targets are on.
+   */
+  enabled: boolean;
+  id: string;
+  name: string;
+  nodes: string[];
+  /**
+   * Some targets are on and others are off.
+   */
+  partial: boolean;
 }
 export interface SaveState {
   error?: string | null;

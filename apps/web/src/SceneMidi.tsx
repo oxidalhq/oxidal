@@ -34,7 +34,7 @@ import {
 type Settings = NonNullable<NonNullable<RigAudioState['configured']>['midi']>;
 type MidiView = Pick<
   NonNullable<RigAudioState['control']>,
-  'controls' | 'scenes' | 'branches' | 'midi'
+  'controls' | 'scenes' | 'branches' | 'midi' | 'stomp_groups'
 >;
 type Learning =
   | { kind: 'scene'; index: number; after: number }
@@ -280,7 +280,20 @@ export function MidiControls({
       current = false;
     };
   }, [dialogOpen, presetId, presetKey, presetKind]);
-  const controls = control?.controls ?? [];
+  const controls = [
+    ...(control?.controls ?? []).flatMap((c) =>
+      'node' in c.target
+        ? [{ ...c, mappingLabel: `${c.target.node} · ${c.label}` }]
+        : [],
+    ),
+    ...(control?.stomp_groups ?? []).map((group) => ({
+      target: { kind: 'stomp_group' as const, group: group.id },
+      mappingLabel: `Stomp group · ${group.name}`,
+      toggle: true,
+      display: group.partial ? 'Mixed' : group.enabled ? 'On' : 'Off',
+      value: Number(group.enabled),
+    })),
+  ];
   const conflicts = midiConflicts(draft);
   if (!control) return null;
   return (
@@ -724,6 +737,7 @@ export function MidiControls({
                   <fieldset className="space-y-2">
                     <legend className="font-semibold">Parameters</legend>
                     {(draft?.parameter_bindings ?? []).map((binding, index) => {
+                      const stomp = binding.target.kind === 'stomp_group';
                       const control = controls.find(
                         (c) =>
                           JSON.stringify(c.target) ===
@@ -762,7 +776,10 @@ export function MidiControls({
                                 if (selected)
                                   change({
                                     target: selected.target,
-                                    mode: 'absolute',
+                                    mode:
+                                      selected.target.kind === 'stomp_group'
+                                        ? 'toggle'
+                                        : 'absolute',
                                   });
                               }}
                             >
@@ -784,7 +801,7 @@ export function MidiControls({
                                     key={JSON.stringify(c.target)}
                                     value={JSON.stringify(c.target)}
                                   >
-                                    {c.target.node} · {c.label}
+                                    {c.mappingLabel}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -808,8 +825,12 @@ export function MidiControls({
                             <label className="field min-w-0">
                               Behavior
                               <Select
-                                value={binding.mode ?? 'absolute'}
-                                disabled={disabled}
+                                value={
+                                  stomp
+                                    ? 'toggle'
+                                    : (binding.mode ?? 'absolute')
+                                }
+                                disabled={disabled || stomp}
                                 onValueChange={(value) =>
                                   change({
                                     mode: value as NonNullable<
@@ -824,10 +845,12 @@ export function MidiControls({
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="absolute">
-                                    Absolute
-                                  </SelectItem>
-                                  {control?.toggle ? (
+                                  {!stomp && (
+                                    <SelectItem value="absolute">
+                                      Absolute
+                                    </SelectItem>
+                                  )}
+                                  {stomp || control?.toggle ? (
                                     <SelectItem value="toggle">
                                       Toggle on press
                                     </SelectItem>
@@ -874,7 +897,9 @@ export function MidiControls({
                             {learning?.kind === 'parameter' &&
                               learning.index === index && (
                                 <span role="status" className="caption">
-                                  Move a controller knob
+                                  {stomp
+                                    ? 'Press the stomp footswitch'
+                                    : 'Move a controller knob'}
                                 </span>
                               )}
                           </div>
@@ -927,7 +952,9 @@ export function MidiControls({
                           const controller = Array.from(
                             { length: 128 },
                             (_, i) => i,
-                          ).find((cc) => !used.has(cc));
+                          ).find(
+                            (cc) => cc !== 0 && cc !== 32 && !used.has(cc),
+                          );
                           if (controller == null) return old;
                           return {
                             ...old,
@@ -936,7 +963,10 @@ export function MidiControls({
                               {
                                 target: controls[0].target,
                                 controller,
-                                mode: 'absolute',
+                                mode:
+                                  controls[0].target.kind === 'stomp_group'
+                                    ? 'toggle'
+                                    : 'absolute',
                               },
                             ],
                           };

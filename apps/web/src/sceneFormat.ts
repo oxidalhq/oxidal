@@ -12,6 +12,39 @@ import type { RigDocument } from './api';
  */
 type Manifest = RigDocument['manifest'];
 
+export const STOMP_GROUPS = 'urn:oxidal:stomp-groups:1';
+
+export type StompGroup = { id: string; name: string; nodes: string[] };
+
+export function rigStompGroups(manifest: Manifest): StompGroup[] {
+  return manifest.extensions[STOMP_GROUPS]?.groups ?? [];
+}
+
+/** Keep assignments only for processors still present in the edited chain. */
+export function writeStompGroups(
+  manifest: Manifest,
+  groups: StompGroup[],
+): void {
+  const processors = new Set(
+    manifest.oxidal?.graph.nodes
+      .filter((n) => n.kind === 'lv2' || n.kind === 'tone3000')
+      .map((n) => n.id),
+  );
+  const kept = groups
+    .map((g) => ({ ...g, nodes: g.nodes.filter((id) => processors.has(id)) }))
+    .filter((g) => g.nodes.length);
+  if (kept.length) {
+    manifest.extensions[STOMP_GROUPS] = { groups: kept };
+    if (!manifest.requiredExtensions.includes(STOMP_GROUPS))
+      manifest.requiredExtensions.push(STOMP_GROUPS);
+  } else {
+    delete manifest.extensions[STOMP_GROUPS];
+    manifest.requiredExtensions = manifest.requiredExtensions.filter(
+      (key) => key !== STOMP_GROUPS,
+    );
+  }
+}
+
 export const SCENES_V1 = 'urn:oxidal:scenes:1';
 export const SCENES_V2 = 'urn:oxidal:scenes:2';
 export const SCENES_V3 = 'urn:oxidal:scenes:3';

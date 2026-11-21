@@ -18,10 +18,11 @@ import {
   renameScene,
   sceneCopyPlan,
   scenePaths,
+  setStompGroups,
   updateScene,
   updateScenes,
 } from './sceneEdit';
-import { readScenes, scenesKey } from './sceneFormat';
+import { readScenes, scenesKey, STOMP_GROUPS } from './sceneFormat';
 
 const validator = new Ajv({ strict: false }).compile(schema);
 const port = (index: number, symbol: string, input: boolean, audio: boolean) =>
@@ -883,4 +884,69 @@ it('saves native block scene states from immutable defaults and preserves them t
     validator(JSON.parse(copied.manifest_json)),
     JSON.stringify(validator.errors),
   ).toBe(true);
+});
+
+it('prepares a shared stomp group in every scene while retaining existing bypass choices', () => {
+  const source = lv2Scenes('Combo', ['echo', 'bloom', 'drive']);
+  const warm = updateScenes(
+    source,
+    {},
+    undefined,
+    {},
+    undefined,
+    [],
+    {},
+    {
+      lead: [
+        { node: 'drive', value: true },
+        { node: 'echo', value: true },
+      ],
+    },
+  );
+  const original = JSON.parse(warm.manifest_json) as RigDocument['manifest'];
+  const group = { id: 'wet', name: 'Wet', nodes: ['echo', 'bloom'] };
+  const saved = JSON.parse(
+    setStompGroups({ ...source, manifest: original }, [group], {}, 'Combo')
+      .manifest_json,
+  ) as RigDocument['manifest'];
+  expect(saved.extensions[STOMP_GROUPS]).toEqual({ groups: [group] });
+  expect(saved.requiredExtensions).toContain(STOMP_GROUPS);
+  const values = (manifest: RigDocument['manifest']) =>
+    readScenes<{
+      scenes: { id: string; bypass: { node: string; value: boolean }[] }[];
+    }>(manifest)!.scenes.map((s) =>
+      Object.fromEntries(s.bypass.map((b) => [b.node, b.value])),
+    );
+  expect(values(saved)).toEqual(
+    values(original).map((v) => ({ ...v, bloom: false })),
+  );
+  for (const remaining of [['bloom', 'echo'], ['bloom'], []]) {
+    const rebuilt = JSON.parse(
+      keepScenes(
+        { ...source, manifest: saved },
+        {
+          manifest_json: JSON.stringify(
+            lv2Scenes('Combo', [...remaining, 'drive']).manifest,
+          ),
+          resources: {},
+        },
+      ).manifest_json,
+    ) as RigDocument['manifest'];
+    expect(rebuilt.extensions[STOMP_GROUPS]?.groups ?? []).toEqual(
+      remaining.length
+        ? [
+            {
+              ...group,
+              nodes: group.nodes.filter((n) => remaining.includes(n)),
+            },
+          ]
+        : [],
+    );
+  }
+  const removed = JSON.parse(
+    setStompGroups({ ...source, manifest: saved }, [], {}, 'Combo')
+      .manifest_json,
+  ) as RigDocument['manifest'];
+  expect(removed.requiredExtensions).not.toContain(STOMP_GROUPS);
+  expect(values(removed)).toEqual(values(saved));
 });

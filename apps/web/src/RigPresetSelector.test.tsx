@@ -569,3 +569,58 @@ it('offers ready Oxidal sounds that are not saved yet, and saves one before play
   );
   expect(saveReadySound).toHaveBeenCalledWith(recipe);
 });
+
+it('keeps the confirmed name while the device prepares a different preset or refuses it', async () => {
+  library();
+  const select = vi.fn();
+  const other = { ...state, key: 'original:b', name: 'Amp B' };
+  const view = render(
+    <RigPresetSelector
+      current={state}
+      phase="running"
+      disabled={false}
+      onSelect={select}
+    />,
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Playing preset: Amp A' }),
+    ).toBeEnabled(),
+  );
+  view.rerender(
+    <RigPresetSelector
+      current={other}
+      phase="starting"
+      disabled={false}
+      onSelect={select}
+    />,
+  );
+  expect(
+    screen.getByRole('button', { name: 'Last playing preset: Amp A' }),
+  ).toBeDisabled();
+  expect(
+    screen.queryByRole('button', { name: 'Playing preset: Amp B' }),
+  ).toBeNull();
+  view.rerender(
+    <RigPresetSelector
+      current={other}
+      phase="failed"
+      disabled={false}
+      onSelect={select}
+    />,
+  );
+  expect(
+    screen.getByRole('button', { name: 'Last playing preset: Amp A' }),
+  ).toHaveTextContent('Audio failed');
+  view.rerender(
+    <RigPresetSelector
+      current={other}
+      phase="running"
+      disabled={false}
+      onSelect={select}
+    />,
+  );
+  expect(
+    screen.getByRole('button', { name: 'Playing preset: Amp B' }),
+  ).toBeEnabled();
+});

@@ -4,7 +4,7 @@
 #![cfg(feature = "qualification")]
 use oxidal_engine::{
     Session,
-    protocol::{ControlCommand, SceneCommand, Snapshot, Target},
+    protocol::{ControlCommand, SceneCommand, Snapshot, StompGroupCommand, Target},
 };
 use oxidal_lv2::World;
 use oxidal_presets::Bundle;
@@ -132,6 +132,174 @@ fn bypass_readback(snapshot: &Snapshot) -> f64 {
         .find(|c| matches!(&c.target, Target::Bypass { node } if node == "fx"))
         .unwrap()
         .value
+}
+
+fn stomp_bundle() -> Bundle {
+    use oxidal_presets::manifest::{SCENES_BYPASS_EXTENSION, STOMP_GROUPS_EXTENSION};
+    let scene = |id, values: [bool; 3]| {
+        let bypass = ["echo", "bloom", "ts9"]
+            .into_iter()
+            .zip(values)
+            .map(|(node, value)| json!({ "node": node, "value": value }))
+            .collect::<Vec<_>>();
+        json!({"id":id,"name":id,"gains":[],"bypass":bypass})
+    };
+    let edges: Vec<_> = ["in", "ts9", "echo", "bloom", "out"]
+        .windows(2)
+        .flat_map(|path| [edge(path[0], 0, path[1], 0), edge(path[0], 1, path[1], 1)])
+        .collect();
+    let value = json!({
+        "format":"oxidal.preset","formatVersion":1,
+        "id":"0b8f8d4e-9a39-4a43-a0f2-3c8f3b6d9a11","name":"Selective Wet",
+        "tone3000":{"instances":[]},"resources":[],
+        "requiredExtensions":[SCENES_BYPASS_EXTENSION,STOMP_GROUPS_EXTENSION],
+        "extensions":{
+            SCENES_BYPASS_EXTENSION:{"fade_ms":4,"scenes":[
+                scene("dirt",[true,true,false]), scene("clean",[false,true,true])
+            ]},
+            STOMP_GROUPS_EXTENSION:{"groups":[{"id":"wet","name":"Wet","nodes":["echo","bloom"]}]}
+        },
+        "oxidal":{"graph":{"nodes":[
+            {"id":"in","kind":"input","audioInputs":0,"audioOutputs":2},
+            {"id":"ts9","kind":"lv2","audioInputs":2,"audioOutputs":2,"instance":"ts9","bypassed":false},
+            {"id":"echo","kind":"lv2","audioInputs":2,"audioOutputs":2,"instance":"echo","bypassed":true},
+            {"id":"bloom","kind":"lv2","audioInputs":2,"audioOutputs":2,"instance":"bloom","bypassed":true},
+            {"id":"out","kind":"output","audioInputs":2,"audioOutputs":0}
+        ],"edges":edges},
+        "lv2":[
+            {"id":"echo","pluginUri":"urn:oxidal:test:contract","controls":{"gain":0.5,"feedback":0},"assets":[],"requiredFeatures":[]},
+            {"id":"bloom","pluginUri":"urn:oxidal:test:contract","controls":{"gain":0.25,"feedback":0},"assets":[],"requiredFeatures":[]},
+            {"id":"ts9","pluginUri":"urn:oxidal:test:contract","controls":{"gain":0.5,"feedback":0},"assets":[],"requiredFeatures":[]}
+        ],"recall":{"tails":"cut"}}});
+    Bundle::from_parts(serde_json::to_vec(&value).unwrap(), BTreeMap::new()).unwrap()
+}
+
+#[test]
+fn stomp_group_touch_and_midi_share_confirmed_bypass_without_touching_ts9() {
+    use oxidal_audio::midi::{
+        Binding, ControlMode, Decoder, ParameterBinding, Settings, dispatch_protected,
+    };
+    let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();
+    let mut session = Session::new(stomp_bundle(), &world, RATE, FRAMES, 1 << 20).unwrap();
+    let ts9 = |session: &mut Session, bypass| {
+        let view = session.snapshot();
+        session
+            .apply(ControlCommand {
+                session: view.session,
+                expected_revision: view.revision,
+                target: Target::Bypass { node: "ts9".into() },
+                value: bypass,
+            })
+            .unwrap();
+    };
+    let state = |session: &Session, expected, named, enabled, partial| {
+        let snapshot = session.snapshot();
+        assert!(snapshot.valid_stomp_state());
+        let bypass = ["echo", "bloom", "ts9"].map(|id| {
+            snapshot
+                .controls
+                .iter()
+                .find(|row| matches!(&row.target, Target::Bypass { node } if node == id))
+                .unwrap()
+                .value
+        });
+        assert_eq!(bypass, expected);
+        assert_eq!(snapshot.stomp_scene.as_deref(), Some(named));
+        assert_eq!(snapshot.stomp_groups[0].enabled, enabled);
+        assert_eq!(snapshot.stomp_groups[0].partial, partial);
+    };
+    let end_sample = |session: &mut Session| {
+        let mut clock = 0;
+        (0..4)
+            .map(|_| render(session, |_| 1.0, &mut clock)[FRAMES - 1])
+            .last()
+            .unwrap()
+    };
+
+    state(&session, [1.0, 1.0, 0.0], "dirt", false, false);
+    ts9(&mut session, 1.0);
+    let view = session.snapshot();
+    let touch = StompGroupCommand {
+        session: view.session,
+        expected_revision: view.revision,
+        group: "wet".into(),
+    };
+    assert!(
+        session
+            .stomp_group(StompGroupCommand {
+                group: "missing".into(),
+                ..touch.clone()
+            })
+            .is_err()
+    );
+    state(&session, [1.0, 1.0, 1.0], "dirt", false, false);
+    session.stomp_group(touch.clone()).unwrap();
+    assert_eq!(session.snapshot().revision, touch.expected_revision + 1);
+    assert!(
+        session.stomp_group(touch).is_err(),
+        "the second viewer was stale"
+    );
+    state(&session, [0.0, 0.0, 1.0], "dirt", true, false);
+    assert_eq!(end_sample(&mut session), 0.125);
+    select(&mut session, "clean").unwrap();
+    state(&session, [0.0, 1.0, 1.0], "clean", false, true);
+    assert_eq!(end_sample(&mut session), 0.5);
+
+    ts9(&mut session, 0.0);
+    let settings = Settings {
+        input: "hw:Fixture,0,0".into(),
+        channel: 1,
+        bindings: vec![Binding {
+            scene: "dirt".into(),
+            program: None,
+            controller: Some(42),
+        }],
+        branch_bindings: vec![],
+        parameter_bindings: vec![ParameterBinding {
+            target: Target::StompGroup {
+                group: "wet".into(),
+            },
+            controller: 41,
+            mode: ControlMode::Toggle,
+        }],
+        extra_inputs: vec![],
+    };
+    session.snapshot().validate_midi(&settings).unwrap();
+    let mut missing_group = settings.clone();
+    missing_group.parameter_bindings[0].target = Target::StompGroup {
+        group: "unavailable".into(),
+    };
+    assert!(session.snapshot().validate_midi(&missing_group).is_err());
+    session
+        .snapshot()
+        .validate_restored_midi(&missing_group)
+        .unwrap();
+    let mut decoder = Decoder::default();
+    let mut midi = |session: &mut Session, bytes: &[u8]| {
+        for message in bytes.iter().filter_map(|byte| decoder.push(*byte)) {
+            assert!(
+                dispatch_protected(&settings, message, true, |s, m| session.midi_message(s, m))
+                    .unwrap()
+            );
+        }
+    };
+    midi(&mut session, &[0xb0, 41, 127, 41, 0]);
+    state(&session, [0.0, 0.0, 0.0], "clean", true, false);
+    assert_eq!(end_sample(&mut session), 0.0625);
+    midi(&mut session, &[41, 127]);
+    state(&session, [1.0, 1.0, 0.0], "clean", false, false);
+    assert_eq!(session.snapshot().scene.as_deref(), Some("dirt"));
+    select(&mut session, "dirt").unwrap();
+    state(&session, [1.0, 1.0, 0.0], "dirt", false, false);
+    assert_eq!(end_sample(&mut session), 0.5);
+
+    select(&mut session, "clean").unwrap();
+    ts9(&mut session, 0.0);
+    midi(&mut session, &[41, 127, 41, 0, 41, 127]);
+    state(&session, [1.0, 1.0, 0.0], "clean", false, false);
+    assert_eq!(session.snapshot().scene.as_deref(), Some("dirt"));
+    midi(&mut session, &[42, 127]);
+    state(&session, [1.0, 1.0, 0.0], "dirt", false, false);
 }
 
 #[test]

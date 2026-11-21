@@ -102,6 +102,35 @@ can report the complete list. Working changes and the startup scene can
 change the current controls without changing those saved defaults. A version 4
 preset can name its startup scene, which the worker applies before audio starts.
 
+### Selective stomp groups
+
+A stomp group switches only its listed blocks. For example, assign Echo and
+Bloom to **Wet**. Pressing Wet turns both on when either is off and turns both
+off when both are on. A manually changed TS9 stays where the player put it
+until another action changes it. Recalling a named scene restores that scene's
+saved settings, including its assignments for the grouped blocks.
+
+The required portable extension `urn:oxidal:stomp-groups:1` stores a
+`groups` array of 1–16 entries, each with an `id`, `name` and `nodes`.
+IDs start with an ASCII letter and contain at most 64 ASCII letters, digits,
+underscores or hyphens. Names are trimmed and at most 80 UTF-8 bytes.
+Each group lists 1–16 distinct graph processor IDs present in the saved
+bypass targets of every scene. Eligible targets include LV2 processors and
+whole native graph nodes. Switching a block inside a native node uses the
+separate native scene format below.
+
+`POST /api/v1/rig-audio` accepts `stomp_group` with a group ID and the
+current worker session and revision. The worker checks every target before
+starting their latency-aligned bypass ramps at the same stream position.
+Readback reports group **On**, **Off** or **Mixed** from the confirmed target
+states and keeps the last selected named scene separately.
+
+Use the playing rig's MIDI controls to map a CC to a stomp group. The
+device-local binding uses the group's ID and `toggle` mode. A press at 64
+or above invokes the same worker command as touch. Lower values leave the
+sound alone. Protect allows the performance action from either input and
+guards assignment edits.
+
 ### Warm bypass inside a native tone
 
 Version 5 scenes can switch a prepared NAM or IR inside a native block. The

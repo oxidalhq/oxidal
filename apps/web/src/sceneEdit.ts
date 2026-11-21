@@ -8,7 +8,14 @@ import type {
 import { controlLabel, scalePointLabel } from './lv2Control';
 import { type DraftEffect, rigBuilder } from './rigDraft';
 import { applySceneBypass, type SceneBypass } from './sceneBypass';
-import { readScenes, sealScenes, writeScenes } from './sceneFormat';
+import {
+  readScenes,
+  rigStompGroups,
+  sealScenes,
+  type StompGroup,
+  writeScenes,
+  writeStompGroups,
+} from './sceneFormat';
 import { applyNativeSceneControls, nativeSceneKey } from './sceneNative';
 import { applyNativeSceneBypass, nativeBypassKey } from './sceneNativeBypass';
 
@@ -67,6 +74,45 @@ function clone(
   for (const effect of manifest.oxidal?.lv2 ?? [])
     Object.assign(effect.controls, live[effect.id]);
   return manifest;
+}
+
+/** Saving prepares group targets for warm bypass in every scene, preserving each scene's sound. */
+export function setStompGroups(
+  document: RigDocument,
+  groups: StompGroup[],
+  live: Record<string, Record<string, number>>,
+  name: string,
+): RigPublish {
+  const manifest = clone(document, live, name);
+  const scenes = scenesOf(manifest).scenes;
+  const first = scenes[0];
+  if (!first) throw new Error('Stomp assignments need a preset with scenes.');
+  if (groups.length) {
+    const saved = new Set(first.bypass?.map((row) => row.node));
+    const defaults = new Map(
+      manifest.oxidal?.graph.nodes
+        .filter((n) => n.kind === 'lv2' || n.kind === 'tone3000')
+        .map((n) => [n.id, n.bypassed ?? false]),
+    );
+    const needed = [...new Set(groups.flatMap((g) => g.nodes))].filter(
+      (id) => !saved.has(id),
+    );
+    const additions = needed.map((node) => {
+      const value = defaults.get(node);
+      if (value === undefined)
+        throw new Error('An assigned block is no longer in this rig.');
+      return { node, value };
+    });
+    applySceneBypass(
+      document.manifest,
+      manifest,
+      scenes,
+      { [first.id]: additions },
+      undefined,
+    );
+  }
+  writeStompGroups(manifest, groups);
+  return publish(manifest, document.revision);
 }
 
 /** Adds `effect` at the end of the scene whose TONE3000 chain is `branch`. */
@@ -1129,5 +1175,6 @@ export function keepScenes(
       'Each scene needs a block switch, effect setting or routing input.',
     );
   writeScenes(manifest, scenes);
+  writeStompGroups(manifest, rigStompGroups(document.manifest));
   return { ...request, manifest_json: JSON.stringify(manifest) };
 }
