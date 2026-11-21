@@ -134,6 +134,7 @@ export function RigPresetSelector({
   const unconfirmed = preparing || phase === 'failed';
   const displayed = unconfirmed && lastRunning ? lastRunning : playing;
   const selected = displayed.key;
+  const sounding = phase === undefined || phase === 'running';
   /** The Library set list, in its order. */
   const setList = items.filter((item) => item.inSetList);
   const inSource = (item: Choice, source: Source) =>
@@ -234,7 +235,7 @@ export function RigPresetSelector({
           {pickerItems
             .slice(currentBank * size, currentBank * size + size)
             .map((item, offset) => {
-              const sounding = key(item) === selected;
+              const playingPad = sounding && key(item) === selected;
               const upcoming = !!next && key(item) === key(next);
               return (
                 <button
@@ -242,8 +243,8 @@ export function RigPresetSelector({
                   key={key(item)}
                   className="preset-pad"
                   data-next={upcoming || undefined}
-                  aria-pressed={sounding}
-                  disabled={disabled || loading || sounding}
+                  aria-pressed={playingPad}
+                  disabled={disabled || loading || playingPad}
                   onClick={() => choose(item)}
                 >
                   <span className="preset-pad-number">
@@ -252,7 +253,7 @@ export function RigPresetSelector({
                   <span className="preset-pad-text">
                     <strong>{item.name}</strong>
                     <span className="preset-pad-origin">
-                      {sounding
+                      {playingPad
                         ? 'Playing'
                         : upcoming
                           ? 'Next'
@@ -502,7 +503,8 @@ export function RigPresetSelector({
             }
           >
             {shown.map((p) => {
-              const playingRow = key(p) === selected;
+              const currentRow = key(p) === selected;
+              const playingRow = sounding && currentRow;
               const n = number(p);
               return (
                 <li key={key(p)} className="preset-picker-entry">
@@ -516,7 +518,7 @@ export function RigPresetSelector({
                     aria-pressed={playingRow}
                     disabled={disabled || loading}
                     ref={(element) => {
-                      if (playingRow && element && !revealed.current) {
+                      if (currentRow && element && !revealed.current) {
                         revealed.current = true;
                         element.scrollIntoView({ block: 'center' });
                       }

@@ -401,3 +401,21 @@ it('chooses a saved native tone from the stopped editor without resuming the pre
   );
   expect(playbackCommand).toHaveBeenCalledTimes(1);
 });
+
+it('resumes the stopped native working copy when its own row is chosen', async () => {
+  const stopped = {
+    ...opening,
+    phase: 'stopped',
+    configured: { ...opening.configured, preset_id: 'next-tone' },
+  } as AudioState;
+  vi.mocked(playbackState).mockResolvedValue(stopped);
+  vi.mocked(playbackCommand).mockResolvedValue(opening);
+  show();
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Choose Next tone' }),
+  );
+  await waitFor(() =>
+    expect(playbackCommand).toHaveBeenCalledWith(stopped, { kind: 'resume' }),
+  );
+  expect(playbackCommand).toHaveBeenCalledTimes(1);
+});

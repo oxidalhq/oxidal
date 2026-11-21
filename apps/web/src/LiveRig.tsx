@@ -51,6 +51,7 @@ import { setPerform, usePerform } from './performState';
 import { PerformView } from './PerformView';
 import {
   boostKey,
+  choiceKey,
   playScenes,
   type PresetChoice,
   tone3000Key,
@@ -298,11 +299,14 @@ export function LiveRig({
         if (alive.current) setState(next);
         return;
       }
-      const next = await playbackCommand(state, {
-        kind: 'load_preset',
-        preset_id: choice.id,
-        owned: choice.owned,
-      });
+      const resumeCurrent =
+        state.phase === 'stopped' && tone3000Key(state) === choiceKey(choice);
+      const next = await playbackCommand(
+        state,
+        resumeCurrent
+          ? { kind: 'resume' }
+          : { kind: 'load_preset', preset_id: choice.id, owned: choice.owned },
+      );
       if (alive.current) {
         setState(next);
         setTarget('outputLevel');

@@ -652,3 +652,26 @@ it('keeps the confirmed name while the device prepares a different preset or ref
     }),
   ).toBeEnabled();
 });
+
+it('lets the player choose the remembered preset when audio is stopped', async () => {
+  library();
+  const select = vi.fn();
+  render(
+    <RigPresetSelector
+      phase="stopped"
+      current={state}
+      disabled={false}
+      onSelect={select}
+    />,
+  );
+  const picker = screen.getByRole('button', {
+    name: /^Choose preset to play:/,
+  });
+  await waitFor(() => expect(picker).toBeEnabled());
+  fireEvent.click(picker);
+  const row = screen.getByRole('button', { name: /^Amp A\s*NAM chain$/ });
+  expect(row).toHaveAttribute('aria-pressed', 'false');
+  fireEvent.click(row);
+  expect(select).toHaveBeenCalledTimes(1);
+  expect(select).toHaveBeenCalledWith(tone('a', false));
+});
