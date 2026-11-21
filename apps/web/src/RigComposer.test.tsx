@@ -125,7 +125,7 @@ it('uses one signal canvas and selected-block inspector for chain and scenes', a
     'true',
   );
   expect(screen.getByRole('heading', { name: 'Clean tone' })).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Tape delay' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Tape delay time' }));
   expect(screen.getByRole('heading', { name: 'Tape delay' })).toBeVisible();
   expect(
     screen.getByText('Effect', { selector: '[data-slot="badge"]' }),
@@ -140,7 +140,7 @@ it('uses one signal canvas and selected-block inspector for chain and scenes', a
   expect(screen.getByLabelText('Scene tails')).toHaveTextContent(
     'Keep ringing',
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Clean tone' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Clean tone lv2' }));
   expect(screen.getByLabelText('Scene 1 name')).toHaveValue('Clean tone');
   expect(screen.getByText('Shared after scenes')).toBeVisible();
 });

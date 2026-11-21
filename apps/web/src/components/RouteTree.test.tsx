@@ -91,14 +91,14 @@ it('moves a focused block with Alt+arrow keys, only when it can move', () => {
       onKey={key}
     />,
   );
-  fireEvent.keyDown(screen.getByRole('button', { name: 'muff' }), {
+  fireEvent.keyDown(screen.getByRole('button', { name: /^muff(?: lv2)?$/ }), {
     key: 'ArrowUp',
     altKey: true,
   });
-  fireEvent.keyDown(screen.getByRole('button', { name: 'muff' }), {
+  fireEvent.keyDown(screen.getByRole('button', { name: /^muff(?: lv2)?$/ }), {
     key: 'ArrowRight',
   });
-  fireEvent.keyDown(screen.getByRole('button', { name: 'comp' }), {
+  fireEvent.keyDown(screen.getByRole('button', { name: 'comp lv2' }), {
     key: 'ArrowRight',
     altKey: true,
   });
@@ -127,7 +127,7 @@ it('names scene lanes and the sounding scene', () => {
     />,
   );
   const lead = screen.getByRole('group', { name: 'Scene 2 Lead, sounding' });
-  expect(within(lead).getByRole('button', { name: 'echo' })).toBeVisible();
+  expect(within(lead).getByRole('button', { name: 'echo lv2' })).toBeVisible();
   expect(screen.getByRole('group', { name: 'Scene 1 Clean' })).toHaveAttribute(
     'data-dim',
   );
@@ -152,10 +152,9 @@ it('reads as a numbered list with path labels and buttons only on E-paper', () =
   expect(list.textContent).toMatch(
     /comp.*Split, 3 paths.*Path 1.*\(100%, Centre\).*ac30.*cab \(off\).*Path 2.*\(80%, 50% left\).*muff.*Split, 2 paths.*Path 3.*reverb.*Add effect at the end/,
   );
-  expect(screen.getByRole('button', { name: 'muff' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  expect(
+    screen.getByRole('button', { name: /^muff(?: lv2)?$/ }),
+  ).toHaveAttribute('aria-pressed', 'true');
   fireEvent.click(screen.getByRole('button', { name: 'reverb' }));
   expect(select).toHaveBeenCalledWith('reverb::');
   fireEvent.click(

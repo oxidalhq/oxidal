@@ -409,7 +409,11 @@ export function RigPresetSelector({
                   : 'Audio failed'
                 : current
                   ? choiceSummary(current)
-                  : 'Not saved yet'}
+                  : selected
+                    ? phase === 'stopped'
+                      ? 'Remembered preset'
+                      : 'Device preset'
+                    : 'Not saved yet'}
               {playingNumber > 0
                 ? ` · Set list ${playingNumber} of ${setList.length}`
                 : current

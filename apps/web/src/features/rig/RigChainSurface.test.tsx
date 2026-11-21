@@ -225,10 +225,13 @@ it('draws scene lanes with an effect ahead of them, a + ahead of the scenes and 
     }),
   ).toBeVisible();
   // The keyboard path for a drag: Alt+arrow moves Comp into the scenes.
-  fireEvent.keyDown(within(chain).getByRole('button', { name: 'comp' }), {
-    key: 'ArrowRight',
-    altKey: true,
-  });
+  fireEvent.keyDown(
+    within(chain).getByRole('button', { name: /^comp (?:pedal|lv2|time)$/i }),
+    {
+      key: 'ArrowRight',
+      altKey: true,
+    },
+  );
   expect(rig.shift).toHaveBeenCalledWith('comp', 1);
 });
 

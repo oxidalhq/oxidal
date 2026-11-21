@@ -396,7 +396,7 @@ it('reports native engines separately from actual blocks and A2 quality', async 
 it('keeps internal split, merge and gain routing out of the player', async () => {
   setup('mine', [], false, true);
 
-  await screen.findByRole('button', { name: 'TONE3000' });
+  await screen.findByRole('button', { name: /^TONE3000 (?:amp|lv2)$/i });
   expect(screen.queryByText('Merge · L')).not.toBeInTheDocument();
   expect(screen.queryByText('Merge · R')).not.toBeInTheDocument();
   expect(screen.queryByText('Input 1')).not.toBeInTheDocument();
@@ -1008,7 +1008,11 @@ function twoPaths(
 }
 it('copies a path into a third path through the routing tree (7.26)', async () => {
   const { manifest } = twoPaths();
-  fireEvent.click(await screen.findByRole('button', { name: 'dirt' }));
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: /^dirt (?:pedal|lv2)(?: Off)?$/i,
+    }),
+  );
   const routing = await screen.findByRole('group', {
     name: 'Routing for dirt',
   });
@@ -1119,7 +1123,11 @@ it('puts the first side back when the second side of a pan fails', async () => {
           ? [[action.command.target.node, action.command.value]]
           : [],
       );
-  fireEvent.click(await screen.findByRole('button', { name: 'dirt' }));
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: /^dirt (?:pedal|lv2)(?: Off)?$/i,
+    }),
+  );
   const level = await screen.findByLabelText('Path 2 level');
   vi.mocked(rigAudioCommand).mockClear();
   vi.mocked(rigAudioCommand).mockImplementation(async (_, action) => {
@@ -1321,7 +1329,11 @@ it('opens the shared LV2 panel and keeps a live adjustment on the selected node 
     }
     return live;
   });
-  fireEvent.click(await screen.findByRole('button', { name: 'dirt' }));
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: /^dirt (?:pedal|lv2)(?: Off)?$/i,
+    }),
+  );
   const panel = await screen.findByRole('region', { name: 'Verb controls' });
   const adjust = within(panel).getByRole('button', {
     name: 'Adjust Wet level',
@@ -1410,7 +1422,7 @@ it('opens the shared LV2 panel and keeps a live adjustment on the selected node 
     )?.value,
   ).toBe(1);
 
-  fireEvent.click(screen.getByRole('button', { name: 'clean' }));
+  fireEvent.click(screen.getByRole('button', { name: 'clean lv2' }));
   const other = await screen.findByRole('region', { name: 'Verb controls' });
   expect(
     within(other).getByRole('button', { name: 'Adjust Wet level' }),
@@ -1436,7 +1448,11 @@ it('shows live symbol controls when discovery is unavailable', async () => {
     ],
   );
   vi.mocked(installedLv2).mockRejectedValue(new Error('Catalog unavailable'));
-  fireEvent.click(await screen.findByRole('button', { name: 'dirt' }));
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: /^dirt (?:pedal|lv2)(?: Off)?$/i,
+    }),
+  );
   const panel = await screen.findByRole('region', { name: 'dirt controls' });
   expect(
     within(panel).getByRole('button', { name: 'Adjust Wet mix' }),

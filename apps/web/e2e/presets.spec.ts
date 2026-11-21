@@ -4969,7 +4969,10 @@ test('mixed rig authoring keeps a long selected block name on its own row beside
   const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
   for (const width of [345, 690, 930]) {
     await page.setViewportSize({ width, height: 900 });
-    await rig.getByRole('button', { name: long, exact: true }).click();
+    await rig
+      .getByRole('group', { name: 'Signal chain' })
+      .getByRole('button', { name: long })
+      .click();
     const selected = rig.getByRole('region', {
       name: 'Block controls',
       exact: true,
@@ -6003,7 +6006,7 @@ test('mixed rig authoring splits inside scene lanes and asks before removing a p
     name: 'Block controls',
     exact: true,
   });
-  await rig.getByRole('button', { name: 'Echo', exact: true }).click();
+  await rig.getByRole('button', { name: /^Echo(?: (?:time|lv2))?$/i }).click();
   const routing = selected.getByRole('group', { name: 'Routing for Echo' });
   await expect(routing).toContainText('Scene 2 · Lead');
   // No hidden routing actions: all four are shown; Split here works here.
@@ -6029,7 +6032,7 @@ test('mixed rig authoring splits inside scene lanes and asks before removing a p
     },
   ]);
   // removing a path with effects names the path and how many.
-  await rig.getByRole('button', { name: 'Echo', exact: true }).click();
+  await rig.getByRole('button', { name: /^Echo(?: (?:time|lv2))?$/i }).click();
   await expect(routing).toContainText('Path 1 of 2');
   await routing.getByRole('button', { name: 'Remove path' }).click();
   const confirm = page.getByRole('dialog', { name: 'Remove Path 1' });
@@ -6132,7 +6135,9 @@ test('mixed rig authoring moves blocks across paths by keys, buttons and drag', 
   const epaper = info.project.name === 'boox-air3c';
   // Keyboard: Alt+Down moves the focused block to the path below.
   if (!epaper) {
-    await rig.getByRole('button', { name: 'Echo', exact: true }).focus();
+    await rig
+      .getByRole('button', { name: /^Echo(?: (?:time|lv2))?$/i })
+      .focus();
     await page.keyboard.press('Alt+ArrowDown');
     await expect.poll(() => unit.published.length).toBe(1);
     expect(unit.route()).toMatchObject([
@@ -6141,7 +6146,7 @@ test('mixed rig authoring moves blocks across paths by keys, buttons and drag', 
     ]);
   }
   // Buttons: the same moves without a pointer or keys (and on E-paper).
-  await rig.getByRole('button', { name: 'Verb', exact: true }).click();
+  await rig.getByRole('button', { name: /^Verb(?: (?:time|lv2))?$/i }).click();
   await selected
     .getByRole('button', { name: 'Move Verb left', exact: true })
     .click();
@@ -6154,7 +6159,7 @@ test('mixed rig authoring moves blocks across paths by keys, buttons and drag', 
         : [['verb'], ['echo', 'hall']],
     },
   ]);
-  await rig.getByRole('button', { name: 'Verb', exact: true }).click();
+  await rig.getByRole('button', { name: /^Verb(?: (?:time|lv2))?$/i }).click();
   await selected
     .getByRole('button', { name: 'Move Verb to the path below', exact: true })
     .click();
@@ -6162,7 +6167,7 @@ test('mixed rig authoring moves blocks across paths by keys, buttons and drag', 
   expect(JSON.stringify(unit.route())).toContain('verb');
   // Drag: a mouse drops a block on the gap nearest the pointer.
   if (info.project.name === 'chromium') {
-    const verb = rig.getByRole('button', { name: 'Verb', exact: true });
+    const verb = rig.getByRole('button', { name: /^Verb(?: (?:time|lv2))?$/i });
     const first = rig.getByRole('button', {
       name: 'Add or split at position 1',
     });

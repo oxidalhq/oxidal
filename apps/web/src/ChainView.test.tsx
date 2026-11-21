@@ -58,7 +58,7 @@ function view(onMove = vi.fn(), onSelect = vi.fn()) {
   return {
     onMove,
     onSelect,
-    flanger: screen.getByRole('button', { name: 'flanger' }),
+    flanger: screen.getByRole('button', { name: 'flanger lv2' }),
   };
 }
 
@@ -75,7 +75,7 @@ it('drags an effect with a mouse and drops it before another block', () => {
     clientY: 30,
     pointerType: 'mouse',
   });
-  expect(screen.getByRole('button', { name: 'amp' })).toHaveAttribute(
+  expect(screen.getByRole('button', { name: 'amp lv2' })).toHaveAttribute(
     'data-drop-before',
   );
   fireEvent.pointerUp(window, { clientX: 20, clientY: 30 });

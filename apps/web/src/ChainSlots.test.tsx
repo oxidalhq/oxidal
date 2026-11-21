@@ -30,7 +30,7 @@ it('shows empty slots as + tiles in place only where blocks can be added', () =>
   const tiles = screen
     .getAllByRole('button')
     .map((b) => b.getAttribute('aria-label'));
-  expect(tiles).toEqual(['Bogner', 'Add a block here', 'Cab']);
+  expect(tiles).toEqual(['Bogner amp', 'Add a block here', 'Cab cab']);
   fireEvent.click(screen.getByRole('button', { name: 'Add a block here' }));
   expect(add).toHaveBeenCalledWith('slot-2');
   view.rerender(<ChainView label="Chain" lanes={[lane]} onSelect={() => {}} />);

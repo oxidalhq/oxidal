@@ -253,7 +253,6 @@ export function RigTile({
       onPointerDown={drag?.onPointerDown}
       data-kind={block.kind}
       data-on={block.on}
-      aria-label={block.on ? block.label : `${block.label}, bypassed`}
       title={block.label}
       disabled={disabled}
       onSelect={onSelect}

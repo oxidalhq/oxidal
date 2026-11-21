@@ -149,7 +149,7 @@ it('keeps bypass in the block detail, opens a single model inspector and retains
   expect(
     screen.queryByRole('button', { name: 'Change model' }),
   ).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Amp' }));
+  fireEvent.click(screen.getByRole('button', { name: /^Amp (?:amp|lv2)$/i }));
   expect(screen.getAllByRole('button', { name: 'Change model' })).toHaveLength(
     1,
   );
@@ -213,7 +213,9 @@ it('restores valid block context across navigation but never carries it into a d
       <LiveRig {...props} />
     </WorkspaceMemory.Provider>,
   );
-  fireEvent.click(await screen.findByRole('button', { name: 'Amp' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: /^Amp (?:amp|lv2)$/i }),
+  );
   expect(screen.getByRole('button', { name: 'Change model' })).toBeVisible();
   view.rerender(
     <WorkspaceMemory.Provider value={memory}>
@@ -240,7 +242,7 @@ it('restores valid block context across navigation but never carries it into a d
       <LiveRig {...props} />
     </WorkspaceMemory.Provider>,
   );
-  await screen.findByRole('button', { name: 'Amp' });
+  await screen.findByRole('button', { name: /^Amp (?:amp|lv2)$/i });
   expect(
     screen.queryByRole('button', { name: 'Change model' }),
   ).not.toBeInTheDocument();
