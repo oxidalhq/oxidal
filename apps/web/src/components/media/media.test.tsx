@@ -140,14 +140,11 @@ afterEach(() => {
 });
 
 it('hides the mini-player until a track is cued', () => {
-  const view = withMedia(
-    media({ player: snapshot('empty') }),
-    <NowPlaying placement="masthead" />,
-  );
+  const view = withMedia(media({ player: snapshot('empty') }), <NowPlaying />);
   expect(screen.queryByRole('region', { name: 'Now playing' })).toBeNull();
   view.rerender(
     <SessionMediaContext.Provider value={{ ...media(), ready: false }}>
-      <NowPlaying placement="masthead" />
+      <NowPlaying />
     </SessionMediaContext.Provider>,
   );
   expect(screen.queryByRole('region', { name: 'Now playing' })).toBeNull();
@@ -168,7 +165,7 @@ it.each([
   'shows %s in words with its transport',
   (state, buttons, time, chip) => {
     const value = media({ player: snapshot(state) });
-    withMedia(value, <NowPlaying placement="bottom" />);
+    withMedia(value, <NowPlaying />);
     const bar = screen.getByRole('region', { name: 'Now playing' });
     const group = within(bar).getByRole('group', {
       name: 'Backing track transport',
@@ -189,7 +186,7 @@ it.each([
 
 it('explains a silent track and an unplayable one, and opens the full player', () => {
   const value = media({ player: snapshot('playing'), muted: true });
-  const view = withMedia(value, <NowPlaying placement="masthead" />);
+  const view = withMedia(value, <NowPlaying />);
   expect(screen.getByText('Output muted')).toBeVisible();
   fireEvent.click(
     screen.getByRole('button', {
@@ -205,7 +202,7 @@ it('explains a silent track and an unplayable one, and opens the full player', (
         }),
       })}
     >
-      <NowPlaying placement="masthead" />
+      <NowPlaying />
     </SessionMediaContext.Provider>,
   );
   expect(

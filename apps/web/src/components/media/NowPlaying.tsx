@@ -1,4 +1,4 @@
-import { MusicNote, Scissors } from '@phosphor-icons/react';
+import { Scissors } from '@phosphor-icons/react';
 
 import { stateWord, useSessionMedia, useTimeText } from './sessionMedia';
 import { StateChip } from './StateChip';
@@ -48,30 +48,21 @@ export function SplitStatus() {
 }
 
 /**
- * The always-visible backing player: in the masthead between the wordmark and
- * the navigation on wide screens, a strip under the masthead on tablets, a
- * bar above the safe area on phones and e-paper. CSS shows the one that
- * fits; all three read the same snapshot. Hidden while nothing is cued, and until the first snapshot.
- * Tapping the title opens the full player.
+ * Persistent backing transport in the bottom dock. The stage has its own transport.
  * @see docs/media.md
  */
-export function NowPlaying({
-  placement,
-}: {
-  placement: 'masthead' | 'strip' | 'bottom';
-}) {
+export function NowPlaying() {
   const media = useSessionMedia();
   const { player, shown, muted, slow, notice } = media;
   const time = useTimeText(shown);
   if (!media.ready || !player?.track || shown === 'empty') return null;
   const title = player.track.title;
-  const bottom = placement === 'bottom';
   // Playing is evident from the moving time; e-paper always says it in words.
   const chip = shown !== 'playing' || slow;
   return (
     <div
       className="now-playing"
-      data-placement={placement}
+      data-placement="bottom"
       role="region"
       aria-label="Now playing"
     >
@@ -82,7 +73,6 @@ export function NowPlaying({
           onClick={() => media.setSheet({ kind: 'player' })}
         >
           <span className="sr-only">Open backing player:</span>{' '}
-          {!bottom && <MusicNote aria-hidden="true" weight="bold" />}
           <span className="now-playing-title">{title}</span>{' '}
           <span className="now-playing-line">
             {chip ? (

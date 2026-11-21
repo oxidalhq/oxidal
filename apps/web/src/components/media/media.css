@@ -1,7 +1,4 @@
-/* Session media: the backing player's now-playing surfaces, full player,
-   Backing tracks list and import queue. Placement by width: in the masthead
-   between the wordmark and the navigation from 1200 px, a strip under the
-   masthead from 600 px, a bottom bar on phones and on e-paper. */
+/* The backing transport sits in the shared bottom dock on every screen. */
 
 @import '../../MasterLevel.css';
 
@@ -9,31 +6,14 @@
   display: none;
   min-width: 0;
 }
-@media (min-width: 1200px) {
-  .now-playing[data-placement='masthead'] {
-    display: flex;
-    flex: 0 1 auto;
-    margin-right: auto;
-  }
-}
-@media (min-width: 600px) and (max-width: 1199px) {
-  .now-playing[data-placement='strip'] {
-    display: flex;
-  }
-}
-@media (max-width: 599px) {
-  .now-playing[data-placement='bottom'] {
-    display: flex;
-  }
-}
-:root[data-display='epaper'] .now-playing[data-placement='masthead'],
-:root[data-display='epaper'] .now-playing[data-placement='strip'] {
-  display: none;
-}
-:root[data-display='epaper'] .now-playing[data-placement='bottom'] {
+.now-playing[data-placement='bottom'] {
   display: flex;
 }
-
+/* Perform has its own stage transport, including Next and the set-list cue. */
+[data-slot='app-shell']:has(.perform-gig)
+  .now-playing[data-placement='bottom'] {
+  display: none;
+}
 .now-playing-item {
   display: flex;
   align-items: center;
@@ -99,65 +79,6 @@
 }
 
 /* The masthead player and the strip sit on the ink faceplate. */
-.now-playing[data-placement='masthead'] {
-  color: var(--enclosure-foreground);
-}
-.now-playing[data-placement='masthead'] .now-playing-item {
-  padding: 0 0.25rem;
-  border: 1px solid var(--enclosure-border);
-  border-radius: var(--radius);
-}
-.now-playing[data-placement='masthead'] .now-playing-line {
-  flex-wrap: nowrap;
-}
-.now-playing[data-placement='masthead'] .oxidal-button {
-  border-color: var(--enclosure-border);
-  background: transparent;
-  color: var(--enclosure-foreground);
-}
-.now-playing[data-placement='masthead'] .oxidal-button:hover {
-  background: var(--enclosure-border);
-}
-.now-playing[data-placement='masthead'] .oxidal-button[data-variant='default'] {
-  border-color: var(--brand);
-  background: var(--brand);
-  color: var(--brand-foreground);
-}
-.now-playing[data-placement='masthead'] .media-chip {
-  border-color: var(--enclosure-border);
-}
-.now-playing[data-placement='strip'] {
-  color: var(--enclosure-foreground);
-}
-.now-playing[data-placement='strip'] .oxidal-button {
-  border-color: var(--enclosure-border);
-  background: transparent;
-  color: var(--enclosure-foreground);
-}
-.now-playing[data-placement='strip'] .oxidal-button:hover {
-  background: var(--enclosure-border);
-}
-.now-playing[data-placement='strip'] .oxidal-button[data-variant='default'] {
-  border-color: var(--brand);
-  background: var(--brand);
-  color: var(--brand-foreground);
-}
-.now-playing[data-placement='strip'] .media-chip {
-  border-color: var(--enclosure-border);
-}
-.now-playing[data-placement='strip'] {
-  padding: 0.25rem max(var(--page-space), var(--safe-right)) 0.25rem
-    max(var(--page-space), var(--safe-left));
-  border-bottom: 1px solid var(--enclosure-border);
-  background: var(--enclosure);
-}
-.now-playing[data-placement='strip'] .now-playing-item {
-  justify-content: space-between;
-}
-.now-playing[data-placement='strip'] .now-playing-title {
-  max-width: 20rem;
-}
-
 /* The shared shell stacks this above navigation and reserves their measured
    height together. It owns the safe area so neither bar overlaps the other. */
 .now-playing[data-placement='bottom'] {

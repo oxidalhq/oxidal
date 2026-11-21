@@ -673,8 +673,12 @@
 /* Previous/Next sit under the headline as one pair of equal buttons; a
    refusal explains itself in text, not colour alone. */
 .perform-steps {
-  display: grid;
-  gap: 0.35rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: 0;
 }
 .perform-steps [role='group'] {
   display: grid;
@@ -682,6 +686,7 @@
   gap: 0.5rem;
 }
 .perform-steps button {
+  padding-inline: 0.75rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -703,6 +708,9 @@
 }
 
 .perform-neighbors {
+  order: 1;
+  flex-basis: 100%;
+  text-align: center;
   display: grid;
   gap: 0.1rem;
   margin: 0;
@@ -710,6 +718,10 @@
   color: var(--muted-foreground);
 }
 .perform-neighbors p {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  column-gap: 1rem;
   color: inherit;
 }
 .perform-neighbors [data-ready='false'] {

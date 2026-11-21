@@ -137,7 +137,7 @@ it('shows edge meters and live stats measured from this preset, and toggles stom
   expect(screen.getByText('edited, not saved')).toBeInTheDocument();
   // Empty slots are not shown on stage.
   expect(screen.queryByText('Empty slot')).not.toBeInTheDocument();
-  const muff = screen.getByRole('button', { name: 'Muff on' });
+  const muff = screen.getByRole('button', { name: 'R Muff on' });
   expect(muff).toHaveAttribute('aria-pressed', 'false');
   fireEvent.click(muff);
   expect(toggle).toHaveBeenCalledWith('fuzz');
@@ -145,9 +145,9 @@ it('shows edge meters and live stats measured from this preset, and toggles stom
   expect(screen.queryByText('Preset pads')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Presets' }));
   expect(screen.getByText('Preset pads')).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Muff on' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'R Muff on' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Play' }));
-  expect(screen.getByRole('button', { name: 'Muff on' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'R Muff on' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Back to Rig' }));
   expect(edit).toHaveBeenCalled();
 });

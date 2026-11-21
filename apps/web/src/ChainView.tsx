@@ -242,6 +242,7 @@ export function RigTile({
         id: block.id,
         label: block.label,
         caption: block.caption,
+        preview: block.preview,
         kind: block.kind === 'other' ? 'lv2' : block.kind,
         on: block.on,
         icon: block.face,
@@ -289,7 +290,7 @@ export function LedToggle({
       className="led-toggle"
       data-kind={kind}
       aria-pressed={on}
-      aria-label={label}
+      aria-label={on && !state ? label : `${label} · ${state ?? 'Bypassed'}`}
       disabled={disabled}
       onClick={onToggle}
     >

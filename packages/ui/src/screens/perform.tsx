@@ -32,14 +32,14 @@ import {
   SheetHeader,
 } from '../components/ui/sheet';
 import { Switch } from '../components/ui/switch';
-import { Caption, Eyebrow, Label } from '../components/ui/text';
+import { Caption, Label } from '../components/ui/text';
 import { Toggle } from '../components/ui/toggle';
-import { cn } from '../lib/cn';
 import { sceneColour } from '../lib/scene-colours';
 import { parseSong } from '../lib/song';
 import { tempoFromTaps } from '../lib/tempo';
 import { useRemembered } from '../lib/use-remembered';
 import { SCENES } from '../patterns/rig.fixtures';
+import { StageHeading } from '../patterns/stage-heading';
 import { type PerformanceTempo, TempoSource } from '../patterns/tempo-source';
 import { CONTROLLERS, type SwitchAction } from '../widgets/controllers';
 import { Footswitches, type StageState } from '../widgets/footswitches';
@@ -364,65 +364,58 @@ export function Perform({
         />
       )}
       {/* What is playing. */}
-      <div className="grid justify-items-center gap-0.5 text-center">
-        <Eyebrow
-          key={`scene-${scene}`}
-          className="inline-flex items-center gap-1.5 motion-safe:animate-arrive"
-        >
-          {sceneName && (
-            <span
-              aria-hidden="true"
-              className="size-2 rounded-full"
-              style={{
-                backgroundColor: sceneColour(
-                  scenes.findIndex((s) => s.id === scene),
-                ),
-              }}
-            />
-          )}
-          {sceneName ? `Scene · ${sceneName}` : 'No scene'}
-          {boost ? ' · Boost' : ''}
-        </Eyebrow>
-        <h1
-          key={`name-${index}`}
-          aria-live="polite"
-          className={cn(
-            'm-0 w-full truncate font-display font-semibold tracking-tight motion-safe:animate-arrive',
-            sheetOn ? 'text-3xl' : 'text-display',
-          )}
-        >
-          {entry.preset}
-        </h1>
-        <Caption className="flex flex-wrap items-center justify-center gap-x-2 text-sm">
-          <span>
-            {entry.version === 'Default'
-              ? 'Default version'
-              : `${entry.version} version`}
-          </span>
-          {index === 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={protect}
-              title={protect ? 'Turn Protect off to edit scenes' : undefined}
-              onClick={() => editor.onOpenChange(true)}
-            >
-              {protect ? 'Edit scenes (protected)' : 'Edit scenes'}
-            </Button>
-          )}
-          {next && (
-            <>
-              <span aria-hidden="true">·</span>
-              <span>
-                Next up:{' '}
-                <strong className="font-semibold text-foreground">
-                  {next.preset}
-                </strong>
-              </span>
-            </>
-          )}
-        </Caption>
-      </div>
+      <StageHeading
+        name={entry.preset}
+        compact={sheetOn}
+        state={
+          <>
+            {sceneName && (
+              <span
+                aria-hidden="true"
+                className="size-2 rounded-full"
+                style={{
+                  backgroundColor: sceneColour(
+                    scenes.findIndex((s) => s.id === scene),
+                  ),
+                }}
+              />
+            )}
+            {sceneName ? `Scene · ${sceneName}` : 'No scene'}
+            {boost ? ' · Boost' : ''}
+          </>
+        }
+        detail={
+          <>
+            <span>
+              {entry.version === 'Default'
+                ? 'Default version'
+                : `${entry.version} version`}
+            </span>
+            {index === 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={protect}
+                title={protect ? 'Turn Protect off to edit scenes' : undefined}
+                onClick={() => editor.onOpenChange(true)}
+              >
+                {protect ? 'Edit scenes (protected)' : 'Edit scenes'}
+              </Button>
+            )}
+            {next && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>
+                  Next up:{' '}
+                  <strong className="font-semibold text-foreground">
+                    {next.preset}
+                  </strong>
+                </span>
+              </>
+            )}
+          </>
+        }
+      />
 
       {/* The song's sheet, or room for the switches. */}
       <div className="min-h-0">

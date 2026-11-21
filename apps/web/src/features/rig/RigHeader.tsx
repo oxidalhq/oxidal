@@ -11,6 +11,7 @@ import {
 import { useEffect, useRef } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Eyebrow } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { WAITING_FOR_DEVICE } from '../../lib/deviceWait';
@@ -98,6 +99,7 @@ export function RigHeader({ rig, vm }: RigViewProps) {
     !switching;
   return (
     <>
+      <Eyebrow>{running ? 'Playing' : 'Rig'}</Eyebrow>
       <div className="rig-performance-header">
         <RigPresetSelector
           phase={state.phase}

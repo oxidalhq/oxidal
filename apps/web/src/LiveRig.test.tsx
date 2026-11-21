@@ -149,7 +149,9 @@ it('keeps bypass in the block detail, opens a single model inspector and retains
   expect(
     screen.queryByRole('button', { name: 'Change model' }),
   ).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: /^Amp (?:amp|lv2)$/i }));
+  fireEvent.click(
+    screen.getByRole('button', { name: /^Amp (?:amp|Tone block) 0 dB$/i }),
+  );
   expect(screen.getAllByRole('button', { name: 'Change model' })).toHaveLength(
     1,
   );
@@ -214,7 +216,9 @@ it('restores valid block context across navigation but never carries it into a d
     </WorkspaceMemory.Provider>,
   );
   fireEvent.click(
-    await screen.findByRole('button', { name: /^Amp (?:amp|lv2)$/i }),
+    await screen.findByRole('button', {
+      name: /^Amp (?:amp|Tone block) 0 dB$/i,
+    }),
   );
   expect(screen.getByRole('button', { name: 'Change model' })).toBeVisible();
   view.rerender(
@@ -242,7 +246,7 @@ it('restores valid block context across navigation but never carries it into a d
       <LiveRig {...props} />
     </WorkspaceMemory.Provider>,
   );
-  await screen.findByRole('button', { name: /^Amp (?:amp|lv2)$/i });
+  await screen.findByRole('button', { name: /^Amp (?:amp|Tone block) 0 dB$/i });
   expect(
     screen.queryByRole('button', { name: 'Change model' }),
   ).not.toBeInTheDocument();
@@ -286,7 +290,9 @@ it('keeps an adjustment usable when beginning it advances the session revision',
   }));
   show();
   fireEvent.click(
-    await screen.findByRole('button', { name: 'Adjust sounding Output level' }),
+    await screen.findByRole('button', {
+      name: /^Adjust sounding Output level /,
+    }),
   );
   const dialog = await screen.findByRole('dialog', { name: 'Output level' });
   await waitFor(() =>

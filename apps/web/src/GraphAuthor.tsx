@@ -512,6 +512,9 @@ export function GraphAuthor({
       {liveOnly ? (
         <div className="rig-performance-header">
           <div className="effects-preset-name">
+            <p className="small-caps text-sm font-medium text-muted-foreground">
+              {running ? 'Playing' : 'Rig'}
+            </p>
             <h2 className="sr-only">
               {running ? playingName : 'Effects presets'}
             </h2>

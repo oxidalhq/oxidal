@@ -224,7 +224,8 @@ export function LinkedSheet({ stage = false }: { stage?: boolean }) {
       document && parseSong(document.source, document.format, document.title),
     [document],
   );
-  if (!shared) return null;
+  if (!shared || (stage && shared.missing && !shared.error && !shared.loading))
+    return null;
   const current =
     shared.reading?.source === shared.source &&
     shared.reading?.document.id === shared.sheet &&

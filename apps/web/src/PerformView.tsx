@@ -6,6 +6,7 @@ import {
 } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
+import { StageHeading } from '@oxidal/design-system/patterns/stage-heading';
 import { FootswitchPad } from '@oxidal/design-system/widgets/footswitches';
 
 import './ChainView.css';
@@ -193,10 +194,9 @@ function PresetSteps({
       {position && position.index != null && (
         <div className="perform-neighbors" aria-label="Set list neighbours">
           <p>
-            {line('Previous', position.previous)}
-            {line('Next', position.next)}
+            {line('Previous', position.previous)} {line('Next', position.next)}
           </p>
-          <p>
+          <p className="sr-only">
             An entry can choose a starting scene. Previous and Next stop at the
             ends.
           </p>
@@ -233,6 +233,7 @@ export function PerformView({
     playing: boolean;
     name?: string | null;
     modified: boolean;
+    scene?: string;
   };
   lanes: RigLaneVM[];
   disabled: boolean;
@@ -459,44 +460,42 @@ export function PerformView({
           showing={live.showing}
         />
         <div className="perform-main">
-          <div className="perform-headline">
-            <div className="perform-now">
-              <span className="perform-now-state">
-                {switching ? 'Switching' : now.playing ? 'Playing' : 'Stopped'}
-              </span>
-              <strong className="perform-now-name">
-                {now.name ??
-                  (switching ? 'Preparing preset…' : 'Unsaved preset')}
-              </strong>
-              <span className="perform-now-sub">
-                {now.modified ? (
-                  <span className="perform-edited">edited, not saved</span>
-                ) : (
-                  'saved'
-                )}
-              </span>
-            </div>
-            <GuitarSwitch layout="compact" />
-          </div>
-          <PerformanceTempo />
-          <LinkedSheet stage />
-          <RehearsalReport
-            stage
-            playing={
-              link != null && now.playing ? (now.name ?? undefined) : undefined
+          <StageHeading
+            name={
+              now.name ?? (switching ? 'Preparing preset…' : 'Unsaved preset')
             }
-            disabled={disabled || !!switching || link == null}
+            state={
+              switching
+                ? 'Switching'
+                : now.scene
+                  ? `Scene · ${now.scene}`
+                  : now.playing
+                    ? 'Playing'
+                    : 'Stopped'
+            }
+            detail={
+              now.modified ? (
+                <span className="perform-edited">edited, not saved</span>
+              ) : (
+                'saved'
+              )
+            }
           />
-          {snapshot?.set_entry && (
-            <CueEntryBacking
-              row={snapshot.set_entry}
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <RehearsalReport
+              stage
+              playing={
+                link != null && now.playing
+                  ? (now.name ?? undefined)
+                  : undefined
+              }
               disabled={disabled || !!switching || link == null}
             />
-          )}
-          <PresetSteps
-            disabled={disabled || !!switching}
-            muted={audio?.monitoring?.output_muted ?? false}
-          />
+            <PresetSteps
+              disabled={disabled || !!switching}
+              muted={audio?.monitoring?.output_muted ?? false}
+            />
+          </div>
           {switching ? (
             <div className="perform-switching" role="status" aria-live="polite">
               <ArrowsClockwise aria-hidden="true" />
@@ -519,7 +518,7 @@ export function PerformView({
                       key={block.id}
                       name={tag ?? block.kind}
                       label={block.label}
-                      accessibleName={`${block.label} on`}
+                      accessibleName={`${tag ?? block.kind} ${block.label} on`}
                       pressed={block.on}
                       disabled={disabled}
                       onTap={() => onToggle(block.id)}
@@ -535,6 +534,17 @@ export function PerformView({
               )}
             </>
           )}
+          <LinkedSheet stage />
+          <div className="flex flex-wrap items-end justify-center gap-x-6 gap-y-2 border-t border-border pt-2">
+            <PerformanceTempo />
+            <GuitarSwitch layout="compact" />
+            {snapshot?.set_entry && (
+              <CueEntryBacking
+                row={snapshot.set_entry}
+                disabled={disabled || !!switching || link == null}
+              />
+            )}
+          </div>
           <PerformPlayerRow />
           {knobs}
           <MasterLevel />

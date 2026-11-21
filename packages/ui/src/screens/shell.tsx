@@ -1,7 +1,10 @@
 import { type ReactNode, useState } from 'react';
 
-import { Badge } from '../components/ui/badge';
-import { AppShell, type Destination } from '../patterns/app-shell';
+import {
+  AppShell,
+  type Destination,
+  PlayingPreset,
+} from '../patterns/app-shell';
 import { ToolDockDemo } from '../patterns/tool-dock.demo';
 import { READINGS } from './fixtures';
 
@@ -24,16 +27,7 @@ export function Screen({
       onNavigate={setWhere}
       readings={READINGS}
       status={status}
-      nowPlaying={
-        playing && (
-          <span className="inline-flex items-center gap-2">
-            <Badge tone="live" size="sm">
-              Live
-            </Badge>
-            <span className="truncate">{playing}</span>
-          </span>
-        )
-      }
+      nowPlaying={<PlayingPreset name={playing} />}
     >
       <ToolDockDemo>{children}</ToolDockDemo>
     </AppShell>

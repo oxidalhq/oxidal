@@ -12,3 +12,17 @@
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
+
+@media (max-width: 47.99rem) {
+  .live-rig .rig-sheet[data-closable][data-open] {
+    position: fixed;
+    z-index: var(--z-strip, 30);
+    inset: auto var(--spacing-page, 0.75rem) var(--app-bottom-height, 4rem);
+    max-height: 50dvh;
+    overflow-y: auto;
+    background: var(--card);
+  }
+  .live-rig .rig-workspace:has(.rig-sheet[data-closable][data-open]) {
+    padding-bottom: min(50dvh, 24rem);
+  }
+}

@@ -147,7 +147,7 @@ function Midi() {
 
 function Display() {
   const [mode, setMode] = useState('default');
-  const [status, setStatus] = useState<'simple' | 'detailed'>('simple');
+  const [status, setStatus] = useState<'simple' | 'detailed'>('detailed');
   const [awake, setAwake] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
   return (

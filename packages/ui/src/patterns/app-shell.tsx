@@ -7,6 +7,7 @@ import {
 } from '@phosphor-icons/react';
 import * as React from 'react';
 
+import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { NoticeTray } from '../components/ui/notice-tray';
 import { Caption, Eyebrow, Title } from '../components/ui/text';
@@ -20,6 +21,19 @@ import {
 import { LauncherSlotContext } from './dock-context';
 
 export type Destination = 'rig' | 'guitars' | 'library' | 'levels' | 'settings';
+
+export function PlayingPreset({ name }: { name?: string | null }) {
+  return name ? (
+    <span className="inline-flex max-w-full min-w-0 items-center gap-2 align-middle">
+      <Badge tone="live" size="sm">
+        Live
+      </Badge>
+      <span className="truncate">{name}</span>
+    </span>
+  ) : (
+    <span>No preset playing</span>
+  );
+}
 
 const DESTINATIONS: {
   id: Destination;
@@ -38,8 +52,8 @@ const DESTINATIONS: {
  * what is playing, and the five destinations as ghost buttons on `md+`;
  * below `md` the destinations move to a bottom bar with icon and label,
  * the masthead keeps the wordmark and the now-playing line. By default the
- * masthead shows the device health in one word (R-7); with `status="detailed"`
- * the full resource strip sits under the masthead instead. The notice tray
+ * full resource strip sits below the masthead. The Simple display preference
+ * puts a compact health indicator in the masthead. The notice tray
  * floats under it.
  */
 export function AppShell({
@@ -51,7 +65,7 @@ export function AppShell({
   resourceState = 'live',
   resourceConnected = resourceState !== 'disconnected',
   resourceLabel,
-  status = 'simple',
+  status = 'detailed',
   children,
   className,
 }: {

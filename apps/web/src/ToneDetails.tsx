@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 
-import { SourceCard } from '@oxidal/design-system/widgets/block-source';
+import {
+  type BlockSource,
+  SourceCard,
+  SourceLine,
+  SourcePicture,
+} from '@oxidal/design-system/widgets/block-source';
 
 import { tone3000Tone, toneImage, type TonePage } from './api';
 import { GearLabel } from './GearIcon';
@@ -23,20 +28,31 @@ const licenses: Record<string, string> = { t3k: 'TONE3000 license' };
 export function ToneDetails({
   toneId,
   initialTone,
+  compact,
 }: {
   toneId: number;
   initialTone?: Tone;
+  compact?: boolean;
 }) {
   // Another block starts afresh instead of showing the last one's details.
-  return <ToneCard key={toneId} toneId={toneId} initialTone={initialTone} />;
+  return (
+    <ToneCard
+      key={toneId}
+      toneId={toneId}
+      initialTone={initialTone}
+      compact={compact}
+    />
+  );
 }
 
 function ToneCard({
   toneId,
   initialTone,
+  compact,
 }: {
   toneId: number;
   initialTone?: Tone;
+  compact?: boolean;
 }) {
   const [tone, setTone] = useState<Tone | null>(
     initialTone ?? known.get(toneId) ?? null,
@@ -69,30 +85,39 @@ function ToneCard({
     (tone.a2_models_count ?? 0) +
     (tone.custom_models_count ?? 0);
   const count = models || tone.models_count;
+  const source: BlockSource = {
+    kind: 'tone3000',
+    title: tone.title,
+    creator: {
+      name: tone.user.display_name || tone.user.username,
+      username: tone.user.display_name ? tone.user.username : undefined,
+      profile: tone.user.profile_url ?? undefined,
+    },
+    page: toneLink(tone),
+    image: toneImage(tone.id),
+    gear: GearLabel({ gear: tone.gear }),
+    format: tone.format.toUpperCase(),
+    models: count,
+    counts: models
+      ? {
+          standard: tone.a1_models_count,
+          a2: tone.a2_models_count,
+          custom: tone.custom_models_count,
+        }
+      : undefined,
+    licence: licenses[tone.license] ?? tone.license,
+  };
+  if (!compact) return <SourceCard source={source} />;
   return (
-    <SourceCard
-      source={{
-        kind: 'tone3000',
-        title: tone.title,
-        creator: {
-          name: tone.user.display_name || tone.user.username,
-          username: tone.user.display_name ? tone.user.username : undefined,
-          profile: tone.user.profile_url ?? undefined,
-        },
-        page: toneLink(tone),
-        image: toneImage(tone.id),
-        gear: GearLabel({ gear: tone.gear }),
-        format: tone.format.toUpperCase(),
-        models: count,
-        counts: models
-          ? {
-              standard: tone.a1_models_count,
-              a2: tone.a2_models_count,
-              custom: tone.custom_models_count,
-            }
-          : undefined,
-        licence: licenses[tone.license] ?? tone.license,
-      }}
-    />
+    <div className="grid gap-2">
+      <div className="flex min-w-0 items-center gap-2">
+        <SourcePicture source={source} className="size-12 shrink-0" />
+        <SourceLine source={source} />
+      </div>
+      <details>
+        <summary>Source details</summary>
+        <SourceCard source={source} />
+      </details>
+    </div>
   );
 }

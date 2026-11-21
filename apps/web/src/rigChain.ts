@@ -14,6 +14,7 @@ export interface RigBlockVM {
   id: string;
   label: string;
   caption?: string;
+  preview?: string;
   kind: BlockKind;
   on: boolean;
   /** Model artwork or gear glyph drawn inside the tile face. */

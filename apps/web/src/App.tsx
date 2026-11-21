@@ -36,6 +36,7 @@ import { useNotice } from '@oxidal/design-system/notices';
 import {
   AppShell,
   PageHeading,
+  PlayingPreset,
 } from '@oxidal/design-system/patterns/app-shell';
 import { DisplaySettings } from '@oxidal/design-system/patterns/display-settings';
 import {
@@ -194,11 +195,11 @@ function InstrumentApp() {
   });
   const [statusMode, setStatusMode] = useState<'simple' | 'detailed'>(() => {
     try {
-      return localStorage.getItem('oxidal.status') === 'detailed'
-        ? 'detailed'
-        : 'simple';
+      return localStorage.getItem('oxidal.status') === 'simple'
+        ? 'simple'
+        : 'detailed';
     } catch {
-      return 'simple';
+      return 'detailed';
     }
   });
   const changeStatus = (mode: 'simple' | 'detailed') => {
@@ -514,10 +515,7 @@ function InstrumentApp() {
       }}
       nowPlaying={
         <>
-          <span>
-            {playingName ?? graphName ?? mixedName ?? 'No preset playing'}
-          </span>
-          <NowPlaying placement="masthead" />
+          <PlayingPreset name={playingName ?? graphName ?? mixedName} />
           <SplitStatus />
         </>
       }
@@ -526,14 +524,13 @@ function InstrumentApp() {
       resourceConnected={resource.connected}
       resourceLabel={resource.label}
       status={statusMode}
-      bottomBar={<NowPlaying placement="bottom" />}
+      bottomBar={<NowPlaying />}
     >
       <PerformanceTools
         tunerOpen={tunerOpen}
         connected={connected}
         slow={displayMode === 'epaper'}
       >
-        <NowPlaying placement="strip" />
         {tunerOpen && (
           <GlobalTuner
             onClose={() => setTunerOpen(false)}

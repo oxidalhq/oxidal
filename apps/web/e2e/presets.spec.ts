@@ -274,19 +274,15 @@ test('rig controls follow the actual session without example effects', async ({
   await expect(rig).toBeVisible();
   await expect(page.getByTestId('active-preset')).toHaveText('Amp only');
   await expect(rig.locator('[data-slot="chain-block"]')).toHaveCount(1);
-  await rig
-    .getByRole('button', { name: 'My amp Tone block', exact: true })
-    .click();
+  await rig.getByRole('button', { name: /^My amp Tone block(?: |$)/ }).click();
   await expect(
     rig.getByRole('button', {
       name: 'Adjust sounding My amp level',
-      exact: true,
     }),
   ).toBeVisible();
   await expect(page.getByText(/delay|reverb/i)).toHaveCount(0);
   const selectedControl = rig.getByRole('button', {
     name: 'Adjust sounding My amp level',
-    exact: true,
   });
   await expect(selectedControl).toBeInViewport();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
@@ -424,12 +420,11 @@ test('rig controls follow the actual session without example effects', async ({
   await expect(page.getByTestId('active-preset')).toHaveText('Output only');
   await expect(rig.locator('[data-slot="chain-block"]')).toHaveCount(0);
   await expect(
-    rig.getByRole('button', { name: 'Adjust sounding Output', exact: true }),
+    rig.getByRole('button', { name: 'Adjust sounding Output' }),
   ).toBeVisible();
   await expect(
     rig.getByRole('button', {
       name: 'Adjust sounding My amp level',
-      exact: true,
     }),
   ).toHaveCount(0);
   audio = { ...audio, phase: 'stopped', controls: [] };
@@ -1394,6 +1389,9 @@ test('playback lifecycle keeps native authoring available after stop and restart
       ).toBe(true);
     }
     await sounding.locator('[data-slot="chain-block"]').first().click();
+    await sounding
+      .getByRole('button', { name: /^EQ band gains.*Edit bands$/ })
+      .click();
     const eq = sounding.getByRole('region', { name: 'Block EQ' });
     await expect(eq).toBeVisible();
     const eqBefore = (await (await request.get('/api/v1/audio')).json()).eq[0];
@@ -1453,7 +1451,6 @@ test('playback lifecycle keeps native authoring available after stop and restart
     await sounding
       .getByRole('button', {
         name: `Adjust sounding ${outputControl.label}`,
-        exact: true,
       })
       .click();
     await sounding
@@ -1481,7 +1478,6 @@ test('playback lifecycle keeps native authoring available after stop and restart
     await sounding
       .getByRole('button', {
         name: `Adjust sounding ${outputControl.label}`,
-        exact: true,
       })
       .click();
     await sounding
@@ -1501,7 +1497,6 @@ test('playback lifecycle keeps native authoring available after stop and restart
     await sounding
       .getByRole('button', {
         name: `Adjust sounding ${outputControl.label}`,
-        exact: true,
       })
       .click();
     await sounding
@@ -1541,21 +1536,18 @@ test('playback lifecycle keeps native authoring available after stop and restart
     await expect(
       sounding.getByRole('button', {
         name: 'Adjust sounding ' + outputControl.label,
-        exact: true,
       }),
     ).toBeEnabled();
     // Stereo deck is contextual, but edits still reach the sounding worker.
     await sounding.getByRole('button', { name: 'Stereo', exact: true }).click();
     const spread = sounding.getByRole('button', {
       name: 'Adjust sounding Spread',
-      exact: true,
     });
     await expect(spread).toHaveAttribute('aria-pressed', 'false');
     await spread.click();
     await expect(spread).toHaveAttribute('aria-pressed', 'true');
     const crossover = sounding.getByRole('button', {
       name: 'Adjust sounding Crossover frequency',
-      exact: true,
     });
     await expect(crossover).toContainText('130 Hz');
     await crossover.click();
@@ -4613,7 +4605,7 @@ test('live model comparison stays open, waits for application and rejects a chan
   await page.goto('/#rig');
   const rig = page.getByRole('region', { name: 'Sounding rig' });
   await rig
-    .getByRole('button', { name: 'Current amp Tone block', exact: true })
+    .getByRole('button', { name: /^Current amp Tone block(?: |$)/ })
     .click();
   await rig.getByRole('button', { name: 'Change model', exact: true }).click();
   const picker = page.getByRole('dialog', { name: 'Choose model' });

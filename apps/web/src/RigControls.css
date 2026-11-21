@@ -237,3 +237,24 @@
 }
 
 /* What a block is, from TONE3000: picture, name, author, link. */
+
+@media (min-width: 760px) {
+  .native-block-dock .live-value-trigger {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    align-items: start;
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .native-block-dock .value-row-label {
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .native-block-dock .effect-inspector,
+  .native-block-dock .live-parameter-grid {
+    border-top: 0;
+    padding-top: 0;
+  }
+}

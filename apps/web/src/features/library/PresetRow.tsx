@@ -59,7 +59,7 @@ export function PresetRow({
             variant={playing ? 'default' : 'outline'}
             disabled={disabled || loading}
             aria-pressed={playing}
-            aria-label={`Play ${name}`}
+            aria-label={`${playing ? 'Playing' : 'Play'} ${name}`}
             onClick={onPlay}
           >
             <Play aria-hidden="true" weight="fill" />

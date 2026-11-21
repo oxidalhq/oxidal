@@ -59,6 +59,7 @@ import {
 } from '../lib/scene';
 import { sceneColour } from '../lib/scene-colours';
 import { useRemembered } from '../lib/use-remembered';
+import { BlockDock } from '../widgets/block-dock';
 import {
   BlockEditor,
   BlockFullEditor,
@@ -822,12 +823,9 @@ export function RigSurface({
           data-slot="block-dock"
           className="sticky bottom-0 z-strip hidden px-page pt-1 pb-3 md:block"
         >
-          <section
+          <BlockDock
             aria-label={`${block.label} controls`}
-            className={cn(
-              'grid gap-x-5 gap-y-3 rounded-xl border border-foreground/70 bg-raised p-3 shadow-raised lg:grid-cols-[20rem_minmax(12rem,1fr)_17rem]',
-              !block.on && 'border-dashed',
-            )}
+            bypassed={!block.on}
           >
             <div className="grid content-start gap-2.5">
               <div className="grid gap-1.5">
@@ -1040,7 +1038,7 @@ export function RigSurface({
                 </div>
               ))}
             </div>
-          </section>
+          </BlockDock>
         </div>
       )}
 

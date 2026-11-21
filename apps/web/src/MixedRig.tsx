@@ -100,6 +100,11 @@ export function MixedRig(props: {
             playing: running,
             name: matching?.manifest.name,
             modified: !!changed,
+            scene: state.control?.scenes?.scenes.find(
+              (scene) =>
+                scene.id ===
+                (state.control?.stomp_scene ?? state.control?.scene),
+            )?.name,
           }}
           lanes={stageLanes}
           disabled={waiting || performSwitching}

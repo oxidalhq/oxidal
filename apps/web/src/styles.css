@@ -2966,9 +2966,7 @@
     outline: 2px solid var(--ring);
     outline-offset: 4px;
   }
-  .rig-workspace[data-inspecting='true'] .rig-inspector-column {
-    grid-row: 1;
-  }
+
   .rig-recovery {
     display: flex;
     align-items: center;
@@ -2981,18 +2979,53 @@
     margin: 0;
   }
   @media (min-width: 760px) {
-    .rig-workspace {
-      grid-template-columns: minmax(0, 1fr) minmax(280px, 0.9fr);
+    .rig-workspace,
+    .rig-workspace[data-inspecting='true'] {
+      grid-template-columns: minmax(0, 1fr);
     }
-    .rig-chain-column {
+    .rig-workspace[data-inspecting='true'] .rig-inspector-column {
+      grid-row: auto;
+    }
+    .live-rig .rig-performance-header .preset-picker {
+      flex: 0 1 auto;
+      max-width: min(36rem, 60%);
+      margin-right: auto;
+    }
+    .live-rig .preset-picker-name {
+      border: 0;
+    }
+    .native-block-dock {
+      grid-template-columns: minmax(12rem, 20rem) minmax(12rem, 1fr) minmax(
+          12rem,
+          17rem
+        );
+    }
+    .native-block-dock .effect-inspector {
       grid-column: 1;
       grid-row: 1;
     }
-    .rig-inspector-column {
+    .native-block-dock .effect-inspector-heading {
+      flex-wrap: wrap;
+    }
+    .native-block-dock .live-parameter-grid {
+      grid-column: 3;
+      grid-row: 1;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.35rem;
+    }
+    .native-block-dock .live-value-trigger {
+      display: grid;
+      padding: 0.3rem;
+      min-width: 0;
+    }
+    .native-block-dock .native-eq-preview {
       grid-column: 2;
       grid-row: 1;
-      border-left: 1px solid var(--border);
-      padding-left: 1rem;
+      margin: 0;
+    }
+    .native-block-dock > details {
+      grid-column: 1/-1;
     }
   }
 

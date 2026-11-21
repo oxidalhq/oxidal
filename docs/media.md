@@ -117,10 +117,7 @@ the full player, Perform and Library never disagree. Source:
 - **Safe retries.** Each action has a fresh request ID; a lost response is
   retried once with the same ID. Next, Previous, seek and skip carry the cued
   track, so a command from a screen that missed a change is refused.
-- **Where it shows.** In the masthead between the wordmark and the navigation
-  from 1200 px, a strip under the masthead from 600 px and a bar above the safe area on phones and in E-paper mode. It is
-  hidden while nothing is cued. The full player opens over any page. Perform
-  has one backing row, and Library has a Backing tracks section.
+- **Where it shows.** A cued track appears in the bottom dock on desktop, tablet and phone. Perform uses its own backing row with the Next control. The title opens the full player. Library also has a Backing tracks section.
 - **Imports.** Files go up in 8 MiB chunks. A refused offset resumes from the
   offset the device confirmed, and a lost connection pauses the file until the
   browser is back online. The import queue lives for the whole app session, so
