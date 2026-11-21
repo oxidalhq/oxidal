@@ -1008,6 +1008,12 @@ function sceneControls(
   start: string | undefined,
   live: Record<string, Record<string, number>>,
 ) {
+  const effectFor = (preset: Manifest, node: string) => {
+    const instance = preset.oxidal?.graph.nodes.find(
+      (item) => item.id === node && item.kind === 'lv2',
+    )?.instance;
+    return preset.oxidal?.lv2.find((effect) => effect.id === instance);
+  };
   const keys: SceneControl[] = [];
   const seen = new Set<string>();
   const offer = (c: SceneControl) => {
@@ -1024,16 +1030,14 @@ function sceneControls(
       `Scenes can change at most ${MAX_SCENE_CONTROLS} effect settings in one preset.`,
     );
   for (const key of keys) {
-    if (!manifest.oxidal?.lv2.some((l) => l.id === key.node))
+    if (!effectFor(manifest, key.node))
       throw new Error('A scene sets an effect that is not in this preset.');
     if (!Number.isFinite(key.value))
       throw new Error('A scene setting must be a number.');
   }
   // What a scene that never set this control sounds like: the saved value.
   const saved = (c: SceneControl) =>
-    document.manifest.oxidal?.lv2.find((l) => l.id === c.node)?.controls[
-      c.symbol
-    ] ??
+    effectFor(document.manifest, c.node)?.controls[c.symbol] ??
     live[c.node]?.[c.symbol] ??
     c.value;
   const draftedFor = (sceneId: string) =>
@@ -1057,16 +1061,17 @@ function sceneControls(
     }));
     if (scene.id === start)
       for (const c of scene.controls) {
-        const effect = manifest.oxidal!.lv2.find((l) => l.id === c.node)!;
+        const effect = effectFor(manifest, c.node)!;
         effect.controls[c.symbol] = c.value;
       }
   }
   // Without a starting scene the effects keep the saved values.
   if (!scenes.some((scene) => scene.id === start))
     for (const key of keys) {
-      const effect = manifest.oxidal!.lv2.find((l) => l.id === key.node)!;
-      const value = document.manifest.oxidal?.lv2.find((l) => l.id === key.node)
-        ?.controls[key.symbol];
+      const effect = effectFor(manifest, key.node)!;
+      const value = effectFor(document.manifest, key.node)?.controls[
+        key.symbol
+      ];
       if (value !== undefined) effect.controls[key.symbol] = value;
     }
 }

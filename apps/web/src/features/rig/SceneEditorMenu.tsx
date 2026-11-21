@@ -25,6 +25,7 @@ import {
   sceneCopyPlan,
 } from '../../sceneEdit';
 import { readScenes } from '../../sceneFormat';
+import { CopySceneBlock } from './CopySceneBlock';
 import { rigBusy } from './mixedRigViewModel';
 import type { RigViewProps } from './useMixedRigSession';
 
@@ -33,11 +34,12 @@ type Step =
   | { kind: 'rename'; value: string }
   | { kind: 'delete' }
   | { kind: 'last' }
+  | { kind: 'copy-block' }
   | { kind: 'copy' };
 
 /**
  * The scene menu (⋯ or hold a pad, or Scene ⋯ for the playing scene):
- * Rename, Duplicate scene, Copy to preset…, Move left, Move right, Delete….
+ * Rename, Duplicate scene, Copy one block, Copy to preset, Move and Delete.
  * Each change saves the preset through the scene save path; MIDI bindings
  * name the scene, so they follow it when it moves. The last scene
  * cannot be deleted. Copy to preset… shows what is skipped before
@@ -162,6 +164,17 @@ export function SceneMenu({
         onDone={onDone}
       />
     );
+  if (step.kind === 'copy-block')
+    return rig.matching ? (
+      <CopySceneBlock
+        document={rig.matching}
+        sourceId={sceneId}
+        sourceName={scene.name}
+        rate={vm.state.configured?.stream.input.sample_rate ?? 48000}
+        onClose={onClose}
+        onDone={onDone}
+      />
+    ) : null;
   const items: [string, () => void, boolean?][] = [
     ['Rename', () => setStep({ kind: 'rename', value: scene.name })],
     [
@@ -175,6 +188,11 @@ export function SceneMenu({
       scenes.length >= MAX_SCENES,
     ],
     ['Copy to preset…', () => setStep({ kind: 'copy' }), !rig.matching],
+    [
+      'Copy block settings…',
+      () => setStep({ kind: 'copy-block' }),
+      !rig.matching || rig.sourceOrigin !== 'mine' || scenes.length < 2,
+    ],
     [
       'Move left',
       () =>

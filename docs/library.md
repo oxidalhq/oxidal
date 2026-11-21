@@ -89,6 +89,10 @@ Open a scene's menu in Rig to manage scenes without leaving the preset:
   least one scene, so the last one cannot be deleted.
 - **Copy to preset…** copies the scene into another preset in Mine and lists
   what differs before it copies. Blocks the target does not have are skipped.
+- **Copy block settings…** previews the saved effect controls of one block
+  beside their equivalents in another scene. Choose a destination that
+  uses the same LV2 plugin and a saved version to update. The copy can be
+  heard when you open the saved version and recall its destination scene.
 
 Scene edits wait until you save or discard pending **Update scene** changes.
 

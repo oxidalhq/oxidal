@@ -69,7 +69,7 @@ function manifest(
 }
 async function publish(
   request: APIRequestContext,
-  document: ReturnType<typeof manifest>,
+  document: object,
 ): Promise<string> {
   const response = await request.post('/api/v1/presets/rigs', {
     data: { manifest_json: JSON.stringify(document), resources: {} },
@@ -720,5 +720,219 @@ test('mixed rig authoring: Copy to preset says what copies and refuses presets w
       request,
       await current(request, [`Lead ${stamp}`, crunchName, twinName]),
     );
+  }
+});
+
+test('mixed rig authoring: copy one block into a saved scene and refuse a stale version', async ({
+  page,
+  request,
+}, info) => {
+  const stamp = Date.now();
+  const name = `Copy EQ ${info.project.name} ${stamp}`;
+  const staleName = `${name} stale`;
+  const scenesKey = 'urn:oxidal:scenes:3';
+  const eqUri = 'urn:fixture:equalizer';
+  const eqDocument = (label: string) => {
+    const document = manifest(label, [
+      { id: 'lead', name: 'Lead', value: 1 },
+      { id: 'dirt', name: 'Dirt', value: 0.6 },
+    ]);
+    const blocks = [
+      { id: 'lead-eq', instance: 'lead-instance', uri: eqUri },
+      { id: 'dirt-eq', instance: 'dirt-instance', uri: eqUri },
+      { id: 'other-fx', instance: 'other-fx', uri: 'urn:fixture:chorus' },
+    ];
+    document.oxidal.graph.nodes.splice(
+      1,
+      0,
+      ...blocks.map(({ id, instance }) => ({
+        id,
+        instance,
+        kind: 'lv2',
+        audioInputs: 1,
+        audioOutputs: 1,
+        bypassed: false,
+      })),
+    );
+    const chain = ['in', ...blocks.map(({ id }) => id), 'scene-gain', 'out'];
+    document.oxidal.graph.edges = chain.slice(1).map((node, index) => ({
+      from: { node: chain[index]!, port: 0 },
+      to: { node, port: 0 },
+    }));
+    Object.assign(document.oxidal, {
+      lv2: blocks.map(({ instance, uri }) => ({
+        id: instance,
+        pluginUri: uri,
+        controls: { mid_gain: 0 },
+        assets: [],
+        requiredFeatures: [],
+      })),
+    });
+    Object.assign(document.extensions['urn:oxidal:authoring'], {
+      labels: {
+        'lead-eq': 'Lead EQ',
+        'dirt-eq': 'Dirt EQ',
+        'other-fx': 'Chorus',
+      },
+    });
+    const legacyKey = 'urn:oxidal:scenes:1';
+    return {
+      ...document,
+      extensions: {
+        'urn:oxidal:gain:1': document.extensions['urn:oxidal:gain:1'],
+        'urn:oxidal:authoring': document.extensions['urn:oxidal:authoring'],
+        [scenesKey]: {
+          fade_ms: document.extensions[legacyKey].fade_ms,
+          scenes: document.extensions[legacyKey].scenes.map((scene, i) => ({
+            ...scene,
+            controls: [
+              { node: 'lead-eq', symbol: 'mid_gain', value: i ? 1 : 5 },
+              { node: 'dirt-eq', symbol: 'mid_gain', value: i ? -2 : 0 },
+            ],
+            bypass: blocks.map(({ id }) => ({
+              node: id,
+              value: i === 1 && id === 'dirt-eq',
+            })),
+          })),
+        },
+      },
+      requiredExtensions: document.requiredExtensions.map((key) =>
+        key === legacyKey ? scenesKey : key,
+      ),
+    };
+  };
+  const versions = async (revision: string) =>
+    (
+      await request.get(`/api/v1/presets/catalog/rig/${revision}/versions`)
+    ).json();
+  const initial = eqDocument(name);
+  const staleDocument = eqDocument(staleName);
+  const first = await publish(request, initial);
+  const staleFirst = await publish(request, staleDocument);
+  const writes = audioWrites(page);
+  const preparePage = async (revision: string, reload: boolean) => {
+    const playing = await mockRig(page, request, revision);
+    await page.route('**/api/v1/plugins/lv2?*', (route) =>
+      route.fulfill({
+        json: {
+          sample_rate: 48000,
+          plugins: [
+            {
+              uri: eqUri,
+              name: 'EQ',
+              ports: [
+                {
+                  index: 0,
+                  symbol: 'mid_gain',
+                  name: 'Mid gain',
+                  unit: 'dB',
+                  minimum: -20,
+                  maximum: 20,
+                  audio: false,
+                  input: true,
+                  output: false,
+                  control: true,
+                  integer: false,
+                  logarithmic: false,
+                  toggled: false,
+                  latency: false,
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+    if (reload) await page.reload();
+    else await page.goto('/#rig');
+    return playing;
+  };
+  const review = async () => {
+    await page.getByRole('button', { name: 'Scene menu for Lead' }).click();
+    await page.getByRole('menuitem', { name: 'Copy block settings…' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Copy block settings' });
+    await dialog.getByLabel('Destination scene').selectOption('dirt');
+    return dialog;
+  };
+  try {
+    const playing = await preparePage(first, false);
+    let dialog = await review();
+    await dialog.getByLabel('Destination block').selectOption('other-fx');
+    await expect(
+      dialog.getByRole('button', { name: 'Copy and save' }),
+    ).toBeDisabled();
+    await expect(dialog.getByText(/same effect plugin/)).toBeVisible();
+    await dialog.getByLabel('Destination block').selectOption('dirt-eq');
+    const preview = dialog.getByRole('row', { name: /Mid gain.*-2 dB.*5 dB/ });
+    await expect(preview).toBeVisible();
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    expect((await versions(first)).preset.versions[0].content).toBe(first);
+
+    dialog = await review();
+    await dialog.getByLabel('Destination block').selectOption('dirt-eq');
+    await dialog.getByRole('button', { name: 'Copy and save' }).click();
+    await expect(page.getByText(/Copied settings to Dirt in/)).toBeVisible();
+    expect(playing()).toBe(first);
+    const saved = (await versions(first)).preset.versions[0].content as string;
+    expect(saved).not.toBe(first);
+    const reopened = await (
+      await request.get(`/api/v1/presets/rigs/${saved}`)
+    ).json();
+    const before = initial.extensions[scenesKey].scenes;
+    expect(reopened.manifest.oxidal).toEqual(initial.oxidal);
+    expect(reopened.manifest.extensions[scenesKey].scenes[0]).toEqual(
+      before[0],
+    );
+    expect(reopened.manifest.extensions[scenesKey].scenes[1]).toEqual({
+      ...before[1],
+      controls: [
+        { node: 'lead-eq', symbol: 'mid_gain', value: 1 },
+        { node: 'dirt-eq', symbol: 'mid_gain', value: 5 },
+      ],
+    });
+    await preparePage(saved, true);
+    dialog = await review();
+    await dialog.getByLabel('Destination block').selectOption('dirt-eq');
+    await expect(
+      dialog.getByText('The destination already has these settings.'),
+    ).toBeVisible();
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+
+    await preparePage(staleFirst, true);
+    dialog = await review();
+    await dialog.getByLabel('Destination block').selectOption('dirt-eq');
+    const copy = dialog.getByRole('button', { name: 'Copy and save' });
+    await expect(copy).toBeEnabled();
+    const reviewed = await versions(staleFirst);
+    const selected = reviewed.preset.versions[0];
+    const competing = structuredClone(staleDocument);
+    competing.extensions[scenesKey].scenes[1]!.controls[1]!.value = 9;
+    const raced = await request.post('/api/v1/presets/rigs', {
+      data: {
+        manifest_json: JSON.stringify(competing),
+        resources: {},
+        source: { kind: 'rig', id: staleFirst },
+        version_target: {
+          first: reviewed.preset.logical_id.slice('rig:'.length),
+          version: selected.id,
+          expected_content: staleFirst,
+          expected_revision: reviewed.catalog_revision,
+          request_id: randomUUID(),
+        },
+      },
+    });
+    expect(raced.ok(), await raced.text()).toBe(true);
+    const competingRevision = (await raced.json()).revision;
+    await copy.click();
+    await expect(dialog.getByRole('alert')).toContainText(
+      'The saved version changed',
+    );
+    await expect(copy).toBeDisabled();
+    expect((await versions(staleFirst)).preset.versions[0].content).toBe(
+      competingRevision,
+    );
+    expect(writes).toEqual([]);
+  } finally {
+    await remove(request, await current(request, [name, staleName]));
   }
 });
