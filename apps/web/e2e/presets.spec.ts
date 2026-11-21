@@ -5631,10 +5631,8 @@ test('device portrait set-list drag and keyboard order agree with picker and Per
   });
   await page.getByRole('button', { name: 'Rig', exact: true }).click();
   await page
-    .getByRole('button', {
-      name: `Playing preset: ${secondName}`,
-      exact: true,
-    })
+    .getByRole('button', { name: /^Playing preset:/ })
+    .filter({ hasText: secondName })
     .click();
   const picker = page.getByRole('dialog', {
     name: 'Choose a preset',

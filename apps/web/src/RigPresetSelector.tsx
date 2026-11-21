@@ -42,7 +42,7 @@ const SOURCES: [Source, string][] = [
 /** One preset picker for every engine: the playing name opens a searchable list
  * of all presets, those with scenes first; a row plays it. Scenes are switched
  * by the pads under it, never from this list.
- * Edits stay with each preset (verified B4), so recall needs no guard prompt.
+ * The active editor handles unsaved edits before accepting a recall.
  * @see docs/audio.md
  */
 export function RigPresetSelector({
@@ -124,10 +124,12 @@ export function RigPresetSelector({
     key: string;
     name?: string | null;
   } | null>(null);
-  useEffect(() => {
-    if (phase === 'running')
-      setLastRunning({ key: playing.key, name: playing.name });
-  }, [phase, playing.key, playing.name]);
+  if (
+    phase === 'running' &&
+    (lastRunning?.key !== playing.key || lastRunning.name !== playing.name)
+  ) {
+    setLastRunning({ key: playing.key, name: playing.name });
+  }
   const preparing = phase === 'starting';
   const unconfirmed = preparing || phase === 'failed';
   const displayed = unconfirmed && lastRunning ? lastRunning : playing;
@@ -306,7 +308,8 @@ export function RigPresetSelector({
           <p>No presets in the set list or Mine yet. Add one from Library.</p>
         )}
         <p className="caption">
-          Changing preset briefly interrupts audio; changing scene never does.
+          Changing presets can briefly interrupt audio. Scenes switch within the
+          loaded rig.
         </p>
       </div>
     );
