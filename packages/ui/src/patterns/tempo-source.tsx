@@ -17,7 +17,7 @@ export function TempoSource({
 }) {
   const labels = { tap: 'Tap', song: 'Song', preset: 'Preset' };
   return (
-    <section aria-label="Performance tempo" className="space-y-2">
+    <div className="space-y-2">
       <p aria-live="polite">
         <strong>
           {state ? labels[state.source] + ' tempo' : 'Tempo unavailable'}
@@ -42,6 +42,6 @@ export function TempoSource({
           </Button>
         ))}
       </div>
-    </section>
+    </div>
   );
 }
