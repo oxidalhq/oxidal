@@ -3,14 +3,13 @@ import { expect, type Page, test } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 
 import { selectSettingsSection, setDisplayMode } from './display';
+import { horizontalProblems } from './horizontal-layout';
 
 // CSS viewports are representative: Android density, browser chrome and zoom vary.
 // Hardware resolution is not the browser viewport. See README.md for the matrix.
 async function fits(page: Page) {
   const failures = await page.evaluate(() => {
     const problems: string[] = [];
-    if (document.documentElement.scrollWidth > window.innerWidth + 1)
-      problems.push('Page has horizontal overflow');
     for (const element of document.querySelectorAll<HTMLElement>(
       'button, input, select, textarea, summary, .chain-tile',
     )) {
@@ -23,8 +22,6 @@ async function fits(page: Page) {
         element.getAttribute('aria-label') ||
         element.textContent ||
         element.tagName;
-      if (rect.left < -1 || rect.right > window.innerWidth + 1)
-        problems.push(`${name}: clipped horizontally`);
       if (
         element.matches(
           'button, select, input:not([type="checkbox"]), summary',
@@ -113,6 +110,7 @@ async function fits(page: Page) {
     }
     return problems;
   });
+  failures.push(...(await page.evaluate(horizontalProblems)));
   expect(failures).toEqual([]);
   const effects = page.locator('.chain-effects .chain-tile');
   if (await effects.count()) {

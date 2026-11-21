@@ -27,6 +27,7 @@ export default defineConfig({
       browserName: 'chromium',
       viewport: { width, height },
       deviceScaleFactor: 1,
+      hasTouch: name !== 'laptop',
     },
   })),
 });

@@ -11,7 +11,13 @@ import {
   User,
   X,
 } from '@phosphor-icons/react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import {
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import {
@@ -455,6 +461,29 @@ export function Library({
   const originalsShown = presets.filter((p) =>
     matches(p.name, 'original', p.sha256),
   );
+  const activeTabs = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const tabs = activeTabs.current;
+    const active = tabs?.querySelector('[role="tab"][aria-selected="true"]');
+    if (!tabs || !active) return;
+
+    // Move just this row. Scrolling the selected element itself can also pull
+    // the whole page away from its heading on a deep link or fold change.
+    const revealSelected = () => {
+      const list = tabs.getBoundingClientRect();
+      const tab = active.getBoundingClientRect();
+      const right = list.left + tabs.clientWidth;
+      if (tab.left < list.left) tabs.scrollLeft += tab.left - list.left;
+      else if (tab.right > right) tabs.scrollLeft += tab.right - right;
+    };
+    revealSelected();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(revealSelected);
+    observer.observe(tabs);
+    for (const tab of tabs.children) observer.observe(tab);
+    return () => observer.disconnect();
+  }, [composer, section]);
+
   if (composer)
     return (
       <section className="instrument-surface" aria-label="Library">
@@ -553,7 +582,12 @@ export function Library({
   ) {
     return (
       <div className="library-group" data-active={group === id}>
-        <TabsList aria-label={`${label} sections`} className="library-tabs">
+        <TabsList
+          aria-label={`${label} sections`}
+          className="library-tabs"
+          data-horizontal-scroll="library"
+          ref={id === group ? activeTabs : undefined}
+        >
           {list.map((id) => (
             <TabsTrigger key={id} value={id} className="icon-tab">
               {sectionIcons[id]}

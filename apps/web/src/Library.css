@@ -691,7 +691,7 @@
 .library-tabs::-webkit-scrollbar {
   display: none;
 }
-.library-tabs > .ui-tabs-trigger {
+.library-tabs > [data-slot='tabs-trigger'] {
   flex: none;
   white-space: nowrap;
 }
