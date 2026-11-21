@@ -370,7 +370,9 @@ export function RigPresetSelector({
                 : preparing
                   ? 'Preparing preset'
                   : 'Unavailable preset'
-              : undefined
+              : phase === 'stopped'
+                ? 'Choose preset to play'
+                : undefined
           }
           className="preset-picker-name"
           disabled={disabled || preparing || (loading && !items.length)}

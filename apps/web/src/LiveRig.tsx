@@ -658,7 +658,7 @@ export function LiveRig({
           <p>
             Resume picks up where you left off
             {state.preset_name ? ` with ${state.preset_name}` : ''}, including
-            unsaved edits. Or choose another rig from Library.
+            unsaved edits. To start a different preset, choose its name below.
           </p>
         ) : state?.phase === 'unavailable' ? (
           <p>
@@ -671,6 +671,27 @@ export function LiveRig({
             configuring your interface.
           </p>
         )}
+        {state?.phase === 'stopped' &&
+          state.configured &&
+          !state.waiting_for_device && (
+            <RigPresetSelector
+              phase="stopped"
+              current={{
+                key: tone3000Key(state),
+                name: state.preset_name,
+                modified: state.modified,
+                refresh: state.saved_copy,
+              }}
+              disabled={
+                !connected ||
+                busy ||
+                !!draft ||
+                !!picker ||
+                !!state.copy_on_edit
+              }
+              onSelect={(choice) => void recall(choice)}
+            />
+          )}
         <div className="action-row">
           {state?.phase === 'stopped' && state.configured && (
             <Button

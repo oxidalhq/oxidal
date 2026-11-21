@@ -19,7 +19,7 @@ import { choiceKey } from '../../presetChoices';
 import { RigPresetSelector } from '../../RigPresetSelector';
 import { TunerButton } from '../../TunerButton';
 import { StageControls } from '../stage/StageControls';
-import { rigBusy } from './mixedRigViewModel';
+import { rigBusy, rigLocked } from './mixedRigViewModel';
 import { RigHeaderDuplicate } from './RigHeaderDuplicate';
 import { historyShortcut } from './rigHistory';
 import type { RigViewProps } from './useMixedRigSession';
@@ -86,6 +86,16 @@ export function RigHeader({ rig, vm }: RigViewProps) {
   } = rig;
   const { changed, disabled, draftCount, performSwitching, running, state } =
     vm;
+  const chooseFromStopped =
+    state.phase === 'stopped' &&
+    !!state.configured &&
+    !state.waiting_for_device &&
+    connected &&
+    !busy &&
+    !eqBusy &&
+    !rig.readError &&
+    !rigLocked(rig) &&
+    !switching;
   return (
     <>
       <div className="rig-performance-header">
@@ -102,7 +112,7 @@ export function RigHeader({ rig, vm }: RigViewProps) {
             modified: !!changed,
             refresh: revision,
           }}
-          disabled={waiting || !!copyOnEdit}
+          disabled={(waiting && !chooseFromStopped) || !!copyOnEdit}
           onSelect={(choice) => void choose(choice)}
         />
         <StageControls connected={connected} compact />
