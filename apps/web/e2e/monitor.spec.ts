@@ -3,7 +3,11 @@ import { expect, test } from '@playwright/test';
 import { mkdir, readFile } from 'node:fs/promises';
 
 import type { Monitoring } from '../src/api';
-import { selectSettingsSection, setDisplayMode } from './display';
+import {
+  selectSettingsSection,
+  selectWorkspaceSection,
+  setDisplayMode,
+} from './display';
 test('monitor shows measured stereo data, freezes, resets and marks stale readings', async ({
   page,
 }, info) => {
@@ -101,13 +105,28 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   const strip = page.getByRole('complementary', {
     name: 'DSP and system resources',
   });
-  await expect(
-    strip.getByRole('button', { name: /device health/ }),
-  ).toBeVisible();
+  const deviceHealth = strip.getByRole('button', { name: /device health/ });
+  const dsp = strip.getByRole('group', { name: /^DSP: 17%/ });
+  await expect(dsp).toBeVisible();
+  await expect(deviceHealth).toHaveCount(0);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await selectSettingsSection(page, 'Display');
-  await page
-    .getByRole('radiogroup', { name: 'Status at the top', exact: true })
+  const statusMode = page.getByRole('radiogroup', {
+    name: 'Status at the top',
+    exact: true,
+  });
+  await expect(
+    statusMode.getByRole('radio', { name: 'Detailed', exact: true }),
+  ).toBeChecked();
+  await statusMode.getByRole('radio', { name: 'Simple', exact: true }).click();
+  await expect(deviceHealth).toBeVisible();
+  await expect(dsp).toHaveCount(0);
+  await deviceHealth.click();
+  const health = page.getByRole('dialog', { name: 'Device health' });
+  await expect(health.getByText('Clips', { exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(health).toHaveCount(0);
+  await statusMode
     .getByRole('radio', { name: 'Detailed', exact: true })
     .click();
   await expect(strip.getByTestId('resource-state')).toHaveText('Audio running');
@@ -125,7 +144,7 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   await expect(strip).toBeVisible();
   await page.getByRole('button', { name: 'Levels', exact: true }).click();
   await expect(page.getByText('Current input verified')).toBeVisible();
-  await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
+  await selectWorkspaceSection(page, 'Levels', 'Diagnostics');
   const panel = page.getByRole('region', {
     name: 'Audio and system monitoring',
   });
@@ -172,7 +191,7 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   await panel.getByRole('button', { name: 'Resume readings' }).click();
   for (const mode of ['stage', 'sunlight', 'epaper'] as const) {
     await setDisplayMode(page, mode);
-    await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
+    await selectWorkspaceSection(page, 'Levels', 'Diagnostics');
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -187,7 +206,7 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   }
   if (info.project.name === 'boox-air3c') {
     await setDisplayMode(page, 'epaper');
-    await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
+    await selectWorkspaceSection(page, 'Levels', 'Diagnostics');
     // E-paper must distinguish series without colour, in both plot and legend.
     for (const label of ['Output peak · dBFS', 'Processing budget · %']) {
       const chart = page.getByRole('figure', { name: label });
@@ -226,7 +245,7 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
     await page.setViewportSize(portrait);
   }
   await setDisplayMode(page, 'stage');
-  await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
+  await selectWorkspaceSection(page, 'Levels', 'Diagnostics');
   await mkdir('../../.local/previews/monitor', { recursive: true });
   await page.screenshot({
     path: `../../.local/previews/monitor/${info.project.name}-fixture.png`,
@@ -264,7 +283,7 @@ test('monitor shows device history after browser reload and exports retained sam
   const initial = await (await request.get('/api/v1/monitor/history')).json();
   await page.goto('/#rig');
   await page.getByRole('button', { name: 'Levels', exact: true }).click();
-  await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
+  await selectWorkspaceSection(page, 'Levels', 'Diagnostics');
   await page.getByText('Device history', { exact: true }).click();
   await expect(
     page.getByRole('figure', { name: 'Recorded DSP and CPU · %' }),
@@ -309,7 +328,7 @@ test('monitor shows device history after browser reload and exports retained sam
   await page.getByRole('button', { name: 'Reset view', exact: true }).click();
   await page.reload();
   await page.getByRole('button', { name: 'Levels', exact: true }).click();
-  await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
+  await selectWorkspaceSection(page, 'Levels', 'Diagnostics');
   await page.getByText('Device history', { exact: true }).click();
   await expect(
     page.getByRole('figure', { name: 'Recorded DSP and CPU · %' }),
@@ -349,7 +368,7 @@ test('monitor shows redacted control audit with filters and reload persistence',
     .toBe(true);
   await page.goto('/#rig');
   await page.getByRole('button', { name: 'Levels', exact: true }).click();
-  await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
+  await selectWorkspaceSection(page, 'Levels', 'Diagnostics');
   await page.getByText('Control audit', { exact: true }).click();
   const panel = page.getByRole('region', { name: 'Control request history' });
   await expect(panel.getByText(/Accepted means/)).toBeVisible();
@@ -417,7 +436,7 @@ test('monitor shows redacted control audit with filters and reload persistence',
   });
   await page.reload();
   await page.getByRole('button', { name: 'Levels', exact: true }).click();
-  await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
+  await selectWorkspaceSection(page, 'Levels', 'Diagnostics');
   await page.getByText('Control audit', { exact: true }).click();
   await expect(page.getByRole('list', { name: 'Audit entries' })).toContainText(
     'Wi-Fi / device',

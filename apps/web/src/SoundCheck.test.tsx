@@ -135,6 +135,7 @@ const monitoring: Monitoring = {
 };
 
 beforeEach(() => {
+  window.history.replaceState(null, '', '/#monitor');
   vi.mocked(calibration).mockResolvedValue(calibrationState);
   vi.mocked(calibrationCoverage).mockResolvedValue({
     total: 4,
@@ -195,9 +196,9 @@ it('summarises measured loudness, guitar, interface and distinct level stages', 
   expect(screen.getByText('+1.0 dB')).toBeVisible();
   expect(screen.getByText('+4.5 dB')).toBeVisible();
   expect(screen.getByText('−6.0 dB')).toBeVisible();
-  await user.click(screen.getByRole('tab', { name: 'Loudness' }));
+  await user.click(screen.getByRole('button', { name: 'Loudness' }));
   expect(screen.getByRole('region', { name: 'Even out' })).toBeVisible();
-  await user.click(screen.getByRole('tab', { name: 'Diagnostics' }));
+  await user.click(screen.getByRole('button', { name: 'Diagnostics' }));
   expect(
     screen.getByRole('region', { name: 'Audio and system monitoring' }),
   ).toBeVisible();

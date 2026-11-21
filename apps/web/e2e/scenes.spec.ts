@@ -6,6 +6,8 @@ import {
 } from '@playwright/test';
 import { createHash, randomUUID } from 'node:crypto';
 
+import { expectWorkspaceSection, selectWorkspaceSection } from './display';
+
 /**
  * Set list, Duplicate and scene management against the real daemon: Duplicate leaves "Name copy" outside the set list and opens it
  * stopped, the starter set list appends and is offered once on
@@ -207,7 +209,7 @@ test('library sections: Duplicate makes "Name copy" in Mine outside the set list
       ).scenes.map((s: { name: string }) => s.name),
     ).toEqual(['Clean', 'Lead']);
     // The Set list shows it under "Not in the set list", ready to add.
-    await page.getByRole('tab', { name: 'Set list', exact: true }).click();
+    await selectWorkspaceSection(page, 'Library', 'Set list');
     const outside = page.getByRole('region', { name: 'Not in the set list' });
     await outside.getByRole('button', { name: 'Show', exact: true }).click();
     await outside
@@ -355,9 +357,7 @@ test('library sections: a fresh unit offers the starter set list once', async ({
   ]);
   // Offered once: it does not come back.
   await page.reload();
-  await expect(
-    page.getByRole('tab', { name: 'Oxidal sounds', selected: true }),
-  ).toBeVisible();
+  await expectWorkspaceSection(page, 'Library', 'Oxidal sounds');
   await expect(
     page.getByRole('region', { name: 'Starter set list' }),
   ).toHaveCount(0);

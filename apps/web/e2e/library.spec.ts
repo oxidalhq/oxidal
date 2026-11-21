@@ -3,13 +3,15 @@ import { readFileSync } from 'node:fs';
 
 import {
   expectSettingsSection,
+  expectWorkspaceSection,
   openSounds,
   selectSettingsSection,
+  selectWorkspaceSection,
+  workspaceSectionPicker,
 } from './display';
 
 /**
- * Library journeys against the real daemon: two groups of sections with their
- * own links, old links that land on the new sections, one Mine list, an empty
+ * Library journeys against the real daemon: sections with their own links, old links that land on the new sections, one Mine list, an empty
  * preset from New preset, protected sound deletion and the device-wide Protect
  * lock.
  */
@@ -18,46 +20,33 @@ test('library sections have their own links and old links redirect', async ({
 }) => {
   // an old Discover link lands on Oxidal sounds.
   await page.goto('/#library/discover');
-  await expect(
-    page.getByRole('tab', { name: 'Oxidal sounds', selected: true }),
-  ).toBeVisible();
+  await expectWorkspaceSection(page, 'Library', 'Oxidal sounds');
   await expect(page).toHaveURL(/#library\/oxidal$/);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.goto('/#library/presets');
-  await expect(
-    page.getByRole('tab', { name: 'Mine', selected: true }),
-  ).toBeVisible();
+  await expectWorkspaceSection(page, 'Library', 'Mine');
   await expect(page).toHaveURL(/#library\/mine$/);
   await page.goto('/#library/sounds');
-  await expect(
-    page.getByRole('tab', { name: 'Tones and IRs', selected: true }),
-  ).toBeVisible();
+  await expectWorkspaceSection(page, 'Library', 'Tones and IRs');
   await expect(page).toHaveURL(/#library\/tones$/);
-  await page.getByRole('tab', { name: 'TONE3000', exact: true }).click();
+  await selectWorkspaceSection(page, 'Library', 'TONE3000');
   await expect(page).toHaveURL(/#library\/tone3000$/);
   await page.reload();
-  await expect(
-    page.getByRole('tab', { name: 'TONE3000', selected: true }),
-  ).toBeVisible();
+  await expectWorkspaceSection(page, 'Library', 'TONE3000');
   await expect(page.getByLabel('TONE3000 preset file')).toBeVisible();
-  // Two groups; on a phone a Sounds | Media switch shows one at a time.
-  const phone = (page.viewportSize()?.width ?? 1000) < 600;
-  const groups = page.getByRole('radiogroup', { name: 'Library group' });
-  if (phone) {
-    await expect(page.getByRole('tab', { name: 'Backing tracks' })).toHaveCount(
-      0,
-    );
-    await groups.getByRole('radio', { name: 'Media', exact: true }).click();
-    await expect(
-      page.getByRole('tab', { name: 'Backing tracks', selected: true }),
-    ).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'Mine' })).toHaveCount(0);
+  const compact = (page.viewportSize()?.width ?? 1000) < 768;
+  const picker = workspaceSectionPicker(page, 'Library');
+  const directory = page.getByRole('navigation', { name: 'Library sections' });
+  if (compact) {
+    await expect(picker).toBeVisible();
+    await expect(directory).toHaveCount(0);
   } else {
-    await expect(groups).toBeHidden();
-    await page.getByRole('tab', { name: 'DI and reamps', exact: true }).click();
-    await expect(page).toHaveURL(/#library\/di$/);
-    await expect(page.getByRole('tab', { name: 'Mine' })).toBeVisible();
+    await expect(directory).toBeVisible();
+    await expect(picker).toHaveCount(0);
   }
+  await selectWorkspaceSection(page, 'Library', 'DI and reamps');
+  await expect(page).toHaveURL(/#library\/di$/);
+  await expectWorkspaceSection(page, 'Library', 'DI and reamps');
   // The old Sound Check link still opens the renamed Levels workspace.
   await page.goto('/#monitor');
   await expect(
@@ -73,6 +62,13 @@ test('library sections keep the Mine search after a reload', async ({
   await page.goto('/#library/mine');
   const search = page.getByRole('searchbox', { name: 'Search presets' });
   await search.fill('no-such-preset-unique');
+  await selectWorkspaceSection(page, 'Library', 'TONE3000');
+  const providerSearch = page.getByRole('searchbox', {
+    name: 'Search presets',
+  });
+  await providerSearch.fill('another-search-value');
+  await selectWorkspaceSection(page, 'Library', 'Mine');
+  await expect(search).toHaveValue('no-such-preset-unique');
   await page.reload();
   await expect(search).toHaveValue('no-such-preset-unique');
   await page.getByRole('button', { name: 'Clear preset search' }).click();

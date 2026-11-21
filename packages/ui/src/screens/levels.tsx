@@ -10,6 +10,11 @@ import { PageHeading } from '../patterns/app-shell';
 import { DeviceDashboard } from '../patterns/device-dashboard';
 import { READINGS } from '../patterns/device-dashboard.data';
 import {
+  LEVELS_SECTIONS,
+  type LevelsSection,
+} from '../patterns/levels-sections';
+import { Workspace } from '../patterns/workspace';
+import {
   BrowserListeningDemo,
   CaptureReferencesDemo,
 } from '../widgets/capture-listening.demo';
@@ -142,9 +147,15 @@ function Output() {
 }
 
 export function Levels({
-  view: initial = 'meters',
-}: { view?: 'meters' | 'device' } = {}) {
-  const [view, setView] = useState(initial);
+  view: initial = 'overview',
+}: { view?: LevelsSection | 'meters' | 'device' } = {}) {
+  const [view, setView] = useState<LevelsSection>(
+    initial === 'meters'
+      ? 'overview'
+      : initial === 'device'
+        ? 'diagnostics'
+        : initial,
+  );
   const [range, setRange] = useState('10m');
   const [live, setLive] = useState({ il: -18, ir: -19, ol: -9, or: -10 });
   const [dsp] = useState(() => series(40));
@@ -165,124 +176,110 @@ export function Levels({
   }, []);
   return (
     <>
-      <PageHeading
-        eyebrow="Levels"
-        title={view === 'device' ? 'Device details' : 'Output and meters'}
-        caption={
-          view === 'device'
-            ? 'Everything the device reports, over the last ten minutes'
-            : 'What leaves the device, set for the room you are in'
-        }
-        actions={
+      <PageHeading title="Levels" />
+      <Workspace
+        sections={LEVELS_SECTIONS}
+        current={view}
+        onSelect={(section) => setView(section as LevelsSection)}
+        label="Levels"
+      >
+        {view === 'diagnostics' && <DeviceDashboard readings={READINGS} />}
+        {view === 'loudness' && (
           <>
-            <SegmentedControl
-              size="sm"
-              value={view}
-              onValueChange={(v) => setView(v as 'meters' | 'device')}
-              aria-label="Levels view"
-            >
-              <Segment value="meters">Output and meters</Segment>
-              <Segment value="device">Device details</Segment>
-            </SegmentedControl>
-            {view === 'meters' && (
-              <SegmentedControl
-                size="sm"
-                value={range}
-                onValueChange={setRange}
-                aria-label="History range"
-              >
-                <Segment value="1m">1 min</Segment>
-                <Segment value="10m">10 min</Segment>
-                <Segment value="1h">1 h</Segment>
-              </SegmentedControl>
-            )}
-          </>
-        }
-      />
-      {view === 'device' ? (
-        <DeviceDashboard readings={READINGS} />
-      ) : (
-        <div className="grid gap-4 px-page lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-          <Output />
-          <div className="grid gap-4 lg:col-span-2">
             <CaptureReferencesDemo />
             <BrowserListeningDemo />
+          </>
+        )}
+        {view === 'overview' && (
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+            <SegmentedControl
+              size="sm"
+              value={range}
+              onValueChange={setRange}
+              className="lg:col-span-2"
+              aria-label="History range"
+            >
+              <Segment value="1m">1 min</Segment>
+              <Segment value="10m">10 min</Segment>
+              <Segment value="1h">1 h</Segment>
+            </SegmentedControl>
+            <Output />
+            <Card>
+              <CardHeader>
+                <CardTitle>Now</CardTitle>
+                <Badge tone="live">Running</Badge>
+              </CardHeader>
+              <div className="grid gap-5">
+                <StereoMeter
+                  label="Input"
+                  left={live.il}
+                  right={live.ir}
+                  peaks={[live.il + 3, live.ir + 3]}
+                  size="lg"
+                />
+                <StereoMeter
+                  label="Output"
+                  left={live.ol}
+                  right={live.or}
+                  peaks={[live.ol + 2, live.or + 2]}
+                  size="lg"
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  ['Xruns', '0'],
+                  ['Clips', '0'],
+                  ['Recovered', '2'],
+                ].map(([k, v]) => (
+                  <div
+                    key={k}
+                    className="grid gap-0.5 rounded-lg border border-border p-3"
+                  >
+                    <span className="small-caps text-xs font-medium text-muted-foreground">
+                      {k}
+                    </span>
+                    <Readout size="lg">{v}</Readout>
+                  </div>
+                ))}
+              </div>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  Last{' '}
+                  {range === '1m'
+                    ? 'minute'
+                    : range === '10m'
+                      ? 'ten minutes'
+                      : 'hour'}
+                </CardTitle>
+                <Caption as="span" className="text-xs">
+                  The dashed line is the period deadline.
+                </Caption>
+              </CardHeader>
+              <History
+                label="Processing, p95 of the period"
+                data={dsp}
+                unit="%"
+                limit={100}
+              />
+              <History
+                label="Host CPU"
+                data={cpu}
+                unit="%"
+                colour="var(--wire)"
+              />
+              <History
+                label="Temperature"
+                data={temp}
+                unit="°"
+                limit={80}
+                colour="var(--wire)"
+              />
+            </Card>
           </div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Now</CardTitle>
-              <Badge tone="live">Running</Badge>
-            </CardHeader>
-            <div className="grid gap-5">
-              <StereoMeter
-                label="Input"
-                left={live.il}
-                right={live.ir}
-                peaks={[live.il + 3, live.ir + 3]}
-                size="lg"
-              />
-              <StereoMeter
-                label="Output"
-                left={live.ol}
-                right={live.or}
-                peaks={[live.ol + 2, live.or + 2]}
-                size="lg"
-              />
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                ['Xruns', '0'],
-                ['Clips', '0'],
-                ['Recovered', '2'],
-              ].map(([k, v]) => (
-                <div
-                  key={k}
-                  className="grid gap-0.5 rounded-lg border border-border p-3"
-                >
-                  <span className="small-caps text-xs font-medium text-muted-foreground">
-                    {k}
-                  </span>
-                  <Readout size="lg">{v}</Readout>
-                </div>
-              ))}
-            </div>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                Last{' '}
-                {range === '1m'
-                  ? 'minute'
-                  : range === '10m'
-                    ? 'ten minutes'
-                    : 'hour'}
-              </CardTitle>
-              <Caption as="span" className="text-xs">
-                The dashed line is the period deadline.
-              </Caption>
-            </CardHeader>
-            <History
-              label="Processing, p95 of the period"
-              data={dsp}
-              unit="%"
-              limit={100}
-            />
-            <History
-              label="Host CPU"
-              data={cpu}
-              unit="%"
-              colour="var(--wire)"
-            />
-            <History
-              label="Temperature"
-              data={temp}
-              unit="°"
-              limit={80}
-              colour="var(--wire)"
-            />
-          </Card>
-        </div>
-      )}
+        )}
+      </Workspace>
     </>
   );
 }

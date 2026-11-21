@@ -136,6 +136,29 @@ LibraryMine.play = async ({ canvasElement }) => {
   );
   for (const star of stars())
     await expect(star).toHaveAttribute('aria-pressed', 'true');
+  const search = canvas.getByRole('searchbox', { name: 'Search' });
+  await userEvent.type(search, 'remember this search');
+  const library = canvas.queryByRole('navigation', {
+    name: 'Library sections',
+  });
+  const choose = async (section: string) => {
+    if (library) {
+      await userEvent.click(
+        within(library).getByRole('button', { name: section }),
+      );
+    } else {
+      await userEvent.click(
+        canvas.getByRole('combobox', { name: 'Library section' }),
+      );
+      await userEvent.click(await page.findByRole('option', { name: section }));
+    }
+  };
+  await choose('Backing tracks');
+  await expect(
+    canvas.getByRole('heading', { name: 'Backing tracks' }),
+  ).toBeVisible();
+  await choose('Mine');
+  await expect(search).toHaveValue('remember this search');
 };
 export const LibraryOxidal = libraryStory('oxidal', 'Oxidal sounds');
 export const LibraryTone3000 = libraryStory('tone3000', 'TONE3000');

@@ -1,23 +1,5 @@
-import {
-  CloudArrowDown,
-  Equalizer,
-  Faders,
-  ListNumbers,
-  MagnifyingGlass,
-  MusicNotes,
-  Plug,
-  Plus,
-  Sparkle,
-  User,
-  X,
-} from '@phosphor-icons/react';
-import {
-  type ReactNode,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react';
+import { MagnifyingGlass, Plus, X } from '@phosphor-icons/react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import {
@@ -32,12 +14,8 @@ import {
   SelectValue,
 } from '@oxidal/design-system/components/select';
 import { StateNotice } from '@oxidal/design-system/components/states';
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@oxidal/design-system/components/tabs';
+import { LIBRARY_SECTIONS } from '@oxidal/design-system/patterns/library-sections';
+import { Workspace } from '@oxidal/design-system/patterns/workspace';
 
 import './Library.css';
 import {
@@ -82,39 +60,8 @@ import {
   WORKSPACE_LOCATION_EVENT,
 } from './workspaceMemory';
 
-const soundSections = [
-  'mine',
-  'oxidal',
-  'tone3000',
-  'setlist',
-  'tones',
-] as const;
-const mediaSections = ['backing', 'stems', 'di', 'songbook'] as const;
-const sections = [...soundSections, ...mediaSections] as const;
+const sections = LIBRARY_SECTIONS.map(({ id }) => id);
 type Section = (typeof sections)[number];
-const sectionLabels: Record<Section, string> = {
-  mine: 'Mine',
-  oxidal: 'Oxidal sounds',
-  tone3000: 'TONE3000',
-  setlist: 'Set list',
-  tones: 'Tones and IRs',
-  backing: 'Backing tracks',
-  stems: 'Stems',
-  di: 'DI and reamps',
-  songbook: 'Songbook',
-};
-/** One icon per Library section, beside its label. */
-const sectionIcons: Record<Section, ReactNode> = {
-  mine: <User aria-hidden="true" />,
-  oxidal: <Sparkle aria-hidden="true" />,
-  tone3000: <CloudArrowDown aria-hidden="true" />,
-  setlist: <ListNumbers aria-hidden="true" />,
-  tones: <Equalizer aria-hidden="true" />,
-  backing: <MusicNotes aria-hidden="true" />,
-  stems: <Faders aria-hidden="true" />,
-  di: <Plug aria-hidden="true" />,
-  songbook: <MusicNotes aria-hidden="true" />,
-};
 /** Links from before Sprint 12 keep working: they land on the new section. */
 const legacySections: Record<string, Section> = {
   presets: 'mine',
@@ -165,9 +112,6 @@ export function Library({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const group = (mediaSections as readonly string[]).includes(section)
-    ? 'media'
-    : 'sounds';
   const [refresh, setRefresh] = useState(0);
   // Search survives a reload (this tab), so Mine opens as you left it.
   const [query, setQuery] = useSessionState('library-mine-query', '');
@@ -461,29 +405,6 @@ export function Library({
   const originalsShown = presets.filter((p) =>
     matches(p.name, 'original', p.sha256),
   );
-  const activeTabs = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const tabs = activeTabs.current;
-    const active = tabs?.querySelector('[role="tab"][aria-selected="true"]');
-    if (!tabs || !active) return;
-
-    // Move just this row. Scrolling the selected element itself can also pull
-    // the whole page away from its heading on a deep link or fold change.
-    const revealSelected = () => {
-      const list = tabs.getBoundingClientRect();
-      const tab = active.getBoundingClientRect();
-      const right = list.left + tabs.clientWidth;
-      if (tab.left < list.left) tabs.scrollLeft += tab.left - list.left;
-      else if (tab.right > right) tabs.scrollLeft += tab.right - right;
-    };
-    revealSelected();
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(revealSelected);
-    observer.observe(tabs);
-    for (const tab of tabs.children) observer.observe(tab);
-    return () => observer.disconnect();
-  }, [composer, section]);
-
   if (composer)
     return (
       <section className="instrument-surface" aria-label="Library">
@@ -575,54 +496,22 @@ export function Library({
       </div>
     );
   }
-  function sectionTabs(
-    id: 'sounds' | 'media',
-    label: string,
-    list: readonly Section[],
-  ) {
-    return (
-      <div className="library-group" data-active={group === id}>
-        <TabsList
-          aria-label={`${label} sections`}
-          className="library-tabs"
-          data-horizontal-scroll="library"
-          ref={id === group ? activeTabs : undefined}
-        >
-          {list.map((id) => (
-            <TabsTrigger key={id} value={id} className="icon-tab">
-              {sectionIcons[id]}
-              <span>{sectionLabels[id]}</span>
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </div>
-    );
-  }
   return (
     <section className="instrument-surface" aria-label="Library">
-      <Tabs
-        value={section}
-        onValueChange={(value) => {
-          if ((sections as readonly string[]).includes(value))
-            setSection(value as Section);
+      <Workspace
+        label="Library"
+        className="px-0"
+        sections={LIBRARY_SECTIONS.map(({ id, label, icon }) => ({
+          id,
+          label,
+          icon,
+        }))}
+        current={section}
+        showTitle={false}
+        onSelect={(id) => {
+          if (sections.includes(id as Section)) setSection(id as Section);
         }}
       >
-        <div className="library-groups">
-          <SegmentedControl
-            value={group}
-            aria-label="Library group"
-            className="library-group-switch"
-            onValueChange={(value) => {
-              if (value === 'sounds' && group !== 'sounds') setSection('mine');
-              if (value === 'media' && group !== 'media') setSection('backing');
-            }}
-          >
-            <Segment value="sounds">Sounds</Segment>
-            <Segment value="media">Media</Segment>
-          </SegmentedControl>
-          {sectionTabs('sounds', 'Sounds', soundSections)}
-          {sectionTabs('media', 'Media', mediaSections)}
-        </div>
         {detailsError && (
           <StateNotice kind="error" title="Preset details unavailable">
             {detailsError}
@@ -651,256 +540,278 @@ export function Library({
           onClose={() => setMineDialog(null)}
           onChanged={() => setRefresh((v) => v + 1)}
         />
-        <TabsContent value="mine">
-          <StarterOffer
-            connected={connected}
-            refresh={refresh}
-            onChanged={() => setRefresh((v) => v + 1)}
-          />
-          {search(
-            query,
-            setQuery,
-            'Find a preset…',
-            <Button disabled={!connected} onClick={() => setCreating(true)}>
-              <Plus aria-hidden="true" /> New preset
-            </Button>,
-          )}
-          <div className="library-bar">
-            <div className="flex flex-wrap items-center gap-2">
-              {categorySelect}
-              {viewToggle}
+        {section === 'mine' && (
+          <div>
+            <StarterOffer
+              connected={connected}
+              refresh={refresh}
+              onChanged={() => setRefresh((v) => v + 1)}
+            />
+            {search(
+              query,
+              setQuery,
+              'Find a preset…',
+              <Button disabled={!connected} onClick={() => setCreating(true)}>
+                <Plus aria-hidden="true" /> New preset
+              </Button>,
+            )}
+            <div className="library-bar">
+              <div className="flex flex-wrap items-center gap-2">
+                {categorySelect}
+                {viewToggle}
+              </div>
             </div>
-          </div>
-          {created && (
-            <CreatedPreset
-              key={created.revision}
-              {...created}
+            {created && (
+              <CreatedPreset
+                key={created.revision}
+                {...created}
+                connected={connected}
+                onOpenRig={onOpenRig}
+                onDismiss={() => setCreated(null)}
+                onEdit={() => {
+                  setEditing({ revision: created.revision });
+                  setCreated(null);
+                }}
+              />
+            )}
+            {editing && (
+              <OfflineEditor
+                revision={editing.revision}
+                selection={editing.selection}
+                connected={connected}
+                onCancel={() => setEditing(null)}
+                onRefresh={() => {
+                  setEditing(null);
+                  setRefresh((v) => v + 1);
+                }}
+                onSaved={() => {
+                  setEditing(null);
+                  setRefresh((v) => v + 1);
+                }}
+              />
+            )}
+            {creating && (
+              <NewPresetDialog
+                connected={connected}
+                onCancel={() => setCreating(false)}
+                onAdvanced={(kind) => {
+                  setCreating(false);
+                  setComposer(kind);
+                }}
+                onCreated={(created) => {
+                  setCreating(false);
+                  setRefresh((v) => v + 1);
+                  setCreated({
+                    name: created.manifest.name,
+                    revision: created.revision,
+                  });
+                }}
+              />
+            )}
+            <SavedRigs
               connected={connected}
               onOpenRig={onOpenRig}
-              onDismiss={() => setCreated(null)}
-              onEdit={() => {
-                setEditing({ revision: created.revision });
-                setCreated(null);
-              }}
+              refresh={refresh}
+              query={query}
+              category={category}
+              details={details}
+              origin="mine"
+              title="Mine"
+              onDetails={(id, name) => setPreview({ kind: 'rig', id, name })}
+              onEdit={(revision) => setEditing({ revision })}
+              onManage={(action, entry) => setMineDialog({ action, ...entry })}
+              tailCount={ownedShown.length}
+              tail={(setList) =>
+                ownedShown.map((p) =>
+                  toneRow(
+                    p.id,
+                    p.name,
+                    true,
+                    'TONE3000 chain',
+                    `/api/v1/presets/owned/${p.id}/download`,
+                    setList,
+                  ),
+                )
+              }
+              empty={
+                <StateNotice kind="empty" title="No presets yet">
+                  Create one with New preset, or start from Oxidal sounds.
+                </StateNotice>
+              }
             />
-          )}
-          {editing && (
-            <OfflineEditor
-              revision={editing.revision}
-              selection={editing.selection}
-              connected={connected}
-              onCancel={() => setEditing(null)}
-              onRefresh={() => {
-                setEditing(null);
-                setRefresh((v) => v + 1);
-              }}
-              onSaved={() => {
-                setEditing(null);
-                setRefresh((v) => v + 1);
-              }}
-            />
-          )}
-          {creating && (
-            <NewPresetDialog
-              connected={connected}
-              onCancel={() => setCreating(false)}
-              onAdvanced={(kind) => {
-                setCreating(false);
-                setComposer(kind);
-              }}
-              onCreated={(created) => {
-                setCreating(false);
-                setRefresh((v) => v + 1);
-                setCreated({
-                  name: created.manifest.name,
-                  revision: created.revision,
-                });
-              }}
-            />
-          )}
-          <SavedRigs
-            connected={connected}
-            onOpenRig={onOpenRig}
-            refresh={refresh}
-            query={query}
-            category={category}
-            details={details}
-            origin="mine"
-            title="Mine"
-            onDetails={(id, name) => setPreview({ kind: 'rig', id, name })}
-            onEdit={(revision) => setEditing({ revision })}
-            onManage={(action, entry) => setMineDialog({ action, ...entry })}
-            tailCount={ownedShown.length}
-            tail={(setList) =>
-              ownedShown.map((p) =>
-                toneRow(
-                  p.id,
-                  p.name,
-                  true,
-                  'TONE3000 chain',
-                  `/api/v1/presets/owned/${p.id}/download`,
-                  setList,
-                ),
-              )
-            }
-            empty={
-              <StateNotice kind="empty" title="No presets yet">
-                Create one with New preset, or start from Oxidal sounds.
+            {copiesError && (
+              <StateNotice
+                kind="error"
+                title="Saved copies unavailable"
+                action={
+                  <Button
+                    variant="outline"
+                    onClick={() => setRefresh((value) => value + 1)}
+                  >
+                    Try again
+                  </Button>
+                }
+              >
+                {copiesError}
               </StateNotice>
-            }
-          />
-          {copiesError && (
-            <StateNotice
-              kind="error"
-              title="Saved copies unavailable"
-              action={
+            )}
+          </div>
+        )}
+        {section === 'oxidal' && (
+          <div>
+            <StarterOffer
+              connected={connected}
+              refresh={refresh}
+              onChanged={() => setRefresh((v) => v + 1)}
+            />
+            <OxidalSounds
+              connected={connected}
+              onOpenRig={onOpenRig}
+              onChanged={() => setRefresh((v) => v + 1)}
+            />
+          </div>
+        )}
+        {section === 'tone3000' && (
+          <div>
+            {search(
+              toneQuery,
+              setToneQuery,
+              'Find a TONE3000 preset…',
+              <>
+                {categorySelect}
+                {viewToggle}
+              </>,
+            )}
+            <div className="section-heading">
+              <h2>TONE3000</h2>
+            </div>
+            {busy && !presets.length ? (
+              <StateNotice kind="loading" title="Reading TONE3000 presets…" />
+            ) : !originalsShown.length ? (
+              <p role="status" className="caption">
+                {toneQuery.trim()
+                  ? 'No TONE3000 presets match these filters.'
+                  : 'No TONE3000 presets yet. Import a preset file below.'}
+              </p>
+            ) : (
+              <ul className="preset-library">
+                {originalsShown.map((preset) =>
+                  toneRow(
+                    preset.sha256,
+                    preset.name,
+                    false,
+                    `Original · ${preset.block_count} blocks${preset.framing === 'legacy' ? ' · legacy format' : ''}`,
+                    `/api/v1/presets/${preset.sha256}/original`,
+                  ),
+                )}
+              </ul>
+            )}
+            <section className="library-import" aria-label="Import a preset">
+              <h2 className="text-base">Import a TONE3000 preset file</h2>
+              <p className="caption">
+                Importing does not change what is playing. The original file is
+                kept unchanged; importing the same file twice keeps one copy. Up
+                to 32 MiB.
+              </p>
+              <div className="form-grid">
+                <label className="field">
+                  TONE3000 preset file
+                  <input
+                    type="file"
+                    accept=".t3kpreset"
+                    disabled={!connected}
+                    onChange={(event) =>
+                      setFile(event.target.files?.[0] ?? null)
+                    }
+                  />
+                </label>
+                <Button
+                  disabled={
+                    !file || !connected || importMessage === 'Importing…'
+                  }
+                  onClick={() => void upload()}
+                >
+                  Import
+                </Button>
+              </div>
+              {importMessage && <p role="status">{importMessage}</p>}
+              {importMessage === 'Importing…' && (
                 <Button
                   variant="outline"
-                  onClick={() => setRefresh((value) => value + 1)}
+                  onClick={() => importing.current?.abort()}
                 >
-                  Try again
+                  Cancel import
                 </Button>
-              }
-            >
-              {copiesError}
-            </StateNotice>
-          )}
-        </TabsContent>
-        <TabsContent value="oxidal">
-          <StarterOffer
-            connected={connected}
-            refresh={refresh}
-            onChanged={() => setRefresh((v) => v + 1)}
-          />
-          <OxidalSounds
-            connected={connected}
-            onOpenRig={onOpenRig}
-            onChanged={() => setRefresh((v) => v + 1)}
-          />
-        </TabsContent>
-        <TabsContent value="tone3000">
-          {search(
-            toneQuery,
-            setToneQuery,
-            'Find a TONE3000 preset…',
-            <>
-              {categorySelect}
-              {viewToggle}
-            </>,
-          )}
-          <div className="section-heading">
-            <h2>TONE3000</h2>
-          </div>
-          {busy && !presets.length ? (
-            <StateNotice kind="loading" title="Reading TONE3000 presets…" />
-          ) : !originalsShown.length ? (
-            <p role="status" className="caption">
-              {toneQuery.trim()
-                ? 'No TONE3000 presets match these filters.'
-                : 'No TONE3000 presets yet. Import a preset file below.'}
-            </p>
-          ) : (
-            <ul className="preset-library">
-              {originalsShown.map((preset) =>
-                toneRow(
-                  preset.sha256,
-                  preset.name,
-                  false,
-                  `Original · ${preset.block_count} blocks${preset.framing === 'legacy' ? ' · legacy format' : ''}`,
-                  `/api/v1/presets/${preset.sha256}/original`,
-                ),
               )}
-            </ul>
-          )}
-          <section className="library-import" aria-label="Import a preset">
-            <h2 className="text-base">Import a TONE3000 preset file</h2>
+              {importError && <p role="alert">{importError}</p>}
+            </section>
+          </div>
+        )}
+        {section === 'setlist' && (
+          <div>
             <p className="caption">
-              Importing does not change what is playing. The original file is
-              kept unchanged; importing the same file twice keeps one copy. Up
-              to 32 MiB.
+              The order of presets here is the order MIDI program changes and
+              Previous/Next follow. Presets you remove from the list stay in
+              Mine and can be restored.
             </p>
-            <div className="form-grid">
-              <label className="field">
-                TONE3000 preset file
-                <input
-                  type="file"
-                  accept=".t3kpreset"
-                  disabled={!connected}
-                  onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-                />
-              </label>
-              <Button
-                disabled={!file || !connected || importMessage === 'Importing…'}
-                onClick={() => void upload()}
-              >
-                Import
-              </Button>
-            </div>
-            {importMessage && <p role="status">{importMessage}</p>}
-            {importMessage === 'Importing…' && (
-              <Button
-                variant="outline"
-                onClick={() => importing.current?.abort()}
-              >
-                Cancel import
-              </Button>
-            )}
-            {importError && <p role="alert">{importError}</p>}
-          </section>
-        </TabsContent>
-        <TabsContent value="setlist">
-          <p className="caption">
-            The order of presets here is the order MIDI program changes and
-            Previous/Next follow. Presets you remove from the list stay in Mine
-            and can be restored.
-          </p>
-          <LibraryManagement
-            connected={connected}
-            onOpenRig={onOpenRig}
-            onChanged={() => setRefresh((v) => v + 1)}
-          />
-          <details className="control-help">
-            <summary>How live switching works</summary>
-            <p>
-              Presets with scenes or effects load in adjacent groups of four, or
-              the presets you choose with Keep ready. Switching inside that
-              group, and scene changes, have no gap. Other presets restart audio
-              briefly.
-            </p>
-          </details>
-        </TabsContent>
-        <TabsContent value="tones">
-          <SegmentedControl
-            value={soundFormat}
-            aria-label="Sound type"
-            className="my-3"
-            onValueChange={(value) => {
-              if (value === 'nam' || value === 'ir') setSoundFormat(value);
-            }}
-          >
-            <Segment value="nam">NAM captures</Segment>
-            <Segment value="ir">Cabinet IRs</Segment>
-          </SegmentedControl>
-          <ModelLibrary
-            key={soundFormat}
-            format={soundFormat}
-            connected={connected}
-            onOpenRig={onOpenRig}
-          />
-        </TabsContent>
-        <TabsContent value="di">
-          <DiReamps connected={connected} />
-        </TabsContent>
-        <TabsContent value="backing">
-          <BackingTracks connected={connected} />
-        </TabsContent>
-        <TabsContent value="stems">
-          <StemSongs connected={connected} />
-        </TabsContent>
-        <TabsContent value="songbook">
-          <Songbook connected={connected} />
-        </TabsContent>
-      </Tabs>
+            <LibraryManagement
+              connected={connected}
+              onOpenRig={onOpenRig}
+              onChanged={() => setRefresh((v) => v + 1)}
+            />
+            <details className="control-help">
+              <summary>How live switching works</summary>
+              <p>
+                Presets with scenes or effects load in adjacent groups of four,
+                or the presets you choose with Keep ready. Switching inside that
+                group, and scene changes, have no gap. Other presets restart
+                audio briefly.
+              </p>
+            </details>
+          </div>
+        )}
+        {section === 'tones' && (
+          <div>
+            <SegmentedControl
+              value={soundFormat}
+              aria-label="Sound type"
+              className="my-3"
+              onValueChange={(value) => {
+                if (value === 'nam' || value === 'ir') setSoundFormat(value);
+              }}
+            >
+              <Segment value="nam">NAM captures</Segment>
+              <Segment value="ir">Cabinet IRs</Segment>
+            </SegmentedControl>
+            <ModelLibrary
+              key={soundFormat}
+              format={soundFormat}
+              connected={connected}
+              onOpenRig={onOpenRig}
+            />
+          </div>
+        )}
+        {section === 'di' && (
+          <div>
+            <DiReamps connected={connected} />
+          </div>
+        )}
+        {section === 'backing' && (
+          <div>
+            <BackingTracks connected={connected} />
+          </div>
+        )}
+        {section === 'stems' && (
+          <div>
+            <StemSongs connected={connected} />
+          </div>
+        )}
+        {section === 'songbook' && (
+          <div>
+            <Songbook connected={connected} />
+          </div>
+        )}
+      </Workspace>
     </section>
   );
 }

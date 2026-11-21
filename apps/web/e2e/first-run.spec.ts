@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { expectWorkspaceSection } from './display';
+
 test('first run opens setup and every step reaches its working destination', async ({
   page,
 }, info) => {
@@ -25,11 +27,12 @@ test('first run opens setup and every step reaches its working destination', asy
       .getByRole('button', { name: `Open: ${title}`, exact: true })
       .click();
     await expect(page).toHaveURL(url);
-    await expect(
-      destination === 'Oxidal sounds'
-        ? page.getByRole('tab', { name: destination, selected: true })
-        : page.getByRole('heading', { name: destination, exact: true }),
-    ).toBeVisible();
+    if (destination === 'Oxidal sounds')
+      await expectWorkspaceSection(page, 'Library', destination);
+    else
+      await expect(
+        page.getByRole('heading', { name: destination, exact: true }),
+      ).toBeVisible();
     await page.reload();
     await expect(page).toHaveURL(url);
   }

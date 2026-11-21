@@ -67,22 +67,24 @@ it.each([
 ])('old link #library/%s lands on %s', async (old, tab, id) => {
   window.location.hash = `#library/${old}`;
   render(<Library connected onOpenRig={() => {}} />);
-  expect(
-    await screen.findByRole('tab', { name: tab, selected: true }),
-  ).toBeVisible();
+  expect(await screen.findByRole('button', { name: tab })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
   expect(window.location.hash).toBe(`#library/${id}`);
 });
 
-it('switches between the Sounds and Media groups', async () => {
+it('switches between sounds and media from the same directory', async () => {
   window.location.hash = '#library/setlist';
   render(<Library connected onOpenRig={() => {}} />);
-  fireEvent.click(await screen.findByRole('radio', { name: 'Media' }));
-  expect(
-    await screen.findByRole('tab', { name: 'Backing tracks', selected: true }),
-  ).toBeVisible();
+  const backing = await screen.findByRole('button', {
+    name: 'Backing tracks',
+  });
+  fireEvent.click(backing);
+  expect(backing).toHaveAttribute('aria-current', 'page');
   expect(window.location.hash).toBe('#library/backing');
-  fireEvent.click(screen.getByRole('radio', { name: 'Sounds' }));
-  expect(
-    await screen.findByRole('tab', { name: 'Mine', selected: true }),
-  ).toBeVisible();
+  const mine = screen.getByRole('button', { name: 'Mine' });
+  fireEvent.click(mine);
+  expect(mine).toHaveAttribute('aria-current', 'page');
+  expect(backing).not.toHaveAttribute('aria-current');
 });

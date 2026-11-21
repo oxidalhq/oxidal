@@ -29,6 +29,31 @@ export const LevelsScreen: StoryObj = {
       <Levels />
     </Screen>
   ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const levels = canvas.queryByRole('navigation', {
+      name: 'Levels sections',
+    });
+    if (levels) {
+      await userEvent.click(
+        within(levels).getByRole('button', { name: 'Loudness' }),
+      );
+      await expect(
+        within(levels).getByRole('button', { name: 'Loudness' }),
+      ).toHaveAttribute('aria-current', 'page');
+    } else {
+      const picker = canvas.getByRole('combobox', { name: 'Levels section' });
+      await userEvent.click(picker);
+      await userEvent.click(
+        await page.findByRole('option', { name: 'Loudness' }),
+      );
+      await expect(picker).toHaveTextContent('Loudness');
+    }
+    await expect(
+      canvas.getByRole('heading', { name: 'Capture references' }),
+    ).toBeVisible();
+  },
 };
 
 export const DeviceDetails: StoryObj = {

@@ -5,7 +5,7 @@ import {
   test,
 } from '@playwright/test';
 
-import { setDisplayMode } from './display';
+import { expectWorkspaceSection, setDisplayMode } from './display';
 
 /**
  * Sprint 09 backing player against the real daemon (its own temporary media
@@ -110,9 +110,7 @@ async function resetMedia(request: APIRequestContext) {
 
 async function importFixture(page: Page) {
   await page.goto('/#library/backing');
-  await expect(
-    page.getByRole('tab', { name: 'Backing tracks', selected: true }),
-  ).toBeVisible();
+  await expectWorkspaceSection(page, 'Library', 'Backing tracks');
   await page.getByLabel('Choose WAV or MP3 files').setInputFiles(fixture);
   const list = page.getByRole('list', { name: 'Backing list' });
   await expect(list.getByRole('listitem', { name: title })).toBeVisible({

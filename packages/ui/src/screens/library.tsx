@@ -27,6 +27,7 @@ import {
 import { PageHeading } from '../patterns/app-shell';
 import { CaptureBuilderDemo } from '../patterns/capture-builder.demo';
 import { type LibraryItem, LibraryList } from '../patterns/library-list';
+import { LIBRARY_SECTIONS } from '../patterns/library-sections';
 import { ModelBrowser } from '../patterns/model-browser';
 import { SoundBrowser } from '../patterns/sound-browser';
 import { SOUNDS as OXIDAL_SOUNDS } from '../patterns/sound-browser.data';
@@ -44,7 +45,6 @@ import {
   TRACKS,
   withUsage,
 } from './fixtures';
-import { LIBRARY_SECTIONS } from './library.sections';
 import { SetListSection } from './set-list-section';
 import { Songbook } from './songbook';
 import { useCaptureScenes } from './use-capture-scenes';
@@ -76,7 +76,10 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
   const editor = useCaptureScenes();
   const [scene, selectScene] = useState<string | null>('b');
   const [section, setSection] = useState(initial);
-  const [query, setQuery] = useState('');
+  const [queries, setQueries] = useState<Record<string, string>>({});
+  const query = queries[section] ?? '';
+  const setQuery = (value: string) =>
+    setQueries((old) => ({ ...old, [section]: value }));
   const [view, setView] = useState<'list' | 'artwork'>('list');
   const [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState<string | null>('p1');
@@ -116,21 +119,12 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
         active={scene}
         onSelect={selectScene}
       />
-      <PageHeading
-        eyebrow="Library"
-        title={
-          LIBRARY_SECTIONS.find((s) => s.id === section)?.label ?? 'Library'
-        }
-        caption={LIBRARY_SECTIONS.find((s) => s.id === section)?.description}
-      />
+      <PageHeading title="Library" />
       <Workspace
         sections={LIBRARY_SECTIONS}
-        value={section}
-        onChange={(id) => {
-          setSection(id);
-          setQuery('');
-        }}
-        label="Library sections"
+        current={section}
+        onSelect={setSection}
+        label="Library"
       >
         {section === 'mine' && (
           <LibraryList

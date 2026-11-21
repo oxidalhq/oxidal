@@ -18,9 +18,11 @@ import { buildRoute, type Route } from '../src/rigRoute';
 import { addSceneEffect } from '../src/sceneEdit';
 import {
   expectSettingsSection,
+  expectWorkspaceSection,
   openComposer,
   openSounds,
   selectSettingsSection,
+  selectWorkspaceSection,
   setDisplayMode,
 } from './display';
 
@@ -310,9 +312,10 @@ test('rig controls follow the actual session without example effects', async ({
     const inspectorBounds = (await rig
       .locator('.rig-inspector-column')
       .boundingBox())!;
-    expect(inspectorBounds.x).toBeGreaterThan(
-      chainBounds.x + chainBounds.width,
+    expect(inspectorBounds.y).toBeGreaterThanOrEqual(
+      chainBounds.y + chainBounds.height,
     );
+    expect(Math.abs(inspectorBounds.width - chainBounds.width)).toBeLessThan(2);
   }
   await page.screenshot({
     path: info.outputPath('rig-selected-landscape.png'),
@@ -460,7 +463,7 @@ test('native preset upload, durable library, exact download and rejected replace
     page.getByRole('complementary', { name: 'DSP and system resources' }),
   ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
-  await page.getByRole('tab', { name: 'TONE3000', exact: true }).click();
+  await selectWorkspaceSection(page, 'Library', 'TONE3000');
   const fixtureNames = [
     'authored-current.t3kpreset',
     'authored-legacy.t3kpreset',
@@ -489,12 +492,10 @@ test('native preset upload, durable library, exact download and rejected replace
     .join(',');
   const rows = page.locator(rowSelector);
   // Originals and the import form share the TONE3000 section.
-  const presetsTab = page.getByRole('tab', { name: 'TONE3000', exact: true });
-  const discoverTab = presetsTab;
-  await presetsTab.click();
+  await expectWorkspaceSection(page, 'Library', 'TONE3000');
   await expect(rows).toHaveCount(2);
   // Importing the same file again keeps one copy.
-  await discoverTab.click();
+  await selectWorkspaceSection(page, 'Library', 'TONE3000');
   await page
     .getByLabel('TONE3000 preset file')
     .setInputFiles(fileURLToPath(new URL(fixtureNames[0]!, fixtures)));
@@ -502,7 +503,7 @@ test('native preset upload, durable library, exact download and rejected replace
   await expect(
     page.getByRole('button', { name: 'Import', exact: true }),
   ).toBeEnabled();
-  await presetsTab.click();
+  await selectWorkspaceSection(page, 'Library', 'TONE3000');
   await expect(rows).toHaveCount(2);
   // Rows mark only the exception (legacy format); the current-format row has no tag.
   const current = page.locator(`[data-testid="preset-${fixtureIds[0]}"]`);
@@ -528,13 +529,13 @@ test('native preset upload, durable library, exact download and rejected replace
   const second = await context.newPage();
   await second.goto('/');
   await second.getByRole('button', { name: 'Library', exact: true }).click();
-  await second.getByRole('tab', { name: 'TONE3000', exact: true }).click();
+  await selectWorkspaceSection(second, 'Library', 'TONE3000');
   await expect(second.locator(rowSelector)).toHaveCount(2);
   await page.reload();
   await page.getByRole('button', { name: 'Library', exact: true }).click();
-  await presetsTab.click();
+  await selectWorkspaceSection(page, 'Library', 'TONE3000');
   await expect(rows).toHaveCount(2);
-  await page.getByRole('tab', { name: 'TONE3000', exact: true }).click();
+  await selectWorkspaceSection(page, 'Library', 'TONE3000');
   await page.getByLabel('TONE3000 preset file').setInputFiles({
     name: 'bad.t3kpreset',
     mimeType: 'application/octet-stream',
@@ -544,10 +545,10 @@ test('native preset upload, durable library, exact download and rejected replace
   await expect(
     page.getByRole('alert').filter({ hasText: 'Not a TONE3000 preset' }),
   ).toContainText('Not a TONE3000 preset');
-  await page.getByRole('tab', { name: 'TONE3000', exact: true }).click();
+  await selectWorkspaceSection(page, 'Library', 'TONE3000');
   await expect(rows).toHaveCount(2);
   expect(await (await request.get('/api/v1/state')).json()).toEqual(before);
-  await page.getByRole('tab', { name: 'Mine', exact: true }).click();
+  await selectWorkspaceSection(page, 'Library', 'Mine');
   await openComposer(page, 'tone3000');
   await expect(
     page.getByText(/Playback and editing are not available/),
@@ -2095,7 +2096,7 @@ test('asset artwork stays identifiable offline in portrait and landscape', async
   }
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   // The fixture is a TONE3000 original, which lives in the TONE3000 section.
-  await page.getByRole('tab', { name: 'TONE3000', exact: true }).click();
+  await selectWorkspaceSection(page, 'Library', 'TONE3000');
   const image = page.getByRole('img', {
     name: 'Shared name · amp',
     exact: true,
@@ -3108,7 +3109,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     await request.get(`/api/v1/presets/rigs/${managedRevision}`)
   ).json();
   await page.getByRole('button', { name: 'Library', exact: true }).click();
-  await page.getByRole('tab', { name: 'Set list', exact: true }).click();
+  await selectWorkspaceSection(page, 'Library', 'Set list');
   const management = page.getByRole('region', {
     name: 'Set list',
     exact: true,
@@ -4784,7 +4785,15 @@ test('mixed rig authoring presents parallel routing and guarded Save on small sc
   const cab = (await rig.locator('[data-node="cab"]').boundingBox())!;
   expect(a.x).toBe(b.x);
   expect(b.y).toBeGreaterThan(a.y + a.height);
-  expect(cab.x).toBeGreaterThan(a.x + a.width);
+  if (page.viewportSize()!.width < 768) {
+    await expect(rig.locator('.route-canvas')).toHaveAttribute(
+      'data-orientation',
+      'vertical',
+    );
+    expect(cab.y).toBeGreaterThan(b.y + b.height);
+  } else {
+    expect(cab.x).toBeGreaterThan(a.x + a.width);
+  }
   await expect(rig.getByRole('group', { name: 'Split · 2 paths' })).toHaveCount(
     1,
   );
@@ -5156,11 +5165,11 @@ test('native preset library keeps originals accessible when saved copies cannot 
     page.getByRole('searchbox', { name: 'Search presets' }),
   ).toBeEnabled();
   // Originals live in TONE3000 and stay playable while Mine's copies fail.
-  await page.getByRole('tab', { name: 'TONE3000', exact: true }).click();
+  await selectWorkspaceSection(page, 'Library', 'TONE3000');
   await expect(
     page.getByRole('button', { name: 'Play Available original' }),
   ).toBeEnabled();
-  await page.getByRole('tab', { name: 'Mine', exact: true }).click();
+  await selectWorkspaceSection(page, 'Library', 'Mine');
   fail = false;
   await page.getByRole('button', { name: 'Try again' }).click();
   await expect(page.getByText('Saved copies could not be read.')).toHaveCount(
@@ -5266,9 +5275,7 @@ test('device portrait shared NAM and IR libraries import, search and page indepe
     )
     .toBe(true);
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
-  await expect(
-    page.getByRole('tab', { name: 'Mine', exact: true }),
-  ).toBeVisible();
+  await expectWorkspaceSection(page, 'Library', 'Mine');
   const accessibility = await new AxeBuilder({ page })
     .include('.asset-library')
     .analyze();
@@ -5332,7 +5339,7 @@ test('device portrait permanent deletion previews a disposable preset and keeps 
   expect(independent.ok()).toBe(true);
   const asset = await independent.json();
   await page.goto('/#library');
-  await page.getByRole('tab', { name: 'Set list', exact: true }).click();
+  await selectWorkspaceSection(page, 'Library', 'Set list');
   await page
     .getByRole('button', { name: 'Manage presets', exact: true })
     .click();
@@ -5535,7 +5542,7 @@ test('device portrait set-list drag and keyboard order agree with picker and Per
   await place('rig', second.revision, { kind: 'rig', id: rig.revision });
   const audioBefore = await (await request.get('/api/v1/audio')).json();
   await page.goto('/#library');
-  await page.getByRole('tab', { name: 'Set list', exact: true }).click();
+  await selectWorkspaceSection(page, 'Library', 'Set list');
   await page
     .getByRole('button', { name: 'Manage presets', exact: true })
     .click();

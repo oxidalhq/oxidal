@@ -1,36 +1,61 @@
 import { expect, type Page } from '@playwright/test';
 
-/** Settings uses a section picker on phones and a directory on wide screens. */
-export async function selectSettingsSection(page: Page, label: string) {
-  const picker = page.getByRole('combobox', {
-    name: 'Settings section',
+type Workspace = 'Settings' | 'Library' | 'Levels';
+
+export function workspaceSectionPicker(page: Page, workspace: Workspace) {
+  return page.getByRole('combobox', {
+    name: `${workspace} section`,
     exact: true,
   });
+}
+
+function workspaceDirectory(page: Page, workspace: Workspace) {
+  return page.getByRole('navigation', {
+    name: `${workspace} sections`,
+    exact: true,
+  });
+}
+
+/** The same section layout uses a compact picker or a wide-screen directory. */
+export async function selectWorkspaceSection(
+  page: Page,
+  workspace: Workspace,
+  label: string,
+) {
+  const picker = workspaceSectionPicker(page, workspace);
+  const directory = workspaceDirectory(page, workspace);
+  await expect(picker.or(directory)).toBeVisible();
   if (await picker.isVisible()) {
     await picker.click();
     await page.getByRole('option', { name: label, exact: true }).click();
   } else {
-    await page
-      .getByRole('navigation', { name: 'Settings sections', exact: true })
-      .getByRole('button', { name: label, exact: true })
-      .click();
+    await directory.getByRole('button', { name: label, exact: true }).click();
   }
+}
+
+export async function expectWorkspaceSection(
+  page: Page,
+  workspace: Workspace,
+  label: string,
+) {
+  const picker = workspaceSectionPicker(page, workspace);
+  const directory = workspaceDirectory(page, workspace);
+  await expect(picker.or(directory)).toBeVisible();
+  if (await picker.isVisible()) await expect(picker).toContainText(label);
+  else
+    await expect(
+      directory.getByRole('button', { name: label, exact: true }),
+    ).toHaveAttribute('aria-current', 'page');
+}
+
+export async function selectSettingsSection(page: Page, label: string) {
+  await selectWorkspaceSection(page, 'Settings', label);
 }
 
 export async function expectSettingsSection(page: Page, label: string) {
   await expect(page.locator('#settings-section-title')).toHaveText(label);
   await expect(page.locator('#settings-section-title')).toBeVisible();
-  const picker = page.getByRole('combobox', {
-    name: 'Settings section',
-    exact: true,
-  });
-  if (await picker.isVisible()) await expect(picker).toContainText(label);
-  else
-    await expect(
-      page
-        .getByRole('navigation', { name: 'Settings sections', exact: true })
-        .getByRole('button', { name: label, exact: true }),
-    ).toHaveAttribute('aria-current', 'page');
+  await expectWorkspaceSection(page, 'Settings', label);
 }
 
 export async function setDisplayMode(
@@ -70,7 +95,7 @@ export async function setDisplayMode(
 
 /** Library → Tones and IRs, then NAM captures or cabinet IRs (Sprint 07). */
 export async function openSounds(page: Page, format: 'nam' | 'ir') {
-  await page.getByRole('tab', { name: 'Tones and IRs', exact: true }).click();
+  await selectWorkspaceSection(page, 'Library', 'Tones and IRs');
   await page
     .getByRole('radiogroup', { name: 'Sound type' })
     .getByRole('radio', {

@@ -3,14 +3,6 @@
   gap: 1.5rem;
   min-width: 0;
 }
-.sound-check-tabs {
-  display: grid;
-  gap: 1.25rem;
-  min-width: 0;
-}
-.sound-check-tabs > .ui-tabs-list {
-  justify-self: start;
-}
 .sound-check-tab-panel {
   display: grid;
   gap: 1.5rem;
@@ -246,12 +238,6 @@
   .sound-check-stages,
   .sound-check-metrics {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .sound-check-tabs > .ui-tabs-list {
-    justify-self: stretch;
-  }
-  .sound-check-tabs > .ui-tabs-list > * {
-    flex: 1 1 0;
   }
   .sound-check-limit-heading {
     display: grid;

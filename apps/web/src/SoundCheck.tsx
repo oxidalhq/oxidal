@@ -1,10 +1,8 @@
 import {
   CheckCircle,
-  Gauge,
   Guitar,
   Pulse,
   SpeakerHigh,
-  Stethoscope,
   WarningCircle,
 } from '@phosphor-icons/react';
 import {
@@ -19,11 +17,10 @@ import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
 import { StateNotice } from '@oxidal/design-system/components/states';
 import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@oxidal/design-system/components/tabs';
+  LEVELS_SECTIONS,
+  type LevelsSection,
+} from '@oxidal/design-system/patterns/levels-sections';
+import { Workspace } from '@oxidal/design-system/patterns/workspace';
 
 import './SoundCheck.css';
 import {
@@ -48,6 +45,7 @@ import { useMonitorFeed } from './monitorFeed';
 import { Monitoring } from './Monitoring';
 import { processingHeadroom } from './processingHeadroom';
 import { ToolRow, ToolSection } from './ToolRow';
+import { useSectionLocation } from './workspaceMemory';
 
 type HealthData = {
   calibration: CalibrationState | null;
@@ -63,7 +61,7 @@ type Fix = {
   action?: { label: string; run: () => void };
 };
 
-type SoundCheckView = 'overview' | 'loudness' | 'diagnostics';
+const sections = LEVELS_SECTIONS.map(({ id }) => id);
 
 const db = (value: number | null | undefined) =>
   value == null
@@ -103,7 +101,11 @@ export function SoundCheck({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refresh, setRefresh] = useState(0);
-  const [view, setView] = useState<SoundCheckView>('overview');
+  const [view, setView] = useSectionLocation<LevelsSection>(
+    'monitor',
+    sections,
+    'overview',
+  );
   const feed = useMonitorFeed(displayMode === 'epaper' ? 5000 : 1000);
 
   const load = useCallback(() => {
@@ -295,58 +297,48 @@ export function SoundCheck({
 
   return (
     <section className="sound-check" aria-label="Levels">
-      <header className="sound-check-intro">
-        <div>
-          <Badge data-state={fixes.length ? 'attention' : 'ready'}>
-            {fixes.length ? (
-              <WarningCircle aria-hidden="true" />
-            ) : (
-              <CheckCircle aria-hidden="true" />
-            )}
-            {loading
-              ? 'Checking'
-              : fixes.length
-                ? `${fixes.length} to review`
-                : 'No current software warnings'}
-          </Badge>
-          <h2>Is the whole instrument ready?</h2>
-          <p>
-            One view of the guitar, interface, loudness, intentional boosts and
-            live processing health. Digital readings cannot judge a physical
-            output knob or room loudness.
-          </p>
-        </div>
-        <Button variant="outline" disabled={loading} onClick={load}>
-          Refresh checks
-        </Button>
-      </header>
-
-      {error && (
-        <StateNotice kind="error" title="Levels could not refresh">
-          {error}
-        </StateNotice>
-      )}
-      <Tabs
-        className="sound-check-tabs"
-        value={view}
-        onValueChange={(value) => setView(value as SoundCheckView)}
+      <Workspace
+        label="Levels"
+        sections={LEVELS_SECTIONS}
+        current={view}
+        className="px-0"
+        onSelect={(id) => {
+          if (sections.includes(id as LevelsSection))
+            setView(id as LevelsSection);
+        }}
       >
-        <TabsList aria-label="Levels sections">
-          <TabsTrigger value="overview" className="icon-tab">
-            <Gauge aria-hidden="true" />
-            <span>Overview</span>
-          </TabsTrigger>
-          <TabsTrigger value="loudness" className="icon-tab">
-            <SpeakerHigh aria-hidden="true" />
-            <span>Loudness</span>
-          </TabsTrigger>
-          <TabsTrigger value="diagnostics" className="icon-tab">
-            <Stethoscope aria-hidden="true" />
-            <span>Diagnostics</span>
-          </TabsTrigger>
-        </TabsList>
+        <header className="sound-check-intro">
+          <div>
+            <Badge data-state={fixes.length ? 'attention' : 'ready'}>
+              {fixes.length ? (
+                <WarningCircle aria-hidden="true" />
+              ) : (
+                <CheckCircle aria-hidden="true" />
+              )}
+              {loading
+                ? 'Checking'
+                : fixes.length
+                  ? `${fixes.length} to review`
+                  : 'No current software warnings'}
+            </Badge>
+            <h2>Is the whole instrument ready?</h2>
+            <p>
+              One view of the guitar, interface, loudness, intentional boosts
+              and live processing health. Digital readings cannot judge a
+              physical output knob or room loudness.
+            </p>
+          </div>
+          <Button variant="outline" disabled={loading} onClick={load}>
+            Refresh checks
+          </Button>
+        </header>
 
-        <TabsContent value="overview">
+        {error && (
+          <StateNotice kind="error" title="Levels could not refresh">
+            {error}
+          </StateNotice>
+        )}
+        {view === 'overview' && (
           <div className="sound-check-tab-panel">
             <div
               className="sound-check-meters"
@@ -656,9 +648,9 @@ export function SoundCheck({
               </div>
             </ToolSection>
           </div>
-        </TabsContent>
+        )}
 
-        <TabsContent value="loudness">
+        {view === 'loudness' && (
           <div className="sound-check-tab-panel">
             <CaptureListening
               appliedTrim={data.levels?.input_trim_db ?? null}
@@ -733,9 +725,9 @@ export function SoundCheck({
 
             <EvenOut connected={connected} />
           </div>
-        </TabsContent>
+        )}
 
-        <TabsContent value="diagnostics">
+        {view === 'diagnostics' && (
           <div className="sound-check-tab-panel">
             <div className="sound-check-diagnostics-heading">
               <h2>Live diagnostics &amp; history</h2>
@@ -746,8 +738,8 @@ export function SoundCheck({
             </div>
             <Monitoring displayMode={displayMode} />
           </div>
-        </TabsContent>
-      </Tabs>
+        )}
+      </Workspace>
     </section>
   );
 }

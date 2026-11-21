@@ -1,6 +1,6 @@
-import * as React from 'react';
+import { CaretRight } from '@phosphor-icons/react';
+import type { ReactNode } from 'react';
 
-import { Segment, SegmentedControl } from '../components/ui/segmented';
 import {
   Select,
   SelectContent,
@@ -8,96 +8,97 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '../components/ui/tabs';
+import { Description } from '../components/ui/text';
 import { cn } from '../lib/cn';
 
 export type Section = {
   id: string;
   label: string;
-  icon?: React.ReactNode;
-  count?: number;
-  /** What the section is for, in a sentence or two; Settings shows it under the title. */
+  icon?: ReactNode;
   description?: string;
 };
 
-/**
- * One workspace with sections (Library, Settings): tabs on `sm+`; below
- * that a segmented control for up to four sections and a Select for more,
- * so nothing scrolls sideways on a phone. The chosen section's content is
- * the only panel rendered.
- */
+/** A section directory on wide screens and a compact picker on phones. */
 export function Workspace({
   sections,
-  value,
-  onChange,
+  current,
+  onSelect,
+  title,
   label,
+  showTitle = true,
   children,
   className,
 }: {
-  sections: Section[];
-  value: string;
-  onChange: (id: string) => void;
+  sections: readonly Section[];
+  current: string;
+  onSelect: (id: string) => void;
+  title?: ReactNode;
   label: string;
-  children: React.ReactNode;
+  showTitle?: boolean;
+  children: ReactNode;
   className?: string;
 }) {
-  const few = sections.length <= 4;
+  const titleId = `${label.toLowerCase()}-section-title`;
+  const section = sections.find((s) => s.id === current);
   return (
-    <div data-slot="workspace" className={cn('grid gap-4', className)}>
-      <div className="px-page sm:hidden">
-        {few ? (
-          <SegmentedControl
-            value={value}
-            onValueChange={onChange}
-            aria-label={label}
-            className="w-full"
-          >
-            {sections.map((section) => (
-              <Segment key={section.id} value={section.id}>
-                {section.icon}
-                {section.label}
-              </Segment>
+    <div
+      data-slot="workspace"
+      className={cn(
+        'grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 px-page md:grid-cols-[13rem_minmax(0,1fr)] md:gap-8',
+        className,
+      )}
+    >
+      <div className="min-w-0 md:hidden">
+        <Select value={current} onValueChange={onSelect}>
+          <SelectTrigger aria-label={`${label} section`}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {sections.map((s) => (
+              <SelectItem key={s.id} value={s.id}>
+                {s.label}
+              </SelectItem>
             ))}
-          </SegmentedControl>
-        ) : (
-          <Select value={value} onValueChange={onChange}>
-            <SelectTrigger aria-label={label}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {sections.map((section) => (
-                <SelectItem key={section.id} value={section.id}>
-                  {section.label}
-                  {section.count !== undefined ? ` · ${section.count}` : ''}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+          </SelectContent>
+        </Select>
       </div>
-      <Tabs value={value} onValueChange={onChange} className="grid gap-4">
-        <TabsList aria-label={label} className="hidden sm:flex">
-          {sections.map((section) => (
-            <TabsTrigger key={section.id} value={section.id}>
-              {section.icon}
-              {section.label}
-              {section.count !== undefined && (
-                <span className="font-mono text-xs text-muted-foreground tabular-nums">
-                  {section.count}
-                </span>
-              )}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-        <TabsContent value={value} forceMount className="grid gap-4 px-page">
-          {children}
-        </TabsContent>
-      </Tabs>
+      <nav
+        aria-label={`${label} sections`}
+        className="hidden content-start gap-0.5 md:grid"
+      >
+        {sections.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            aria-current={s.id === current ? 'page' : undefined}
+            onClick={() => onSelect(s.id)}
+            className="grid min-h-touch grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-3 text-left text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring aria-[current=page]:bg-foreground aria-[current=page]:text-background [&_svg]:size-4"
+          >
+            {s.icon ?? <span />}
+            <span className="truncate">{s.label}</span>
+            <CaretRight className="opacity-50 aria-[current=page]:opacity-100" />
+          </button>
+        ))}
+      </nav>
+      <section
+        aria-labelledby={titleId}
+        className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-5"
+      >
+        <h2
+          id={titleId}
+          className={
+            showTitle
+              ? 'm-0 font-display text-2xl font-semibold tracking-tight'
+              : 'sr-only'
+          }
+        >
+          {title ?? section?.label}
+        </h2>
+        {section?.description && (
+          <Description>{section.description}</Description>
+        )}
+        {children}
+      </section>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { expectWorkspaceSection, workspaceSectionPicker } from './display';
 import { horizontalProblems } from './horizontal-layout';
 
 const library = [
@@ -28,7 +29,16 @@ const surfaces = [
   { route: 'rig', heading: 'No preset playing' },
   { route: 'guitars', heading: 'Your guitars' },
   { route: 'levels', heading: 'Levels' },
-  ...library.map(([id, tab]) => ({ route: `library/${id}`, tab })),
+  ...library.map(([id, section]) => ({
+    route: `library/${id}`,
+    section,
+    area: 'Library' as const,
+  })),
+  ...(['Overview', 'Loudness', 'Diagnostics'] as const).map((section) => ({
+    route: `levels/${section.toLowerCase()}`,
+    section,
+    area: 'Levels' as const,
+  })),
   ...settings.map(([id, heading]) => ({ route: `settings/${id}`, heading })),
 ];
 
@@ -62,10 +72,8 @@ for (const mode of ['default', 'stage', 'sunlight', 'epaper'] as const)
             await page.goto(`/#${surface.route}`);
             const main = page.getByRole('main');
             await expect(main).toBeVisible();
-            if ('tab' in surface)
-              await expect(
-                main.getByRole('tab', { name: surface.tab, exact: true }),
-              ).toHaveAttribute('aria-selected', 'true');
+            if ('section' in surface)
+              await expectWorkspaceSection(page, surface.area, surface.section);
             else if (surface.route.startsWith('settings/'))
               await expect(main.locator('#settings-section-title')).toHaveText(
                 surface.heading,
@@ -193,74 +201,51 @@ for (const mode of ['default', 'stage', 'sunlight', 'epaper'] as const)
       ).toEqual([]);
     });
 
-test('Library tabs stay reachable by touch and keyboard on the Fold cover', async ({
+test('Library and Levels sections stay reachable by touch and keyboard on the Fold cover', async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'fold-cover', 'Fold cover touch layout');
 
   await page.goto('/#library/mine');
-  const sounds = page.getByRole('tablist', { name: 'Sounds sections' });
-  const mine = sounds.getByRole('tab', { name: 'Mine', exact: true });
-  const tones = sounds.getByRole('tab', { name: 'Tones and IRs' });
-  const rail = (label: string) => page.getByRole('tablist', { name: label });
-  const visibleInRail = (tab: HTMLElement) => {
-    const bounds = tab.getBoundingClientRect();
-    const parent = tab.closest<HTMLElement>('[role=tablist]')!;
-    const { left } = parent.getBoundingClientRect();
-    return (
-      bounds.left >= left - 1 && bounds.right <= left + parent.clientWidth + 1
-    );
-  };
-  await expect(mine).toHaveAttribute('aria-selected', 'true');
-  await expect.poll(() => tones.evaluate(visibleInRail)).toBe(false);
-  const box = (await sounds.boundingBox())!;
-  await sounds.scrollIntoViewIfNeeded();
-  const client = await page.context().newCDPSession(page);
-  const x = Math.round(box.x + box.width * 0.85);
-  const y = Math.round(box.y + box.height / 2);
-  await client.send('Input.dispatchTouchEvent', {
-    type: 'touchStart',
-    touchPoints: [{ x, y }],
-  });
-  for (
-    let offset = 20;
-    offset <= Math.floor(box.width / 40) * 40;
-    offset += 20
-  ) {
-    if (x - offset <= box.x + 8) break;
-    await client.send('Input.dispatchTouchEvent', {
-      type: 'touchMove',
-      touchPoints: [{ x: x - offset, y }],
-    });
-  }
-  await client.send('Input.dispatchTouchEvent', {
-    type: 'touchEnd',
-    touchPoints: [],
-  });
-  await expect
-    .poll(() => sounds.evaluate((el) => el.scrollLeft))
-    .toBeGreaterThan(0);
-  await expect.poll(() => tones.evaluate(visibleInRail)).toBe(true);
-  const last = (await tones.boundingBox())!;
-  await page.touchscreen.tap(last.x + last.width / 2, last.y + last.height / 2);
-  await expect(tones).toHaveAttribute('aria-selected', 'true');
+  const library = workspaceSectionPicker(page, 'Library');
+  await expect(library).toContainText('Mine');
+  await library.tap();
+  await page.getByRole('option', { name: 'Tones and IRs', exact: true }).tap();
+  await expectWorkspaceSection(page, 'Library', 'Tones and IRs');
 
-  await page.getByRole('radio', { name: 'Media', exact: true }).tap();
-  const media = rail('Media sections');
-  const backing = media.getByRole('tab', { name: 'Backing tracks' });
-  const songbook = media.getByRole('tab', { name: 'Songbook' });
-  await expect(backing).toHaveAttribute('aria-selected', 'true');
-  await backing.focus();
-  await backing.press('End');
-  await expect(songbook).toBeFocused();
-  await expect(songbook).toHaveAttribute('aria-selected', 'true');
-  await expect.poll(() => songbook.evaluate(visibleInRail)).toBe(true);
-
+  await library.focus();
+  await page.keyboard.press('Space');
+  await expect(page.getByRole('listbox')).toBeVisible();
+  await page.keyboard.press('End');
+  await expect(page.getByRole('option', { name: 'Songbook' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expectWorkspaceSection(page, 'Library', 'Songbook');
+  await expect(page).toHaveURL(/#library\/songbook$/);
   await page.reload();
-  await expect(songbook).toHaveAttribute('aria-selected', 'true');
-  await expect.poll(() => songbook.evaluate(visibleInRail)).toBe(true);
+  await expectWorkspaceSection(page, 'Library', 'Songbook');
+
   await page.setViewportSize({ width: 882, height: 344 });
+  const directory = page.getByRole('navigation', { name: 'Library sections' });
+  await expectWorkspaceSection(page, 'Library', 'Songbook');
+  await directory.getByRole('button', { name: 'DI and reamps' }).press('Enter');
+  await expectWorkspaceSection(page, 'Library', 'DI and reamps');
   await page.setViewportSize({ width: 344, height: 882 });
-  await expect.poll(() => songbook.evaluate(visibleInRail)).toBe(true);
+  await expect(library).toContainText('DI and reamps');
+  expect(await page.evaluate(horizontalProblems)).toEqual([]);
+
+  await page.goto('/#levels/loudness');
+  const levels = workspaceSectionPicker(page, 'Levels');
+  await expectWorkspaceSection(page, 'Levels', 'Loudness');
+  await expect(
+    page.getByRole('button', { name: 'Open browser audition' }),
+  ).toBeVisible();
+  await levels.tap();
+  await page.getByRole('option', { name: 'Diagnostics', exact: true }).tap();
+  await expectWorkspaceSection(page, 'Levels', 'Diagnostics');
+  await page.reload();
+  await expectWorkspaceSection(page, 'Levels', 'Diagnostics');
+  await expect(
+    page.getByRole('region', { name: 'Audio and system monitoring' }),
+  ).toBeVisible();
   expect(await page.evaluate(horizontalProblems)).toEqual([]);
 });
