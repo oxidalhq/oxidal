@@ -544,7 +544,9 @@ it('opens the shared phone block sheet with a scrim and commits its slider throu
         ...manualEditBegun,
         revision: manualEditBegun.revision + 1,
       });
-    const exact = screen.getByRole('button', { name: 'Edit exact Input gain' });
+    const exact = screen.getByRole('button', {
+      name: /^Edit exact Input gain.*0\.5 dB$/,
+    });
     await waitFor(() => expect(exact).toBeEnabled());
     expect(exact).toHaveTextContent('0.5 dB');
     fireEvent.click(exact);

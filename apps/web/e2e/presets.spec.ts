@@ -5754,7 +5754,8 @@ test('device portrait preset details edit and category search never recall audio
   });
   await page.goto('/#library/tone3000');
   await page
-    .getByRole('button', { name: `Details: ${imported.name}`, exact: true })
+    .getByTestId(`preset-${imported.sha256}`)
+    .getByRole('button', { name: /^Details:/ })
     .click();
   const dialog = page.getByRole('dialog', {
     name: 'Preset details',
@@ -5805,7 +5806,8 @@ test('device portrait preset details edit and category search never recall audio
   ).toBeVisible();
   await page.reload();
   await page
-    .getByRole('button', { name: `Details: ${imported.name}`, exact: true })
+    .getByTestId(`preset-${imported.sha256}`)
+    .getByRole('button', { name: /^Details:/ })
     .click();
   await expect(
     page

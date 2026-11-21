@@ -687,7 +687,7 @@ export function Library({
                   : 'No TONE3000 presets yet. Import a preset file below.'}
               </p>
             ) : (
-              <ul className="preset-library">
+              <ul className="m-0 grid list-none gap-2 p-0">
                 {originalsShown.map((preset) =>
                   toneRow(
                     preset.sha256,

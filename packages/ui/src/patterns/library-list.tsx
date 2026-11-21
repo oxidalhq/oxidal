@@ -131,6 +131,70 @@ const pictureOf = (item: LibraryItem, tile?: React.ReactNode) =>
     />
   );
 
+/** The same selectable row is used for saved rigs, native preset files and the library stories. */
+export function LibraryRow({
+  item,
+  active,
+  leading,
+  actions,
+  onOpen,
+  openPrefix,
+  testId,
+}: {
+  item: LibraryItem;
+  active: boolean;
+  leading: React.ReactNode;
+  actions: React.ReactNode;
+  onOpen?: () => void;
+  openPrefix?: string;
+  testId?: string;
+}) {
+  return (
+    <li
+      data-testid={testId}
+      data-slot="library-row"
+      data-active={active || undefined}
+      className={cn(
+        'relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 hover:border-foreground/40',
+        active && 'border-foreground shadow-raised',
+      )}
+    >
+      <span className="relative z-10">{leading}</span>
+      <button
+        type="button"
+        aria-pressed={active}
+        onClick={onOpen}
+        disabled={!onOpen}
+        className="grid min-w-0 gap-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:outline-2 focus-visible:after:outline-ring"
+      >
+        <span className="truncate font-display text-lg leading-tight font-semibold">
+          {openPrefix && <span className="sr-only">{openPrefix} </span>}
+          {item.title}
+        </span>
+        {item.caption && (
+          <span className="truncate text-sm text-muted-foreground">
+            {item.caption}
+          </span>
+        )}
+        {(item.chain || item.origin || item.badge) && (
+          <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 pt-0.5">
+            {item.chain && <MiniChain chain={item.chain} />}
+            {item.origin && <SourceLine source={item.origin} plain />}
+            {item.badge && (
+              <Badge tone={item.badge.tone} size="sm">
+                {item.badge.text}
+              </Badge>
+            )}
+          </span>
+        )}
+      </button>
+      <span className="relative z-10 flex flex-wrap items-center justify-end gap-1">
+        {actions}
+      </span>
+    </li>
+  );
+}
+
 /** Everything about one item, with every action one tap away. */
 function ItemDetail({
   item,
@@ -513,16 +577,13 @@ export function LibraryList({
               const active = item.id === (current?.id ?? selected);
               const main = mainAction?.(item);
               return (
-                <li
+                <LibraryRow
                   key={item.id}
-                  data-active={active || undefined}
-                  className={cn(
-                    'relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 hover:border-foreground/40',
-                    active && 'border-foreground shadow-raised',
-                  )}
-                >
-                  <span className="relative z-10">
-                    {item.playable && onPlay ? (
+                  item={item}
+                  active={active}
+                  onOpen={() => open(item.id)}
+                  leading={
+                    item.playable && onPlay ? (
                       <Button
                         size="icon"
                         variant="outline"
@@ -540,61 +601,35 @@ export function LibraryList({
                       />
                     ) : (
                       pictureOf(item, tile)
-                    )}
-                  </span>
-                  <button
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => open(item.id)}
-                    className="grid min-w-0 gap-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:outline-2 focus-visible:after:outline-ring"
-                  >
-                    <span className="truncate font-display text-lg leading-tight font-semibold">
-                      {item.title}
-                    </span>
-                    {item.caption && (
-                      <span className="truncate text-sm text-muted-foreground">
-                        {item.caption}
-                      </span>
-                    )}
-                    {(item.chain || item.origin || item.badge) && (
-                      <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 pt-0.5">
-                        {item.chain && <MiniChain chain={item.chain} />}
-                        {item.origin && (
-                          <SourceLine source={item.origin} plain />
-                        )}
-                        {item.badge && (
-                          <Badge tone={item.badge.tone} size="sm">
-                            {item.badge.text}
-                          </Badge>
-                        )}
-                      </span>
-                    )}
-                  </button>
-                  <span className="relative z-10 flex items-center gap-1">
-                    {onFavourite && (
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-pressed={!!item.favourite}
-                        aria-label={`Favourite ${item.title}`}
-                        onClick={() => onFavourite(item.id, !item.favourite)}
-                      >
-                        <Star weight={item.favourite ? 'fill' : 'regular'} />
-                      </Button>
-                    )}
-                    {main && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        aria-label={`${main.label}: ${item.title}`}
-                        onClick={() => main.run(item.id)}
-                      >
-                        {main.icon}
-                        <span className="max-sm:sr-only">{main.label}</span>
-                      </Button>
-                    )}
-                  </span>
-                </li>
+                    )
+                  }
+                  actions={
+                    <>
+                      {onFavourite && (
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-pressed={!!item.favourite}
+                          aria-label={`Favourite ${item.title}`}
+                          onClick={() => onFavourite(item.id, !item.favourite)}
+                        >
+                          <Star weight={item.favourite ? 'fill' : 'regular'} />
+                        </Button>
+                      )}
+                      {main && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          aria-label={`${main.label}: ${item.title}`}
+                          onClick={() => main.run(item.id)}
+                        >
+                          {main.icon}
+                          <span className="max-sm:sr-only">{main.label}</span>
+                        </Button>
+                      )}
+                    </>
+                  }
+                />
               );
             })}
           </ul>

@@ -381,7 +381,7 @@ export function SavedRigs({
           {notice}
         </p>
       )}
-      <ul className="preset-library">
+      <ul className="m-0 grid list-none gap-2 p-0">
         {shown.map((p) => {
           const active = playing === p.revision;
           const scenes = p.scenes ?? [];

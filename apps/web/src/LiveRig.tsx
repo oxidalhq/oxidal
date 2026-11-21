@@ -1229,7 +1229,6 @@ export function LiveRig({
             <button
               type="button"
               className="relative min-h-0 border-0 bg-transparent p-0 before:absolute before:-inset-x-1 before:-top-2 before:-bottom-0.5 before:content-['']"
-              aria-label={`Edit exact ${control.label}`}
               aria-haspopup="dialog"
               disabled={disabled || !!draft}
               onClick={() => {
@@ -1241,6 +1240,7 @@ export function LiveRig({
                 openAdjustment(item);
               }}
             >
+              <span className="sr-only">Edit exact {control.label} </span>
               {control.value.toFixed(control.step && control.step >= 1 ? 0 : 1)}
               {control.unit ? ` ${control.unit}` : ''}
             </button>

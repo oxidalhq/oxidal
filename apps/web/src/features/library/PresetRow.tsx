@@ -1,7 +1,9 @@
-import { CircleNotch, DotsThree, Play } from '@phosphor-icons/react';
+import { DotsThree, MusicNotes, Play } from '@phosphor-icons/react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+
+import { LibraryRow } from '@oxidal/design-system/patterns/library-list';
 
 export type RowAction =
   | { label: string; onSelect: () => void; disabled?: boolean }
@@ -37,47 +39,47 @@ export function PresetRow({
   testId?: string;
 }) {
   return (
-    <li className="library-row preset-row" data-testid={testId}>
-      <div className="preset-row-text min-w-0">
-        <span className="library-name">{name}</span>
-        <span className="library-meta">
-          {playing && <span className="library-playing">Playing</span>}
-          {loading ? (
-            <>
-              <CircleNotch aria-hidden="true" className="animate-spin" />{' '}
-              Starting…
-            </>
-          ) : (
-            meta
-          )}
+    <LibraryRow
+      item={{
+        id: name,
+        title: name,
+        caption: meta,
+        badge:
+          playing || loading
+            ? { text: loading ? 'Starting…' : 'Playing', tone: 'live' }
+            : undefined,
+      }}
+      active={playing}
+      testId={testId}
+      onOpen={onDetails}
+      openPrefix={onDetails ? 'Details:' : undefined}
+      leading={
+        <span className="grid size-11 place-items-center rounded-md border border-border bg-background text-muted-foreground">
+          <MusicNotes aria-hidden="true" className="size-5" />
         </span>
-      </div>
-      <div className="preset-row-actions">
-        {extra}
-        {onPlay && (
-          <Button
-            variant={playing ? 'default' : 'outline'}
-            disabled={disabled || loading}
-            aria-pressed={playing}
-            aria-label={`${playing ? 'Playing' : 'Play'} ${name}`}
-            onClick={onPlay}
-          >
-            <Play aria-hidden="true" weight="fill" />
-            {playing ? 'Playing' : 'Play'}
-          </Button>
-        )}
-        {onDetails && (
-          <Button
-            variant="ghost"
-            aria-label={`Details: ${name}`}
-            onClick={onDetails}
-          >
-            Details
-          </Button>
-        )}
-        {actions.length > 0 && <RowMenu name={name} actions={actions} />}
-      </div>
-    </li>
+      }
+      actions={
+        <>
+          {extra}
+          {onPlay && (
+            <Button
+              size="sm"
+              variant={playing ? 'default' : 'outline'}
+              disabled={disabled || loading}
+              aria-pressed={playing}
+              aria-label={`${playing ? 'Playing' : 'Play'} ${name}`}
+              onClick={onPlay}
+            >
+              <Play aria-hidden="true" />{' '}
+              <span className="max-sm:sr-only">
+                {playing ? 'Playing' : 'Play'}
+              </span>
+            </Button>
+          )}
+          {actions.length > 0 && <RowMenu name={name} actions={actions} />}
+        </>
+      }
+    />
   );
 }
 
