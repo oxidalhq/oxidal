@@ -1,9 +1,6 @@
 import {
-  ArrowCounterClockwise,
   ArrowDown,
   ArrowUp,
-  CaretLeft,
-  CaretRight,
   ClockCounterClockwise,
   Faders,
   GitFork,
@@ -64,6 +61,7 @@ import { SourceCard } from '../widgets/block-source';
 import { ChangeScope } from '../widgets/change-scope';
 import { IrFacts } from '../widgets/ir-facts';
 import { MidiTarget } from '../widgets/midi';
+import { ModelStepper } from '../widgets/model-stepper';
 import { RouteView } from '../widgets/route-view';
 import { SceneChange, type SceneChangeSettings } from '../widgets/scene-change';
 import { SceneEditor, type SceneModel } from '../widgets/scene-editor';
@@ -807,60 +805,27 @@ export function RigSurface({
             }
             modelStepper={
               ready.length > 1 && (
-                <div
-                  role="group"
-                  aria-label={`Try another ${kindOf(block) === 'cab' ? 'cab' : kindOf(block) === 'pedal' ? 'pedal' : 'amp'} model`}
+                <ModelStepper
+                  label={`Try another ${kindOf(block) === 'cab' ? 'cab' : kindOf(block) === 'pedal' ? 'pedal' : 'amp'} model`}
                   title="Each model plays as loud as the one you started with"
-                  data-slot="model-stepper"
-                  className="flex items-center gap-0.5 rounded-lg border border-border bg-background px-1"
-                >
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="Previous model"
-                    disabled={reading}
-                    onClick={() => stepModel(-1)}
-                  >
-                    <CaretLeft />
-                  </Button>
-                  <span className="grid min-w-0 flex-1 text-center">
-                    <span className="truncate text-sm font-medium">
-                      {block.label}
-                    </span>
-                    <span className="font-mono text-2xs text-muted-foreground tabular-nums">
-                      {modelAt >= 0
-                        ? `${modelAt + 1} of ${ready.length} ${block.kind === 'cab' ? 'IRs' : 'models'}`
-                        : `${ready.length} ${block.kind === 'cab' ? 'IRs' : 'models'} to try`}
-                    </span>
-                  </span>
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="Next model"
-                    disabled={reading}
-                    onClick={() => stepModel(1)}
-                  >
-                    <CaretRight />
-                  </Button>
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label={
-                      stepped
-                        ? `Back to ${stepOrigin!.label}`
-                        : 'Back to the model it started with'
-                    }
-                    disabled={!stepped || reading}
-                    onClick={() => {
-                      if (stepOrigin)
-                        onRoute(
-                          updateBlock(route, stepOrigin.id, () => stepOrigin),
-                        );
-                    }}
-                  >
-                    <ArrowCounterClockwise />
-                  </Button>
-                </div>
+                  name={block.label}
+                  count={ready.length}
+                  index={modelAt}
+                  units={block.kind === 'cab' ? 'IRs' : 'models'}
+                  disabled={reading}
+                  onStep={stepModel}
+                  backLabel={
+                    stepOrigin ? `Back to ${stepOrigin.label}` : undefined
+                  }
+                  onBack={
+                    stepped && stepOrigin
+                      ? () =>
+                          onRoute(
+                            updateBlock(route, stepOrigin.id, () => stepOrigin),
+                          )
+                      : undefined
+                  }
+                />
               )
             }
             actions={

@@ -50,7 +50,7 @@ export function Segment({
     <ToggleGroupPrimitive.Item
       data-slot="segment"
       className={cn(
-        'inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-3 text-sm font-semibold whitespace-nowrap text-muted-foreground transition-colors duration-[var(--duration-fast)] select-none hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-40 data-[state=on]:bg-foreground data-[state=on]:text-background [&_svg]:size-[1.125em] [&_svg]:shrink-0 [[data-size=md]_&]:min-h-[calc(var(--spacing-touch)-0.375rem)] [[data-size=sm]_&]:h-8 max-[600px]:[[data-size]_&]:min-h-touch [@media(pointer:coarse)]:[[data-size]_&]:min-h-touch',
+        'inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-3 text-sm font-semibold whitespace-nowrap text-muted-foreground transition-colors duration-[var(--duration-fast)] select-none hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-40 data-[state=on]:bg-foreground data-[state=on]:text-background [&_svg]:size-[1.125em] [&_svg]:shrink-0 [[data-size=md]_&]:min-h-[calc(var(--spacing-touch)-0.375rem)] [[data-size=sm]_&]:h-[max(32px,2rem)] max-[600px]:[[data-size]_&]:min-h-touch [@media(pointer:coarse)]:[[data-size]_&]:min-h-touch',
         className,
       )}
       {...props}

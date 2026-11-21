@@ -29,11 +29,12 @@ const buttonVariants = cva(
         link: 'h-auto min-h-0 border-transparent bg-transparent p-0 text-foreground underline decoration-wire underline-offset-[0.2em] hover:decoration-foreground',
       },
       size: {
-        sm: 'h-9 px-3 text-sm [@media(pointer:coarse)]:min-h-touch',
+        sm: 'h-[max(36px,2.25rem)] px-3 text-sm [@media(pointer:coarse)]:min-h-touch',
         md: 'min-h-touch px-4 text-sm',
         lg: 'min-h-13 px-5 text-md',
         icon: 'size-touch p-0',
-        'icon-sm': 'size-9 p-0 [@media(pointer:coarse)]:min-h-touch',
+        'icon-sm':
+          'size-[max(36px,2.25rem)] p-0 [@media(pointer:coarse)]:min-h-touch',
         'icon-lg': 'size-13 p-0',
       },
     },

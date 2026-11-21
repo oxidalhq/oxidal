@@ -117,7 +117,11 @@ const libraryStory = (section: string, name: string): StoryObj => ({
 export const LibraryMine = libraryStory('mine', 'Mine');
 
 /** Sort by name, star a preset, then show only favourites (R-6). */
-LibraryMine.play = async ({ canvasElement }) => {
+export const LibraryMineFavourites = libraryStory(
+  'mine',
+  'Mine · sort, favourite and return',
+);
+LibraryMineFavourites.play = async ({ canvasElement }) => {
   const canvas = within(canvasElement);
   const page = within(canvasElement.ownerDocument.body);
   await userEvent.click(canvas.getByRole('button', { name: /Recently used/ }));

@@ -42,11 +42,11 @@ import {
   SettingRow,
   SettingsPage,
 } from '../patterns/settings-page';
+import { SETTINGS_SECTIONS } from '../patterns/settings-sections';
 import { Tone3000AccountDemo } from '../patterns/tone3000.demo';
 import { MidiBar, MidiProvider } from '../widgets/midi';
 import { PretendController, WebMidiButton } from '../widgets/midi-controller';
 import { MidiMap } from '../widgets/midi-map';
-import { SETTINGS_SECTIONS } from './settings.sections';
 
 function Audio() {
   return (

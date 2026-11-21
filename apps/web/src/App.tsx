@@ -1,18 +1,4 @@
-import {
-  ArrowsSplit,
-  Cpu,
-  Faders,
-  Info,
-  ListChecks,
-  Monitor,
-  PianoKeys,
-  Power,
-  SpeakerHigh,
-  UserCircle,
-  WarningCircle,
-  WifiHigh,
-  Wrench,
-} from '@phosphor-icons/react';
+import { ArrowsSplit, Power, WarningCircle } from '@phosphor-icons/react';
 import {
   lazy,
   Suspense,
@@ -44,6 +30,7 @@ import {
   type FirstRunRoute,
 } from '@oxidal/design-system/patterns/first-run';
 import { SettingsPage } from '@oxidal/design-system/patterns/settings-page';
+import { SETTINGS_SECTIONS } from '@oxidal/design-system/patterns/settings-sections';
 
 import { About } from './About';
 import {
@@ -68,10 +55,12 @@ import { ControlEditor } from './ControlEditor';
 import { DebugConsole } from './DebugConsole';
 import { DevicePower } from './DevicePower';
 import { EffectPacks } from './EffectPacks';
+import { EngineSettings } from './EngineSettings';
 import { FeatureBoundary } from './FeatureBoundary';
 import { PerformanceTools } from './features/library/PerformanceTools';
 import { GlobalTuner } from './GlobalTuner';
 import { GuitarSettings } from './GuitarSettings';
+import { InstalledEffects } from './InstalledEffects';
 import { friendlyError } from './lib/friendlyError';
 import { leaveScreen } from './lib/leaveGuard';
 import { publishPlayer } from './lib/playerFeed';
@@ -79,6 +68,7 @@ import { publishVenue } from './lib/venueFeed';
 import { LiveRig } from './LiveRig';
 import { MidiSettings } from './MidiSettings';
 import { refreshMonitorFeed } from './monitorFeed';
+import { NativeDefaults } from './NativeDefaults';
 import { NetworkSettings } from './NetworkSettings';
 import { SignalChain } from './SignalChain';
 import { StorageLock } from './StorageLock';
@@ -111,35 +101,7 @@ const WebTerminal = lazy(() =>
   import('./WebTerminal').then((m) => ({ default: m.WebTerminal })),
 );
 
-/** Quiet rig control over a single authoritative Rust state model.
- * @see docs/architecture.md
- */
-/** Settings destinations, each with its own link such as `#settings/accounts`. */
-/** One icon per Settings section, beside its label. */
-const settingsIcons = {
-  essentials: <ListChecks aria-hidden="true" />,
-  audio: <SpeakerHigh aria-hidden="true" />,
-  connections: <WifiHigh aria-hidden="true" />,
-  accounts: <UserCircle aria-hidden="true" />,
-  midi: <PianoKeys aria-hidden="true" />,
-  effects: <Faders aria-hidden="true" />,
-  display: <Monitor aria-hidden="true" />,
-  device: <Cpu aria-hidden="true" />,
-  maintenance: <Wrench aria-hidden="true" />,
-  about: <Info aria-hidden="true" />,
-} as const;
-const settingsSections = [
-  'essentials',
-  'audio',
-  'connections',
-  'accounts',
-  'midi',
-  'effects',
-  'display',
-  'device',
-  'maintenance',
-  'about',
-] as const;
+const settingsSections = SETTINGS_SECTIONS.map((section) => section.id);
 
 function InstrumentApp() {
   const screen = useScreenSession();
@@ -172,18 +134,6 @@ function InstrumentApp() {
     settingsSections,
     'audio',
   );
-  const settingsLabels = {
-    essentials: 'Before you play',
-    audio: 'Audio',
-    connections: 'Network',
-    accounts: 'Accounts',
-    midi: 'MIDI',
-    effects: 'Effects',
-    display: 'Display',
-    device: 'Device',
-    maintenance: 'Maintenance',
-    about: 'About',
-  };
   const [displayMode, setDisplayMode] = useState(() => {
     try {
       const saved = localStorage.getItem('oxidal.display');
@@ -627,7 +577,8 @@ function InstrumentApp() {
                             : state.preset === 'parallel'
                               ? 'Parallel rig'
                               : 'Serial rig'))
-                    : settingsLabels[settingsSection]}
+                    : SETTINGS_SECTIONS.find(({ id }) => id === settingsSection)
+                        ?.label}
                 </h1>
               </div>
             )}
@@ -875,18 +826,14 @@ function InstrumentApp() {
           ) : (
             <SettingsPage
               className="px-0 pt-4"
-              sections={settingsSections.map((id) => ({
-                id,
-                label: settingsLabels[id],
-                icon: settingsIcons[id],
-              }))}
+              sections={SETTINGS_SECTIONS}
               current={settingsSection}
               onSelect={(value) => {
-                if (value === settingsSection) return;
-                if (value in settingsLabels)
-                  leaveScreen(() =>
-                    setSettingsSection(value as keyof typeof settingsLabels),
-                  );
+                const section = SETTINGS_SECTIONS.find(
+                  ({ id }) => id === value,
+                );
+                if (section && section.id !== settingsSection)
+                  leaveScreen(() => setSettingsSection(section.id));
               }}
             >
               {settingsSection === 'essentials' && (
@@ -938,7 +885,19 @@ function InstrumentApp() {
               {settingsSection === 'audio' && (
                 <AudioSettings connected={connected} />
               )}
+              {settingsSection === 'nam' && (
+                <section
+                  className="control-stack"
+                  aria-label="NAM engine controls"
+                >
+                  <EngineSettings connected={connected} />
+                  <NativeDefaults connected={connected} />
+                </section>
+              )}
               {settingsSection === 'effects' && (
+                <InstalledEffects connected={connected} />
+              )}
+              {settingsSection === 'plugins' && (
                 <EffectPacks
                   connected={connected}
                   audioRunning={audioRunning}

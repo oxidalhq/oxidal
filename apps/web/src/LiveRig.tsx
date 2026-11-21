@@ -70,6 +70,7 @@ import { MasterLevel } from './MasterLevel';
 import { requestMidiAssignments } from './midiNavigation';
 import { ModelPicker } from './ModelPicker';
 import { NativeAuthoring } from './NativeAuthoring';
+import { NativeModelStepper } from './NativeModelStepper';
 import { setPerform, usePerform } from './performState';
 import { PerformView } from './PerformView';
 import {
@@ -1051,6 +1052,34 @@ export function LiveRig({
   const adjacent = flattened.findIndex((block) => block.id === selectedBlock);
   const previousBlock = adjacent > 0 ? flattened[adjacent - 1] : undefined;
   const nextBlock = adjacent >= 0 ? flattened[adjacent + 1] : undefined;
+  async function auditionNativeModel(
+    opening: AudioState,
+    target: string,
+    asset: string,
+    request?: number,
+  ) {
+    if (sending.current || adjustment.current || eqEditing)
+      throw new Error('Finish the active adjustment first.');
+    generation.current += 1;
+    sending.current = true;
+    setBusy(true);
+    try {
+      const current = await playbackState();
+      assertAuditionOwner(opening, current, request, current.model_change);
+      const next = await playbackCommand(current, {
+        kind: 'replace_model',
+        assignment: { target, asset },
+      });
+      if (alive.current) {
+        setState(next);
+        setError('');
+      }
+      return next;
+    } finally {
+      sending.current = false;
+      if (alive.current) setBusy(false);
+    }
+  }
   function changeBlockModel() {
     if (selectedBlock && state)
       setPicker({
@@ -1315,6 +1344,22 @@ export function LiveRig({
         changeDisabled={disabled || !!draft}
         onAllControls={() => setNativeFull(true)}
         controlCount={selectedControls.length}
+        modelStepper={
+          <NativeModelStepper
+            key={`${state.session}:${selectedBlock}`}
+            state={state}
+            block={selectedBlock}
+            name={selectedName}
+            gear={
+              selectedArtwork?.gear ??
+              (toneSource?.kind === 'tone3000' ? toneSource.gear : undefined)
+            }
+            disabled={disabled || !!draft || !!picker || fullSelected}
+            onAudition={(opening, asset) =>
+              auditionNativeModel(opening, selectedBlock, asset)
+            }
+          />
+        }
         actions={blockActions}
         visual={
           selectedEq ? (
@@ -1831,33 +1876,14 @@ export function LiveRig({
               }
               onClose={() => setPicker(null)}
               onAudition={async (asset) => {
-                generation.current += 1;
-                sending.current = true;
-                setBusy(true);
-                try {
-                  const current = await playbackState();
-                  assertAuditionOwner(
-                    picker.opening,
-                    current,
-                    picker.request,
-                    current.model_change,
-                  );
-                  const next = await playbackCommand(current, {
-                    kind: 'replace_model',
-                    assignment: { target: picker.target, asset },
-                  });
-                  if (alive.current) {
-                    setState(next);
-                    setPicker({
-                      ...picker,
-                      request: next.model_change?.request,
-                    });
-                    setError('');
-                  }
-                } finally {
-                  sending.current = false;
-                  if (alive.current) setBusy(false);
-                }
+                const next = await auditionNativeModel(
+                  picker.opening,
+                  picker.target,
+                  asset,
+                  picker.request,
+                );
+                if (alive.current)
+                  setPicker({ ...picker, request: next.model_change?.request });
               }}
             />
           )}

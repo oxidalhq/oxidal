@@ -577,6 +577,9 @@
   top: 0;
   right: 0;
 }
+[data-slot='library-row']:has(.row-menu [aria-expanded='true']) {
+  z-index: 20;
+}
 .row-menu {
   position: relative;
 }

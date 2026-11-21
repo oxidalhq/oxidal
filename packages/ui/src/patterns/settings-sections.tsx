@@ -13,9 +13,9 @@ import {
   Wrench,
 } from '@phosphor-icons/react';
 
-import type { Section } from '../patterns/workspace';
+import type { Section } from './workspace';
 
-export const SETTINGS_SECTIONS: Section[] = [
+export const SETTINGS_SECTIONS = [
   {
     id: 'essentials',
     label: 'Before you play',
@@ -100,4 +100,4 @@ export const SETTINGS_SECTIONS: Section[] = [
     description:
       'The Oxidal version, its licences, and the projects and people it builds on.',
   },
-];
+] as const satisfies readonly Section[];
