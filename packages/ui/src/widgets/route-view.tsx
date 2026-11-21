@@ -166,6 +166,7 @@ function Gap({
   return (
     <button
       type="button"
+      data-drop-before={active || undefined}
       data-drop={`gap:${JSON.stringify(path)}:${index}`}
       aria-label={`Add a block here (${index + 1})`}
       onClick={onAdd}
@@ -492,6 +493,7 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
       </span>
       {editing && lifted && lifted !== step.id && (
         <span
+          data-drop-before={target === `branch:${step.id}` || undefined}
           data-drop={`branch:${step.id}`}
           className={cn(
             'inline-flex items-center justify-center gap-1 rounded-full border border-dashed border-wire px-2 small-caps text-2xs text-muted-foreground',

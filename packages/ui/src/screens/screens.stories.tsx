@@ -26,6 +26,30 @@ export const RigPlaying: StoryObj = {
   ),
 };
 
+RigPlaying.play = async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  const switcher = within(canvas.getByRole('group', { name: 'Switch preset' }));
+  await expect(
+    switcher.getByRole('button', { name: 'Previous preset' }),
+  ).toBeDisabled();
+  await userEvent.click(
+    switcher.getByRole('button', { name: 'Next preset: Echo lead' }),
+  );
+  await expect(
+    canvas.getByRole('heading', { name: 'Echo lead' }),
+  ).toBeVisible();
+  const current = within(canvas.getByRole('group', { name: 'Switch preset' }));
+  await expect(
+    current.getByRole('button', { name: 'Next preset' }),
+  ).toBeDisabled();
+  await userEvent.click(
+    current.getByRole('button', { name: 'Previous preset: Rhythm section' }),
+  );
+  await expect(
+    canvas.getByRole('heading', { name: 'Rhythm section' }),
+  ).toBeVisible();
+};
+
 export const RigDetailedStatus: StoryObj = {
   name: 'Rig · detailed status strip',
   render: () => (

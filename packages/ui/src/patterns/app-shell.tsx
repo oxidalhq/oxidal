@@ -97,7 +97,7 @@ export function AppShell({
       data-slot="app-shell"
       data-destination={destination}
       className={cn(
-        'grid min-h-dvh grid-rows-[auto_auto_minmax(0,1fr)] bg-background text-foreground',
+        'grid min-h-dvh grid-cols-1 grid-rows-[auto_auto_minmax(0,1fr)] bg-background text-foreground',
         className,
       )}
     >

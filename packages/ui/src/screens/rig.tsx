@@ -1,16 +1,23 @@
+import { useState } from 'react';
+
 import { Button } from '../components/ui/button';
 import { Card, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { EFFECTS } from '../patterns/block-chooser.data';
 import { NamBlockToolsDemo } from '../patterns/nam-block.demo';
+import { SCENES, SERIAL_ROUTE } from '../patterns/rig.fixtures';
 import { RigSurface } from '../patterns/rig-surface';
 import { useModelDownloads } from '../patterns/swap.demo';
 import { BLOCK_TYPES, MODELS } from '../patterns/swap.fixtures';
 import { useRigDemo } from '../patterns/use-rig.demo';
+import { PresetSteps } from '../widgets/preset-steps';
 import { CAPTURE_ROUTE, CAPTURE_SCENES } from './four-captures.fixtures';
 
 /** The Rig screen: the rig surface, or the card that says why audio is not playing. */
 export function Rig({ audio = true }: { audio?: boolean }) {
-  const rig = useRigDemo(CAPTURE_ROUTE, CAPTURE_SCENES);
+  const [position, setPosition] = useState(0);
+  const rhythm = useRigDemo(CAPTURE_ROUTE, CAPTURE_SCENES);
+  const echo = useRigDemo(SERIAL_ROUTE);
+  const rig = position === 0 ? rhythm : echo;
   const store = useModelDownloads(MODELS);
   if (!audio)
     return (
@@ -40,7 +47,17 @@ export function Rig({ audio = true }: { audio?: boolean }) {
       downloads={store.downloads}
       onGetModel={store.onGet}
       catalogue={store.catalogue}
-      presetName="Rhythm section"
+      key={position}
+      presetName={position === 0 ? 'Rhythm section' : 'Echo lead'}
+      presetSteps={
+        <PresetSteps
+          previous={position === 1 ? 'Rhythm section' : undefined}
+          next={position === 0 ? 'Echo lead' : undefined}
+          onStep={(dir) =>
+            setPosition((n) => Math.max(0, Math.min(1, n + dir)))
+          }
+        />
+      }
       playing
       route={rig.route}
       saved={rig.saved}
@@ -51,7 +68,7 @@ export function Rig({ audio = true }: { audio?: boolean }) {
       onSaveVersion={rig.onSaveVersion}
       onSaveVersionAs={rig.onSaveVersionAs}
       onMakeDefault={rig.onMakeDefault}
-      scenes={rig.settings ?? CAPTURE_SCENES}
+      scenes={rig.settings ?? (position === 0 ? CAPTURE_SCENES : SCENES)}
       sceneSettings={rig.settings}
       savedSceneSettings={rig.savedSettings}
       onSceneSettings={rig.setSettings}

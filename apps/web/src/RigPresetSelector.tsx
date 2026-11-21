@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { Loading } from '@oxidal/design-system/components/states';
+import { PresetSteps } from '@oxidal/design-system/widgets/preset-steps';
 
 import './PresetPicker.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
@@ -328,6 +329,13 @@ export function RigPresetSelector({
     : shownSource === 'setlist'
       ? setList
       : items.filter((item) => inSource(item, shownSource));
+  // Step in set-list order for members, or within the playing preset's source.
+  const neighbours = current?.inSetList
+    ? setList
+    : items.filter((item) => item.origin === (current?.origin ?? 'mine'));
+  const cursor = neighbours.findIndex((item) => key(item) === selected);
+  const previous = cursor > 0 ? neighbours[cursor - 1] : undefined;
+  const next = neighbours[cursor + 1];
   const entryOf = (item: Choice) => ({
     kind:
       item.kind === 'scenes'
@@ -340,49 +348,57 @@ export function RigPresetSelector({
   });
   return (
     <div className="preset-picker" aria-label="Preset navigation">
-      <button
-        type="button"
-        className="preset-picker-name"
-        aria-label={`Playing preset: ${name}`}
-        aria-haspopup="dialog"
-        title={name}
-        disabled={disabled || (loading && !items.length)}
-        onClick={() => {
-          setQuery('');
-          setOpen(true);
-        }}
-      >
-        {playingNumber > 0 && (
-          <span className="preset-picker-number" aria-hidden="true">
-            {playingNumber}
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
+        <button
+          type="button"
+          className="preset-picker-name"
+          aria-label={`Playing preset: ${name}`}
+          aria-haspopup="dialog"
+          title={name}
+          disabled={disabled || (loading && !items.length)}
+          onClick={() => {
+            setQuery('');
+            setOpen(true);
+          }}
+        >
+          {playingNumber > 0 && (
+            <span className="preset-picker-number" aria-hidden="true">
+              {playingNumber}
+            </span>
+          )}
+          <span className="preset-picker-text">
+            <span className="preset-picker-title">
+              <span className="preset-picker-label">{name}</span>
+              {playing.modified && (
+                <span className="preset-picker-edited">
+                  <span
+                    className="preset-modified"
+                    role="img"
+                    aria-label="Modified preset"
+                    title="This playing sound has unsaved edits"
+                  />
+                  edited
+                </span>
+              )}
+            </span>
+            <span className="preset-picker-meta">
+              {current ? choiceSummary(current) : 'Not saved yet'}
+              {playingNumber > 0
+                ? ` · Set list ${playingNumber} of ${setList.length}`
+                : current
+                  ? ` · ${choiceSource(current)}`
+                  : ''}
+            </span>
           </span>
-        )}
-        <span className="preset-picker-text">
-          <span className="preset-picker-title">
-            <span className="preset-picker-label">{name}</span>
-            {playing.modified && (
-              <span className="preset-picker-edited">
-                <span
-                  className="preset-modified"
-                  role="img"
-                  aria-label="Modified preset"
-                  title="This playing sound has unsaved edits"
-                />
-                edited
-              </span>
-            )}
-          </span>
-          <span className="preset-picker-meta">
-            {current ? choiceSummary(current) : 'Not saved yet'}
-            {playingNumber > 0
-              ? ` · Set list ${playingNumber} of ${setList.length}`
-              : current
-                ? ` · ${choiceSource(current)}`
-                : ''}
-          </span>
-        </span>
-        <CaretDown aria-hidden="true" />
-      </button>
+          <CaretDown aria-hidden="true" />
+        </button>
+        <PresetSteps
+          previous={previous?.name}
+          next={next?.name}
+          disabled={disabled || loading}
+          onStep={(direction) => choose(direction < 0 ? previous : next)}
+        />
+      </div>
       {backingPreset && (
         <CueLinkedMix preset={backingPreset} scope="rig" disabled={disabled} />
       )}

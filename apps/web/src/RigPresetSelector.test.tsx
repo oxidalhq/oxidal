@@ -84,9 +84,14 @@ it('selects original and owned identities without optimistically changing the so
     name: 'Playing preset: Amp A',
   });
   await waitFor(() => expect(picker).toBeEnabled());
+  const next = screen.getByRole('button', { name: 'Next preset: Amp B' });
   expect(
-    screen.queryByRole('button', { name: 'Next preset' }),
-  ).not.toBeInTheDocument();
+    screen.getByRole('button', { name: 'Previous preset' }),
+  ).toBeDisabled();
+  fireEvent.click(next);
+  expect(select).toHaveBeenCalledWith(tone('b', false));
+  expect(picker).toHaveAccessibleName('Playing preset: Amp A');
+  select.mockClear();
   fireEvent.click(picker);
   // Opens on the playing preset's source; every row has one summary form.
   expect(screen.getByRole('tab', { name: /TONE3000/ })).toHaveAttribute(

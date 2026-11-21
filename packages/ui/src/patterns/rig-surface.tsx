@@ -149,6 +149,7 @@ function withPreview(route: RigRoute): RigRoute {
  */
 export function RigSurface({
   presetName,
+  presetSteps,
   playing = false,
   route,
   saved,
@@ -188,6 +189,7 @@ export function RigSurface({
   className,
 }: {
   presetName: string;
+  presetSteps?: React.ReactNode;
   playing?: boolean;
   /** The route as edited (what plays). */
   route: RigRoute;
@@ -594,6 +596,7 @@ export function RigSurface({
               <Title size="md" className="truncate">
                 {presetName}
               </Title>
+              {presetSteps}
               <VersionPicker
                 presetName={presetName}
                 versions={versions}

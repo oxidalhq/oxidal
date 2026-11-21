@@ -405,6 +405,44 @@
   }
 }
 
+/* Confirmed scene and block selection settle once. Drag translation follows the pointer directly. */
+@keyframes rig-selection {
+  from {
+    outline: 2px solid var(--brand);
+    outline-offset: 1px;
+  }
+  to {
+    outline: 2px solid transparent;
+    outline-offset: 3px;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-display='epaper'])
+    :is(
+      [data-slot='chain-block'][data-selected],
+      [data-slot='scene-pad'][data-active]
+    ):not(:focus-visible):not([data-lifted]) {
+    animation: rig-selection 150ms ease-out;
+  }
+  :root:not([data-display='epaper']) [data-drop-before='true'] {
+    animation: rig-selection 150ms ease-out;
+  }
+  :root:not([data-display='epaper']) [data-slot='chain-block'][data-lifted] {
+    transition-property: box-shadow, background-color;
+    transition-duration: var(--duration-fast);
+    cursor: grabbing;
+  }
+}
+/* Preserve pointer translation while removing decorative lift. */
+:root[data-display='epaper'] [data-slot='chain-block'][data-lifted] {
+  scale: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-slot='chain-block'][data-lifted] {
+    scale: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --duration-fast: 0ms;

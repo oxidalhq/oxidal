@@ -19,9 +19,7 @@ export const AssignScenes: StoryObj = {
       await userEvent.click(
         c.getByRole('button', { name: scene + ' · Choose capture' }),
       );
-      await userEvent.click(
-        c.getByRole('button', { name: models[i]!.name, exact: true }),
-      );
+      await userEvent.click(c.getByRole('button', { name: models[i]!.name }));
     }
     await expect(c.getByRole('button', { name: 'Save rig' })).toBeDisabled();
     await userEvent.selectOptions(c.getByLabelText('Dirt capture type'), 'amp');

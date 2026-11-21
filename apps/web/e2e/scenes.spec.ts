@@ -277,12 +277,18 @@ test('library sections: Add starter set list appends after the existing entries'
     await page.goto('/#library/setlist');
     const list = page.getByRole('region', { name: 'Set list', exact: true });
     await list.getByRole('button', { name: 'Add starter set list' }).click();
-    await expect(list.getByRole('status')).toHaveText(
+    await expect(
+      list.getByRole('status').filter({ hasText: 'Added 9 after' }),
+    ).toHaveText(
       `Added 9 after your ${before.length} existing entries. Nothing was replaced.`,
     );
     const after = await members(request);
     expect(after.slice(0, before.length)).toEqual(before);
     expect(after.slice(before.length)).toEqual(starter);
+    // Manage presets exposes each catalog entry and its set position.
+    await list
+      .getByRole('button', { name: 'Manage presets', exact: true })
+      .click();
     // The first starter preset is numbered after the existing entries.
     await expect(
       list
@@ -291,9 +297,9 @@ test('library sections: Add starter set list appends after the existing entries'
     ).toBeVisible();
     // Adding again replaces nothing and adds nothing.
     await list.getByRole('button', { name: 'Add starter set list' }).click();
-    await expect(list.getByRole('status')).toHaveText(
-      'The starter set list is already in your set list.',
-    );
+    await expect(
+      list.getByRole('status').filter({ hasText: 'already in your set list' }),
+    ).toHaveText('The starter set list is already in your set list.');
     expect(await members(request)).toEqual(after);
   } finally {
     // Leave the shared unit's set list and Mine as other journeys expect them.
@@ -373,7 +379,6 @@ async function mockRig(
     period_frames: 128,
     periods: 3,
   };
-  let count = 0;
   const running = async (rev: string) => {
     const document = await (
       await request.get(`/api/v1/presets/rigs/${rev}`)
@@ -382,7 +387,6 @@ async function mockRig(
       document.manifest.extensions['urn:oxidal:scenes:3'] ??
       document.manifest.extensions['urn:oxidal:scenes:2'] ??
       document.manifest.extensions['urn:oxidal:scenes:1'];
-    count++;
     return {
       ...baseline,
       phase: 'running',
@@ -397,7 +401,8 @@ async function mockRig(
         },
       },
       control: {
-        session: `scenes-${count}`,
+        // The daemon's shared scene draft survives across browser tests.
+        session: randomUUID(),
         revision: 1,
         source_revision: rev,
         modified: false,
@@ -480,22 +485,23 @@ test('mixed rig authoring: scene grid saves block On/Off in version 3 and reopen
       .getByRole('button', { name: 'Edit scenes', exact: true })
       .click();
     const grid = page.getByRole('dialog', { name: 'Edit scenes' });
-    await grid
-      .getByRole('button', { name: 'Echo in Clean', exact: true })
-      .click();
-    await expect(
-      grid.getByRole('button', { name: 'Echo in Clean', exact: true }),
-    ).toHaveAttribute('aria-pressed', 'false');
+    const cleanEcho = grid.getByRole('button', {
+      name: 'Echo in Clean',
+      exact: true,
+    });
+    await expect(cleanEcho).toHaveAttribute('aria-pressed', 'true');
+    await cleanEcho.click();
+    await expect(cleanEcho).toHaveAttribute('aria-pressed', 'false');
     await expect(
       grid.getByRole('button', { name: 'Echo in Lead', exact: true }),
     ).toHaveAttribute('aria-pressed', 'true');
-    await page.screenshot({
-      path: info.outputPath('scene-grid.png'),
-      fullPage: true,
+    const saveScenes = grid.getByRole('button', {
+      name: 'Save scenes',
+      exact: true,
     });
-    await grid
-      .getByRole('button', { name: 'Save scenes', exact: true })
-      .click();
+    await expect(saveScenes).toBeInViewport({ ratio: 1 });
+    await page.screenshot({ path: info.outputPath('scene-grid.png') });
+    await saveScenes.click();
     await expect.poll(playing).not.toBe(first);
     const saved = await (
       await request.get(`/api/v1/presets/rigs/${playing()}`)

@@ -54,7 +54,7 @@ export function CaptureBuilder({
     setRows((old) => old.map((row, i) => (i === index ? value : row)));
   }
   return (
-    <fieldset className="grid min-w-0 gap-3">
+    <fieldset className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 [&_input]:max-w-full [&_input]:min-w-0 [&_label]:grid [&_label]:min-w-0 [&_label]:gap-1 [&_select]:max-w-full [&_select]:min-w-0">
       <legend className="sr-only">Scene assignments and shared cabinet</legend>
       <fieldset disabled={busy} className="grid min-w-0 gap-3">
         <label>
@@ -77,7 +77,9 @@ export function CaptureBuilder({
                 aria-pressed={current === i}
                 onClick={() => setCurrent(i)}
               >
-                {scene} · {rows[i]?.name ?? 'Choose capture'}
+                <span className="min-w-0 truncate">
+                  {scene} · {rows[i]?.name ?? 'Choose capture'}
+                </span>
               </Button>
               {rows[i] && (
                 <label>
@@ -111,7 +113,7 @@ export function CaptureBuilder({
           />
         </label>
         <div
-          className="grid max-h-48 gap-1 overflow-auto"
+          className="grid max-h-48 min-w-0 grid-cols-[minmax(0,1fr)] gap-1 overflow-auto"
           role="group"
           aria-label="Local captures"
         >
@@ -126,7 +128,7 @@ export function CaptureBuilder({
                 );
               }}
             >
-              {model.name}
+              <span className="min-w-0 truncate">{model.name}</span>
             </Button>
           ))}
           {!models.length && (

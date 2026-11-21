@@ -5328,6 +5328,9 @@ test('device portrait permanent deletion previews a disposable preset and keeps 
   const asset = await independent.json();
   await page.goto('/#library');
   await page.getByRole('tab', { name: 'Set list', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Manage presets', exact: true })
+    .click();
   const row = page.locator(
     `[data-library-kind="rig"][data-library-entry="${preset.revision}"]`,
   );
@@ -5528,6 +5531,9 @@ test('device portrait set-list drag and keyboard order agree with picker and Per
   const audioBefore = await (await request.get('/api/v1/audio')).json();
   await page.goto('/#library');
   await page.getByRole('tab', { name: 'Set list', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Manage presets', exact: true })
+    .click();
   const management = page.getByRole('region', {
     name: 'Set list',
     exact: true,
