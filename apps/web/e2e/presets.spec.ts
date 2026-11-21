@@ -5269,7 +5269,7 @@ test('device portrait shared NAM and IR libraries import, search and page indepe
     )
     .toBe(true);
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
-  await expectWorkspaceSection(page, 'Library', 'Mine');
+  await expectWorkspaceSection(page, 'Library', 'Tones and IRs');
   const accessibility = await new AxeBuilder({ page })
     .include('.asset-library')
     .analyze();
