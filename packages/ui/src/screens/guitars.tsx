@@ -14,6 +14,7 @@ import {
   LevelMatchDemo,
   SoundCheckDemo,
 } from '../patterns/guitar-tools.demo';
+import { CaptureReferencesDemo } from '../widgets/capture-listening.demo';
 import { Meter } from '../widgets/meter';
 import { GUITARS } from './fixtures';
 
@@ -123,6 +124,7 @@ export function Guitars() {
           </Card>
           <LevelMatchDemo />
           <EvenOutDemo />
+          <CaptureReferencesDemo appliedTrim={trim} />
         </div>
       </div>
     </>

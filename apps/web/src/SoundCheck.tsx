@@ -38,6 +38,7 @@ import {
   type UnitLevels,
   unitLevels,
 } from './api';
+import { CaptureListening } from './CaptureListening';
 import { EvenOut } from './EvenOut';
 import {
   guitarVerificationDetail,
@@ -659,6 +660,10 @@ export function SoundCheck({
 
         <TabsContent value="loudness">
           <div className="sound-check-tab-panel">
+            <CaptureListening
+              appliedTrim={data.levels?.input_trim_db ?? null}
+              audition
+            />
             <div className="sound-check-metrics" aria-label="Loudness summary">
               <div className="sound-check-metric">
                 <span>Target</span>

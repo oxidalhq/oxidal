@@ -10,6 +10,7 @@ import './MasterLevel.css';
 import './GuitarSettings.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { boosts, type GuitarProfiles } from './api';
+import { CaptureListening } from './CaptureListening';
 import { guitarVerificationDetail } from './guitarVerification';
 import { useMonitorReadings } from './monitorFeed';
 import { ToolRow, ToolSection } from './ToolRow';
@@ -499,6 +500,12 @@ export function GuitarSettings() {
             </AdjustmentDialog>
           );
         })()}
+      <CaptureListening
+        appliedTrim={
+          profiles.guitars.find((guitar) => guitar.id === profiles.active)
+            ?.trim_db ?? null
+        }
+      />
       {error && (
         <StateNotice kind="error" title="Guitar profile action failed">
           {error}

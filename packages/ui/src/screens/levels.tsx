@@ -9,6 +9,10 @@ import { Caption, Readout } from '../components/ui/text';
 import { PageHeading } from '../patterns/app-shell';
 import { DeviceDashboard } from '../patterns/device-dashboard';
 import { READINGS } from '../patterns/device-dashboard.data';
+import {
+  BrowserListeningDemo,
+  CaptureReferencesDemo,
+} from '../widgets/capture-listening.demo';
 import { StereoMeter } from '../widgets/meter';
 import { VenueEq } from '../widgets/venue-eq';
 import { VENUE_PROFILES } from '../widgets/venue-eq.data';
@@ -200,6 +204,10 @@ export function Levels({
       ) : (
         <div className="grid gap-4 px-page lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
           <Output />
+          <div className="grid gap-4 lg:col-span-2">
+            <CaptureReferencesDemo />
+            <BrowserListeningDemo />
+          </div>
           <Card>
             <CardHeader>
               <CardTitle>Now</CardTitle>
