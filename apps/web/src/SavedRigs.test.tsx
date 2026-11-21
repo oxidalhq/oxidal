@@ -328,17 +328,23 @@ it('shows set list position on Mine rows and lets extra rows join the set list',
     <SavedRigs
       connected
       onOpenRig={() => {}}
-      tail={(setList) => (
-        <li>
-          <span>{setList.label('chain-1') || 'unknown'}</span>
-          <button
-            type="button"
-            onClick={() => setList.toggle('chain-1', 'Chain', true)}
-          >
-            Join
-          </button>
-        </li>
-      )}
+      owned={[
+        {
+          id: 'chain-1',
+          name: 'Chain',
+          render: (setList) => (
+            <li>
+              <span>{setList.label('chain-1') || 'unknown'}</span>
+              <button
+                type="button"
+                onClick={() => setList.toggle('chain-1', 'Chain', true)}
+              >
+                Join
+              </button>
+            </li>
+          ),
+        },
+      ]}
     />,
   );
   expect(await screen.findByText(/In set list #1/)).toBeInTheDocument();

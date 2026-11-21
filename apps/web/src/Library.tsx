@@ -21,7 +21,7 @@ import './Library.css';
 import {
   type AudioState,
   importPreset,
-  nativeState,
+  libraryCatalog,
   playbackState,
   type Preset,
   type PresetDetails,
@@ -151,13 +151,6 @@ export function Library({
     id: string;
     name: string;
   } | null>(null);
-  const matches = (name: string, kind: 'original' | 'owned', id: string) =>
-    detailsMatch(
-      name,
-      details[`${kind}:${id}`],
-      kind === 'owned' ? query : toneQuery,
-      category,
-    );
   const categories = [
     ...new Set(Object.values(details).flatMap((d) => d.categories)),
   ].sort((a, b) => a.localeCompare(b));
@@ -196,10 +189,14 @@ export function Library({
         if (active) setPlaying(s);
       })
       .catch(() => {});
-    void nativeState()
+    void libraryCatalog()
       .then((s) => {
         if (active) {
-          setOwned(s.owned.map((p) => ({ id: p.id, name: p.preset.name })));
+          setOwned(
+            s.items
+              .filter((p) => p.kind === 'owned' && !p.archived && !p.superseded)
+              .map((p) => ({ id: p.id, name: p.name })),
+          );
           setCopiesError('');
         }
       })
@@ -249,6 +246,7 @@ export function Library({
     meta: string,
     download: string,
     setList?: SetListControls,
+    favourite?: ReactNode,
   ) {
     const inSetList = setList?.isMember(id) ?? null;
     const active =
@@ -260,6 +258,7 @@ export function Library({
         key={`${isOwned ? 'owned' : 'original'}-${id}`}
         testId={isOwned ? undefined : `preset-${id}`}
         name={name}
+        favourite={favourite}
         meta={[meta, setList?.label(id)].filter(Boolean).join(' · ')}
         playing={active}
         loading={loadingId === id}
@@ -401,9 +400,8 @@ export function Library({
       if (request === generation.current) setBusy(false);
     }
   }
-  const ownedShown = owned.filter((p) => matches(p.name, 'owned', p.id));
   const originalsShown = presets.filter((p) =>
-    matches(p.name, 'original', p.sha256),
+    detailsMatch(p.name, details[`original:${p.sha256}`], toneQuery, category),
   );
   if (composer)
     return (
@@ -543,20 +541,6 @@ export function Library({
               refresh={refresh}
               onChanged={() => setRefresh((v) => v + 1)}
             />
-            {search(
-              query,
-              setQuery,
-              'Find a preset…',
-              <Button disabled={!connected} onClick={() => setCreating(true)}>
-                <Plus aria-hidden="true" /> New preset
-              </Button>,
-            )}
-            <div className="library-bar">
-              <div className="flex flex-wrap items-center gap-2">
-                {categorySelect}
-                {viewToggle}
-              </div>
-            </div>
             {created && (
               <CreatedPreset
                 key={created.revision}
@@ -616,9 +600,21 @@ export function Library({
               onDetails={(id, name) => setPreview({ kind: 'rig', id, name })}
               onEdit={(revision) => setEditing({ revision })}
               onManage={(action, entry) => setMineDialog({ action, ...entry })}
-              tailCount={ownedShown.length}
-              tail={(setList) =>
-                ownedShown.map((p) =>
+              onQuery={setQuery}
+              primary={
+                <Button disabled={!connected} onClick={() => setCreating(true)}>
+                  <Plus aria-hidden="true" /> New preset
+                </Button>
+              }
+              toolbar={
+                <div className="flex flex-wrap items-center gap-2">
+                  {categorySelect}
+                  {viewToggle}
+                </div>
+              }
+              owned={owned.map((p) => ({
+                ...p,
+                render: (setList, favourite) =>
                   toneRow(
                     p.id,
                     p.name,
@@ -626,9 +622,9 @@ export function Library({
                     'TONE3000 chain',
                     `/api/v1/presets/owned/${p.id}/download`,
                     setList,
+                    favourite,
                   ),
-                )
-              }
+              }))}
               empty={
                 <StateNotice kind="empty" title="No presets yet">
                   Create one with New preset, or start from Oxidal sounds.

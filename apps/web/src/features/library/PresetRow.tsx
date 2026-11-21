@@ -2,7 +2,6 @@ import { DotsThree, MusicNotes, Play } from '@phosphor-icons/react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
-
 import { LibraryRow } from '@oxidal/design-system/patterns/library-list';
 
 export type RowAction =
@@ -25,6 +24,7 @@ export function PresetRow({
   onDetails,
   actions = [],
   extra,
+  favourite,
   testId,
 }: {
   name: string;
@@ -36,6 +36,7 @@ export function PresetRow({
   onDetails?: () => void;
   actions?: RowAction[];
   extra?: ReactNode;
+  favourite?: ReactNode;
   testId?: string;
 }) {
   return (
@@ -61,6 +62,7 @@ export function PresetRow({
       actions={
         <>
           {extra}
+          {favourite}
           {onPlay && (
             <Button
               size="sm"

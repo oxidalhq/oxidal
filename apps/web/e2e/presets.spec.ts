@@ -5155,26 +5155,13 @@ test('native preset library keeps originals accessible when saved copies cannot 
       },
     }),
   );
-  await page.route('**/api/v1/native', async (route) => {
+  await page.route('**/api/v1/presets/catalog', async (route) => {
     if (fail && route.request().method() === 'GET')
       return route.fulfill({
         status: 503,
         json: { error: 'Unavailable fixture' },
       });
-    return route.fulfill({
-      json: {
-        session: 'fixture',
-        revision: 0,
-        dirty: false,
-        parameters: [],
-        block_controls: [],
-        owned: [],
-        state_captures: 0,
-        live_audio: false,
-        can_undo: false,
-        can_redo: false,
-      },
-    });
+    await route.continue();
   });
   await page.goto('/#rig');
   await page.getByRole('button', { name: 'Library', exact: true }).click();

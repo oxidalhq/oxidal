@@ -47,6 +47,7 @@ export type LibraryItem = {
   badge?: { text: string; tone?: 'neutral' | 'live' | 'warning' | 'selected' };
   playable?: boolean;
   favourite?: boolean;
+  searchText?: string;
   /** Where it comes from: shown on the row, and in full in the details. */
   origin?: BlockSource;
   /** What it is for, in one sentence. */
@@ -62,6 +63,7 @@ export type LibraryItem = {
 };
 
 const SORTS = [
+  { id: 'library', label: 'Library order' },
   { id: 'recent', label: 'Recently used' },
   { id: 'name', label: 'Name' },
   { id: 'plays', label: 'Most played' },
@@ -74,6 +76,7 @@ function sortItems(items: LibraryItem[], sort: SortId) {
     [...items].sort(
       (a, b) => pick(b) - pick(a) || a.title.localeCompare(b.title),
     );
+  if (sort === 'library') return items;
   if (sort === 'name')
     return [...items].sort((a, b) => a.title.localeCompare(b.title));
   if (sort === 'recent') return by((i) => i.lastUsed ?? 0);
@@ -167,8 +170,8 @@ export function LibraryRow({
         disabled={!onOpen}
         className="grid min-w-0 gap-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:outline-2 focus-visible:after:outline-ring"
       >
+        {openPrefix && <span className="sr-only">{openPrefix} </span>}
         <span className="truncate font-display text-lg leading-tight font-semibold">
-          {openPrefix && <span className="sr-only">{openPrefix} </span>}
           {item.title}
         </span>
         {item.caption && (
@@ -308,6 +311,7 @@ export function LibraryList({
   items,
   query,
   onQuery,
+  searchLabels,
   filters,
   filter,
   onFilter,
@@ -323,14 +327,19 @@ export function LibraryList({
   tile,
   noun = ['item', 'items'],
   empty,
+  emptyContent,
   primary,
   sortable = true,
   onFavourite,
+  sortOptions,
+  renderRow,
+  toolbar,
   className,
 }: {
   items: LibraryItem[];
   query: string;
   onQuery: (query: string) => void;
+  searchLabels?: { input: string; clear: string; placeholder?: string };
   filters?: { id: string; label: string }[];
   filter?: string;
   onFilter?: (id: string) => void;
@@ -352,27 +361,35 @@ export function LibraryList({
   /** What the rows are: one and many. */
   noun?: [string, string];
   empty: { title: string; text?: string };
+  emptyContent?: React.ReactNode;
   /** The one action for this section: New preset, Import…, Split a track… */
   primary?: React.ReactNode;
   /** Offer the Sort menu (off for lists the player orders by hand). */
   sortable?: boolean;
   /** Offer the favourite star and the Favourites filter. */
   onFavourite?: (id: string, on: boolean) => void;
+  /** Only offer orders supported by the underlying catalog. */
+  sortOptions?: readonly SortId[];
+  /** Rows in a list with their own details, play and management actions. */
+  renderRow?: (
+    item: LibraryItem,
+    favourite: React.ReactNode,
+  ) => React.ReactNode;
+  toolbar?: React.ReactNode;
   className?: string;
 }) {
   const wide = useMedia('(min-width: 72rem)');
   const [sheet, setSheet] = React.useState(false);
   const [sort, setSort] = React.useState<SortId>(
-    items.some((i) => i.lastUsed) ? 'recent' : 'name',
+    sortOptions?.[0] ?? (items.some((i) => i.lastUsed) ? 'recent' : 'name'),
   );
   const [favouritesOnly, setFavouritesOnly] = React.useState(false);
   const filtered = items.filter(
     (item) =>
       (!favouritesOnly || item.favourite) &&
-      (!query ||
-        `${item.title} ${item.caption ?? ''}`
-          .toLowerCase()
-          .includes(query.toLowerCase())),
+      (item.searchText ?? `${item.title} ${item.caption ?? ''}`)
+        .toLocaleLowerCase()
+        .includes(query.trim().toLocaleLowerCase()),
   );
   const shown = sortable ? sortItems(filtered, sort) : filtered;
   const sortLabel = SORTS.find((s) => s.id === sort)!.label;
@@ -411,8 +428,8 @@ export function LibraryList({
           />
           <input
             type="search"
-            aria-label="Search"
-            placeholder="Find…"
+            aria-label={searchLabels?.input ?? 'Search'}
+            placeholder={searchLabels?.placeholder ?? 'Find…'}
             value={query}
             onChange={(event) => onQuery(event.target.value)}
             // The field's own frame shows focus; the input inside must not add a second ring.
@@ -422,7 +439,7 @@ export function LibraryList({
           {query && (
             <button
               type="button"
-              aria-label="Clear search"
+              aria-label={searchLabels?.clear ?? 'Clear search'}
               onClick={() => onQuery('')}
               className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
             >
@@ -441,7 +458,7 @@ export function LibraryList({
           </span>
         )}
       </div>
-      {(filters || onView || sortable || onFavourite) && (
+      {(toolbar || filters || onView || sortable || onFavourite) && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           {filters && onFilter && (
             <SegmentedControl
@@ -457,6 +474,7 @@ export function LibraryList({
               ))}
             </SegmentedControl>
           )}
+          {toolbar}
           <span className="flex flex-wrap items-center gap-2">
             {onFavourite && (
               <Toggle
@@ -476,7 +494,11 @@ export function LibraryList({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Sort by</DropdownMenuLabel>
-                  {SORTS.map((s) => (
+                  {SORTS.filter((s) =>
+                    sortOptions
+                      ? sortOptions.includes(s.id)
+                      : s.id !== 'library',
+                  ).map((s) => (
                     <DropdownMenuCheckboxItem
                       key={s.id}
                       checked={sort === s.id}
@@ -514,21 +536,25 @@ export function LibraryList({
         )}
       >
         {shown.length === 0 ? (
-          <EmptyState
-            title={
-              query
-                ? `Nothing matches “${query}”`
+          !query.trim() && !favouritesOnly && emptyContent ? (
+            emptyContent
+          ) : (
+            <EmptyState
+              title={
+                query
+                  ? `Nothing matches “${query}”`
+                  : favouritesOnly
+                    ? 'No favourites here yet'
+                    : empty.title
+              }
+            >
+              {query
+                ? 'Try fewer letters.'
                 : favouritesOnly
-                  ? 'No favourites here yet'
-                  : empty.title
-            }
-          >
-            {query
-              ? 'Try fewer letters.'
-              : favouritesOnly
-                ? 'Tap the star on anything you reach for often.'
-                : empty.text}
-          </EmptyState>
+                  ? 'Tap the star on anything you reach for often.'
+                  : empty.text}
+            </EmptyState>
+          )
         ) : view === 'artwork' ? (
           <ul
             aria-label="Items"
@@ -574,6 +600,24 @@ export function LibraryList({
         ) : (
           <ul aria-label={noun[1]} className="m-0 grid list-none gap-2 p-0">
             {shown.map((item) => {
+              const favourite = onFavourite && (
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  className="max-sm:min-h-touch max-sm:min-w-touch"
+                  aria-pressed={!!item.favourite}
+                  aria-label={`Favourite ${item.title}`}
+                  onClick={() => onFavourite(item.id, !item.favourite)}
+                >
+                  <Star weight={item.favourite ? 'fill' : 'regular'} />
+                </Button>
+              );
+              if (renderRow)
+                return (
+                  <React.Fragment key={item.id}>
+                    {renderRow(item, favourite)}
+                  </React.Fragment>
+                );
               const active = item.id === (current?.id ?? selected);
               const main = mainAction?.(item);
               return (
@@ -605,17 +649,7 @@ export function LibraryList({
                   }
                   actions={
                     <>
-                      {onFavourite && (
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          aria-pressed={!!item.favourite}
-                          aria-label={`Favourite ${item.title}`}
-                          onClick={() => onFavourite(item.id, !item.favourite)}
-                        >
-                          <Star weight={item.favourite ? 'fill' : 'regular'} />
-                        </Button>
-                      )}
+                      {favourite}
                       {main && (
                         <Button
                           size="sm"

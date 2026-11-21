@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { Checkbox } from '@oxidal/design-system/components/checkbox';
+import { LibraryList } from '@oxidal/design-system/patterns/library-list';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
@@ -26,7 +27,7 @@ import {
   rigTopologyLabel,
   writeKeepReady,
 } from './presetChoices';
-import { detailsMatch } from './presetMetadata';
+import { detailsMatch, presetSearchText } from './presetMetadata';
 
 /**
  * Portable rigs in the Library: rows look and play like every other
@@ -55,34 +56,47 @@ export type SetListControls = {
   disabled: boolean;
 };
 
-function TailRows({
-  tail,
-  setList,
-}: {
-  tail: (setList: SetListControls) => ReactNode;
-  setList: SetListControls;
-}) {
-  return <>{tail(setList)}</>;
+type OwnedRow = {
+  id: string;
+  name: string;
+  render: (setList: SetListControls, favourite: ReactNode) => ReactNode;
+};
+
+const favouritesKey = 'oxidal-library-favourites';
+function readFavourites(): string[] {
+  try {
+    const saved: unknown = JSON.parse(
+      localStorage.getItem(favouritesKey) ?? '[]',
+    );
+    return Array.isArray(saved)
+      ? saved.filter((value): value is string => typeof value === 'string')
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 export function SavedRigs({
   connected,
   onOpenRig,
   refresh = 0,
-  query = '',
+  query: controlledQuery,
+  onQuery: setControlledQuery,
   category = '',
   details = {},
   onDetails,
   onEdit,
   origin = 'mine',
   title = 'Mine',
-  tail,
-  tailCount = 0,
+  owned = [],
+  primary,
+  toolbar,
   empty,
   onManage,
 }: {
   refresh?: number;
   query?: string;
+  onQuery?: (value: string) => void;
   category?: string;
   details?: Record<string, PresetDetails>;
   onDetails?: (id: string, name: string) => void;
@@ -91,8 +105,9 @@ export function SavedRigs({
   origin?: RigPage['presets'][number]['origin'];
   title?: string;
   /** More rows for the same list (owned TONE3000 chains in Mine). */
-  tail?: (setList: SetListControls) => ReactNode;
-  tailCount?: number;
+  owned?: OwnedRow[];
+  primary?: ReactNode;
+  toolbar?: ReactNode;
   /** Shown when the list has loaded and holds nothing. */
   empty?: ReactNode;
   /** Rename or delete a preset; the list refreshes when the parent does. */
@@ -103,6 +118,21 @@ export function SavedRigs({
   connected: boolean;
   onOpenRig: () => void;
 }) {
+  const [ownQuery, setOwnQuery] = useState('');
+  const query = controlledQuery ?? ownQuery;
+  const onQuery = setControlledQuery ?? setOwnQuery;
+  const [favourites, setFavourites] = useState(readFavourites);
+  function favourite(id: string, on: boolean) {
+    const next = on
+      ? [...new Set([...favourites, id])]
+      : favourites.filter((entry) => entry !== id);
+    setFavourites(next);
+    try {
+      localStorage.setItem(favouritesKey, JSON.stringify(next));
+    } catch {
+      // Keep the selection for this visit if browser storage is unavailable.
+    }
+  }
   const [items, setItems] = useState<RigPage['presets']>([]);
   const [next, setNext] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -253,7 +283,7 @@ export function SavedRigs({
         revision,
         gaplessBank(
           revision,
-          shown.map((item) => item.revision),
+          bankOrder.map((item) => item.revision),
         ),
       );
       if (alive.current) {
@@ -295,12 +325,29 @@ export function SavedRigs({
     }
   }
   const originItems = items.filter((item) => item.origin === origin);
-  const shown = originItems.filter((item) =>
+  const bankOrder = originItems.filter((item) =>
     detailsMatch(item.name, details[`rig:${item.revision}`], query, category),
   );
-  if (!originItems.length && !tailCount && !failure)
-    return loaded && empty ? <>{empty}</> : null;
-  const readyCount = shown.filter((p) => ready.includes(p.revision)).length;
+  const rows = [
+    ...originItems.map((rig) => ({
+      kind: 'rig' as const,
+      id: rig.revision,
+      name: rig.name,
+      rig,
+    })),
+    ...owned.map((item) => ({ kind: 'owned' as const, ...item })),
+  ].filter((item) =>
+    detailsMatch(item.name, details[`${item.kind}:${item.id}`], '', category),
+  );
+  const byId = new Map(rows.map((item) => [`${item.kind}:${item.id}`, item]));
+  const setList = {
+    label: (id: string) => setListLabel(members, 'owned', id, true),
+    isMember: (id: string) => members?.has(`owned:${id}`) ?? null,
+    toggle: (id: string, name: string, add: boolean) =>
+      void member(id, name, add, 'owned'),
+    disabled: !connected || busy,
+  };
+  const readyCount = bankOrder.filter((p) => ready.includes(p.revision)).length;
   // Selected but not loaded beside the playing preset: needs a restart.
   const pending = prepared.some((id) => id !== playing && !ready.includes(id));
   return (
@@ -318,7 +365,7 @@ export function SavedRigs({
       </div>
       <p className="caption" role="status">
         {running
-          ? `${readyCount} of ${shown.length}${next ? '+' : ''} presets ready`
+          ? `${readyCount} of ${bankOrder.length}${next ? '+' : ''} presets ready`
           : 'Nothing is ready while audio is stopped.'}
       </p>
       {choosing && running && pending && (
@@ -381,14 +428,50 @@ export function SavedRigs({
           {notice}
         </p>
       )}
-      <ul className="m-0 grid list-none gap-2 p-0">
-        {shown.map((p) => {
+      <LibraryList
+        items={rows.map((item) => {
+          const id = `${item.kind}:${item.id}`;
+          return {
+            id,
+            title: item.name,
+            searchText: presetSearchText(item.name, details[id]),
+            favourite: favourites.includes(id),
+          };
+        })}
+        query={query}
+        onQuery={onQuery}
+        searchLabels={{
+          input: 'Search presets',
+          clear: 'Clear preset search',
+          placeholder: 'Find a preset…',
+        }}
+        layout="list"
+        noun={['preset', 'presets']}
+        empty={{
+          title: loaded
+            ? category
+              ? 'No presets in this category'
+              : 'No presets yet'
+            : 'Loading presets…',
+        }}
+        emptyContent={loaded && !category && !next && empty}
+        sortOptions={['library', 'name']}
+        primary={primary}
+        toolbar={toolbar}
+        onOpen={() => {}}
+        onFavourite={favourite}
+        renderRow={(item, star) => {
+          const row = byId.get(item.id);
+          if (!row) return null;
+          if (row.kind === 'owned') return row.render(setList, star);
+          const p = row.rig;
           const active = playing === p.revision;
           const scenes = p.scenes ?? [];
           return (
             <PresetRow
               key={p.revision}
               name={p.name}
+              favourite={star}
               meta={[
                 rigTopologyLabel({ ...p, scenes }),
                 scenes.join(', '),
@@ -495,26 +578,8 @@ export function SavedRigs({
               }
             />
           );
-        })}
-        {tail && (
-          <TailRows
-            tail={tail}
-            setList={{
-              label: (id) => setListLabel(members, 'owned', id, true),
-              isMember: (id) => members?.has(`owned:${id}`) ?? null,
-              toggle: (id, name, add) => void member(id, name, add, 'owned'),
-              disabled: !connected || busy,
-            }}
-          />
-        )}
-      </ul>
-      {(query.trim() || category) && !shown.length && !tailCount && (
-        <p role="status" className="caption">
-          {next
-            ? 'No matches yet. Load more to search further.'
-            : 'No saved presets match these filters.'}
-        </p>
-      )}
+        }}
+      />
       {next && (
         <Button variant="outline" disabled={busy} onClick={() => void more()}>
           Load more

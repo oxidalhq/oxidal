@@ -75,11 +75,11 @@ test('library sections keep the Mine search after a reload', async ({
   await expect(search).toHaveValue('');
 });
 
-test('Settings sections have links and Effects shows which presets need a pack', async ({
+test('Settings sections have links and LV2 shows which presets need a pack', async ({
   page,
 }) => {
-  await page.goto('/#settings/effects');
-  await expectSettingsSection(page, 'Effects');
+  await page.goto('/#settings/plugins');
+  await expectSettingsSection(page, 'LV2');
   const effects = page.getByRole('region', { name: 'Effects' });
   await expect(
     effects.getByRole('list', { name: 'Curated packs' }),

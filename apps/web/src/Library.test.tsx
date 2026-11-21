@@ -14,7 +14,6 @@ vi.mock('./api', () => ({
   importPreset: vi.fn(),
   presetLibrary: vi.fn(async () => []),
   playbackState: vi.fn(() => new Promise(() => {})),
-  nativeState: vi.fn(async () => ({ owned: [] })),
   presetDetails: vi.fn(async () => ({ revision: 'r', entries: [] })),
   libraryCatalog: vi.fn(async () => ({
     revision: 'c',

@@ -10,7 +10,7 @@
     "lint": "eslint . --max-warnings 0",
     "format:check": "prettier --check .",
     "format": "prettier --write .",
-    "test:stories": "vitest run",
+    "test:stories": "node scripts/check-story-interactions.mjs && vitest run",
     "check": "pnpm --dir ../../packages/ui check && pnpm format:check && pnpm lint && pnpm test:stories && pnpm build && pnpm layout",
     "layout": "node scripts/layout.mjs"
   },
