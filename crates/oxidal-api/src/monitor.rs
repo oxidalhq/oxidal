@@ -44,6 +44,8 @@ pub struct Monitoring {
     pub preset: Option<LibraryReference>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub set_entry: Option<oxidal_presets::ResolvedOccurrence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tempo: Option<crate::tempo::TempoState>,
     pub stream: Option<StreamConfig>,
     pub audio: Option<Snapshot>,
     pub audio_age_ms: Option<u64>,
@@ -260,6 +262,7 @@ pub(super) fn start(shared: Weak<Shared>, updates: watch::Sender<Monitoring>) {
             });
             updates.send_replace(Monitoring {
                 set_entry,
+                tempo: Some(shared.tempo.snapshot()),
                 sequence,
                 host: host.clone(),
                 audio_phase: phase(native.phase),

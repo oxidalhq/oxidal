@@ -915,6 +915,7 @@ impl Owner {
                 message: seen.message,
                 local_program: false,
                 source: seen.source,
+                received_ms: seen.received_ms,
             });
         }
         if changed {
@@ -1374,7 +1375,11 @@ impl Owner {
         }
         Ok(self.state.clone())
     }
-    async fn save_copy(&mut self, name: String) -> Reply {
+    async fn save_copy(
+        &mut self,
+        name: String,
+        target: Option<oxidal_audio::lifecycle::VersionTarget>,
+    ) -> Reply {
         if self.model_pending() {
             return Err("Wait for model audition or cancel before saving".into());
         }
@@ -1394,7 +1399,18 @@ impl Owner {
             eq: Some(self.state.eq.clone()),
             name,
         };
-        let mut bytes = serde_json::to_vec(&request).map_err(|e| e.to_string())?;
+        let name = request.name.clone();
+        let input = match target {
+            Some(version_target) if request.settings.owned && !request.settings.draft => {
+                oxidal_audio::lifecycle::SaveInput::Version {
+                    request,
+                    version_target,
+                }
+            }
+            Some(_) => return Err("Choose an owned preset version before saving".into()),
+            None => oxidal_audio::lifecycle::SaveInput::Copy(request),
+        };
+        let mut bytes = serde_json::to_vec(&input).map_err(|e| e.to_string())?;
         if bytes.len() >= PLAYBACK_FRAME_BYTES {
             return Err("Save catalog too large".into());
         }
@@ -1444,7 +1460,7 @@ impl Owner {
                 .read(&id)
                 .map_err(|e| e.to_string())?
                 .0;
-            if info.preset.name != request.name.trim() {
+            if info.preset.name != name.trim() {
                 return Err("Saved name differs".into());
             }
             Ok(id)
@@ -1622,7 +1638,7 @@ impl Owner {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => return Err(format!("Cannot clear source recovery: {error}")),
         }
-        self.save_copy(name).await?;
+        self.save_copy(name, None).await?;
         let copy_id = self
             .state
             .saved_copy
@@ -1718,6 +1734,11 @@ impl Owner {
     }
     async fn request(&mut self, request: OwnerRequest<AudioCommand>) -> Reply {
         match request {
+            OwnerRequest::Tempo { .. } => Err("Native playback has no linked effects".into()),
+
+            OwnerRequest::Occurrence { .. } => {
+                Err("Only Mixed presets have starting scenes".into())
+            }
             OwnerRequest::Action(command) => {
                 let stop = matches!(&command.action, AudioAction::Stop);
                 if stop
@@ -1864,6 +1885,7 @@ impl Owner {
             && matches!(
                 &command.action,
                 AudioAction::SaveCopy { .. }
+                    | AudioAction::SaveVersion { .. }
                     | AudioAction::Stop
                     | AudioAction::Restart
                     | AudioAction::Reconfigure { .. }
@@ -1911,6 +1933,7 @@ impl Owner {
             AudioAction::Start { .. }
                 | AudioAction::LoadPreset { .. }
                 | AudioAction::SaveCopy { .. }
+                | AudioAction::SaveVersion { .. }
         );
         let result = match command.action {
             AudioAction::HostUtility { command } => self.host_utility(command).await,
@@ -2021,7 +2044,10 @@ impl Owner {
                 }
                 return self.model_command(ModelOperation::Cancel).await;
             }
-            AudioAction::SaveCopy { name } => return self.save_copy(name).await,
+            AudioAction::SaveVersion { name, target } => {
+                return self.save_copy(name, Some(target)).await;
+            }
+            AudioAction::SaveCopy { name } => return self.save_copy(name, None).await,
             AudioAction::ResolveCopy { keep } => {
                 let copy = self
                     .state

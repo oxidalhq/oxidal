@@ -515,3 +515,34 @@ it('shows a running split on every page and opens its stems', () => {
     source: 'song',
   });
 });
+
+it('keeps live Undo available after the device refuses a mix and advances only on confirmation', async () => {
+  vi.stubGlobal('fetch', songFetch());
+  const live = player({
+    state: 'playing',
+    stems: {
+      source: source.id,
+      split: 'six',
+      roles: ['vocals', 'drums', 'bass', 'other', 'guitar', 'piano'],
+      recipe: mix.recipe,
+    },
+  });
+  const { send, wrap } = session(live);
+  render(
+    wrap(<StemMixEditor source={source} locked={false} onClose={() => {}} />),
+  );
+  const mute = await screen.findByRole('button', { name: 'Mute Guitar' });
+  expect(send).not.toHaveBeenCalled();
+  fireEvent.click(mute);
+  await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+  const undo = screen.getByRole('button', { name: 'Undo' });
+  send.mockResolvedValueOnce(false);
+  fireEvent.click(undo);
+  await screen.findByText(/did not apply the mix/);
+  expect(mute).toHaveAttribute('aria-pressed', 'false');
+  expect(undo).toBeEnabled();
+  fireEvent.click(undo);
+  await waitFor(() => expect(mute).toHaveAttribute('aria-pressed', 'true'));
+  expect(undo).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Redo' })).toBeEnabled();
+});

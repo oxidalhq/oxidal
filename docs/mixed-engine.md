@@ -205,3 +205,19 @@ with your intended interface and rig.
 - [Routing and rendering code](../crates/oxidal-engine/src)
 - [Mixed engine qualification](../crates/oxidal-engine/examples/qualify_mixed.rs)
 - [Worker and API tests](../crates/oxidal-api/tests/rig_playback.rs)
+
+## Starting scenes in the set list
+
+Two set entries can recall the same saved revision with different starting
+scenes. Set-list recall, Next and Previous, and Program Change use the entry's
+resolved revision and scene. A prepared alternative stays inaudible while its
+starting scene settles and the worker verifies its output. A refusal leaves the
+current resident playing and preserves the current set-list position. If the
+alternative is still contributing an earlier tail, the worker refuses a
+different starting scene until that tail has finished.
+
+A rig that loads on recall checks its saved starting scene in an isolated
+worker before replacing the current sound. The new stream starts at that scene
+and confirms processed frames before the device reports the entry as selected.
+This path reopens the audio device. Protect allows recalls of the current rig
+or an already prepared alternative.

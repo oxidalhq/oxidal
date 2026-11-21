@@ -160,6 +160,9 @@ pub struct PluginDefaultsCommand {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkerRequest {
+    Tempo {
+        bpm: Option<f32>,
+    },
     RestorePluginDefaults {
         command: PluginDefaultsCommand,
     },
@@ -232,6 +235,10 @@ pub enum GraphAudioAction {
     Restart,
     SaveCopy {
         name: String,
+    },
+    SaveVersion {
+        name: String,
+        target: oxidal_audio::lifecycle::VersionTarget,
     },
     Control {
         command: Box<Command>,

@@ -50,7 +50,7 @@ import {
   capabilities,
   deviceStorage,
   type MappingFile,
-  midiAction,
+  parseMidiAction,
   parseSnapshot,
   sendCommand,
   type Snapshot,
@@ -162,47 +162,6 @@ function InstrumentApp() {
     window.addEventListener(OPEN_TUNER_EVENT, open);
     return () => window.removeEventListener(OPEN_TUNER_EVENT, open);
   }, []);
-  const lastTunerAction = useRef<number | null>(null);
-  useEffect(() => {
-    if (!connected) return;
-    let active = true;
-    let timer: ReturnType<typeof setTimeout>;
-    async function poll() {
-      try {
-        const action = await midiAction();
-        if (!active) return;
-        if (lastTunerAction.current === null) {
-          lastTunerAction.current = action.seq;
-        } else if (
-          action.seq !== lastTunerAction.current &&
-          action.ok &&
-          action.message === 'Tuner requested'
-        ) {
-          lastTunerAction.current = action.seq;
-          requestTuner();
-        } else if (
-          action.seq !== lastTunerAction.current &&
-          action.ok &&
-          action.message.startsWith('Guitar: ')
-        ) {
-          // A footswitch chose another guitar: every guitar control reads again.
-          lastTunerAction.current = action.seq;
-          window.dispatchEvent(new Event(GUITARS_CHANGED_EVENT));
-        } else {
-          lastTunerAction.current = action.seq;
-        }
-      } catch {
-        // The normal reconnect path remains authoritative if polling fails.
-      } finally {
-        if (active) timer = setTimeout(() => void poll(), 250);
-      }
-    }
-    void poll();
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
-  }, [connected]);
   const [settingsSection, setSettingsSection] = useSectionLocation(
     'settings',
     settingsSections,
@@ -334,6 +293,25 @@ function InstrumentApp() {
             setError('Device sent incompatible state');
             setConnected(false);
           }
+        }
+      });
+      let lastMidiSequence: number | undefined;
+      source.addEventListener('open', () => {
+        lastMidiSequence = undefined;
+      });
+      source.addEventListener('midi-action', (event: MessageEvent<string>) => {
+        if (!active || events !== source) return;
+        try {
+          const action = parseMidiAction(JSON.parse(event.data));
+          const previous = lastMidiSequence;
+          lastMidiSequence = action.seq;
+          if (previous === undefined || action.seq <= previous || !action.ok)
+            return;
+          if (action.message === 'Tuner requested') requestTuner();
+          else if (action.message.startsWith('Guitar: '))
+            window.dispatchEvent(new Event(GUITARS_CHANGED_EVENT));
+        } catch {
+          // Keep the last confirmed action when a message is incompatible.
         }
       });
       source.addEventListener('player', (event: MessageEvent<string>) => {

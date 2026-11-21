@@ -185,6 +185,10 @@ pub enum AudioAction {
     SaveCopy {
         name: String,
     },
+    SaveVersion {
+        name: String,
+        target: VersionTarget,
+    },
     ResolveCopy {
         keep: bool,
     },
@@ -309,6 +313,36 @@ pub struct PlaybackStart {
     pub eq: Option<Vec<BlockEqState>>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct VersionTarget {
+    pub first: String,
+    pub version: String,
+    pub expected_content: String,
+    pub expected_revision: String,
+    pub request_id: String,
+}
+/// The isolated save workers also accept their original unwrapped requests.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum SaveInput<T> {
+    Version {
+        request: T,
+        version_target: VersionTarget,
+    },
+    Copy(T),
+}
+impl<T> SaveInput<T> {
+    pub fn into_parts(self) -> (T, Option<VersionTarget>) {
+        match self {
+            Self::Version {
+                request,
+                version_target,
+            } => (request, Some(version_target)),
+            Self::Copy(request) => (request, None),
+        }
+    }
+}
 /// Immutable reconstruction request for a separate, non-PCM export worker.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

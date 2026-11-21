@@ -233,29 +233,43 @@ export function useStemMixSender() {
   const { send } = useSessionMedia();
   const sending = useRef(false);
   type Change = { split: string; expected: LiveRecipe; recipe: LiveRecipe };
-  const waiting = useRef<Change | null>(null);
+  type Pending = { change: Change; finish: (applied: boolean) => void };
+  const waiting = useRef<Pending | null>(null);
   return useCallback(
-    async (change: Change) => {
-      if (sending.current) {
-        const prior = waiting.current;
-        waiting.current =
-          prior?.split === change.split
-            ? { ...change, expected: prior.expected }
-            : change;
-        return;
-      }
-      sending.current = true;
-      let next: Change | null = change;
-      while (next) {
-        waiting.current = null;
-        if (!(await send({ kind: 'set_stem_mix', ...next }))) {
-          waiting.current = null;
-          break;
+    (change: Change) =>
+      new Promise<boolean>((finish) => {
+        const previous = waiting.current;
+        previous?.finish(false);
+        if (previous?.change.split === change.split)
+          change = { ...change, expected: previous.change.expected };
+        waiting.current = { change, finish };
+        if (sending.current) return;
+        sending.current = true;
+        async function drain() {
+          while (waiting.current) {
+            const next = waiting.current;
+            waiting.current = null;
+            const applied = await send({
+              kind: 'set_stem_mix',
+              ...next.change,
+            }).catch(() => false);
+            next.finish(applied);
+            if (!applied) {
+              // A queued edit expected the refused recipe. Leave the device as it is.
+              const queued: Pending | null = takeWaiting();
+              queued?.finish(false);
+              break;
+            }
+          }
+          sending.current = false;
         }
-        next = waiting.current;
-      }
-      sending.current = false;
-    },
+        function takeWaiting(): Pending | null {
+          const queued = waiting.current;
+          waiting.current = null;
+          return queued;
+        }
+        void drain();
+      }),
     [send],
   );
 }

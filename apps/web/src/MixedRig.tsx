@@ -6,6 +6,7 @@ import { rigAudioCommand, rigAudioState } from './api';
 import { BoostControl } from './BoostControl';
 import { MaybeSheet } from './components/RigSheet';
 import { FailureNotice } from './FailureNotice';
+import { SaveSoundVersion } from './features/library/SaveSoundVersion';
 import { ControlAdjustDialog } from './features/rig/ControlAdjustDialog';
 import { ControlGrid } from './features/rig/ControlGrid';
 import { LiveLv2Panel } from './features/rig/LiveLv2Panel';
@@ -369,6 +370,23 @@ export function MixedRig(props: {
               {busy ? 'Saving…' : 'Save'}
             </Button>
           </div>
+          {rig.sourceOrigin === 'mine' && rig.revision && (
+            <SaveSoundVersion
+              key={rig.revision}
+              kind="rig"
+              source={rig.revision}
+              name={name}
+              disabled={
+                disabled ||
+                !matching ||
+                !!edit ||
+                busy ||
+                !!state.save?.running ||
+                saveStale
+              }
+              onSave={saveCopy}
+            />
+          )}
           {saveStale && (
             <p role="status">The rig changed. Close and reopen Save copy.</p>
           )}

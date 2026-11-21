@@ -460,3 +460,20 @@ eligible for recovery, the error provides a SHA-256 digest. A restore that
 supplies this digest instead of the empty revision first verifies that the
 damaged file still matches and preserves its exact bytes in a digest-named
 file beside the registry. Keep that copy until recovery is confirmed.
+
+### Performance tempo
+
+The device owns the active tempo source for every connected view. **Tap**
+measures the interval between device-stamped presses. Linux workers record when
+each mapped MIDI press arrived, so several presses in one status update keep
+their original timing.
+**Song** follows the cued track's confirmed analysis or manual click tempo.
+**Preset** uses the current rig's own settings. A missing tempo or conflicting
+preset tempos show as unavailable. Selecting Song or Preset requires the
+latest tempo revision. The device remembers the source and last measured Tap
+tempo across restart.
+
+Echo in Sync mode and Moment in Link Tempo mode use the selected external BPM
+with their own note divisions. The override leaves saved BPM values intact. A
+scene recall retains Tap. Stopping backing returns Song to Preset and leaves
+guitar audio running. Stopping backing while Tap is selected leaves Tap active.

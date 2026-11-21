@@ -1,3 +1,4 @@
+use crate::tempo_link_control;
 mod state;
 use crate::{PluginInfo, Port, ScalePoint, metadata_homepage, metadata_text};
 pub use state::{PluginState, StatePath, StateProperty};
@@ -460,6 +461,7 @@ pub struct Plugin {
     channels: usize,
     latency_port: Option<u32>,
     prepared_latency: Option<u32>,
+    host_tempo: Option<(u32, f32)>,
 }
 impl Plugin {
     /// Map an Atom URI between processing calls. IDs belong to this instance.
@@ -615,6 +617,7 @@ impl Plugin {
                 channels: if mono && !stereo { 1 } else { 2 },
                 latency_port,
                 prepared_latency: None,
+                host_tempo: None,
             });
         }
         Err("LV2 URI not discovered".into())
@@ -839,6 +842,36 @@ impl Plugin {
             Err("Nonfinite control output".into())
         }
     }
+    /// Only the shipped effects with independently qualified BPM and division
+    /// processing receive the shared tempo. Authored control state remains live.
+    pub fn set_host_tempo(&mut self, bpm: Option<f32>) {
+        self.host_tempo = bpm
+            .filter(|value| (40.0..=240.0).contains(value))
+            .and_then(|value| {
+                tempo_link_control(&self.info.uri)?;
+                self.info
+                    .ports
+                    .iter()
+                    .find(|port| {
+                        port.symbol == "bpm"
+                            && port.control
+                            && port.input
+                            && !port.output
+                            && port.minimum == Some(40.0)
+                            && port.maximum == Some(240.0)
+                    })
+                    .map(|port| (port.index, value))
+            });
+    }
+
+    fn begin_host_tempo(&mut self) -> Option<(u32, [f32; 2])> {
+        self.host_tempo.and_then(|(port, tempo)| {
+            let authored = self.channel_values(port).ok()?;
+            self.write_channels(port, [tempo; 2]);
+            Some((port, authored))
+        })
+    }
+
     pub fn process_mono(&mut self, samples: &mut [f32]) -> Result<(), String> {
         if self.failed {
             samples.fill(0.0);
@@ -858,6 +891,7 @@ impl Plugin {
         // SAFETY: new_ports admitted exactly one input/output port and no right
         // instance. The C bridge never dereferences right for this mono layout;
         // samples is exclusive, finite, and has the instantiated frame count.
+        let authored_tempo = self.begin_host_tempo();
         let status = unsafe {
             ox_lv2_run(
                 self.left.ptr.as_ptr(),
@@ -871,6 +905,9 @@ impl Plugin {
         } else {
             self.check_latency()
         };
+        if let Some((port, authored)) = authored_tempo {
+            self.write_channels(port, authored);
+        }
         if let Err(reason) = result {
             self.failed = true;
             samples.fill(0.0);
@@ -897,6 +934,7 @@ impl Plugin {
             return Err(reason);
         }
         // SAFETY: both slices are exclusive, live, and exact declared size. C owns stable port buffers.
+        let authored_tempo = self.begin_host_tempo();
         let first = unsafe {
             ox_lv2_run(
                 self.left.ptr.as_ptr(),
@@ -927,6 +965,9 @@ impl Plugin {
         } else {
             self.check_latency()
         };
+        if let Some((port, authored)) = authored_tempo {
+            self.write_channels(port, authored);
+        }
         if let Err(reason) = result {
             self.failed = true;
             left.fill(0.0);

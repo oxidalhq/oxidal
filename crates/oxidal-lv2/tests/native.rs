@@ -731,3 +731,110 @@ fn plugin_defaults_keep_moments_recorded_audio() {
     assert!(audition(&mut recorded) > 0.05);
     assert_eq!(audition(&mut empty), 0.0);
 }
+
+#[test]
+#[ignore = "requires the actual shipped Echo and Moment LV2 bundles"]
+fn shared_tempo_uses_the_effect_division_without_changing_authored_bpm() {
+    for (var, uri, settings) in [
+        (
+            "OXIDAL_ECHO_LV2_BUNDLE",
+            "urn:oxidal:plugin:echo#stereo",
+            &[
+                ("sync", 1.0),
+                ("division", 8.0),
+                ("mix", 100.0),
+                ("feedback", 0.0),
+            ][..],
+        ),
+        (
+            "OXIDAL_MOMENT_LV2_BUNDLE",
+            "urn:oxidal:plugin:moment#stereo",
+            &[
+                ("link", 3.0),
+                ("division", 8.0),
+                ("mix", 100.0),
+                ("wetmode", 1.0),
+                ("route", 0.0),
+            ][..],
+        ),
+    ] {
+        let bundle = std::env::var_os(var).expect("Built effect bundle");
+        let world = World::bundle(Path::new(&bundle)).unwrap();
+        let create = || {
+            let mut plugin = Plugin::new(&world, uri, 48000.0, 128).unwrap();
+            for &(symbol, value) in settings {
+                let port = plugin
+                    .info()
+                    .ports
+                    .iter()
+                    .find(|row| row.symbol == symbol)
+                    .unwrap()
+                    .index;
+                plugin.set(port, value).unwrap();
+            }
+            plugin
+        };
+        let mut authored = create();
+        let mut override_bpm = create();
+        let mut direct = create();
+        let bpm = direct
+            .info()
+            .ports
+            .iter()
+            .find(|row| row.symbol == "bpm")
+            .unwrap()
+            .index;
+        direct.set(bpm, 90.0).unwrap();
+        override_bpm.set_host_tempo(Some(90.0));
+        let mut changed = 0.0_f32;
+        for block in 0..600 {
+            let input = |channel: f32| {
+                std::array::from_fn::<_, 128, _>(|sample| {
+                    let n = (block * 128 + sample) as f32;
+                    ((n * (0.013 + channel)).sin() + (n * 0.113).cos()) * 0.17
+                })
+            };
+            let mut target = [input(0.0), input(0.025)];
+            let mut reference = target;
+            let mut saved = target;
+            for (plugin, [left, right]) in [
+                (&mut override_bpm, &mut target),
+                (&mut direct, &mut reference),
+                (&mut authored, &mut saved),
+            ] {
+                plugin.process(left, right).unwrap();
+            }
+            assert_eq!(target, reference, "{uri} block {block}");
+            assert_eq!(override_bpm.value(bpm).unwrap(), 120.0, "{uri}");
+            changed = changed.max(
+                target
+                    .iter()
+                    .flatten()
+                    .zip(saved.iter().flatten())
+                    .map(|(a, b)| (a - b).abs())
+                    .fold(0.0, f32::max),
+            );
+        }
+        assert!(
+            changed > 1.0e-3,
+            "{uri} did not follow its division at 90 BPM"
+        );
+        override_bpm.set_host_tempo(None);
+        assert_eq!(override_bpm.value(bpm).unwrap(), 120.0);
+        direct.set(bpm, 120.0).unwrap();
+        for _ in 0..16 {
+            let (mut left, mut right) = ([0.1; 128], [-0.1; 128]);
+            let (mut left_ref, mut right_ref) = (left, right);
+            override_bpm.process(&mut left, &mut right).unwrap();
+            direct.process(&mut left_ref, &mut right_ref).unwrap();
+            assert_eq!(
+                [left, right],
+                [left_ref, right_ref],
+                "{uri} restored authored BPM"
+            );
+        }
+        println!(
+            "{uri}: exact 90 BPM division match, nonzero difference {changed} vs authored 120 BPM"
+        );
+    }
+}

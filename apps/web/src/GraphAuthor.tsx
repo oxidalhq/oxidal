@@ -25,6 +25,7 @@ import {
 } from './api';
 import { ChainView, LedToggle } from './ChainView';
 import { ControlEditor } from './ControlEditor';
+import { SaveSoundVersion } from './features/library/SaveSoundVersion';
 import { StageControls } from './features/stage/StageControls';
 import { GearIcon } from './GearIcon';
 import { friendlyError } from './lib/friendlyError';
@@ -160,7 +161,7 @@ export function GraphAuthor({
     try {
       const next = await graphAudioCommand(current.current, action);
       accept(next, session);
-      if (action.kind === 'save_copy') {
+      if (action.kind === 'save_copy' || action.kind === 'save_version') {
         const items = await graphLibrary();
         if (alive.current) setLibrary(items);
       }
@@ -664,6 +665,18 @@ export function GraphAuthor({
             >
               <FloppyDisk aria-hidden="true" /> Save preset
             </Button>
+            {configured?.library_id && (
+              <SaveSoundVersion
+                key={configured.library_id}
+                kind="graph"
+                source={configured.library_id}
+                name={name}
+                disabled={disabled || !!state.control.edit}
+                onSave={(target) =>
+                  command({ kind: 'save_version', name: name.trim(), target })
+                }
+              />
+            )}
           </div>
         </>
       )}

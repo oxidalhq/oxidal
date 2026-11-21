@@ -413,6 +413,25 @@ async fn prepared_song_mixes_save_reopen_cue_and_export_both_stem_counts() {
     );
     let (_, position) = json_request(&app, "GET", "/midi/position", Value::Null).await;
     assert_eq!(position["length"], 2);
+    let (_, before) = json_request(&app, "GET", "/rig-audio", Value::Null).await;
+    let (status, report) =
+        json_request(&app, "GET", "/presets/set-list/rehearsal", Value::Null).await;
+    assert_eq!(status, 200, "{report}");
+    assert_eq!(report["revision"], independent["revision"]);
+    assert_eq!(report["entries"].as_array().unwrap().len(), 2);
+    for (index, entry) in report["entries"].as_array().unwrap().iter().enumerate() {
+        assert_eq!(entry["id"], independent["entries"][index]["entry"]["id"]);
+        assert_eq!(entry["status"], "blocked"); // No interface has been configured.
+        assert_eq!(entry["accompaniment"], json!([]));
+    }
+    assert_eq!(
+        before,
+        json_request(&app, "GET", "/rig-audio", Value::Null).await.1
+    );
+    assert_eq!(
+        independent,
+        json_request(&app, "GET", order_path, Value::Null).await.1
+    );
     body["replace"] = json!({"id":old["id"],"revision":old["revision"]});
     body["title"] = "Stage mix".into();
     let (status, saved) = json_request(&app, "POST", &mix_path, body.clone()).await;
@@ -629,5 +648,159 @@ async fn prepared_song_mixes_save_reopen_cue_and_export_both_stem_counts() {
         0
     );
     drop(app);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
+async fn device_tempo_agrees_for_viewers_and_restores_preset_on_song_stop() {
+    let root = std::env::temp_dir().join(format!("oxidal-tempo-{}", std::process::id()));
+    let config = Config {
+        debug_socket: None,
+        device_socket: None,
+        graph_worker: None,
+        rig_worker: None,
+        audio_worker: None,
+        native_worker: None,
+        shutdown: None,
+        simulator: true,
+        mapping_path: root.join("mapping.json"),
+        preset_dir: root.join("presets"),
+        media_dir: Some(root.join("media")),
+        ui_dir: PathBuf::from("nonexistent"),
+    };
+    let app = router(config.clone()).unwrap();
+    let original = include_bytes!("fixtures/media/tone-44k-mono-vbr.mp3");
+    let (status, upload) = json_request(
+        &app,
+        "POST",
+        "/media/uploads",
+        json!({"name":"Tempo fixture.mp3","size":original.len()}),
+    )
+    .await;
+    assert_eq!(status, 201, "{upload}");
+    let id = upload["id"].as_str().unwrap();
+    let (status, _) = request(
+        &app,
+        "PUT",
+        &format!("/media/uploads/{id}?offset=0"),
+        Body::from(original.to_vec()),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let asset = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let (_, state) =
+                json_request(&app, "GET", &format!("/media/uploads/{id}"), Value::Null).await;
+            if let Some(asset) = state["import"]["asset"].as_str() {
+                break asset.to_owned();
+            }
+            assert_ne!(state["import"]["state"], "failed", "{state}");
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("Backing import did not complete");
+    let player = |id: &'static str, command: Value| {
+        json!({
+            "requestId":id,"origin":"api","command":command
+        })
+    };
+    let (status, cue) = json_request(
+        &app,
+        "POST",
+        "/player/commands",
+        player("cue", json!({"kind":"cue","asset":asset})),
+    )
+    .await;
+    assert_eq!(status, 200, "{cue}");
+    let track = &cue["track"];
+    let timing = root.join("media/timing");
+    std::fs::create_dir_all(&timing).unwrap();
+    std::fs::write(
+        timing.join(format!("{asset}.json")),
+        json!({
+            "source":asset,"rate":track["rate"],"frames":track["frames"],"bpm":108.0,
+            "beats":[],"peaks":[]
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    let (_, preset) = json_request(&app, "GET", "/tempo", Value::Null).await;
+    assert_eq!(preset["source"], "preset");
+    let (status, song) = json_request(
+        &app,
+        "POST",
+        "/tempo",
+        json!({"kind":"select","source":"song","expected_revision":preset["revision"]}),
+    )
+    .await;
+    assert_eq!(status, 200, "{song}");
+    assert_eq!(song["source"], "song");
+    assert_eq!(song["bpm"], 108.0);
+    let other = app.clone();
+    assert_eq!(
+        json_request(&other, "GET", "/tempo", Value::Null).await.1,
+        song
+    );
+    assert_eq!(
+        json_request(
+            &other,
+            "POST",
+            "/tempo",
+            json!({"kind":"select","source":"preset",
+        "expected_revision":preset["revision"]})
+        )
+        .await
+        .0,
+        409
+    );
+    assert_eq!(
+        json_request(&app, "GET", "/tempo", Value::Null).await.1,
+        song
+    );
+
+    assert_eq!(
+        json_request(
+            &app,
+            "POST",
+            "/player/commands",
+            player("song-stop", json!({"kind":"stop"}))
+        )
+        .await
+        .0,
+        200
+    );
+    let (_, stopped) = json_request(&app, "GET", "/tempo", Value::Null).await;
+    assert_eq!(stopped["source"], "preset");
+    let (status, tapped) = json_request(&app, "POST", "/tempo", json!({"kind":"tap"})).await;
+    assert_eq!(status, 200, "{tapped}");
+    assert_eq!(tapped["source"], "tap");
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let (_, tapped) = json_request(&other, "POST", "/tempo", json!({"kind":"tap"})).await;
+    let bpm = tapped["bpm"].as_f64().unwrap();
+    assert!((40.0..=130.0).contains(&bpm), "{tapped}");
+    assert_eq!(
+        json_request(
+            &app,
+            "POST",
+            "/player/commands",
+            player("tap-stop", json!({"kind":"stop"}))
+        )
+        .await
+        .0,
+        200
+    );
+    assert_eq!(
+        json_request(&app, "GET", "/tempo", Value::Null).await.1,
+        tapped
+    );
+    drop(app);
+    drop(other);
+    let restarted = router(config).unwrap();
+    let (_, persisted) = json_request(&restarted, "GET", "/tempo", Value::Null).await;
+    assert_eq!(persisted["source"], "tap");
+    assert_eq!(persisted["bpm"], tapped["bpm"]);
+    drop(restarted);
     std::fs::remove_dir_all(root).unwrap();
 }

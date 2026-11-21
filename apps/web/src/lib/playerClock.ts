@@ -63,16 +63,3 @@ export function clock(seconds: number) {
   const rest = (whole - minutes * 60).toFixed(1).padStart(4, '0');
   return `${minutes}:${rest}`;
 }
-
-/** Tempo from the last few taps, ignoring a pause longer than two seconds. */
-export function tapTempo(taps: number[]): number | null {
-  const recent: number[] = [];
-  for (let i = taps.length - 1; i > 0 && recent.length < 4; i -= 1) {
-    const gap = (taps[i] ?? 0) - (taps[i - 1] ?? 0);
-    if (gap <= 0 || gap > 2000) break;
-    recent.push(gap);
-  }
-  if (!recent.length) return null;
-  const average = recent.reduce((sum, gap) => sum + gap, 0) / recent.length;
-  return Math.round(600_000 / average) / 10;
-}

@@ -2309,3 +2309,101 @@ async fn live_structure_save_reconfigure_recovery_and_rollback() {
     server.abort();
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[tokio::test]
+#[ignore = "requires the actual native audio worker and ALSA null"]
+async fn named_native_save_advances_the_selected_version_while_playing() {
+    let _device = QUALIFICATION_DEVICE.lock().await;
+    assert_eq!(
+        std::env::var("OXIDAL_AUDIO_QUALIFY_NULL").as_deref(),
+        Ok("1")
+    );
+    let root = std::env::temp_dir().join(format!("oxidal-named-native-{}", std::process::id()));
+    let preset_dir = root.join("presets");
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let (app, stopped) = router_with_shutdown(Config {
+        debug_socket: None,
+        device_socket: None,
+        graph_worker: None,
+        rig_worker: None,
+        native_worker: None,
+        audio_worker: Some(std::env::var_os("OXIDAL_TEST_AUDIO_WORKER").unwrap().into()),
+        simulator: false,
+        mapping_path: root.join("mappings.json"),
+        preset_dir: preset_dir.clone(),
+        media_dir: None,
+        ui_dir: root.join("ui"),
+        shutdown: Some(signal),
+    })
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let c = reqwest::Client::new();
+    let input = json!({"endpoint":"hw:CARD=Qualification,DEV=0","direction":"capture","sample_rate":48000,"channels":2,"format":"s16","period_frames":128,"periods":3});
+    let mut output = input.clone();
+    output["direction"] = "playback".into();
+    let stream = json!({"input":input,"output":output,"input_map":[0,1],"output_map":[0,1]});
+    let initial = get(&c, &url, "audio").await;
+    let draft: Value = send(
+        &c,
+        &url,
+        &initial,
+        json!({"kind":"create","stream":stream,"name":"Version source"}),
+    )
+    .await
+    .error_for_status()
+    .unwrap()
+    .json()
+    .await
+    .unwrap();
+    let first: Value = send(
+        &c,
+        &url,
+        &draft,
+        json!({"kind":"save_copy","name":"Version source"}),
+    )
+    .await
+    .error_for_status()
+    .unwrap()
+    .json()
+    .await
+    .unwrap();
+    let id = first["saved_copy"].as_str().unwrap();
+    let running: Value = send(
+        &c,
+        &url,
+        &first,
+        json!({"kind":"load_preset","preset_id":id,"owned":true}),
+    )
+    .await
+    .error_for_status()
+    .unwrap()
+    .json()
+    .await
+    .unwrap();
+    let path = format!("presets/catalog/owned/{id}/versions");
+    let family = get(&c, &url, &path).await;
+    let action = json!({"kind":"save_version","name":"Rehearsal","target":{"first":id,"version":"main","expected_content":id,"expected_revision":family["catalog_revision"],"request_id":"native-retry"}});
+    let result = send(&c, &url, &running, action.clone()).await;
+    let status = result.status();
+    let body: Value = result.json().await.unwrap();
+    assert!(status.is_success(), "{body}");
+    assert_eq!(body["phase"], "running");
+    assert_eq!(body["session"], running["session"]);
+    let saved = &body["saved_copy"];
+    assert_ne!(saved, id);
+    assert_eq!(
+        get(&c, &url, &path).await["preset"]["versions"][0]["content"],
+        *saved
+    );
+    let retry = send(&c, &url, &body, action).await;
+    let status = retry.status();
+    let replay: Value = retry.json().await.unwrap();
+    assert!(status.is_success(), "{replay}");
+    assert_eq!(replay["saved_copy"], *saved);
+    shutdown.send(true).unwrap();
+    stopped.wait().await.unwrap();
+    server.abort();
+    std::fs::remove_dir_all(root).unwrap();
+}

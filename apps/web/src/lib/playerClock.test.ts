@@ -1,13 +1,7 @@
 import { expect, it } from 'vitest';
 
 import type { PlayerSnapshot } from '../api';
-import {
-  clock,
-  formatTime,
-  positionAt,
-  spokenTime,
-  tapTempo,
-} from './playerClock';
+import { clock, formatTime, positionAt, spokenTime } from './playerClock';
 
 const snapshot = (
   state: PlayerSnapshot['state'],
@@ -57,11 +51,7 @@ it('formats and speaks times', () => {
   expect(spokenTime(61)).toBe('1 minute 1');
 });
 
-it('shows loop points to a tenth of a second and taps a tempo', () => {
+it('shows loop points to a tenth of a second', () => {
   expect(clock(83.44)).toBe('1:23.4');
   expect(clock(5.2)).toBe('0:05.2');
-  expect(tapTempo([0])).toBeNull();
-  expect(tapTempo([0, 500, 1000, 1500])).toBe(120);
-  // A long pause starts a new count.
-  expect(tapTempo([0, 500, 4000, 4545])).toBe(110.1);
 });

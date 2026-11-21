@@ -275,6 +275,22 @@ async fn republishing_an_earlier_revision_restores_it_and_moves_midi_back() {
     )
     .await;
     assert_eq!(status, 200, "{body}");
+    let ready_url = format!("{url}/presets/keep-ready");
+    let legacy_path = mapping.with_extension("presets").join("keep-ready.json");
+    let legacy = serde_json::to_vec(&json!({"revisions":[first]})).unwrap();
+    std::fs::write(&legacy_path, &legacy).unwrap();
+    assert_eq!(
+        get(&client, ready_url.clone()).await["revisions"],
+        json!([first])
+    );
+    for bad in [json!(["bad"]), json!([first, first, first, first, first])] {
+        assert_eq!(
+            post(&client, ready_url.clone(), json!({"revisions":bad}))
+                .await
+                .0,
+            422
+        );
+    }
     // An edit: the second revision takes the first one's place and its MIDI.
     let second = publish(manifest(0.5), Some(&first)).await;
     let catalog = get(&client, format!("{url}/presets/catalog")).await;
@@ -337,6 +353,14 @@ async fn republishing_an_earlier_revision_restores_it_and_moves_midi_back() {
     let cat = get(&client, format!("{url}/presets/catalog")).await;
     assert_eq!(row(&cat, "rig", quiet).unwrap()["in_set_list"], true);
     assert_eq!(row(&cat, "rig", &second).unwrap()["superseded"], true);
+    assert_eq!(
+        get(&client, ready_url.clone()).await["revisions"],
+        json!([quiet])
+    );
+    assert_eq!(std::fs::read(legacy_path).unwrap(), legacy);
+    let (status, dedup) = post(&client, ready_url, json!({"revisions":[quiet,quiet]})).await;
+    assert_eq!(status, 200);
+    assert_eq!(dedup["revisions"], json!([quiet]));
     task.abort();
     let _ = std::fs::remove_file(&mapping);
     let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));

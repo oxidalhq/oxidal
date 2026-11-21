@@ -47,7 +47,13 @@ static void cleanup(LV2_Handle h){free(h);}
 static const LV2_Descriptor descriptor={"urn:oxidal:test:contract",create,connect,NULL,run,NULL,cleanup,NULL};
 static const LV2_Descriptor quantized={"urn:oxidal:test:quantized",create,connect,NULL,run,NULL,cleanup,NULL};
 // Qualification only: unity feedback retains a finite input indefinitely.
-static const LV2_Descriptor sleep_tail={"urn:oxidal:test:sleep-tail",create,connect,NULL,run,NULL,cleanup,NULL};
+static void run_sleep_tail(LV2_Handle h,uint32_t n) {
+    run(h,n);
+    Test* t=h;
+    // A successful scalar write can still fail on its first DSP block.
+    if(n && *t->p[4]==2.0f)t->p[2][0]=NAN;
+}
+static const LV2_Descriptor sleep_tail={"urn:oxidal:test:sleep-tail",create,connect,NULL,run_sleep_tail,NULL,cleanup,NULL};
 // Deliberately reports only from run(), including the core run(0) query.
 // Mode selects malformed or spontaneously changing latency for host rejection tests.
 typedef struct {float* p[7];float history[2][1024];uint32_t position;int stuck, stereo, poison_default;} Latent;

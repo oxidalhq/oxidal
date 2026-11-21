@@ -7,6 +7,7 @@ import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { type MediaAsset, originalPath, updateAsset } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
 import { formatDb, formatTime } from '../../lib/playerClock';
+import { PerformanceTempo } from './PerformanceTempo';
 import { PositionBar } from './PositionBar';
 import { PracticeControls } from './PracticeControls';
 import {
@@ -159,6 +160,7 @@ function FullPlayer({ onClose }: { onClose: () => void }) {
       onCancel={onClose}
       className="media-sheet"
     >
+      <PerformanceTempo />
       {!track || shown === 'empty' ? (
         <div className="media-sheet-body">
           <p>No track cued.</p>

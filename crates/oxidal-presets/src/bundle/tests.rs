@@ -85,6 +85,32 @@ fn mixed_and_native_revisions_preserve_exact_bytes_roles_and_offline_identity() 
     }
 }
 #[test]
+fn report_identifies_each_unavailable_file_by_its_declared_role() {
+    let temp = Temporary::new();
+    let store = BundleStore::new(temp.0.join("bundles"));
+    let source = bundle(true);
+    let rev = store.save(&source).unwrap();
+    let base = store.path(&rev).unwrap();
+    for id in ["currentTone3000Preset", "delayState"] {
+        let file = source
+            .manifest
+            .resources
+            .iter()
+            .find(|r| r.id == id)
+            .unwrap();
+        fs::write(base.join(&file.path), b"damaged").unwrap();
+    }
+    let unavailable = store.unavailable_resources(&rev).unwrap();
+    assert_eq!(unavailable.len(), 2);
+    assert!(
+        unavailable
+            .iter()
+            .any(|r| r.kind == ResourceKind::Tone3000Preset)
+    );
+    assert!(unavailable.iter().any(|r| r.kind == ResourceKind::Lv2State));
+    assert!(store.read(&rev).is_err());
+}
+#[test]
 fn integrity_rejects_missing_extra_corrupt_or_invalid_native_payloads() {
     let (manifest, resources) = parts(true);
     let mut missing = resources.clone();

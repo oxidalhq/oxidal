@@ -183,11 +183,7 @@ pub(super) async fn mute(State(shared): State<Arc<Shared>>) -> impl IntoResponse
 
 /// The newest device-wide MIDI action and whether it ran, for the UI to show.
 pub(super) async fn action(State(shared): State<Arc<Shared>>) -> impl IntoResponse {
-    let action = shared
-        .midi_action
-        .lock()
-        .map(|action| action.clone())
-        .unwrap_or_default();
+    let action = shared.midi_action.borrow().clone();
     ([(header::CACHE_CONTROL, "no-store")], Json(action))
 }
 

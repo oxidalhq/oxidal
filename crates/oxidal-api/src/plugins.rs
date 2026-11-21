@@ -21,32 +21,43 @@ pub async fn catalog(
     if !(8000..=192000).contains(&query.sample_rate) {
         return failure(StatusCode::UNPROCESSABLE_ENTITY, "Invalid sample rate");
     }
-    let Some(worker) = shared.config.graph_worker.clone() else {
-        return failure(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "LV2 discovery is unavailable",
-        );
-    };
-    // A second caller waits for the scan in progress instead of failing.
-    let Ok(Ok(permit)) = tokio::time::timeout(
+    match installed(&shared, query.sample_rate).await {
+        Ok(catalog) => Json(catalog).into_response(),
+        Err((status, reason)) => failure(status, &reason),
+    }
+}
+
+pub(super) async fn installed(
+    shared: &Shared,
+    rate: u32,
+) -> Result<PluginCatalog, (StatusCode, String)> {
+    let worker = shared.config.graph_worker.clone().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "LV2 discovery is unavailable".into(),
+    ))?;
+    let permit = tokio::time::timeout(
         Duration::from_secs(12),
         shared.catalog_work.clone().acquire_owned(),
     )
     .await
-    else {
-        return failure(StatusCode::CONFLICT, "LV2 discovery already in progress");
-    };
-    // The task owns both child and permit if the browser disconnects. Always reap
-    // before allowing another scan; a cancelled request cannot multiply workers.
-    let task = tokio::spawn(async move {
+    .ok()
+    .and_then(Result::ok)
+    .ok_or((
+        StatusCode::CONFLICT,
+        "LV2 discovery already in progress".into(),
+    ))?;
+    tokio::spawn(async move {
         let _permit = permit;
-        discover(worker, query.sample_rate).await
-    });
-    match task.await {
-        Ok(Ok(catalog)) => Json(catalog).into_response(),
-        Ok(Err(error)) => failure(StatusCode::SERVICE_UNAVAILABLE, &error),
-        Err(_) => failure(StatusCode::SERVICE_UNAVAILABLE, "LV2 discovery task failed"),
-    }
+        discover(worker, rate).await
+    })
+    .await
+    .map_err(|_| {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "LV2 discovery task failed".into(),
+        )
+    })?
+    .map_err(|reason| (StatusCode::SERVICE_UNAVAILABLE, reason))
 }
 
 #[derive(Debug, Deserialize)]

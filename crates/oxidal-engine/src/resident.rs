@@ -79,6 +79,8 @@ struct Transition {
     length: usize,
     preserve: bool,
     retained_target: bool,
+    starting_scene: Option<String>,
+    scene_wait: usize,
 }
 #[derive(Debug)]
 pub struct ResidentSet {
@@ -228,6 +230,12 @@ impl ResidentSet {
         }
         Ok(result)
     }
+    pub fn set_host_tempo(&mut self, bpm: Option<f32>) {
+        for resident in &mut self.residents {
+            resident.session.graph.set_host_tempo(bpm);
+        }
+    }
+
     pub fn active_mut(&mut self) -> &mut Session {
         &mut self.residents[self.active].session
     }
@@ -260,6 +268,30 @@ impl ResidentSet {
         state
     }
     pub fn switch(&mut self, command: SwitchCommand) -> Result<(), String> {
+        self.switch_with_scene(command, None)
+    }
+
+    pub fn validate_switch_midi(
+        &self,
+        revision: &str,
+        midi: Option<&oxidal_audio::midi::Settings>,
+    ) -> Result<(), String> {
+        if let Some(settings) = midi {
+            let candidate = self
+                .residents
+                .iter()
+                .find(|row| row.session.source_revision() == revision)
+                .ok_or("Select a prepared alternative")?;
+            candidate.session.snapshot().validate_midi(settings)?;
+        }
+        Ok(())
+    }
+
+    pub fn switch_with_scene(
+        &mut self,
+        command: SwitchCommand,
+        scene: Option<String>,
+    ) -> Result<(), String> {
         if !self.healthy()
             || self.switching()
             || self.residents[self.active].session.model_pending()
@@ -286,6 +318,30 @@ impl ResidentSet {
         if let Some(error) = &self.residents[target].error {
             return Err(format!("Prepared alternative unavailable: {error}"));
         }
+        let candidate = &mut self.residents[target];
+        let mut starting_scene = None;
+        if let Some(scene) = scene {
+            if candidate.retained {
+                if !candidate
+                    .session
+                    .starting_scene_ready(&scene)
+                    .unwrap_or(false)
+                {
+                    return Err(
+                        "Wait for the prepared preset's tail before changing its starting scene"
+                            .into(),
+                    );
+                }
+            } else {
+                if let Err(error) = candidate.session.select_starting_scene(scene.clone()) {
+                    if !candidate.session.healthy() {
+                        candidate.error = Some(error.clone());
+                    }
+                    return Err(error);
+                }
+                starting_scene = Some(scene);
+            }
+        }
         self.residents[target].quiet_frames = 0;
         self.switch_error = None;
         // Feed the candidate current input before blending. Both output paths
@@ -297,6 +353,11 @@ impl ResidentSet {
             length: command.fade_frames as usize,
             preserve: self.residents[self.active].preserve,
             retained_target: self.residents[target].retained,
+            starting_scene,
+            scene_wait: self.rate as usize
+                - self.latency as usize
+                - self.frames
+                - command.fade_frames as usize,
         });
         Ok(())
     }
@@ -320,6 +381,14 @@ impl ResidentSet {
             if let Some(error) = &self.residents[index].error {
                 self.switch_error = Some(format!("Prepared alternative failed: {error}"));
                 self.transition = None;
+            } else if let Some(transition) = &mut self.transition
+                && transition.starting_scene.is_some()
+            {
+                transition.scene_wait = transition.scene_wait.saturating_sub(self.frames);
+                if transition.scene_wait == 0 {
+                    self.switch_error = Some("Starting scene did not confirm in the live switch window; previous sound retained".into());
+                    self.transition = None;
+                }
             }
         }
         // Candidate validation above preserves same-block failure fallback.
@@ -360,7 +429,9 @@ impl ResidentSet {
                 }
             }
             if let Some(t) = &mut self.transition {
-                if t.preserve {
+                if t.starting_scene.is_some() {
+                    // Keep the current return while the candidate settles.
+                } else if t.preserve {
                     // Fade the sends, never the stored return. Report completion
                     // only after the aligned graph latency has drained the ramp.
                     left += self.residents[t.target].left[i];
@@ -424,7 +495,7 @@ impl ResidentSet {
             index == self.active || self.transition.as_ref().is_some_and(|t| t.target == index);
         for (i, (&left, &right)) in input[0].iter().zip(input[1]).enumerate() {
             let gain = match &self.transition {
-                Some(t) if t.preserve || t.retained_target => {
+                Some(t) if t.starting_scene.is_none() && (t.preserve || t.retained_target) => {
                     let weight = ((t.cursor + i) as f32 / (t.length - 1) as f32).min(1.0);
                     if index == self.active {
                         if t.preserve { 1.0 - weight } else { 1.0 }
@@ -517,7 +588,27 @@ impl ResidentSet {
                 }
             }
         }
+        self.check_starting_scene();
         Ok(())
+    }
+    fn check_starting_scene(&mut self) {
+        let Some(transition) = &mut self.transition else {
+            return;
+        };
+        let Some(scene) = &transition.starting_scene else {
+            return;
+        };
+        match self.residents[transition.target]
+            .session
+            .starting_scene_ready(scene)
+        {
+            Ok(true) => transition.starting_scene = None,
+            Ok(false) => {}
+            Err(error) => {
+                self.switch_error = Some(error);
+                self.transition = None;
+            }
+        }
     }
     pub fn pump(&mut self) -> Result<(), String> {
         for (index, r) in self.residents.iter_mut().enumerate() {
@@ -535,6 +626,7 @@ impl ResidentSet {
                 }
             }
         }
+        self.check_starting_scene();
         Ok(())
     }
 }

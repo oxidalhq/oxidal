@@ -17,6 +17,7 @@ use std::{
 
 /// What a saved revision still has, for [`MidiMapStore::follow_save`].
 struct Saved<'a> {
+    retain_source: bool,
     branches: &'a [String],
     blocks: &'a [(String, u8)],
 }
@@ -266,6 +267,9 @@ pub struct Navigation {
     /// Selects the next guitar profile, wrapping after the last.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub guitar: Option<Trigger>,
+    /// A device-stamped performance tempo tap.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tap: Option<Trigger>,
     /// Backing-track player switches and level knob.
     #[serde(default, skip_serializing_if = "BackingTriggers::is_empty")]
     pub backing: BackingTriggers,
@@ -321,6 +325,7 @@ pub enum DeviceAction {
     MuteToggle,
     TunerOpen,
     GuitarNext,
+    TapTempo,
     BackingPlayPause,
     BackingStop,
     BackingNext,
@@ -340,6 +345,7 @@ impl Navigation {
             && self.mute.is_none()
             && self.tuner.is_none()
             && self.guitar.is_none()
+            && self.tap.is_none()
             && self.backing.is_empty()
     }
 
@@ -355,6 +361,8 @@ impl Navigation {
             Some(DeviceAction::TunerOpen)
         } else if self.guitar.is_some_and(|t| t.matches(message)) {
             Some(DeviceAction::GuitarNext)
+        } else if self.tap.is_some_and(|t| t.matches(message)) {
+            Some(DeviceAction::TapTempo)
         } else {
             self.backing_action(message)
         }
@@ -386,10 +394,17 @@ impl Navigation {
     }
 
     fn triggers(&self) -> impl Iterator<Item = Trigger> {
-        [self.previous, self.next, self.mute, self.tuner, self.guitar]
-            .into_iter()
-            .chain(self.backing.triggers())
-            .flatten()
+        [
+            self.previous,
+            self.next,
+            self.mute,
+            self.tuner,
+            self.guitar,
+            self.tap,
+        ]
+        .into_iter()
+        .chain(self.backing.triggers())
+        .flatten()
     }
 
     fn validate(&self, entries: &BTreeMap<String, PresetMap>) -> Result<()> {
@@ -968,6 +983,42 @@ impl MidiMapStore {
         self.carry(source, target, scenes, None)
     }
 
+    /// Carry the assignments supported by the saved rig topology.
+    pub fn follow_rig(
+        &self,
+        manifest: &crate::manifest::Manifest,
+        source: &LibraryReference,
+        target: &LibraryReference,
+        retain_source: bool,
+    ) -> Result<()> {
+        let (scenes, branches) = manifest
+            .scenes()?
+            .map(|s| {
+                let ids = |list: Vec<_>| {
+                    list.into_iter()
+                        .map(|item: crate::manifest::Scene| item.id)
+                        .collect::<Vec<_>>()
+                };
+                (ids(s.scenes), ids(s.branches))
+            })
+            .unwrap_or_default();
+        let blocks = manifest
+            .oxidal
+            .iter()
+            .flat_map(|host| &host.graph.nodes)
+            .map(|node| {
+                let gains = node.input_gains.as_ref().map_or(0, Vec::len);
+                (node.id.clone(), u8::try_from(gains).unwrap_or(u8::MAX))
+            })
+            .collect::<Vec<_>>();
+        if retain_source {
+            self.follow_version(source, target, &scenes, &branches, &blocks)?;
+        } else {
+            self.follow_save(source, target, &scenes, &branches, &blocks)?;
+        }
+        Ok(())
+    }
+
     /// Move the MIDI assignments of a preset to the revision that replaces it.
     /// Assignments the new revision cannot run are dropped with their
     /// switched-off markers, because the rig worker refuses a map that names a
@@ -988,7 +1039,38 @@ impl MidiMapStore {
         branches: &[String],
         blocks: &[(String, u8)],
     ) -> Result<bool> {
-        self.carry(source, target, scenes, Some(Saved { branches, blocks }))
+        self.carry(
+            source,
+            target,
+            scenes,
+            Some(Saved {
+                branches,
+                blocks,
+                retain_source: false,
+            }),
+        )
+    }
+
+    /// A named version can share its source with another version. Retain that
+    /// source's map and filter copied assignments against the new contents.
+    pub fn follow_version(
+        &self,
+        source: &LibraryReference,
+        target: &LibraryReference,
+        scenes: &[String],
+        branches: &[String],
+        blocks: &[(String, u8)],
+    ) -> Result<bool> {
+        self.carry(
+            source,
+            target,
+            scenes,
+            Some(Saved {
+                branches,
+                blocks,
+                retain_source: true,
+            }),
+        )
     }
 
     fn carry(
@@ -1014,7 +1096,10 @@ impl MidiMapStore {
         mapping
             .bindings
             .retain(|binding| known.contains(&binding.scene));
-        if let Some(Saved { branches, blocks }) = &saved {
+        if let Some(Saved {
+            branches, blocks, ..
+        }) = &saved
+        {
             mapping
                 .branch_bindings
                 .retain(|binding| branches.contains(&binding.branch));
@@ -1046,7 +1131,7 @@ impl MidiMapStore {
                 .iter()
                 .any(|b| Some(b.controller) == d.controller),
         });
-        if saved.is_some() {
+        if saved.is_some_and(|s| !s.retain_source) {
             book.entries.remove(&from);
         } else if mapping.empty() {
             return Ok(true);
@@ -1462,6 +1547,7 @@ mod tests {
             }),
             backing: BackingTriggers::default(),
             guitar: None,
+            tap: None,
         };
         let saved = store
             .replace(update(nav, vec![], &initial.revision))
@@ -1477,6 +1563,7 @@ mod tests {
                 tuner: None,
                 backing: BackingTriggers::default(),
                 guitar: None,
+                tap: None,
             },
             // Mute may not reuse Previous either.
             Navigation {
@@ -1486,6 +1573,7 @@ mod tests {
                 tuner: None,
                 backing: BackingTriggers::default(),
                 guitar: None,
+                tap: None,
             },
             Navigation {
                 previous: Some(Trigger {
@@ -1497,6 +1585,7 @@ mod tests {
                 tuner: None,
                 backing: BackingTriggers::default(),
                 guitar: None,
+                tap: None,
             },
             Navigation {
                 previous: Some(Trigger {
@@ -1508,6 +1597,7 @@ mod tests {
                 tuner: None,
                 backing: BackingTriggers::default(),
                 guitar: None,
+                tap: None,
             },
         ] {
             assert!(matches!(
@@ -1650,6 +1740,7 @@ mod tests {
                 tuner: None,
                 backing: BackingTriggers::default(),
                 guitar: None,
+                tap: None,
             },
         };
         let update = |layouts: Vec<SavedLayout>, revision: &str| MidiMapUpdate {

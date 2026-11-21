@@ -41,6 +41,7 @@ mod plugins;
 mod presets;
 pub mod protect;
 mod provider;
+mod rehearsal;
 mod rig_library;
 mod rig_playback;
 mod rig_recovery;
@@ -53,6 +54,7 @@ mod songs;
 mod split_jobs;
 mod stem_import;
 mod storage_lock;
+mod tempo;
 mod terminal;
 mod timing;
 mod tuner;
@@ -175,6 +177,8 @@ pub struct Contract {
     pub song_links: song_links::Links,
     pub song_link_update: song_links::Update,
     pub practice_timing: timing::Timing,
+    pub tempo_state: tempo::TempoState,
+    pub tempo_command: tempo::TempoCommand,
     pub player_snapshot: player::PlayerSnapshot,
     pub player_request: player::PlayerRequest,
     pub player_order: player::PlayerOrder,
@@ -185,7 +189,7 @@ pub struct Contract {
     pub capture_stop: capture::StopRequest,
     pub removal_preview: oxidal_presets::RemovalPreview,
     pub protect_state: protect::ProtectState,
-    pub keep_ready: keep_ready::KeepReady,
+    pub keep_ready: oxidal_presets::KeepReady,
     pub startup_state: audio_boot::StartupState,
     pub startup_update: audio_boot::StartupUpdate,
     pub model_removal_preview: oxidal_presets::ModelRemovalPreview,
@@ -194,6 +198,7 @@ pub struct Contract {
     pub removal_request: oxidal_presets::RemovalRequest,
     pub removal_result: oxidal_presets::RemovalResult,
     pub local_model: local_models::LocalModel,
+    pub capture_levels: oxidal_presets::CaptureLevels,
     pub local_model_page: local_models::LocalModelPage,
     pub native_defaults: oxidal_tone3000::preferences::Snapshot,
     pub native_defaults_update: oxidal_tone3000::preferences::Update,
@@ -271,6 +276,7 @@ pub struct Contract {
     pub preset_details_update: oxidal_presets::DetailsUpdate,
     pub library_catalog: oxidal_presets::LibraryCatalog,
     pub set_order: oxidal_presets::SetOrder,
+    pub rehearsal: rehearsal::Report,
     pub occurrence_edit: oxidal_presets::OccurrenceEdit,
     pub preset_versions: oxidal_presets::VersionView,
     pub preset_version_edit: oxidal_presets::VersionEdit,
@@ -322,7 +328,7 @@ struct Shared {
     graph_playback: graph_playback::GraphPlayback,
     levels: Arc<levels::Levels>,
     midi_map: Arc<oxidal_presets::MidiMapStore>,
-    midi_action: std::sync::Mutex<midi_recall::MidiAction>,
+    midi_action: watch::Sender<midi_recall::MidiAction>,
     set_position: std::sync::Mutex<Option<midi_recall::PlayingOccurrence>>,
     set_recall: tokio::sync::Mutex<()>,
     guitars: Arc<guitars::Store>,
@@ -337,13 +343,13 @@ struct Shared {
     presets: Arc<std::sync::Mutex<oxidal_presets::Store>>,
     events: watch::Sender<Snapshot>,
     protect: Arc<protect::Protect>,
-    keep_ready: keep_ready::Store,
     media: Result<Arc<media::Store>, String>,
     uploads: media_api::Uploads,
     song_write: Arc<tokio::sync::Semaphore>,
     sheet_write: std::sync::Mutex<()>,
     split_jobs: split_jobs::Jobs,
     player: player::Player,
+    tempo: tempo::Tempo,
     venues: venues::Venues,
     captures: capture::Captures,
     config: Config,
@@ -450,10 +456,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         sheet_write: std::sync::Mutex::new(()),
         split_jobs: split_jobs::Jobs::load(),
         player,
+        tempo: tempo::Tempo::load(config.preset_dir.join("tempo.json")),
         venues,
         captures: capture::Captures::new(protect.job_flag()),
         protect: protect.clone(),
-        keep_ready: keep_ready::Store::new(config.preset_dir.join("keep-ready.json")),
         boot: boot.clone(),
         account: provider::Account::new(
             config.preset_dir.join("accounts"),
@@ -499,7 +505,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         audio_change,
         levels,
         midi_map,
-        midi_action: Default::default(),
+        midi_action: watch::channel(Default::default()).0,
         set_position: Default::default(),
         set_recall: Default::default(),
         library_access,
@@ -523,6 +529,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
     monitor_history::start(Arc::downgrade(&shared));
     midi_recall::start(Arc::downgrade(&shared), midi_event_rx);
     player::follow(Arc::downgrade(&shared));
+    tempo::follow(Arc::downgrade(&shared));
     venues::expire(Arc::downgrade(&shared));
     capture::follow(Arc::downgrade(&shared));
     let stopped = WorkersStopped {
@@ -555,6 +562,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             get(local_models::list)
                 .post(local_models::upload)
                 .layer(DefaultBodyLimit::max(oxidal_presets::MAX_FILE_BYTES)),
+        )
+        .route(
+            "/models/local/{id}/levels",
+            get(local_models::capture_levels),
         )
         .route("/models/local/collection", post(local_models::collection))
         .route(
@@ -685,6 +696,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             "/presets/catalog",
             get(presets::catalog).post(presets::manage),
         )
+        .route("/presets/set-list/rehearsal", get(rehearsal::read))
         .route("/presets/set-list/{id}/recall", post(set_order::jump))
         .route(
             "/presets/set-list",
@@ -720,6 +732,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/venues", get(venues::state))
         .route("/venues/commands", post(venues::command))
         .route("/venues/preview/keep", post(venues::keep))
+        .route("/tempo", get(tempo::state).post(tempo::command))
         .route("/player", get(player::state))
         .route("/player/events", get(player::events))
         .route("/player/commands", post(player::command))
@@ -938,12 +951,14 @@ async fn command(
 /// player (`player`), so a few open tabs never exhaust the browser's
 /// connections to the device.
 async fn state_events(State(shared): State<Arc<Shared>>) -> impl IntoResponse {
+    let mut midi = shared.midi_action.subscribe();
     let mut receiver = shared.events.subscribe();
     let mut player = shared.player.subscribe();
     let mut venue = shared.venues.subscribe();
     let mut capture = shared.captures.subscribe();
     let mut shutdown = shared.config.shutdown.clone();
     let stream = async_stream::stream! {
+        let mut midi_changed = true;
         let mut state_changed = true;
         let mut player_changed = true;
         let mut venue_changed = true;
@@ -969,7 +984,17 @@ async fn state_events(State(shared): State<Arc<Shared>>) -> impl IntoResponse {
                 let event = Event::default().event("capture").json_data(snapshot).expect("finite capture state");
                 yield Ok::<Event,Infallible>(event);
             }
+            if midi_changed {
+                let snapshot = midi.borrow_and_update().clone();
+                yield Ok::<Event,Infallible>(Event::default().event("midi-action").json_data(snapshot).expect("serializable MIDI action"));
+            }
+            midi_changed = false;
             tokio::select! {
+                changed = midi.changed() => {
+                    if changed.is_err() { break; }
+                    midi_changed = true;
+                    (state_changed, player_changed, venue_changed, capture_changed) = (false, false, false, false);
+                },
                 changed = receiver.changed() => {
                     if changed.is_err() { break; }
                     (state_changed, player_changed, venue_changed, capture_changed) = (true, false, false, false);

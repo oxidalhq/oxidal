@@ -16,6 +16,7 @@ pub(crate) struct Event {
     pub local_program: bool,
     /// Which controller sent it; bank state is kept per controller and channel.
     pub source: u8,
+    pub received_ms: Option<u64>,
 }
 
 /// Outcome of the newest device-wide MIDI action. `seq` increases with each one
@@ -29,13 +30,13 @@ pub struct MidiAction {
 }
 
 fn record(shared: &Shared, result: &Result<String, String>) {
-    if let Ok(mut action) = shared.midi_action.lock() {
+    shared.midi_action.send_modify(|action| {
         action.seq += 1;
         action.ok = result.is_ok();
         action.message = match result {
             Ok(message) | Err(message) => message.clone(),
         };
-    }
+    });
 }
 
 #[derive(Default)]
@@ -127,6 +128,15 @@ pub(crate) fn start(shared: Weak<Shared>, mut events: mpsc::Receiver<Event>) {
                     }
                     DeviceAction::GuitarNext => {
                         let result = crate::guitars::select_next(&shared).await;
+                        record(&shared, &result);
+                        result.ok()
+                    }
+                    DeviceAction::TapTempo => {
+                        let result = shared
+                            .tempo
+                            .midi_tap(&shared, event.received_ms)
+                            .await
+                            .map(|_| "Tempo tapped".to_owned());
                         record(&shared, &result);
                         result.ok()
                     }
@@ -478,12 +488,12 @@ async fn recall_slot(
 ) -> Result<(), String> {
     let worker = shared.clone();
     let row = target.clone();
-    let expected = expected.to_owned();
+    let admitted_revision = expected.to_owned();
     tokio::task::spawn_blocking(move || {
         let root = &worker.config.preset_dir;
         let catalog = oxidal_presets::CatalogStore::open(root.clone())?;
         let view = catalog.versions(row.entry.preset.kind, &row.entry.preset.id)?;
-        if view.catalog_revision != expected {
+        if view.catalog_revision != admitted_revision {
             return Err(oxidal_presets::Error::Conflict(
                 "Set list changed; reload before recall",
             ));
@@ -505,28 +515,10 @@ async fn recall_slot(
             kind: target.entry.preset.kind,
             id: target.content.clone(),
         },
+        target.entry.settings.scene.as_deref(),
+        expected,
     )
     .await?;
-    if let Some(scene) = &target.entry.settings.scene {
-        let state = shared.rig_playback.snapshot();
-        let control = state.control.ok_or("Starting scene is unavailable")?;
-        shared
-            .rig_playback
-            .dispatch(RigAudioCommand {
-                session: state.session,
-                expected_revision: state.revision,
-                action: RigAudioAction::Scene {
-                    command: oxidal_engine::protocol::SceneCommand {
-                        session: control.session,
-                        expected_revision: control.revision,
-                        scene: scene.clone(),
-                        release_ms: None,
-                        native_bypass_preview: None,
-                    },
-                },
-            })
-            .await?;
-    }
     *shared
         .set_position
         .lock()
@@ -537,12 +529,72 @@ async fn recall_slot(
     Ok(())
 }
 
+const PROTECTED: &str = "Protect is on: MIDI can only switch to presets that are ready. Prepare it or turn Protect off.";
+
+pub(super) enum RigRecallPolicy {
+    Current,
+    Prepared,
+    Loads,
+}
+
+/// The same read-only live admission used by recall and the rehearsal check.
+pub(super) fn rig_recall_policy(shared: &Shared, target: &str) -> Result<RigRecallPolicy, String> {
+    use RigRecallPolicy::*;
+    if shared.audio_change.active() {
+        return Err("Finish the audio settings trial before recall".into());
+    }
+    let state = shared.rig_playback.snapshot();
+    if matches!(state.phase, AudioPhase::Starting | AudioPhase::Stopping) {
+        return Err("Wait for the current mixed audio operation".into());
+    }
+    if state.phase == AudioPhase::Unavailable {
+        return Err("Mixed worker unavailable".into());
+    }
+    if state.phase == AudioPhase::Running {
+        if state
+            .configured
+            .as_ref()
+            .is_some_and(|s| s.revision == target)
+        {
+            return Ok(Current);
+        }
+        if let Some(prepared) = state
+            .control
+            .as_ref()
+            .and_then(|control| control.prepared.iter().find(|row| row.revision == target))
+        {
+            return match &prepared.error {
+                Some(error) => Err(format!("Prepared alternative unavailable: {error}")),
+                None => Ok(Prepared),
+            };
+        }
+        if state
+            .control
+            .as_ref()
+            .is_some_and(|control| control.modified)
+        {
+            return Err("Save or discard mixed-rig edits before MIDI preset recall".into());
+        }
+    }
+    if shared.protect.on() {
+        return Err(PROTECTED.into());
+    }
+    if stream(shared).is_none() {
+        return Err("Choose an audio interface before MIDI recall".into());
+    }
+    Ok(Loads)
+}
+
 async fn recall_target(
     shared: &Arc<Shared>,
     target: oxidal_presets::LibraryReference,
+    scene: Option<&str>,
+    expected_order: &str,
 ) -> Result<(), String> {
+    if shared.audio_change.active() {
+        return Err("Finish the audio settings trial before recall".into());
+    }
     let stream = stream(shared).ok_or("Choose an audio interface before MIDI recall")?;
-    const PROTECTED: &str = "Protect is on: MIDI can only switch to presets that are ready. Prepare it or turn Protect off.";
     match target.kind {
         LibraryKind::Owned => {
             if shared.protect.on() {
@@ -579,70 +631,153 @@ async fn recall_target(
         }
         LibraryKind::Rig => {
             let state = shared.rig_playback.snapshot();
-            if state
-                .configured
-                .as_ref()
-                .is_some_and(|s| s.revision == target.id)
-                && state.phase == AudioPhase::Running
-            {
-                return Ok(());
-            }
-            if let (AudioPhase::Running, Some(control), Some(configured)) = (
-                state.phase,
-                state.control.as_ref(),
-                state.configured.as_ref(),
-            ) && control
-                .prepared
-                .iter()
-                .any(|prepared| prepared.revision == target.id && prepared.error.is_none())
-            {
-                shared
-                    .rig_playback
-                    .dispatch(RigAudioCommand {
+            match rig_recall_policy(shared, &target.id)? {
+                RigRecallPolicy::Current => {
+                    if let Some(scene) = scene {
+                        let control = state.control.ok_or("Starting scene is unavailable")?;
+                        // A new effect endpoint can accept its control write and
+                        // fail during DSP. Check it in isolation before touching
+                        // the already sounding copy of this same preset.
+                        let changes_effect = control
+                            .scenes
+                            .as_ref()
+                            .and_then(|scenes| scenes.scenes.iter().find(|row| row.id == scene))
+                            .is_some_and(|row| {
+                                row.controls.iter().any(|value| {
+                                    control.controls.iter().any(|current| {
+                                        matches!(&current.target,
+                                    oxidal_engine::protocol::Target::Lv2 { node, symbol }
+                                    if *node == value.node && *symbol == value.symbol)
+                                            && current.value != f64::from(value.value as f32)
+                                    })
+                                })
+                            });
+                        if changes_effect {
+                            let mut settings = state.configured.ok_or("Missing playing rig")?;
+                            settings.prepared.clear();
+                            shared
+                                .rig_playback
+                                .check_occurrence(&oxidal_engine::protocol::OccurrenceStart {
+                                    settings,
+                                    scene: scene.into(),
+                                })
+                                .await?;
+                            if set_list(shared).await?.revision != expected_order {
+                                return Err(
+                                    "Set list changed during starting scene preparation".into()
+                                );
+                            }
+                        }
+                        let control_session = control.session.clone();
+                        shared
+                            .rig_playback
+                            .dispatch(RigAudioCommand {
+                                session: state.session,
+                                expected_revision: state.revision,
+                                action: RigAudioAction::Scene {
+                                    command: oxidal_engine::protocol::SceneCommand {
+                                        session: control.session,
+                                        expected_revision: control.revision,
+                                        scene: scene.into(),
+                                        release_ms: None,
+                                        native_bypass_preview: None,
+                                    },
+                                },
+                            })
+                            .await?;
+                        shared
+                            .rig_playback
+                            .confirm_occurrence(&target.id, scene, Some(&control_session))
+                            .await?;
+                    }
+                }
+                RigRecallPolicy::Prepared => {
+                    let control = state.control.ok_or("Prepared preset is unavailable")?;
+                    let configured = state.configured.ok_or("Missing mixed configuration")?;
+                    let action = RigAudioCommand {
                         session: state.session,
                         expected_revision: state.revision,
                         action: RigAudioAction::Switch {
                             command: SwitchCommand {
-                                session: control.session.clone(),
+                                session: control.session,
                                 expected_revision: control.revision,
                                 revision: target.id,
                                 fade_frames: (configured.stream.input.sample_rate / 100).max(2),
                             },
                         },
-                    })
-                    .await?;
-                return Ok(());
+                    };
+                    if let Some(scene) = scene {
+                        shared
+                            .rig_playback
+                            .dispatch_occurrence(action, scene.into())
+                            .await?;
+                    } else {
+                        shared.rig_playback.dispatch(action).await?;
+                    }
+                }
+                RigRecallPolicy::Loads => {
+                    let settings = StartRig {
+                        revision: target.id.clone(),
+                        stream,
+                        recall: None,
+                        prepared: vec![],
+                        midi: None,
+                    };
+                    if let Some(scene) = scene {
+                        // Establish the exact endpoint in a real isolated worker
+                        // using the same saved resources and stream geometry.
+                        shared
+                            .rig_playback
+                            .check_occurrence(&oxidal_engine::protocol::OccurrenceStart {
+                                settings: settings.clone(),
+                                scene: scene.into(),
+                            })
+                            .await?;
+                    }
+                    if scene.is_some() {
+                        if set_list(shared).await?.revision != expected_order {
+                            return Err("Set list changed during starting scene preparation".into());
+                        }
+                        if !matches!(
+                            rig_recall_policy(shared, &target.id)?,
+                            RigRecallPolicy::Loads
+                        ) {
+                            return Err(
+                                "Playing rig changed during starting scene preparation".into()
+                            );
+                        }
+                    }
+                    stop_native(shared).await?;
+                    stop_graph(shared).await?;
+                    if scene.is_none() {
+                        stop_mixed(shared).await?;
+                    }
+                    let state = if scene.is_some() {
+                        state
+                    } else {
+                        shared.rig_playback.snapshot()
+                    };
+                    let action = RigAudioCommand {
+                        session: state.session,
+                        expected_revision: state.revision,
+                        action: RigAudioAction::Start {
+                            settings: Box::new(settings),
+                        },
+                    };
+                    if let Some(scene) = scene {
+                        shared
+                            .rig_playback
+                            .dispatch_occurrence(action, scene.into())
+                            .await?;
+                        shared
+                            .rig_playback
+                            .confirm_occurrence(&target.id, scene, None)
+                            .await?;
+                    } else {
+                        shared.rig_playback.dispatch(action).await?;
+                    }
+                }
             }
-            if state
-                .control
-                .as_ref()
-                .is_some_and(|control| control.modified)
-            {
-                return Err("Save or discard mixed-rig edits before MIDI preset recall".into());
-            }
-            if shared.protect.on() {
-                return Err(PROTECTED.into());
-            }
-            stop_native(shared).await?;
-            stop_graph(shared).await?;
-            stop_mixed(shared).await?;
-            let state = shared.rig_playback.snapshot();
-            shared
-                .rig_playback
-                .dispatch(RigAudioCommand {
-                    session: state.session,
-                    expected_revision: state.revision,
-                    action: RigAudioAction::Start {
-                        settings: Box::new(StartRig {
-                            revision: target.id,
-                            stream,
-                            recall: None,
-                            prepared: vec![],
-                            midi: None,
-                        }),
-                    },
-                })
-                .await?;
         }
         _ => return Err("MIDI set list contains an unsupported preset".into()),
     }
@@ -704,6 +839,7 @@ mod tests {
             message,
             local_program: false,
             source: 0,
+            received_ms: None,
         }
     }
 
@@ -770,6 +906,7 @@ mod tests {
             message,
             local_program: false,
             source,
+            received_ms: None,
         };
         let bank = |value| Message::Control {
             channel: 1,
@@ -824,6 +961,7 @@ mod tests {
                 },
                 local_program: true,
                 source: 0,
+                received_ms: None,
             }),
             None
         );

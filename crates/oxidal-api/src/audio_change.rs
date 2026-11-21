@@ -158,12 +158,32 @@ pub enum AudioChangeRequest {
 
 /// Private actor messages. Only the daemon transaction can mint these.
 pub(super) enum OwnerRequest<C> {
+    Tempo {
+        worker_session: String,
+        bpm: Option<f32>,
+    },
     Action(C),
-    Apply { id: String, action: C },
-    Restore { id: String, action: C },
-    Commit { id: String },
-    SealRollback { id: String },
-    Stop { id: String },
+    Occurrence {
+        action: C,
+        scene: String,
+    },
+    Apply {
+        id: String,
+        action: C,
+    },
+    Restore {
+        id: String,
+        action: C,
+    },
+    Commit {
+        id: String,
+    },
+    SealRollback {
+        id: String,
+    },
+    Stop {
+        id: String,
+    },
 }
 
 pub(super) type OwnerMessage<C, S> = (

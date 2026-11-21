@@ -19,7 +19,7 @@ import {
   sceneDraft as sharedSceneDraft,
 } from '../../api';
 import { EditQueue } from '../../editQueue';
-import type { RigPublish } from '../../generated/contract';
+import type { RigPublish, VersionTarget } from '../../generated/contract';
 import { errorDetails, friendlyError } from '../../lib/friendlyError';
 import { useFailure } from '../../lib/useFailure';
 import { useNarrow } from '../../lib/useNarrow';
@@ -1198,7 +1198,7 @@ export function useMixedRigSession({
       onClose: clearSelection,
     },
   };
-  async function saveCopy() {
+  async function saveCopy(target?: VersionTarget) {
     const cursor = current.current;
     if (
       !cursor ||
@@ -1211,7 +1211,13 @@ export function useMixedRigSession({
       setError('The rig changed. Close and reopen Save copy.');
       return;
     }
-    if (await command({ kind: 'save', name: name.trim() }))
+    if (
+      await command(
+        target
+          ? { kind: 'save_version', name: name.trim(), target }
+          : { kind: 'save', name: name.trim() },
+      )
+    )
       setSaveOpening(null);
   }
   async function resolveMixedCopy(keep: boolean) {
@@ -1300,6 +1306,7 @@ export function useMixedRigSession({
   }
   return {
     view,
+    sourceOrigin,
     connected,
     revision,
     matching,

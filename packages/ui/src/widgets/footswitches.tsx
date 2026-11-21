@@ -17,7 +17,7 @@ export type StageState = {
   tuner: boolean;
   playing: boolean;
   loop: boolean;
-  bpm: number;
+  bpm?: number | null;
 };
 
 function describe(
@@ -46,7 +46,10 @@ function describe(
     case 'tuner':
       return { label: 'Tuner', on: state.tuner };
     case 'tap':
-      return { label: `Tap ${Math.round(state.bpm)}`, on: false };
+      return {
+        label: state.bpm == null ? 'Tap tempo' : `Tap ${Math.round(state.bpm)}`,
+        on: false,
+      };
     case 'boost':
       return { label: 'Boost', on: state.boost };
     case 'play':

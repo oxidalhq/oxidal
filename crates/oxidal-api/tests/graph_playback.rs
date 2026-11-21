@@ -311,6 +311,7 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
     // Reopen the durable document through a fresh Start, not retained worker state.
     apply(&c, &url, &mut s, json!({"kind":"stop"})).await;
     let mut recalled = settings();
+    recalled["library_id"] = saved_id.clone();
     for key in ["name", "rig", "bindings", "recall"] {
         recalled[key] = saved[0]["preset"][key].clone();
     }
@@ -323,6 +324,21 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
     .await;
     assert_eq!(s["native_values"][0]["value"], 70.0);
     assert_eq!(s["control"]["rig"], routed);
+    let versions = format!(
+        "presets/catalog/graph/{}/versions",
+        saved_id.as_str().unwrap()
+    );
+    let family = get(&c, &url, &versions).await;
+    apply(&c,&url,&mut s,json!({"kind":"save_version","name":"Effects check",
+        "target":{"first":saved_id,"expected_content":saved_id,"expected_revision":family["catalog_revision"],
+        "version":"main","request_id":"effects-save"}})).await;
+    assert_eq!(s["phase"], "running");
+    let default_content = s["saved_copy"].clone();
+    assert_ne!(default_content, saved_id);
+    assert_eq!(
+        get(&c, &url, &versions).await["preset"]["versions"][0]["content"],
+        s["saved_copy"]
+    );
     // Kill only our direct child with the verified graph-worker executable. No user processes.
     let pid = worker_pid(&executable);
     assert!(
@@ -486,7 +502,9 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
     assert_eq!(s["phase"], "unavailable");
     assert_eq!(s["start_on_boot"], false);
     assert!(!boot_path.exists());
-    assert_eq!(get(&c, &url, "presets/graphs").await[0]["id"], saved_id);
+    let library = get(&c, &url, "presets/graphs").await;
+    assert_eq!(library.as_array().unwrap().len(), 1);
+    assert_eq!(library[0]["id"], default_content);
     shutdown.send_replace(true);
     tokio::time::timeout(Duration::from_secs(5), stopped.wait())
         .await

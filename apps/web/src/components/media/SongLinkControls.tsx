@@ -17,9 +17,12 @@ import {
 import {
   type LibraryCatalog,
   libraryCatalog,
+  type SetOrder,
+  setOrder,
   type SongLinks,
   songLinks,
   type SongLinkUpdate,
+  songView,
 } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
 import { useSessionMedia } from './sessionMedia';
@@ -222,10 +225,8 @@ export function CueLinkedMix({
   scope: Target['scope'];
   disabled: boolean;
 }) {
-  const { player, ready, send } = useSessionMedia();
-  const { ask, dialog } = useConfirm();
+  const { ready } = useSessionMedia();
   const [links, setLinks] = useState<SongLinks | null>(null);
-  const [error, setError] = useState('');
   const { id, kind } = preset;
   useEffect(() => {
     if (!ready) return;
@@ -253,13 +254,76 @@ export function CueLinkedMix({
     );
   const link = find(links);
   if (!ready || !link) return null;
-  const cued = !!link.asset && player?.track?.id === link.asset;
+  return (
+    <CueBackingButton
+      title={link.title ?? 'Mix unavailable'}
+      asset={link.asset}
+      disabled={disabled}
+      resolve={async () => {
+        const latest = await songLinks();
+        setLinks(latest);
+        return find(latest)?.asset;
+      }}
+    />
+  );
+}
+
+/** Resolve the selected occurrence and its latest rendered mix only upon a deliberate cue. */
+export function CueEntryBacking({
+  row,
+  disabled,
+}: {
+  row: SetOrder['entries'][number];
+  disabled: boolean;
+}) {
+  const media = useSessionMedia();
+  const { track, mix } = row.entry.settings;
+  if (!media.ready || !track) return null;
+  const name =
+    media.tracks.find((t) => t.id === track)?.title ?? 'Linked track';
+  return (
+    <CueBackingButton
+      title={mix ? name + ' · saved mix' : name}
+      asset={mix ? undefined : track}
+      available={true}
+      disabled={disabled}
+      resolve={async () => {
+        const current = (await setOrder()).entries.find(
+          (r) => r.entry.id === row.entry.id,
+        )?.entry.settings;
+        if (!current || current.track !== track || current.mix !== mix)
+          throw new Error('The entry changed. Reopen it before cueing.');
+        return mix
+          ? (await songView(track)).mixes.find((m) => m.id === mix)?.asset
+          : track;
+      }}
+    />
+  );
+}
+function CueBackingButton({
+  title,
+  asset,
+  available = !!asset,
+  disabled,
+  resolve,
+}: {
+  title: string;
+  asset?: string | null;
+  available?: boolean;
+  disabled: boolean;
+  resolve: () => Promise<string | null | undefined>;
+}) {
+  const { player, pending, send } = useSessionMedia();
+  const { ask, dialog } = useConfirm();
+  const [error, setError] = useState('');
+  const [resolving, setResolving] = useState(false);
+  const cued = !!asset && player?.track?.id === asset;
   async function cue() {
+    if (resolving) return;
+    setResolving(true);
     setError('');
     try {
-      const latest = await songLinks();
-      setLinks(latest);
-      const asset = find(latest)?.asset;
+      const asset = await resolve();
       if (!asset) {
         setError('This backing mix is no longer available.');
         return;
@@ -277,18 +341,20 @@ export function CueLinkedMix({
       await send({ kind: 'cue', asset });
     } catch (cause) {
       setError(deviceSentence(cause, 'cue the backing mix'));
+    } finally {
+      setResolving(false);
     }
   }
   return (
-    <div className="stem-cue" data-missing={!link.asset || undefined}>
+    <div className="stem-cue" data-missing={!available || undefined}>
       <MusicNotes aria-hidden="true" />
       <span className="stem-cue-title">
         <span className="caption">Backing </span>
-        {link.title ?? 'Mix unavailable'}
+        {title}
       </span>
       <Button
         variant="outline"
-        disabled={disabled || !link.asset || cued}
+        disabled={disabled || !available || cued || pending || resolving}
         onClick={() => void cue()}
       >
         {cued ? 'Cued' : 'Cue backing'}

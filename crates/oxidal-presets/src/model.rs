@@ -582,14 +582,26 @@ impl ModelStore {
         asset.validate()?;
         Ok(asset)
     }
-    pub fn read(&self, id: &str) -> Result<(ModelAsset, PathBuf)> {
+    fn verified_file(&self, id: &str) -> Result<(ModelAsset, PathBuf, Vec<u8>)> {
         let asset = self.metadata(id)?;
         let model = self.root.join(id).join(asset.filename());
         let bytes = read(&model, MAX_FILE_BYTES)?;
         if bytes.is_empty() || digest(&bytes) != asset.sha256 {
             return Err(Error::Invalid("Model content integrity failed"));
         }
-        Ok((asset, fs::canonicalize(model)?))
+        Ok((asset, fs::canonicalize(model)?, bytes))
+    }
+    pub fn read(&self, id: &str) -> Result<(ModelAsset, PathBuf)> {
+        let (asset, path, _) = self.verified_file(id)?;
+        Ok((asset, path))
+    }
+    /// Read capture references from verified bytes, including older local and downloaded files.
+    pub fn capture_levels(&self, id: &str) -> Result<crate::CaptureLevels> {
+        let (asset, _, bytes) = self.verified_file(id)?;
+        if asset.format != "nam" {
+            return Err(Error::Invalid("Choose a NAM capture"));
+        }
+        crate::CaptureLevels::read(&bytes)
     }
     pub fn stage(&self, asset: &ModelAsset, bytes: &[u8]) -> Result<String> {
         asset.validate()?;

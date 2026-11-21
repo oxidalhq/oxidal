@@ -1,9 +1,12 @@
 import { ArrowSquareOut } from '@phosphor-icons/react';
 import { useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
+
 import { AdjustmentDialog } from './AdjustmentDialog';
-import { type LocalModel, toneImage } from './api';
+import { captureLevels, type LocalModel, toneImage } from './api';
 import { GearIcon } from './GearIcon';
+import { friendlyError } from './lib/friendlyError';
 import { LibraryModelAudition } from './LibraryModelAudition';
 import { modelSourceLink, modelToneId } from './modelProvenance';
 import { ToneDetails } from './ToneDetails';
@@ -20,6 +23,50 @@ export function ModelPicture({ model }: { model: LocalModel }) {
     />
   ) : (
     <GearIcon gear={model.gear || 'experimental'} />
+  );
+}
+
+function ModelLevels({ id }: { id: string }) {
+  const [levels, setLevels] =
+    useState<Awaited<ReturnType<typeof captureLevels>>>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function inspect() {
+    setBusy(true);
+    setError('');
+    try {
+      setLevels(await captureLevels(id));
+    } catch (cause) {
+      setError(friendlyError(cause, 'read the capture levels'));
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (levels) {
+    const label = (value: number | null | undefined) =>
+      value == null ? 'Unknown' : value + ' dBu';
+    return (
+      <dl className="media-facts">
+        <dt>Capture input reference</dt>
+        <dd>{label(levels.input_dbu)}</dd>
+        <dt>Capture output reference</dt>
+        <dd>{label(levels.output_dbu)}</dd>
+        {levels.gear_type && (
+          <>
+            <dt>Capture type</dt>
+            <dd>{levels.gear_type}</dd>
+          </>
+        )}
+      </dl>
+    );
+  }
+  return (
+    <div>
+      <Button variant="outline" disabled={busy} onClick={() => void inspect()}>
+        {busy ? 'Reading capture…' : 'Read capture levels'}
+      </Button>
+      {error && <p role="alert">{error}</p>}
+    </div>
   );
 }
 
@@ -83,6 +130,7 @@ export function LibraryModelPreview({
           </div>
         )}
         <p className="library-meta break-words">File: {model.name}</p>
+        <ModelLevels id={model.id} />
         <LibraryModelAudition asset={model.id} onOpenRig={onOpenRig} />
       </div>
     </AdjustmentDialog>

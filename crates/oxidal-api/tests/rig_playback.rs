@@ -206,6 +206,32 @@ async fn scene_bypass_survives_mixed_worker_restart_and_independent_save() {
     .await;
     assert_eq!(reopened["control"]["scene"], "dry");
     assert_eq!(control(&reopened, &bypass), 1.0);
+    let versions = format!("presets/catalog/rig/{saved}/versions");
+    let family = get(&client, &url, &versions).await;
+    apply(&client,&url,json!({"kind":"save_version","name":"Sounding scene revision","target":{
+        "first": saved, "expected_content": saved, "expected_revision":family["catalog_revision"],
+        "version":"main","request_id":"mixed-scene-save"}
+    })).await;
+    let mut published = None;
+    for _ in 0..200 {
+        let state = get(&client, &url, "rig-audio").await;
+        if state["save"]["running"] == false {
+            assert_eq!(state["save"]["error"], Value::Null, "{state}");
+            assert_eq!(state["control"]["session"], reopened["control"]["session"]);
+            published = state["save"]["saved_revision"].as_str().map(str::to_owned);
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    let published = published.expect("named mixed Save timed out");
+    assert_eq!(
+        get(&client, &url, &versions).await["preset"]["versions"][0]["content"],
+        published
+    );
+    assert_eq!(
+        store.read(&published).unwrap().manifest().name,
+        "Sounding scene revision"
+    );
     shutdown.send(true).unwrap();
     tokio::time::timeout(Duration::from_secs(5), stopped.wait())
         .await
@@ -1423,6 +1449,316 @@ async fn warm_native_candidate_refusal_keeps_pcm_and_valid_edit_rearms() {
         .await
         .unwrap()
         .unwrap();
+    server.abort();
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
+#[ignore = "uses a real qualification Mixed worker, null PCM and the maintained LV2 tail fixture"]
+async fn repeated_set_entry_confirms_its_scene_before_replacing_the_playing_rig() {
+    use oxidal_presets::{
+        Bundle,
+        manifest::{GAIN_EXTENSION, SCENES_CONTROLS_EXTENSION},
+    };
+    let _worker_test = WORKER_TEST.lock().await;
+    let executable = std::path::PathBuf::from(std::env::var_os("OXIDAL_TEST_RIG_WORKER").unwrap());
+    assert_eq!(std::env::var("OXIDAL_RIG_QUALIFY_NULL").unwrap(), "1");
+    let root =
+        std::env::temp_dir().join(format!("oxidal-occurrence-recall-{}", std::process::id()));
+    let store = BundleStore::new(root.join("presets/bundles"));
+    let edge = |a, ap, b, bp| json!({"from":{"node":a,"port":ap},"to":{"node":b,"port":bp}});
+    let save = |id: &str, name: &str, alternate_gain: u8| {
+        let scene = |id, gain, effect_gain| {
+            json!({"id":id,"name":id,
+            "gains":[{"node":"level","port":0,"value":gain}],
+            "controls":[{"node":"fx","symbol":"gain","value":effect_gain}]})
+        };
+        let manifest = json!({
+            "format":"oxidal.preset","formatVersion":1,"id":id,"name":name,
+            "tone3000":{"instances":[]},"resources":[],
+            "requiredExtensions":[GAIN_EXTENSION,SCENES_CONTROLS_EXTENSION],
+            "extensions":{GAIN_EXTENSION:{},SCENES_CONTROLS_EXTENSION:{"fade_ms":30,
+                "scenes":[scene("a",1.0,1),scene("b",0.5,alternate_gain)]}},
+            "oxidal":{"graph":{"nodes":[
+                {"id":"in","kind":"input","audioInputs":0,"audioOutputs":2},
+                {"id":"fx","kind":"lv2","instance":"fx","bypassed":false,"audioInputs":2,"audioOutputs":2},
+                {"id":"level","kind":"gain","audioInputs":1,"audioOutputs":1,"inputGains":[1]},
+                {"id":"out","kind":"output","audioInputs":2,"audioOutputs":0}
+            ],"edges":[edge("in",0,"fx",0),edge("fx",0,"level",0),edge("level",0,"out",0),edge("in",1,"fx",1),edge("fx",1,"out",1)]},
+            "lv2":[{"id":"fx","pluginUri":"urn:oxidal:test:sleep-tail","controls":{"gain":1,"feedback":0},
+                "assets":[],"requiredFeatures":[]}],"recall":{"tails":"cut"}}
+        });
+        let bundle =
+            Bundle::from_parts(serde_json::to_vec(&manifest).unwrap(), Default::default()).unwrap();
+        store.save(&bundle).unwrap()
+    };
+    let old = save("68448a6d-0168-4fc8-b337-c12959165271", "Sounding", 1);
+    let prepared = save("68448a6d-0168-4fc8-b337-c12959165272", "Repeated", 1);
+    // Gain 2 is accepted as a scalar. Its first DSP block produces NaN,
+    // which must fail the candidate while it is still inaudible.
+    let bad = save(
+        "68448a6d-0168-4fc8-b337-c12959165273",
+        "Prepared refusal",
+        2,
+    );
+    let cold_bad = save("68448a6d-0168-4fc8-b337-c12959165274", "Cold refusal", 2);
+    let cold_ok = save("68448a6d-0168-4fc8-b337-c12959165275", "Cold success", 1);
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let (app, stopped) = router_with_shutdown(Config {
+        debug_socket: None,
+        device_socket: None,
+        simulator: false,
+        native_worker: None,
+        audio_worker: None,
+        graph_worker: None,
+        rig_worker: Some(executable.clone()),
+        mapping_path: root.join("mapping.json"),
+        preset_dir: root.join("presets"),
+        media_dir: None,
+        ui_dir: root.join("ui"),
+        shutdown: Some(signal),
+    })
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let c = Client::builder()
+        .timeout(Duration::from_secs(35))
+        .build()
+        .unwrap();
+    let write = |path: String, body: Value| c.post(format!("{url}/{path}")).json(&body).send();
+    for id in [&old, &prepared, &bad, &cold_bad, &cold_ok] {
+        let cat = get(&c, &url, "presets/catalog").await;
+        let response = write(
+            "presets/catalog".into(),
+            json!({
+                "expected_revision":cat["revision"],"entry_kind":"rig","id":id,
+                "action":{"kind":"set_list","member":true}
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(
+            response.status().is_success(),
+            "{}",
+            response.text().await.unwrap()
+        );
+    }
+    let mut order = get(&c, &url, "presets/set-list").await;
+    let occurrence = |order: &Value, digest: &str| {
+        order["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["content"] == digest)
+            .unwrap()["entry"]["id"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    let first = occurrence(&order, &prepared);
+    let bad_id = occurrence(&order, &bad);
+    let cold_bad_id = occurrence(&order, &cold_bad);
+    let cold_ok_id = occurrence(&order, &cold_ok);
+    let response = write("presets/set-list".into(), json!({
+        "expected_revision":order["revision"],"entry":first,"action":{"kind":"repeat","new_id":"repeat"}
+    })).await.unwrap();
+    assert!(
+        response.status().is_success(),
+        "{}",
+        response.text().await.unwrap()
+    );
+    order = response.json().await.unwrap();
+    for (id, scene) in [
+        (&*first, "b"),
+        ("repeat", "a"),
+        (&*bad_id, "b"),
+        (&*cold_bad_id, "b"),
+        (&*cold_ok_id, "b"),
+    ] {
+        let response = write("presets/set-list".into(), json!({
+            "expected_revision":order["revision"],"entry":id,"action":{"kind":"change","settings":{"scene":scene}}
+        })).await.unwrap();
+        assert!(
+            response.status().is_success(),
+            "{}",
+            response.text().await.unwrap()
+        );
+        order = response.json().await.unwrap();
+    }
+    // Membership order is independent of fixture publication. Put the
+    // deliberately failing entry right after the repeated occurrence.
+    let entries = order["entries"].as_array().unwrap();
+    let repeat_index = entries
+        .iter()
+        .position(|row| row["entry"]["id"] == "repeat")
+        .unwrap();
+    let successor = entries
+        .get(repeat_index + 1)
+        .and_then(|row| row["entry"]["id"].as_str());
+    if successor != Some(bad_id.as_str()) {
+        let response = write(
+            "presets/set-list".into(),
+            json!({
+                "expected_revision":order["revision"],"entry":bad_id,
+                "action":{"kind":"place","before":successor}
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(
+            response.status().is_success(),
+            "{}",
+            response.text().await.unwrap()
+        );
+        order = response.json().await.unwrap();
+    }
+    apply(
+        &c,
+        &url,
+        json!({"kind":"start","settings":{
+            "revision":old,"stream":stream(),"recall":null,
+            "prepared":[{"revision":prepared,"recall":null},{"revision":bad,"recall":null}]
+        }}),
+    )
+    .await;
+    let tap = || write("tempo".into(), json!({"kind":"tap"}));
+    tap().await.unwrap().error_for_status().unwrap();
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let tempo: Value = tap()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(tempo["source"], "tap");
+    assert!(tempo["bpm"].as_f64().is_some(), "{tempo}");
+    let protect = |on| write("protect".into(), json!({"on":on}));
+    protect(true).await.unwrap().error_for_status().unwrap();
+    let jump = |id: &str| {
+        write(
+            format!("presets/set-list/{id}/recall"),
+            json!({"expected_revision":order["revision"]}),
+        )
+    };
+    let response = jump(&first).await.unwrap();
+    assert_eq!(response.status(), 204, "{}", response.text().await.unwrap());
+    let first_state = get(&c, &url, "rig-audio").await;
+    assert_eq!(first_state["configured"]["revision"], prepared);
+    assert_eq!(first_state["control"]["scene"], "b");
+    assert_eq!(first_state["control"]["scene_transitioning"], false);
+    assert_eq!(
+        control(
+            &first_state,
+            &json!({"kind":"merge","node":"level","port":0})
+        ),
+        0.5
+    );
+
+    let response = write("midi/navigate".into(), json!({"direction":"next"}))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 204, "{}", response.text().await.unwrap());
+    let previous = get(&c, &url, "rig-audio").await;
+    assert_eq!(previous["control"]["scene"], "a");
+    assert_eq!(
+        previous["control"]["session"],
+        first_state["control"]["session"]
+    );
+    assert_eq!(get(&c, &url, "tempo").await, tempo);
+    write(
+        "player/commands".into(),
+        json!({"requestId":"stop-for-tempo","origin":"api","command":{"kind":"stop"}}),
+    )
+    .await
+    .unwrap()
+    .error_for_status()
+    .unwrap();
+    let after_stop = get(&c, &url, "rig-audio").await;
+    assert_eq!(after_stop["phase"], "running");
+    assert_eq!(
+        after_stop["control"]["session"],
+        previous["control"]["session"]
+    );
+    assert_eq!(get(&c, &url, "tempo").await, tempo);
+    let previous_pid = pids(&executable);
+    assert_eq!(previous_pid.len(), 1);
+    for (index, id) in [&bad_id, &cold_bad_id].into_iter().enumerate() {
+        if index == 1 {
+            let protected = jump(id).await.unwrap();
+            assert_eq!(protected.status(), 409);
+            assert!(protected.text().await.unwrap().contains("Protect"));
+            protect(false).await.unwrap().error_for_status().unwrap();
+        }
+        let response = jump(id).await.unwrap();
+        assert_eq!(response.status(), 409, "{}", response.text().await.unwrap());
+        assert!(
+            response
+                .text()
+                .await
+                .unwrap()
+                .to_lowercase()
+                .contains("nonfinite")
+        );
+        let after = get(&c, &url, "rig-audio").await;
+        assert_eq!(after["control"]["session"], previous["control"]["session"]);
+        assert_eq!(after["control"]["scene"], "a");
+        assert_eq!(after["configured"]["revision"], prepared);
+        assert!(
+            after["processed_frames"].as_u64().unwrap()
+                > previous["processed_frames"].as_u64().unwrap()
+        );
+        assert_eq!(pids(&executable), previous_pid);
+        assert_eq!(
+            get(&c, &url, "midi/position").await["occurrence"]["entry"]["id"],
+            "repeat"
+        );
+    }
+    let response = write("midi/navigate".into(), json!({"direction":"next"}))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 409, "{}", response.text().await.unwrap());
+    assert_eq!(
+        get(&c, &url, "midi/position").await["occurrence"]["entry"]["id"],
+        "repeat"
+    );
+    let response = jump(&cold_ok_id).await.unwrap();
+    assert_eq!(response.status(), 204, "{}", response.text().await.unwrap());
+    let current = get(&c, &url, "rig-audio").await;
+    assert_eq!(current["control"]["scene"], "b");
+    assert_eq!(current["control"]["scene_transitioning"], false);
+    assert_eq!(current["configured"]["revision"], cold_ok);
+    assert_eq!(
+        get(&c, &url, "midi/position").await["occurrence"]["entry"]["id"],
+        cold_ok_id
+    );
+
+    apply(&c, &url, json!({"kind":"stop"})).await;
+    let already_playing = apply(
+        &c,
+        &url,
+        json!({"kind":"start","settings":{
+            "revision":bad,"stream":stream(),"recall":null
+        }}),
+    )
+    .await;
+    assert_eq!(already_playing["control"]["scene"], "a");
+    let same_pid = pids(&executable);
+    let response = jump(&bad_id).await.unwrap();
+    assert_eq!(response.status(), 409, "{}", response.text().await.unwrap());
+    let refused = get(&c, &url, "rig-audio").await;
+    assert_eq!(refused["phase"], "running");
+    assert_eq!(
+        refused["control"]["session"],
+        already_playing["control"]["session"]
+    );
+    assert_eq!(refused["control"]["scene"], "a");
+    assert_eq!(pids(&executable), same_pid);
+
+    shutdown.send_replace(true);
+    stopped.wait().await.unwrap();
     server.abort();
     std::fs::remove_dir_all(root).unwrap();
 }

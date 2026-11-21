@@ -335,28 +335,62 @@ impl Session {
         else {
             return Ok(());
         };
+        self.prepare_initial_scene(scene)?;
+        self.state.revision = 0;
+        self.initial.clone_from(&self.state.controls);
+        Ok(())
+    }
+    /// An isolated candidate has never received live input. Set the endpoint
+    /// directly before the first PCM sample and keep the saved baseline intact.
+    pub fn prepare_initial_scene(&mut self, scene: String) -> Result<(), String> {
+        let previous: Vec<_> = self.state.controls.iter().map(|c| c.value).collect();
+        self.select_starting_scene(scene.clone())?;
+        if self.sleep_pending.is_some() {
+            return Err("Starting scene requires live branch preparation".into());
+        }
+        for (index, old) in previous.into_iter().enumerate() {
+            let control = &self.state.controls[index];
+            if matches!(control.target, Target::Lv2 { .. }) && old != control.value {
+                self.set(index, control.value)
+                    .map_err(|error| error.to_string())?;
+            }
+        }
+        self.graph.finish_preparation()?;
+        self.capture_fade_remaining = 0;
+        self.scene_readback = false;
+        if self.snapshot().scene.as_deref() != Some(scene.as_str()) {
+            return Err("Could not confirm the starting scene".into());
+        }
+        Ok(())
+    }
+
+    pub(crate) fn select_starting_scene(&mut self, scene: String) -> Result<(), String> {
         self.select_scene(SceneCommand {
             session: self.state.session.clone(),
             expected_revision: self.state.revision,
             scene,
             release_ms: None,
             native_bypass_preview: None,
-        })?;
-        for index in 0..self.state.controls.len() {
-            let control = &self.state.controls[index];
-            if matches!(control.target, Target::Lv2 { .. })
-                && self.initial[index].value != control.value
-            {
-                self.set(index, control.value).map_err(|e| e.to_string())?;
-            }
-        }
-        self.graph.finish_preparation()?;
-        self.capture_fade_remaining = 0;
-        self.scene_readback = false;
-        self.state.revision = 0;
-        self.initial.clone_from(&self.state.controls);
-        Ok(())
+        })
     }
+
+    pub(crate) fn starting_scene_ready(&self, scene: &str) -> Result<bool, String> {
+        if let Some(message) = &self.sleep_message {
+            return Err(message.clone());
+        }
+        if self.sleep_pending.is_some()
+            || self.graph.scene_transitioning()
+            || self.capture_fade_remaining > 0
+            || self.scene_readback
+        {
+            return Ok(false);
+        }
+        if self.snapshot().scene.as_deref() != Some(scene) {
+            return Err("Could not confirm the starting scene".into());
+        }
+        Ok(true)
+    }
+
     fn reply_fits(&mut self) -> Result<bool, String> {
         let fits = |session: &Session| {
             serde_json::to_vec(&session.snapshot())

@@ -61,6 +61,16 @@ pub(super) struct VersionReceipt {
     response: VersionView,
 }
 
+impl VersionView {
+    pub fn content(&self, version: &str) -> Result<&str> {
+        self.preset
+            .versions
+            .iter()
+            .find(|v| v.id == version)
+            .map(|v| v.content.as_str())
+            .ok_or(Error::Invalid("Saved version is unavailable"))
+    }
+}
 impl PresetFamily {
     pub(super) fn legacy(kind: LibraryKind, first: &str) -> Result<Self> {
         Ok(Self {
@@ -168,13 +178,12 @@ impl CatalogStore {
     }
 
     pub fn logical_source(&self, kind: LibraryKind, content: &str) -> Result<String> {
-        kind.key(content)?;
+        let key = kind.key(content)?;
+        if self.preferences.families.contains_key(&key) {
+            return Ok(content.into());
+        }
         let mut families = self.preferences.families.values().filter(|family| {
-            family.kind == kind
-                && family
-                    .versions
-                    .iter()
-                    .any(|v| v.id == family.default_version && v.content == content)
+            family.kind == kind && family.versions.iter().any(|v| v.content == content)
         });
         let Some(family) = families.next() else {
             return Ok(content.into());
@@ -210,11 +219,87 @@ impl CatalogStore {
     }
 
     /// The verified content store stages new bytes before the pointer transaction.
+    /// Publish a checked export into the selected version, preserving prior contents.
+    pub fn publish_version(
+        root: &std::path::Path,
+        kind: LibraryKind,
+        source: &str,
+        target: oxidal_audio::lifecycle::VersionTarget,
+        content: &str,
+        publish: impl FnOnce() -> Result<()>,
+    ) -> Result<VersionView> {
+        Self::publish_export(root, kind, source, target, content, None, publish)
+    }
+
+    /// Reconstructing an export can produce fresh native file identifiers. Bind
+    /// retries to the original verified input and return the first saved digest.
+    pub fn publish_export(
+        root: &std::path::Path,
+        kind: LibraryKind,
+        source: &str,
+        target: oxidal_audio::lifecycle::VersionTarget,
+        content: &str,
+        input_hash: Option<&str>,
+        publish: impl FnOnce() -> Result<()>,
+    ) -> Result<VersionView> {
+        let fingerprint = input_hash
+            .map(|input| {
+                let bytes = serde_json::to_vec(&("live-export", kind, &target, input))
+                    .map_err(|_| Error::Invalid("Invalid version export input"))?;
+                Ok::<_, Error>(format!("{:x}", Sha256::digest(bytes)))
+            })
+            .transpose()?;
+        if source != target.expected_content {
+            return Err(Error::Conflict(
+                "The selected version has a different source",
+            ));
+        }
+        let mut catalog = Self::open(root.to_owned())?;
+        if catalog.logical_source(kind, &target.first)? != target.first {
+            return Err(Error::Conflict(
+                "Choose the logical preset for this version",
+            ));
+        }
+        kind.key(content)?;
+        let path = match kind {
+            LibraryKind::Owned => root.join("owned").join(content),
+            LibraryKind::Graph => root.join("graphs").join(format!("{content}.json")),
+            LibraryKind::Rig => root.join("bundles").join(content),
+            LibraryKind::Original => return Err(Error::Invalid("Save a copy in Mine first")),
+        };
+        let edit = VersionEdit {
+            version: target.version,
+            expected_content: target.expected_content,
+            expected_revision: target.expected_revision,
+            request_id: target.request_id,
+            action: VersionAction::Publish {
+                content: content.into(),
+            },
+        };
+        catalog.edit_with_receipt(kind, &target.first, edit, fingerprint, || {
+            if !path.try_exists()? {
+                Self::mark_version_payload(root, kind, content)?;
+            }
+            publish()
+        })
+    }
+
     pub fn edit_version_after(
         &mut self,
         kind: LibraryKind,
         first: &str,
         edit: VersionEdit,
+        publish: impl FnOnce() -> Result<()>,
+    ) -> Result<VersionView> {
+        self.edit_with_receipt(kind, first, edit, None, publish)
+    }
+
+    fn edit_with_receipt(
+        &mut self,
+        kind: LibraryKind,
+        first: &str,
+        edit: VersionEdit,
+        fingerprint: Option<String>,
         publish: impl FnOnce() -> Result<()>,
     ) -> Result<VersionView> {
         if edit.request_id.len() > 96
@@ -226,13 +311,16 @@ impl CatalogStore {
         {
             return Err(Error::Invalid("Invalid version request identifier"));
         }
-        let fingerprint = format!(
-            "{:x}",
-            Sha256::digest(
-                serde_json::to_vec(&(kind, first, &edit))
-                    .map_err(|_| Error::Invalid("Invalid version edit"))?
-            )
-        );
+        let fingerprint = match fingerprint {
+            Some(value) => value,
+            None => format!(
+                "{:x}",
+                Sha256::digest(
+                    serde_json::to_vec(&(kind, first, &edit))
+                        .map_err(|_| Error::Invalid("Invalid version edit"))?
+                )
+            ),
+        };
         if let Some(previous) = self
             .preferences
             .version_receipts
@@ -291,7 +379,7 @@ impl CatalogStore {
             VersionAction::Publish { content } => {
                 let key = kind.key(&content)?;
                 if family.default_version == edit.version {
-                    Self::move_default_content(
+                    self.move_default_content(
                         &mut candidate,
                         kind.key(&edit.expected_content)?,
                         key,
@@ -305,7 +393,7 @@ impl CatalogStore {
                     .iter()
                     .find(|v| v.id == family.default_version)
                     .ok_or(Error::Invalid("Default version is missing"))?;
-                Self::move_default_content(
+                self.move_default_content(
                     &mut candidate,
                     kind.key(&old.content)?,
                     kind.key(&family.versions[index].content)?,
@@ -353,6 +441,55 @@ impl CatalogStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn interrupted_publication_and_no_space_leave_old_contents_visible_and_allow_retry() {
+        let root = std::env::temp_dir().join(format!(
+            "oxidal-version-publication-fault-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        let first = "c".repeat(64);
+        let next = "d".repeat(64);
+        let kind = LibraryKind::Rig;
+        let view = CatalogStore::open(root.clone())
+            .unwrap()
+            .versions(kind, &first)
+            .unwrap();
+        let target = oxidal_audio::lifecycle::VersionTarget {
+            first: first.clone(),
+            version: "main".into(),
+            expected_content: first.clone(),
+            expected_revision: view.catalog_revision.clone(),
+            request_id: "checked-save".into(),
+        };
+        let save = |target, publish: fn() -> Result<()>| {
+            CatalogStore::publish_version(&root, kind, &first, target, &next, publish)
+        };
+        assert!(
+            save(target.clone(), || Err(std::io::Error::from(
+                std::io::ErrorKind::StorageFull
+            )
+            .into()))
+            .is_err()
+        );
+        let recovered = CatalogStore::open(root.clone()).unwrap();
+        assert!(!recovered.visible(kind, &next).unwrap());
+        assert!(recovered.visible(kind, &first).unwrap());
+        assert_eq!(
+            recovered.versions(kind, &first).unwrap().catalog_revision,
+            view.catalog_revision
+        );
+        let reply = save(target.clone(), || Ok(())).unwrap();
+        assert_eq!(reply.preset.versions[0].content, next);
+        assert_eq!(
+            save(target, || panic!("replayed a completed write"))
+                .unwrap()
+                .catalog_revision,
+            reply.catalog_revision
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn legacy_read_creates_no_files_and_edits_preserve_the_backup_and_identity() {

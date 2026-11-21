@@ -346,6 +346,35 @@ impl Owner {
     }
     async fn request(&mut self, request: OwnerRequest<GraphAudioCommand>) -> Reply {
         match request {
+            OwnerRequest::Tempo {
+                worker_session,
+                bpm,
+            } => {
+                self.change.admits(AudioChangeOwner::Effects, false, None)?;
+                if self.state.phase != AudioPhase::Running
+                    || self
+                        .state
+                        .control
+                        .as_ref()
+                        .is_none_or(|state| state.session != worker_session)
+                {
+                    return Err("The playing effects changed before tempo could be applied".into());
+                }
+                let reply = match self.exchange(&WorkerRequest::Tempo { bpm }).await {
+                    Ok(reply) => reply,
+                    Err(error) => return Err(self.fault(error).await),
+                };
+                let error = reply.error.clone();
+                self.readback(reply);
+                match error {
+                    Some(error) => Err(error),
+                    None => Ok(self.state.clone()),
+                }
+            }
+
+            OwnerRequest::Occurrence { .. } => {
+                Err("Only Mixed presets have starting scenes".into())
+            }
             OwnerRequest::Action(command) => {
                 let stop = matches!(&command.action, GraphAudioAction::Stop);
                 if stop
@@ -677,7 +706,12 @@ impl Owner {
                     return Err(e);
                 }
             }
-            GraphAudioAction::SaveCopy { name } => {
+            action @ (GraphAudioAction::SaveCopy { .. } | GraphAudioAction::SaveVersion { .. }) => {
+                let (name, target) = match action {
+                    GraphAudioAction::SaveCopy { name } => (name, None),
+                    GraphAudioAction::SaveVersion { name, target } => (name, Some(target)),
+                    _ => unreachable!(),
+                };
                 if self.state.phase != AudioPhase::Running {
                     return Err("Graph audio is not running".into());
                 }
@@ -701,8 +735,41 @@ impl Owner {
                 };
                 preset.validate().map_err(|e| e.to_string())?;
                 let root = self.preset_root.clone();
+                let saving_copy = target.is_none();
                 let source = settings.library_id.clone();
                 let saved = tokio::task::spawn_blocking(move || {
+                    if let Some(target) = target {
+                        let source = source.as_ref().ok_or(oxidal_presets::Error::Invalid(
+                            "Choose a saved effects preset",
+                        ))?;
+                        let parent = root
+                            .parent()
+                            .ok_or(oxidal_presets::Error::Invalid("Invalid graph store"))?;
+                        let kind = oxidal_presets::LibraryKind::Graph;
+                        let id = preset.revision()?;
+                        let store = oxidal_presets::GraphStore::new(root.clone());
+                        oxidal_presets::CatalogStore::publish_version(
+                            parent,
+                            kind,
+                            source,
+                            target,
+                            &id,
+                            || {
+                                store.save(preset)?;
+                                oxidal_presets::DetailsStore::new(parent.into()).inherit(
+                                    oxidal_presets::LibraryReference {
+                                        kind,
+                                        id: id.clone(),
+                                    },
+                                    oxidal_presets::LibraryReference {
+                                        kind,
+                                        id: source.clone(),
+                                    },
+                                )
+                            },
+                        )?;
+                        return store.read(&id);
+                    }
                     if let Some(id) = source {
                         use oxidal_presets::{DetailsStore, LibraryKind, LibraryReference};
                         let parent = root
@@ -724,7 +791,7 @@ impl Owner {
                 .await
                 .map_err(|_| "Graph save task failed")?
                 .map_err(|e| e.to_string())?;
-                if let Some(settings) = &mut self.state.configured {
+                if saving_copy && let Some(settings) = &mut self.state.configured {
                     settings.name = Some(saved.preset.name);
                 }
                 self.state.saved_copy = Some(saved.id);
@@ -947,6 +1014,22 @@ impl GraphPlayback {
             Some(self.library_access.clone().read_owned().await)
         };
         self.send(OwnerRequest::Action(command), access).await
+    }
+
+    pub(super) async fn set_host_tempo(
+        &self,
+        worker_session: String,
+        bpm: Option<f32>,
+    ) -> Result<(), String> {
+        self.send(
+            OwnerRequest::Tempo {
+                worker_session,
+                bpm,
+            },
+            None,
+        )
+        .await
+        .map(|_| ())
     }
 
     pub(super) async fn dispatch_change(&self, request: OwnerRequest<GraphAudioCommand>) -> Reply {

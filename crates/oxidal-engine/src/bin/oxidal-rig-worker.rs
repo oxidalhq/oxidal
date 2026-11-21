@@ -62,6 +62,31 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let model_root = std::env::var_os("OXIDAL_PRESET_DIR").map(std::path::PathBuf::from);
     let args: Vec<_> = std::env::args().skip(1).collect();
     if !args.is_empty() {
+        if args == ["--check-occurrence"] {
+            let request: OccurrenceStart =
+                serde_json::from_slice(&frame(&mut std::io::stdin().lock())?)?;
+            let result: Result<(), String> = (|| {
+                let world = World::discover().map_err(|error| error.to_string())?;
+                let mut resident = ResidentSet::new_with_models(
+                    &store,
+                    &world,
+                    &request.settings,
+                    BUFFER_BUDGET,
+                    model_root.as_deref(),
+                )?;
+                resident.active_mut().prepare_initial_scene(request.scene)?;
+                let n = request.settings.stream.input.period_frames as usize;
+                let zeros = vec![0.0; n];
+                resident.process(
+                    &[&zeros, &zeros],
+                    &mut [&mut vec![0.0; n], &mut vec![0.0; n]],
+                )?;
+                resident.pump()
+            })();
+            serde_json::to_writer(std::io::stdout().lock(), &result)?;
+            std::io::stdout().flush()?;
+            return Ok(());
+        }
         if args == ["--prepare-native-edit"] {
             let request: PrepareNativeEdit =
                 serde_json::from_slice(&frame(&mut std::io::stdin().lock())?)?;
@@ -79,9 +104,20 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         if args != ["--save-revision"] {
             return Err("Unknown rig worker mode".into());
         }
-        let request: SaveRequest = serde_json::from_slice(&frame(&mut std::io::stdin().lock())?)?;
+        let (request, target) = serde_json::from_slice::<
+            oxidal_audio::lifecycle::SaveInput<SaveRequest>,
+        >(&frame(&mut std::io::stdin().lock())?)?
+        .into_parts();
         let world = World::discover()?;
-        let revision = if let Some(root) = &model_root {
+        let revision = if let Some(target) = target {
+            oxidal_engine::save_named_version(
+                &store,
+                &world,
+                request,
+                model_root.as_deref().ok_or("Missing version store")?,
+                target,
+            )?
+        } else if let Some(root) = &model_root {
             oxidal_engine::save_revision_with_models(&store, &world, request, root)?
         } else {
             oxidal_engine::save_revision(&store, &world, request)?
@@ -90,7 +126,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         std::io::stdout().flush()?;
         return Ok(());
     }
-    let settings: StartRig = serde_json::from_slice(&frame(&mut std::io::stdin().lock())?)?;
+    let bytes = frame(&mut std::io::stdin().lock())?;
+    let (settings, starting_scene) = match serde_json::from_slice::<OccurrenceStart>(&bytes) {
+        Ok(request) => (request.settings, Some(request.scene)),
+        Err(_) => (serde_json::from_slice::<StartRig>(&bytes)?, None),
+    };
     settings.validate()?;
     let stop = Arc::new(AtomicBool::new(false));
     let reader_stop = stop.clone();
@@ -133,13 +173,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Before the rig is built, so its graphs create their lane helpers now on
     // this thread rather than later on the render thread.
     oxidal_engine::render::enable_render_thread();
-    let session = ResidentSet::new_with_models(
+    let mut session = ResidentSet::new_with_models(
         &store,
         &world,
         &settings,
         BUFFER_BUDGET,
         model_root.as_deref(),
     )?;
+    if let Some(scene) = starting_scene {
+        session.active_mut().prepare_initial_scene(scene)?;
+    }
     if stop.load(Ordering::Acquire) {
         return Ok(());
     }
@@ -264,6 +307,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let latest = || telemetry.lock().map(|t| *t).unwrap_or_default();
         let mut announced = false;
         let mut switch_reply = false;
+        let mut switch_midi = None;
         let mut pump = Instant::now();
         let mut reported = Instant::now();
         while !stop.load(Ordering::Acquire) {
@@ -300,7 +344,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 announced = true;
             }
             // Shared bounded, nonblocking reads outside PCM; failures stay in MIDI status.
-            if primed && !shared.lock("midi state").switching() {
+            if primed && !switch_reply && !shared.lock("midi state").switching() {
                 // Device enumeration/open on a disconnected MIDI input can
                 // take several audio periods. Only dispatching a received
                 // message needs the rig; retries must never hold its lock.
@@ -327,6 +371,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     return Err("Rig failed before confirming the preset switch".into());
                 }
                 let error = rig.take_switch_error();
+                if error.is_none() {
+                    midi.configure(switch_midi.take());
+                } else {
+                    switch_midi = None;
+                }
                 let control = snapshot(&rig, &midi.status);
                 drop(rig);
                 responses.send(WorkerReply {
@@ -348,6 +397,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 WorkerRequest::Protect { .. } => "protect",
                 WorkerRequest::HostUtility { .. } => "host utility",
                 WorkerRequest::Status => "status",
+                WorkerRequest::Tempo { .. } => "tempo",
                 WorkerRequest::SettleAuthoring => "settle authoring",
                 WorkerRequest::Authoring { .. } => "authoring",
                 WorkerRequest::Midi { .. } => "midi settings",
@@ -360,7 +410,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 WorkerRequest::BranchSleep { .. } => "sleeping branches",
                 WorkerRequest::Eq { .. } => "eq",
                 WorkerRequest::Model { .. } => "model",
-                WorkerRequest::Switch { .. } => "switch",
+                WorkerRequest::Switch { .. } | WorkerRequest::RecallSwitch { .. } => "switch",
             };
             let mut rig = shared.lock(what);
             let error = match request {
@@ -381,6 +431,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     None
                 }
                 WorkerRequest::Status => None,
+                WorkerRequest::Tempo { bpm } => {
+                    rig.set_host_tempo(bpm);
+                    None
+                }
                 WorkerRequest::SettleAuthoring => {
                     let deadline = Instant::now() + Duration::from_secs(2);
                     loop {
@@ -440,14 +494,28 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     Some(root) => rig.active_mut().model_command(command, root).err(),
                     None => Some("Model asset store is unavailable".into()),
                 },
-                WorkerRequest::Switch { command } => match rig.switch(command) {
-                    Ok(()) => {
-                        midi.configure(None);
-                        switch_reply = true;
-                        continue;
+                request @ (WorkerRequest::Switch { .. } | WorkerRequest::RecallSwitch { .. }) => {
+                    let (command, scene, settings) = match request {
+                        WorkerRequest::Switch { command } => (command, None, None),
+                        WorkerRequest::RecallSwitch {
+                            command,
+                            scene,
+                            midi,
+                        } => (command, Some(scene), midi),
+                        _ => unreachable!(),
+                    };
+                    match rig
+                        .validate_switch_midi(&command.revision, settings.as_ref())
+                        .and_then(|()| rig.switch_with_scene(command, scene))
+                    {
+                        Ok(()) => {
+                            switch_midi = settings;
+                            switch_reply = true;
+                            continue;
+                        }
+                        Err(error) => Some(error),
                     }
-                    Err(error) => Some(error),
-                },
+                }
             };
             if !rig.healthy() {
                 return Err(error.unwrap_or_else(|| "Rig failed".into()).into());

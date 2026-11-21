@@ -126,6 +126,11 @@ export type AudioAction =
       name: string;
     }
   | {
+      kind: "save_version";
+      name: string;
+      target: VersionTarget;
+    }
+  | {
       keep: boolean;
       kind: "resolve_copy";
     }
@@ -600,6 +605,11 @@ export type GraphAudioAction =
       name: string;
     }
   | {
+      kind: "save_version";
+      name: string;
+      target: VersionTarget;
+    }
+  | {
       command: Command;
       kind: "control";
     };
@@ -668,6 +678,7 @@ export type ImportPhase =
  */
 export type AssignmentKind = "scene" | "branch" | "parameter";
 export type MidiDirection = "previous" | "next";
+export type TempoSource = "tap" | "song" | "preset";
 export type EditorAction =
   | {
       id: string;
@@ -956,6 +967,7 @@ export type VersionAction =
   | {
       action: "delete";
     };
+export type RehearsalStatus = "prepared" | "loads_on_recall" | "blocked";
 export type RigAudioAction =
   | {
       command: PluginDefaultsCommand;
@@ -1030,6 +1042,11 @@ export type RigAudioAction =
   | {
       kind: "save";
       name: string;
+    }
+  | {
+      kind: "save_version";
+      name: string;
+      target: VersionTarget;
     };
 export type ModelOperation =
   | {
@@ -1096,6 +1113,16 @@ export type Scope = "rig" | "set_list";
  */
 export type StartupPolicy = "off" | "follow" | "pinned";
 export type StartupOwner = "native" | "mixed" | "effects";
+export type TempoCommand =
+  | {
+      kind: "tap";
+    }
+  | {
+      expected_revision: number;
+      kind: "select";
+      source: SelectTempoSource;
+    };
+export type SelectTempoSource = "song" | "preset";
 export type TerminalCommand =
   | {
       cursor: number;
@@ -1192,6 +1219,7 @@ export interface Contract {
   calibration_command: CalibrationCommand;
   calibration_coverage: CalibrationCoverage;
   capabilities: Capabilities;
+  capture_levels: CaptureLevels;
   capture_state: CaptureState;
   capture_stop: StopRequest;
   command: Command;
@@ -1250,6 +1278,7 @@ export interface Contract {
   preset_versions: VersionView;
   protect_state: ProtectState;
   reamp_request: ReampRequest;
+  rehearsal: RehearsalReport;
   removal_preview: RemovalPreview;
   removal_request: RemovalRequest;
   removal_result: RemovalResult;
@@ -1296,6 +1325,8 @@ export interface Contract {
   startup_update: StartupUpdate;
   storage_request: StorageRequest;
   storage_state: StorageState;
+  tempo_command: TempoCommand;
+  tempo_state: TempoState;
   terminal_command: TerminalCommand;
   terminal_state: TerminalState;
   tone_page: Page;
@@ -1642,6 +1673,13 @@ export interface SlotPosition {
   index: number;
   lane: number;
 }
+export interface VersionTarget {
+  expected_content: string;
+  expected_revision: string;
+  first: string;
+  request_id: string;
+  version: string;
+}
 export interface AudioDevices {
   backend_available: boolean;
   endpoints: AudioEndpoint[];
@@ -1842,6 +1880,10 @@ export interface Status {
 export interface Observed {
   message: Message;
   /**
+   * Device monotonic time at raw MIDI receipt. Older workers omit it.
+   */
+  received_ms?: number | null;
+  /**
    * Equals `Status::events` after this message; consecutive messages differ by one.
    */
   seq: number;
@@ -1951,6 +1993,14 @@ export interface Capabilities {
   native_editor: boolean;
   protocol: number;
   version: string;
+}
+/**
+ * Trainer-written references in dBu. These readings never change an audio gain.
+ */
+export interface CaptureLevels {
+  gear_type?: string | null;
+  input_dbu?: number | null;
+  output_dbu?: number | null;
 }
 export interface CaptureState {
   job?: CaptureJob | null;
@@ -2861,6 +2911,10 @@ export interface Navigation {
   next?: Trigger | null;
   previous?: Trigger | null;
   /**
+   * A device-stamped performance tempo tap.
+   */
+  tap?: Trigger | null;
+  /**
    * Opens the global tuner overlay when a browser is connected.
    */
   tuner?: Trigger | null;
@@ -3047,6 +3101,7 @@ export interface Monitoring {
   set_entry?: ResolvedOccurrence | null;
   source?: string | null;
   stream?: StreamConfig | null;
+  tempo?: TempoState | null;
   /**
    * Recovered overruns/underruns for the current worker; unavailable with older workers.
    */
@@ -3058,6 +3113,12 @@ export interface Host {
   memory_used_bytes?: number | null;
   temperature_c?: number | null;
   temperature_sensor?: string | null;
+}
+export interface TempoState {
+  bpm?: number | null;
+  reason?: string | null;
+  revision: number;
+  source: TempoSource;
 }
 export interface History {
   dropped_samples: number;
@@ -3437,6 +3498,18 @@ export interface ReampRequest {
   processing: "current" | "none";
   source: string;
   tailSeconds?: number;
+}
+export interface RehearsalReport {
+  entries: RehearsalEntry[];
+  revision: string;
+}
+export interface RehearsalEntry {
+  accompaniment: string[];
+  id: string;
+  name: string;
+  sheet: string[];
+  sound: string[];
+  status: RehearsalStatus;
 }
 export interface RemovalPreview {
   blocked?: string | null;
@@ -3917,13 +3990,6 @@ export interface RigPublish {
    * Saving an explicit named version binds the edit to the catalog and source bytes.
    */
   version_target?: VersionTarget | null;
-}
-export interface VersionTarget {
-  expected_content: string;
-  expected_revision: string;
-  first: string;
-  request_id: string;
-  version: string;
 }
 export interface RigSleepPlan {
   inserted_sends: SleepSendBoundary[];

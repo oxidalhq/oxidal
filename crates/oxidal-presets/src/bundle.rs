@@ -2,7 +2,7 @@
 //! Integrity/structural inspection is not native/LV2 playback qualification.
 use crate::{
     Error, Result, inspect,
-    manifest::{MAX_MANIFEST_BYTES, Manifest, ResourceKind},
+    manifest::{MAX_MANIFEST_BYTES, Manifest, Resource, ResourceKind},
 };
 use sha2::{Digest, Sha256};
 use std::{
@@ -35,15 +35,7 @@ impl Bundle {
             let bytes = resources
                 .get(&resource.id)
                 .ok_or(Error::Invalid("Missing bundle resource"))?;
-            if bytes.len() as u64 != resource.bytes || digest(bytes) != resource.sha256 {
-                return Err(Error::Invalid("Bundle resource integrity failed"));
-            }
-            if matches!(
-                resource.kind,
-                ResourceKind::Tone3000Preset | ResourceKind::Tone3000Source
-            ) {
-                inspect(bytes)?;
-            }
+            verify_payload(resource, bytes)?;
         }
         let revision = digest(&manifest_bytes);
         Ok(Self {
@@ -67,6 +59,18 @@ impl Bundle {
     pub fn revision(&self) -> &str {
         &self.revision
     }
+}
+fn verify_payload(resource: &Resource, bytes: &[u8]) -> Result<()> {
+    if bytes.len() as u64 != resource.bytes || digest(bytes) != resource.sha256 {
+        return Err(Error::Invalid("Bundle resource integrity failed"));
+    }
+    if matches!(
+        resource.kind,
+        ResourceKind::Tone3000Preset | ResourceKind::Tone3000Source
+    ) {
+        inspect(bytes)?;
+    }
+    Ok(())
 }
 fn digest(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
@@ -164,6 +168,31 @@ impl BundleStore {
             );
         }
         Bundle::from_parts(manifest_bytes, resources)
+    }
+    /// Identify individual declared files after whole-bundle verification failed.
+    /// Recheck the stored manifest before using its relative paths.
+    pub fn unavailable_resources(&self, revision: &str) -> Result<Vec<Resource>> {
+        let manifest = self.manifest(revision)?;
+        let root = self.path(revision)?;
+        let mut unavailable = Vec::new();
+        for resource in manifest.resources {
+            let path = root.join(&resource.path);
+            let result = (|| {
+                let mut parent = root.clone();
+                if let Some(dir) = Path::new(&resource.path).parent() {
+                    for component in dir.components() {
+                        parent.push(component);
+                        directory(&parent)?;
+                    }
+                }
+                let bytes = read_bounded(&path, resource.bytes)?;
+                verify_payload(&resource, &bytes)
+            })();
+            if result.is_err() {
+                unavailable.push(resource);
+            }
+        }
+        Ok(unavailable)
     }
     /// Publish a complete new revision without replacing earlier revisions.
     /// The logical preset UUID stays in the manifest; Save As supplies a new UUID.

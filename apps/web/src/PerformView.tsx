@@ -17,8 +17,11 @@ import {
   muteMidi,
   navigateMidi,
 } from './api';
+import { PerformanceTempo } from './components/media/PerformanceTempo';
 import { PerformPlayerRow } from './components/media/PerformPlayerRow';
+import { CueEntryBacking } from './components/media/SongLinkControls';
 import { LinkedSheet } from './features/library/LinkedSheet';
+import { RehearsalReport } from './features/library/RehearsalReport';
 import { GuitarSwitch } from './GuitarSettings';
 import { friendlyError } from './lib/friendlyError';
 import { MasterLevel } from './MasterLevel';
@@ -194,8 +197,8 @@ function PresetSteps({
             {line('Next', position.next)}
           </p>
           <p>
-            Recall uses the preset’s saved starting scene; without one, it
-            starts at Scene 1. Previous and Next stop at the ends.
+            An entry can choose a starting scene. Previous and Next stop at the
+            ends.
           </p>
         </div>
       )}
@@ -475,7 +478,21 @@ export function PerformView({
             </div>
             <GuitarSwitch layout="compact" />
           </div>
+          <PerformanceTempo />
           <LinkedSheet stage />
+          <RehearsalReport
+            stage
+            playing={
+              link != null && now.playing ? (now.name ?? undefined) : undefined
+            }
+            disabled={disabled || !!switching || link == null}
+          />
+          {snapshot?.set_entry && (
+            <CueEntryBacking
+              row={snapshot.set_entry}
+              disabled={disabled || !!switching || link == null}
+            />
+          )}
           <PresetSteps
             disabled={disabled || !!switching}
             muted={audio?.monitoring?.output_muted ?? false}

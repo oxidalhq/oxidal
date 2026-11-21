@@ -199,6 +199,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         None
                     }
                     WorkerRequest::Status => None,
+                    WorkerRequest::Tempo { bpm } => {
+                        graph.set_host_tempo(bpm);
+                        None
+                    }
                     WorkerRequest::Control { command } => graph.apply(*command, true).err(),
                     WorkerRequest::RestorePluginDefaults { command } => {
                         graph.restore_plugin_defaults(command).err()

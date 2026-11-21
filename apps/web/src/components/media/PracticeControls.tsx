@@ -16,10 +16,10 @@ import { Slider } from '@oxidal/design-system/components/slider';
 import { Switch } from '@oxidal/design-system/components/switch';
 
 import './media.css';
-import { type PracticeTiming, practiceTiming } from '../../api';
+import { type PracticeTiming, practiceTiming, sendTempo } from '../../api';
 import type { PlayerCommand } from '../../generated/contract';
 import { deviceSentence } from '../../lib/friendlyError';
-import { clock, tapTempo } from '../../lib/playerClock';
+import { clock } from '../../lib/playerClock';
 import { usePlayerPosition, useProtect, useSessionMedia } from './sessionMedia';
 
 type ClickCommand = Extract<PlayerCommand, { kind: 'set_click' }>['click'];
@@ -51,7 +51,6 @@ export function PracticeControls() {
   );
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
-  const taps = useRef<number[]>([]);
   const drag = useRef<number | null>(null);
   const [dragging, setDragging] = useState<{ from: number; to: number } | null>(
     null,
@@ -167,14 +166,17 @@ export function PracticeControls() {
     updateClick({ bpm: tempo, first: start, follow: false });
   }
 
-  function tap() {
-    const now = performance.now();
-    taps.current = [...taps.current.slice(-5), now];
-    const tempo = tapTempo(taps.current);
-    if (tempo !== null && tempo >= 30 && tempo <= 300) {
-      setBpm(tempo);
-      setFollow(false);
-      updateClick({ bpm: tempo, follow: false });
+  async function tap() {
+    setError('');
+    try {
+      const state = await sendTempo({ kind: 'tap' });
+      if (state.bpm != null) {
+        setBpm(state.bpm);
+        setFollow(false);
+        updateClick({ bpm: state.bpm, follow: false });
+      }
+    } catch (cause) {
+      setError(deviceSentence(cause, 'tap the tempo'));
     }
   }
 
@@ -417,7 +419,7 @@ export function PracticeControls() {
                 onBlur={() => updateClick()}
               />
             </label>
-            <Button variant="outline" onClick={tap}>
+            <Button variant="outline" onClick={() => void tap()}>
               Tap
             </Button>
             <Button

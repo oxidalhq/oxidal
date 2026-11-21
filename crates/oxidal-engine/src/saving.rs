@@ -58,7 +58,7 @@ pub fn save_revision(
     world: &World,
     request: SaveRequest,
 ) -> Result<String, String> {
-    save_with_assets(store, world, request, None)
+    save_with_assets(store, world, request, None, None)
 }
 pub fn save_revision_with_models(
     store: &BundleStore,
@@ -66,14 +66,29 @@ pub fn save_revision_with_models(
     request: SaveRequest,
     root: &std::path::Path,
 ) -> Result<String, String> {
-    save_with_assets(store, world, request, Some(root))
+    save_with_assets(store, world, request, Some(root), None)
+}
+pub fn save_named_version(
+    store: &BundleStore,
+    world: &World,
+    request: SaveRequest,
+    root: &std::path::Path,
+    target: oxidal_audio::lifecycle::VersionTarget,
+) -> Result<String, String> {
+    save_with_assets(store, world, request, Some(root), Some(target))
 }
 fn save_with_assets(
     store: &BundleStore,
     world: &World,
     request: SaveRequest,
     model_root: Option<&std::path::Path>,
+    target: Option<oxidal_audio::lifecycle::VersionTarget>,
 ) -> Result<String, String> {
+    let input_hash = target
+        .as_ref()
+        .map(|_| serde_json::to_vec(&request).map(|bytes| format!("{:x}", Sha256::digest(bytes))))
+        .transpose()
+        .map_err(|e| e.to_string())?;
     request.settings.validate()?;
     if !oxidal_audio::lifecycle::valid_preset_name(&request.name)
         || request.recall.source_revision != request.settings.revision
@@ -433,6 +448,44 @@ fn save_with_assets(
                 return Err("Saved LV2 state did not survive fresh recall".into());
             }
         }
+    }
+    if let Some(target) = target {
+        let root = model_root.ok_or("Missing version store")?;
+        if LibraryOrigin::from_manifest(original.manifest()).map_err(|e| e.to_string())?
+            != LibraryOrigin::Mine
+        {
+            return Err("Choose an owned rig version".into());
+        }
+        let revision = bundle.revision().to_owned();
+        let kind = oxidal_presets::LibraryKind::Rig;
+        let version = target.version.clone();
+        let result = oxidal_presets::CatalogStore::publish_export(
+            root,
+            kind,
+            &request.settings.revision,
+            target,
+            &revision,
+            input_hash.as_deref(),
+            || {
+                store.save(&bundle)?;
+                let source = oxidal_presets::LibraryReference {
+                    kind,
+                    id: request.settings.revision.clone(),
+                };
+                let dest = oxidal_presets::LibraryReference {
+                    kind,
+                    id: revision.clone(),
+                };
+                oxidal_presets::MidiMapStore::new(root.into())
+                    .follow_rig(&manifest, &source, &dest, true)?;
+                oxidal_presets::DetailsStore::new(root.into()).inherit(dest, source)
+            },
+        )
+        .map_err(|e| e.to_string())?;
+        return result
+            .content(&version)
+            .map(str::to_owned)
+            .map_err(|e| e.to_string());
     }
     if let Some(root) = model_root {
         use oxidal_presets::{DetailsStore, LibraryKind, LibraryReference};

@@ -28,8 +28,27 @@ pub fn idle() {
     imp::idle();
 }
 
+/// Milliseconds from the Linux monotonic clock shared across worker processes.
+pub fn monotonic_millis() -> Option<u64> {
+    imp::monotonic_millis()
+}
+
 #[cfg(all(target_os = "linux", feature = "alsa"))]
 mod imp {
+    pub fn monotonic_millis() -> Option<u64> {
+        let mut value = libc::timespec {
+            tv_sec: 0,
+            tv_nsec: 0,
+        };
+        // SAFETY: this writable, exclusive timespec is valid for clock_gettime.
+        if unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &raw mut value) } != 0 {
+            return None;
+        }
+        u64::try_from(value.tv_sec)
+            .ok()?
+            .checked_mul(1000)?
+            .checked_add(u64::try_from(value.tv_nsec).ok()? / 1_000_000)
+    }
     pub fn enter() -> String {
         // SAFETY: plain syscalls on the calling process/thread with valid arguments.
         let locked = unsafe { libc::mlockall(libc::MCL_CURRENT | libc::MCL_FUTURE) } == 0;
@@ -86,4 +105,7 @@ mod imp {
     }
     pub fn leave() {}
     pub fn idle() {}
+    pub fn monotonic_millis() -> Option<u64> {
+        None
+    }
 }

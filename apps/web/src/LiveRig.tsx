@@ -34,8 +34,10 @@ import { BoostControl } from './BoostControl';
 import { ChainView, LedToggle } from './ChainView';
 import { MaybeSheet } from './components/RigSheet';
 import { EditQueue } from './editQueue';
+import { SaveSoundVersion } from './features/library/SaveSoundVersion';
 import { StageControls } from './features/stage/StageControls';
 import { GearIcon } from './GearIcon';
+import type { VersionTarget } from './generated/contract';
 import { GuitarPicker } from './GuitarSettings';
 import { LevelMatch } from './LevelMatch';
 import { WAITING_FOR_DEVICE } from './lib/deviceWait';
@@ -549,7 +551,7 @@ export function LiveRig({
       }
     }
   }
-  async function saveCopy() {
+  async function saveCopy(target?: VersionTarget) {
     if (!state || !saveOpening || sending.current) return;
     if (
       state.session !== saveOpening.session ||
@@ -563,10 +565,13 @@ export function LiveRig({
     setBusy(true);
     setError('');
     try {
-      const next = await playbackCommand(state, {
-        kind: 'save_copy',
-        name: copyName.trim(),
-      });
+      const name = copyName.trim();
+      const next = await playbackCommand(
+        state,
+        target
+          ? { kind: 'save_version', name, target }
+          : { kind: 'save_copy', name },
+      );
       if (alive.current) {
         setState(next);
         setDraft(null);
@@ -1835,6 +1840,22 @@ export function LiveRig({
               {busy ? 'Saving…' : 'Save a copy'}
             </Button>
           </div>
+          {state.configured?.owned && !state.configured.draft && (
+            <SaveSoundVersion
+              key={state.configured.preset_id}
+              kind="owned"
+              source={state.configured.preset_id}
+              name={copyName}
+              disabled={
+                disabled ||
+                !!draft ||
+                busy ||
+                state.session !== saveOpening.session ||
+                state.revision !== saveOpening.revision
+              }
+              onSave={saveCopy}
+            />
+          )}
           {(state.session !== saveOpening.session ||
             state.revision !== saveOpening.revision) && (
             <p role="status">The rig changed. Close and reopen Save copy.</p>

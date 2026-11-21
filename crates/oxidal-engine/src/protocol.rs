@@ -446,9 +446,21 @@ pub fn valid_revision(s: &str) -> bool {
         && s.bytes()
             .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
 }
+/// One-time startup override for a set-list entry. Ordinary worker input
+/// retains the StartRig wire format and the override never changes the bundle.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OccurrenceStart {
+    pub settings: StartRig,
+    pub scene: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkerRequest {
+    Tempo {
+        bpm: Option<f32>,
+    },
     RestorePluginDefaults {
         command: PluginDefaultsCommand,
     },
@@ -471,6 +483,11 @@ pub enum WorkerRequest {
     },
     Switch {
         command: SwitchCommand,
+    },
+    RecallSwitch {
+        command: SwitchCommand,
+        scene: String,
+        midi: Option<oxidal_audio::midi::Settings>,
     },
     Scene {
         command: SceneCommand,
@@ -616,6 +633,10 @@ pub enum RigAudioAction {
     },
     Save {
         name: String,
+    },
+    SaveVersion {
+        name: String,
+        target: oxidal_audio::lifecycle::VersionTarget,
     },
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

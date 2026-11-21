@@ -1218,3 +1218,102 @@ fn decoded_parameter_cc_uses_confirmed_controls_and_rejects_latency_edits() {
         .push(settings.parameter_bindings[0].clone());
     assert!(settings.validate().is_err());
 }
+
+#[test]
+fn starting_scene_failure_keeps_the_old_resident_pcm_and_session() {
+    use oxidal_engine::{ResidentSet, protocol::SwitchCommand};
+    use oxidal_presets::manifest::{SCENES_CONTROLS_EXTENSION, SCENES_EXTENSION};
+    let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();
+    let root = std::env::temp_dir().join(format!("oxidal-starting-scene-{}", std::process::id()));
+    let store = BundleStore::new(root.clone());
+    let current = scene_bundle();
+    let source = store.save(&current).unwrap();
+    let mut manifest: serde_json::Value = serde_json::from_slice(current.manifest_bytes()).unwrap();
+    manifest["requiredExtensions"] = json!([SCENES_CONTROLS_EXTENSION]);
+    let mut scenes = manifest["extensions"]
+        .as_object_mut()
+        .unwrap()
+        .remove(SCENES_EXTENSION)
+        .unwrap();
+    for (row, gain) in scenes["scenes"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .zip([1, 2])
+    {
+        row["controls"] = json!([{"node":"fx","symbol":"gain","value":gain}]);
+    }
+    manifest["extensions"][SCENES_CONTROLS_EXTENSION] = scenes;
+    let graph = &mut manifest["oxidal"]["graph"];
+    let fx = graph["nodes"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|n| n["id"] == "fx")
+        .unwrap();
+    fx["audioInputs"] = json!(2);
+    fx["audioOutputs"] = json!(2);
+    let edges = graph["edges"].as_array_mut().unwrap();
+    let right = edges
+        .iter_mut()
+        .find(|e| e["to"]["node"] == "out" && e["to"]["port"] == 1)
+        .unwrap();
+    right["to"] = json!({"node":"fx","port":1});
+    edges.push(json!({"from":{"node":"fx","port":1},"to":{"node":"out","port":1}}));
+    manifest["oxidal"]["lv2"][0]["pluginUri"] = json!("urn:oxidal:test:sleep-tail");
+    manifest["oxidal"]["lv2"][0]["controls"] = json!({"gain":1,"feedback":0});
+    let candidate =
+        Bundle::from_parts(serde_json::to_vec(&manifest).unwrap(), Default::default()).unwrap();
+    let candidate = store.save(&candidate).unwrap();
+    let input = json!({"endpoint":"hw:CARD=Qualification,DEV=0","direction":"capture",
+        "sample_rate":48000,"channels":2,"format":"s16","period_frames":64,"periods":3});
+    let mut output = input.clone();
+    output["direction"] = json!("playback");
+    let settings: StartRig = serde_json::from_value(json!({
+        "revision":source,"recall":null,"prepared":[{"revision":candidate,"recall":null}],
+        "stream":{"input":input,"output":output,"input_map":[0,1],"output_map":[0,1],"hear_yourself":true}
+    })).unwrap();
+    let mut residents = ResidentSet::new(&store, &world, &settings, 1024 * 1024).unwrap();
+    let input = [&[0.25; 64][..], &[-0.125; 64][..]];
+    let render = |set: &mut ResidentSet| {
+        let mut left = [0.0; 64];
+        let mut right = [0.0; 64];
+        set.process(&input, &mut [&mut left, &mut right]).unwrap();
+        set.pump().unwrap();
+        (left, right)
+    };
+    for _ in 0..5 {
+        render(&mut residents);
+    }
+    let reference = render(&mut residents);
+    let original = residents.snapshot();
+    residents
+        .switch_with_scene(
+            SwitchCommand {
+                session: original.session.clone(),
+                expected_revision: original.revision,
+                revision: candidate,
+                fade_frames: 97,
+            },
+            Some("lead".into()),
+        )
+        .unwrap();
+    assert!(residents.switching());
+    for _ in 0..20 {
+        assert_eq!(render(&mut residents), reference);
+    }
+    assert!(!residents.switching());
+    assert!(
+        residents
+            .take_switch_error()
+            .unwrap()
+            .to_lowercase()
+            .contains("nonfinite")
+    );
+    let after = residents.snapshot();
+    assert_eq!(after.session, original.session);
+    assert_eq!(after.revision, original.revision);
+    assert_eq!(after.source_revision, source);
+    assert_eq!(after.scene.as_deref(), Some("clean"));
+    std::fs::remove_dir_all(root).unwrap();
+}

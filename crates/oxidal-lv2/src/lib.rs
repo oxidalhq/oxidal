@@ -704,3 +704,12 @@ impl PluginCatalog {
 pub fn qualification_bundle() -> &'static std::path::Path {
     std::path::Path::new(env!("OXIDAL_LV2_FIXTURE"))
 }
+
+/// Exact linked-mode control of the shipped effects that consume host tempo.
+pub fn tempo_link_control(uri: &str) -> Option<(&'static str, f32)> {
+    match uri {
+        "urn:oxidal:plugin:echo#mono" | "urn:oxidal:plugin:echo#stereo" => Some(("sync", 1.0)),
+        "urn:oxidal:plugin:moment#mono" | "urn:oxidal:plugin:moment#stereo" => Some(("link", 3.0)),
+        _ => None,
+    }
+}

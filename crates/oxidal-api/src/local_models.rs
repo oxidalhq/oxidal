@@ -104,6 +104,30 @@ fn error(error: Error) -> Response {
         ),
     }
 }
+pub(super) async fn capture_levels(
+    State(shared): State<Arc<Shared>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Response {
+    let root = shared.config.preset_dir.join("audition-models");
+    let permit = match shared.bundle_work.clone().try_acquire_owned() {
+        Ok(p) => p,
+        Err(_) => return failure(StatusCode::CONFLICT, "A library file is being checked"),
+    };
+    let access = shared.library_access.clone().read_owned().await;
+    match tokio::task::spawn_blocking(move || {
+        let (_permit, _access) = (permit, access);
+        ModelStore::new(root).capture_levels(&id)
+    })
+    .await
+    {
+        Ok(Ok(levels)) => Json(levels).into_response(),
+        Ok(Err(e)) => error(e),
+        Err(_) => failure(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Capture reference check stopped",
+        ),
+    }
+}
 pub(super) async fn upload(
     State(shared): State<Arc<Shared>>,
     query: Result<Query<Upload>, QueryRejection>,

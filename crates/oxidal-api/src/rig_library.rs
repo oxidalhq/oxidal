@@ -10,6 +10,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use oxidal_audio::lifecycle::VersionTarget;
 use oxidal_presets::{
     Bundle, BundleStore, Error, OwnedStore, Store,
     manifest::{Graph, Manifest, ResourceKind, RigSleepPlan},
@@ -201,15 +202,6 @@ pub struct RigPublish {
     /// immutable revision. The source itself is never changed.
     #[serde(default)]
     pub source: Option<oxidal_presets::LibraryReference>,
-}
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct VersionTarget {
-    pub first: String,
-    pub version: String,
-    pub expected_content: String,
-    pub expected_revision: String,
-    pub request_id: String,
 }
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -565,18 +557,14 @@ pub async fn publish(
                 return Err(Error::Invalid("Save a named version from its current owned source"));
             }
             let kind = oxidal_presets::LibraryKind::Rig;
-            let mut catalog = oxidal_presets::CatalogStore::open(root.clone())?;
             let revision = bundle.revision().to_owned();
-            let edit = oxidal_presets::VersionEdit {
-                request_id:target.request_id, version:target.version, expected_revision:target.expected_revision,
-                expected_content:target.expected_content, action:oxidal_presets::VersionAction::Publish {content:revision.clone()},
-            };
-            // Verify bytes on write or deduplication before advancing the pointer.
-            catalog.edit_version_after(kind, &target.first, edit, || {
-                if !root.join("bundles").join(&revision).try_exists()? {
-                    oxidal_presets::CatalogStore::mark_version_payload(&root, kind, &revision)?;
-                }
+            let source = request.source.as_ref().ok_or(Error::Invalid("Missing version source"))?;
+            let dest = oxidal_presets::LibraryReference { kind, id: revision.clone() };
+            // Prepare copies before exposing the target, leaving other versions' data intact.
+            oxidal_presets::CatalogStore::publish_version(&root,kind,&source.id,target,&revision,|| {
                 store.save(&bundle)?;
+                oxidal_presets::MidiMapStore::new(root.clone()).follow_rig(&manifest, source, &dest, true)?;
+                oxidal_presets::DetailsStore::new(root.clone()).inherit(dest.clone(), source.clone())?;
                 Ok(())
             })?;
             return Ok(RigDocument { revision, manifest });
@@ -613,39 +601,11 @@ pub async fn publish(
                 &source.id,
                 &revision,
             )?;
-            super::keep_ready::Store::new(root.join("keep-ready.json"))
-                .replace(&source.id, &revision)
-                .map_err(|_| Error::Invalid("Keep ready could not follow the saved preset"))?;
             // MIDI assignments follow the saved preset; scene bindings follow
             // the scene id, so renaming or reordering scenes keeps them.
             // Assignments of a removed scene, path or block are dropped, and
             // the map moves so the earlier revision keeps no copy.
-            let (scenes, branches) = manifest
-                .scenes()?
-                .map(|s| {
-                    let ids = |list: Vec<_>| list.into_iter().map(|item: oxidal_presets::manifest::Scene| item.id).collect::<Vec<_>>();
-                    (ids(s.scenes), ids(s.branches))
-                })
-                .unwrap_or_default();
-            let blocks = manifest
-                .oxidal
-                .iter()
-                .flat_map(|host| &host.graph.nodes)
-                .map(|node| {
-                    let gains = node.input_gains.as_ref().map_or(0, Vec::len);
-                    (node.id.clone(), u8::try_from(gains).unwrap_or(u8::MAX))
-                })
-                .collect::<Vec<_>>();
-            oxidal_presets::MidiMapStore::new(root.clone()).follow_save(
-                source,
-                &oxidal_presets::LibraryReference {
-                    kind: oxidal_presets::LibraryKind::Rig,
-                    id: revision.clone(),
-                },
-                &scenes,
-                &branches,
-                &blocks,
-            )?;
+            oxidal_presets::MidiMapStore::new(root.clone()).follow_rig(&manifest, source, &oxidal_presets::LibraryReference { kind: oxidal_presets::LibraryKind::Rig, id: revision.clone() }, false)?;
         }
         if let Some(source) = request.source {
             oxidal_presets::DetailsStore::new(root.clone()).inherit(

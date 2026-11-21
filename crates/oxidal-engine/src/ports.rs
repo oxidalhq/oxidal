@@ -886,6 +886,14 @@ impl PreparedPorts {
         Ok(())
     }
     /// Reported processing delay plus host alignment, excluding device/transport.
+    pub(crate) fn set_host_tempo(&mut self, bpm: Option<f32>) {
+        for node in &mut self.nodes {
+            if let Some(Processor::Lv2(plugin)) = &mut node.processor {
+                plugin.set_host_tempo(bpm);
+            }
+        }
+    }
+
     pub fn latency_frames(&self) -> u32 {
         self.latency_frames
     }

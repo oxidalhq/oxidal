@@ -41,6 +41,39 @@ impl NamInfo {
         }
     }
 }
+/// Trainer-written references in dBu. These readings never change an audio gain.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct CaptureLevels {
+    pub input_dbu: Option<f64>,
+    pub output_dbu: Option<f64>,
+    pub gear_type: Option<String>,
+}
+impl CaptureLevels {
+    pub(crate) fn read(bytes: &[u8]) -> crate::Result<Self> {
+        #[derive(Deserialize)]
+        struct Capture {
+            #[serde(default)]
+            metadata: serde_json::Value,
+        }
+        let capture: Capture =
+            serde_json::from_slice(bytes).map_err(|_| crate::Error::Invalid("Invalid NAM data"))?;
+        let reference = |key: &str| {
+            capture.metadata[key]
+                .as_f64()
+                .filter(|v| (-60.0..=60.0).contains(v))
+        };
+        Ok(Self {
+            input_dbu: reference("input_level_dbu"),
+            output_dbu: reference("output_level_dbu"),
+            gear_type: capture.metadata["gear_type"]
+                .as_str()
+                .map(str::trim)
+                .filter(|s| !s.is_empty() && s.len() <= 128 && !s.chars().any(char::is_control))
+                .map(str::to_owned),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -54,5 +87,26 @@ mod tests {
         let info =
             NamInfo::from_model(&serde_json::json!({"metadata":{"tone3000":{"tone_id":42}}}));
         assert_eq!(info.source_tone_id, Some(42));
+    }
+
+    #[test]
+    fn capture_levels_use_only_finite_trainer_references() {
+        let levels = CaptureLevels::read(
+            br#"{"metadata":{"input_level_dbu":-18.4,"output_level_dbu":12,"gear_type":" amp "}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            (levels.input_dbu, levels.output_dbu),
+            (Some(-18.4), Some(12.0))
+        );
+        assert_eq!(levels.gear_type.as_deref(), Some("amp"));
+        for model in [
+            r#"{}"#,
+            r#"{"metadata":{"input_level_dbu":61,"output_level_dbu":"0"}}"#,
+        ] {
+            let levels = CaptureLevels::read(model.as_bytes()).unwrap();
+            assert_eq!((levels.input_dbu, levels.output_dbu), (None, None));
+        }
+        assert!(CaptureLevels::read(b"not json").is_err());
     }
 }

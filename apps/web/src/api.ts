@@ -868,6 +868,9 @@ const midiActionValidator = ajv.compile<MidiAction>({
 /** The newest device-wide MIDI action (Program recall, navigation, mute or tuner). */
 export async function midiAction(): Promise<MidiAction> {
   const body = await presetResponse(await fetch('/api/v1/midi/action'));
+  return parseMidiAction(body);
+}
+export function parseMidiAction(body: unknown): MidiAction {
   if (!midiActionValidator(body)) throw new Error('Incompatible MIDI action');
   return body;
 }
@@ -1240,6 +1243,20 @@ export async function libraryCatalog(
     ),
   );
   if (!catalogValidator(body)) throw new Error('Incompatible library catalog');
+  return body;
+}
+
+type RehearsalReport = Contract['rehearsal'];
+const rehearsalValidator = ajv.compile<RehearsalReport>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/RehearsalReport',
+});
+export async function rehearsalReport(): Promise<RehearsalReport> {
+  const body = await presetResponse(
+    await fetch('/api/v1/presets/set-list/rehearsal'),
+  );
+  if (!rehearsalValidator(body))
+    throw new Error('Incompatible rehearsal report');
   return body;
 }
 
@@ -2097,5 +2114,29 @@ export async function audioChange(
       (body.phase === 'proving' && body.remaining_ms == null))
   )
     throw new Error('Incomplete audio confirmation response');
+  return body;
+}
+
+export async function sendTempo(command: Contract['tempo_command']) {
+  const response = await fetch('/api/v1/tempo', json('POST', command));
+  const body = await presetResponse(response);
+  if (!tempoValidator(body)) throw new Error('Incompatible tempo state');
+  return body;
+}
+const tempoValidator = ajv.compile<Contract['tempo_state']>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/TempoState',
+});
+
+const captureLevelsValidator = ajv.compile<Contract['capture_levels']>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/CaptureLevels',
+});
+export async function captureLevels(id: string) {
+  const body = await presetResponse(
+    await fetch('/api/v1/models/local/' + encodeURIComponent(id) + '/levels'),
+  );
+  if (!captureLevelsValidator(body))
+    throw new Error('Incompatible capture levels');
   return body;
 }

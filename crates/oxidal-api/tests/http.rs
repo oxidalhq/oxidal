@@ -4230,7 +4230,7 @@ async fn the_backing_player_cues_navigates_dedupes_and_restores_stopped() {
     // only one stream to the device.
     let mut device = reqwest::get(format!("{url}/events")).await.unwrap();
     let mut seen = String::new();
-    while !seen.contains("event: player") {
+    while !seen.contains("event: midi-action") {
         let chunk = tokio::time::timeout(std::time::Duration::from_secs(2), device.chunk())
             .await
             .unwrap()
@@ -4240,6 +4240,8 @@ async fn the_backing_player_cues_navigates_dedupes_and_restores_stopped() {
     }
     assert!(seen.starts_with("event: state"), "{seen}");
     assert!(seen.contains("\"title\":\"Song A\""), "{seen}");
+    assert!(seen.contains("event: player"), "{seen}");
+    assert!(seen.contains("\"seq\":0"), "{seen}");
     drop(device);
     task.abort();
 

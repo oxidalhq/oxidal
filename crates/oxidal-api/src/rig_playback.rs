@@ -34,6 +34,8 @@ pub(super) struct RigPlayback {
     pub(super) finished: watch::Receiver<bool>,
     commands: mpsc::Sender<OwnerMessage<RigAudioCommand, RigAudioState>>,
     state: watch::Receiver<RigAudioState>,
+    executable: Option<PathBuf>,
+    preset_dir: PathBuf,
 }
 struct Worker {
     child: Child,
@@ -46,6 +48,7 @@ type ReadyPipes = (ChildStdin, BufReader<ChildStdout>, WorkerReply);
 struct Preparing {
     task: tokio::task::JoinHandle<Result<ReadyPipes, String>>,
     started: Instant,
+    starting_scene: Option<String>,
 }
 impl Worker {
     async fn read(&mut self) -> Result<WorkerReply, String> {
@@ -168,6 +171,7 @@ impl Owner {
                 message,
                 local_program,
                 source: seen.source,
+                received_ms: seen.received_ms,
             });
         }
     }
@@ -433,8 +437,17 @@ impl Owner {
     }
     async fn start_reserved(
         &mut self,
+        settings: StartRig,
+        reserved: Option<tokio::sync::SemaphorePermit<'static>>,
+    ) -> Result<(), String> {
+        self.start_with_scene(settings, reserved, None).await
+    }
+
+    async fn start_with_scene(
+        &mut self,
         mut settings: StartRig,
         reserved: Option<tokio::sync::SemaphorePermit<'static>>,
+        starting_scene: Option<String>,
     ) -> Result<(), String> {
         self.follow_preparation = None;
         // Unit levels follow the player, not the preset or the recovered session.
@@ -452,7 +465,14 @@ impl Owner {
             .settings(Some(&entry))
             .map_err(|error| error.to_string())?;
         settings.validate()?;
-        let bytes = encode(&settings)?;
+        let bytes = if let Some(scene) = &starting_scene {
+            encode(&OccurrenceStart {
+                settings: settings.clone(),
+                scene: scene.clone(),
+            })?
+        } else {
+            encode(&settings)?
+        };
         if self.worker.is_some() {
             return Err("Stop mixed audio before changing its configuration".into());
         }
@@ -498,6 +518,7 @@ impl Owner {
             preparing: Some(Preparing {
                 task,
                 started: Instant::now(),
+                starting_scene,
             }),
             _permit: permit,
         });
@@ -716,10 +737,9 @@ impl Owner {
         if !preparing.task.is_finished() {
             return;
         }
-        let result = worker
-            .preparing
-            .take()
-            .unwrap()
+        let preparing = worker.preparing.take().unwrap();
+        let starting_scene = preparing.starting_scene;
+        let result = preparing
             .task
             .await
             .map_err(|_| "Mixed preparation task failed".to_owned())
@@ -728,7 +748,13 @@ impl Owner {
             Ok((input, output, reply)) => {
                 worker.input = Some(input);
                 worker.output = Some(output);
-                if reply.error.is_some() || reply.processed_frames == 0 {
+                if reply.error.is_some()
+                    || reply.processed_frames == 0
+                    || starting_scene.as_ref().is_some_and(|scene| {
+                        reply.control.scene.as_ref() != Some(scene)
+                            || reply.control.scene_transitioning
+                    })
+                {
                     self.preparation_failed(
                         reply
                             .error
@@ -753,7 +779,11 @@ impl Owner {
             }
         }
     }
-    async fn save(&mut self, name: String) -> Result<(), String> {
+    async fn save(
+        &mut self,
+        name: String,
+        target: Option<oxidal_audio::lifecycle::VersionTarget>,
+    ) -> Result<(), String> {
         if self.model_pending() {
             return Err("Finish model preparation before saving".into());
         }
@@ -775,7 +805,15 @@ impl Owner {
             recall: control.recall(),
             name: name.clone(),
         };
-        let bytes = encode(&request)?;
+        let source = request.settings.revision.clone();
+        let input = match target {
+            Some(version_target) => oxidal_audio::lifecycle::SaveInput::Version {
+                request,
+                version_target,
+            },
+            None => oxidal_audio::lifecycle::SaveInput::Copy(request),
+        };
+        let bytes = encode(&input)?;
         let runtime = self.runtime.join("export");
         std::fs::create_dir_all(&runtime).map_err(|e| e.to_string())?;
         let mut child = tokio::process::Command::new(
@@ -802,7 +840,7 @@ impl Owner {
             child,
             started: Instant::now(),
             name,
-            source: request.settings.revision.clone(),
+            source,
         });
         self.state.save = Some(SaveState {
             source_session: control.session.clone(),
@@ -931,6 +969,38 @@ impl Owner {
     }
     async fn request(&mut self, request: OwnerRequest<RigAudioCommand>) -> Reply {
         match request {
+            OwnerRequest::Tempo {
+                worker_session,
+                bpm,
+            } => {
+                self.change.admits(AudioChangeOwner::Mixed, false, None)?;
+                if self.state.phase != AudioPhase::Running
+                    || self
+                        .state
+                        .control
+                        .as_ref()
+                        .is_none_or(|state| state.session != worker_session)
+                {
+                    return Err("The playing effects changed before tempo could be applied".into());
+                }
+                let reply = match self.exchange(&WorkerRequest::Tempo { bpm }).await {
+                    Ok(reply) => reply,
+                    Err(error) => return Err(self.fault(error).await),
+                };
+                let error = reply.error.clone();
+                self.readback(reply)?;
+                match error {
+                    Some(error) => Err(error),
+                    None => Ok(self.state.clone()),
+                }
+            }
+
+            OwnerRequest::Occurrence { action, scene } => {
+                self.change.admits(AudioChangeOwner::Mixed, false, None)?;
+                self.command_with_scene(action, false, false, Some(scene))
+                    .await
+            }
+
             OwnerRequest::Action(command) => {
                 let stop = matches!(&command.action, RigAudioAction::Stop);
                 if stop
@@ -1063,6 +1133,17 @@ impl Owner {
     }
 
     async fn command(&mut self, command: RigAudioCommand, safety: bool, restoring: bool) -> Reply {
+        self.command_with_scene(command, safety, restoring, None)
+            .await
+    }
+
+    async fn command_with_scene(
+        &mut self,
+        command: RigAudioCommand,
+        safety: bool,
+        restoring: bool,
+        scene: Option<String>,
+    ) -> Reply {
         if !safety
             && let Some(reason) = self
                 .protect
@@ -1112,7 +1193,7 @@ impl Owner {
         // Any owner command supersedes automatic resume.
         self.cancel_wait();
         let recall = matches!(command.action, RigAudioAction::Switch { .. });
-        self.run_action(command.action, restoring).await?;
+        self.run_action(command.action, restoring, scene).await?;
         if recall && self.state.phase == AudioPhase::Running {
             self.follow_confirmed();
         }
@@ -1130,14 +1211,32 @@ impl Owner {
             self.publish();
         }
     }
-    async fn run_action(&mut self, action: RigAudioAction, restoring: bool) -> Result<(), String> {
+    async fn run_action(
+        &mut self,
+        action: RigAudioAction,
+        restoring: bool,
+        scene: Option<String>,
+    ) -> Result<(), String> {
         match action {
             RigAudioAction::Start { settings } => {
                 let revision = settings.revision.clone();
-                self.start(*settings).await?;
+                if scene.is_some() && self.state.phase == AudioPhase::Running {
+                    self.flush_trial_history().await?;
+                    let previous = self.state.configured.clone().ok_or("Missing playing rig")?;
+                    self.phase(AudioPhase::Stopping, None);
+                    let reserved = self.release_reserved().await?;
+                    self.rollback = Some(previous);
+                    self.restored_error = None;
+                    if let Err(error) = self.start_with_scene(*settings, reserved, scene).await {
+                        self.preparation_failed(error.clone()).await;
+                        return Err(error);
+                    }
+                } else {
+                    self.start_with_scene(*settings, None, scene).await?;
+                    self.rollback = None;
+                    self.restored_error = None;
+                }
                 self.follow_preparation = Some(revision);
-                self.rollback = None;
-                self.restored_error = None;
             }
             RigAudioAction::Reconfigure { stream } => self.reconfigure(stream, restoring).await?,
             RigAudioAction::Stop => {
@@ -1513,7 +1612,22 @@ impl Owner {
                     .iter()
                     .position(|p| p.revision == target)
                     .ok_or("Select a prepared alternative")?;
-                let reply = match self.exchange(&WorkerRequest::Switch { command }).await {
+                let midi = self
+                    .midi_map
+                    .settings(Some(&oxidal_presets::LibraryReference {
+                        kind: oxidal_presets::LibraryKind::Rig,
+                        id: target.clone(),
+                    }))
+                    .map_err(|error| error.to_string())?;
+                let request = match &scene {
+                    Some(scene) => WorkerRequest::RecallSwitch {
+                        command,
+                        scene: scene.clone(),
+                        midi: midi.clone(),
+                    },
+                    None => WorkerRequest::Switch { command },
+                };
+                let reply = match self.exchange(&request).await {
                     Ok(reply) => reply,
                     Err(e) => return Err(self.fault(e).await),
                 };
@@ -1524,6 +1638,10 @@ impl Owner {
                     return Err(error);
                 }
                 if reply.control.source_revision != target
+                    || scene.as_ref().is_some_and(|id| {
+                        reply.control.scene.as_ref() != Some(id)
+                            || reply.control.scene_transitioning
+                    })
                     || self
                         .state
                         .control
@@ -1540,19 +1658,16 @@ impl Owner {
                     recall: self.state.control.as_ref().map(|c| c.recall()),
                 };
                 settings.recall = None;
-                settings.midi = self
-                    .midi_map
-                    .settings(Some(&oxidal_presets::LibraryReference {
-                        kind: oxidal_presets::LibraryKind::Rig,
-                        id: target.clone(),
-                    }))
-                    .map_err(|error| error.to_string())?;
+                settings.midi = midi;
                 self.state.configured = Some(settings);
                 self.state.control = None;
                 // An isolated export retains its source-session receipt even
                 // while another resident is sounding.
                 if let Err(e) = self.readback(reply) {
                     return Err(self.fault(e).await);
+                }
+                if scene.is_some() {
+                    return Ok(());
                 }
                 let midi = self
                     .state
@@ -1571,7 +1686,8 @@ impl Owner {
                     return Err(error);
                 }
             }
-            RigAudioAction::Save { name } => self.save(name).await?,
+            RigAudioAction::Save { name } => self.save(name, None).await?,
+            RigAudioAction::SaveVersion { name, target } => self.save(name, Some(target)).await?,
             RigAudioAction::SetBoot { enabled } => {
                 if enabled {
                     if self.model_pending() {
@@ -1853,6 +1969,8 @@ impl RigPlayback {
             finished,
             commands,
             state,
+            executable: config.rig_worker.clone(),
+            preset_dir: config.preset_dir.clone(),
         })
     }
     /// Called under exclusive library access: no concurrent start or control can race the lock.
@@ -1891,6 +2009,132 @@ impl RigPlayback {
             Some(self.library_access.clone().read_owned().await)
         };
         self.send(OwnerRequest::Action(command), access).await
+    }
+
+    pub(super) async fn check_occurrence(&self, request: &OccurrenceStart) -> Result<(), String> {
+        let root = self.preset_dir.join("bundles");
+        let input_bytes = encode(request)?;
+        let mut child = tokio::process::Command::new(
+            self.executable.as_ref().ok_or("Mixed worker unavailable")?,
+        )
+        .arg("--check-occurrence")
+        .env("OXIDAL_BUNDLE_STORE", root)
+        .env("OXIDAL_PRESET_DIR", &self.preset_dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|error| error.to_string())?;
+        let result = tokio::time::timeout(Duration::from_secs(25), async {
+            let mut input = child.stdin.take().ok_or("Missing recall check input")?;
+            input
+                .write_all(&input_bytes)
+                .await
+                .map_err(|error| error.to_string())?;
+            drop(input);
+            let mut output = Vec::new();
+            child
+                .stdout
+                .take()
+                .ok_or("Missing recall check output")?
+                .take(2049)
+                .read_to_end(&mut output)
+                .await
+                .map_err(|error| error.to_string())?;
+            if output.len() > 2048
+                || !child
+                    .wait()
+                    .await
+                    .map_err(|error| error.to_string())?
+                    .success()
+            {
+                return Err("Starting scene preparation failed".into());
+            }
+            serde_json::from_slice::<Result<(), String>>(&output)
+                .map_err(|_| "Invalid starting scene preparation reply")?
+        })
+        .await
+        .unwrap_or_else(|_| Err("Starting scene preparation timed out".into()));
+        if result.is_err() {
+            let _ = child.start_kill();
+            let _ = child.wait().await;
+        }
+        result
+    }
+
+    pub(super) async fn dispatch_occurrence(
+        &self,
+        action: RigAudioCommand,
+        scene: String,
+    ) -> Reply {
+        let access = self.library_access.clone().read_owned().await;
+        self.send(OwnerRequest::Occurrence { action, scene }, Some(access))
+            .await
+    }
+
+    pub(super) async fn confirm_occurrence(
+        &self,
+        target: &str,
+        scene: &str,
+        session: Option<&str>,
+    ) -> Reply {
+        let mut watch = self.state.clone();
+        let confirm = async {
+            loop {
+                let state = watch.borrow_and_update().clone();
+                let still_target = state
+                    .configured
+                    .as_ref()
+                    .is_some_and(|s| s.revision == target);
+                if !still_target
+                    || !matches!(state.phase, AudioPhase::Starting | AudioPhase::Running)
+                {
+                    return Err(state
+                        .error
+                        .unwrap_or_else(|| "Starting scene was not confirmed".into()));
+                }
+                if let Some(control) = &state.control {
+                    if session.is_some_and(|expected| control.session != expected) {
+                        return Err("Playing rig changed during scene recall".into());
+                    }
+                    if !control.scene_transitioning && state.phase == AudioPhase::Running {
+                        return if control.scene.as_deref() == Some(scene) {
+                            Ok(state)
+                        } else {
+                            Err(control
+                                .branch_sleep
+                                .as_ref()
+                                .and_then(|sleep| sleep.message.clone())
+                                .unwrap_or_else(|| "Starting scene was not confirmed".into()))
+                        };
+                    }
+                }
+                watch
+                    .changed()
+                    .await
+                    .map_err(|_| "Mixed audio owner stopped")?;
+            }
+        };
+        tokio::time::timeout(Duration::from_secs(62), confirm)
+            .await
+            .unwrap_or_else(|_| Err("Starting scene confirmation timed out".into()))
+    }
+
+    pub(super) async fn set_host_tempo(
+        &self,
+        worker_session: String,
+        bpm: Option<f32>,
+    ) -> Result<(), String> {
+        self.send(
+            OwnerRequest::Tempo {
+                worker_session,
+                bpm,
+            },
+            None,
+        )
+        .await
+        .map(|_| ())
     }
 
     pub(super) async fn dispatch_change(&self, request: OwnerRequest<RigAudioCommand>) -> Reply {

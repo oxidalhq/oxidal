@@ -411,6 +411,9 @@ pub struct Observed {
     /// Which controller sent it: 0 is the first input, then the extras in order.
     #[serde(default)]
     pub source: u8,
+    /// Device monotonic time at raw MIDI receipt. Older workers omit it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub received_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -466,6 +469,7 @@ impl Status {
             seq: self.events,
             message,
             source,
+            received_ms: crate::realtime::monotonic_millis(),
         });
     }
 }
@@ -1345,6 +1349,23 @@ mod tests {
             branch_bindings: vec![],
             parameter_bindings: vec![],
         }
+    }
+
+    #[test]
+    fn older_observed_midi_records_remain_readable() {
+        let record: Observed = serde_json::from_value(serde_json::json!({
+            "seq":1,"message":{"kind":"control","channel":1,"controller":27,"value":127}
+        }))
+        .unwrap();
+        assert_eq!(record.received_ms, None);
+        assert_eq!(record.source, 0);
+        let mut status = Status::default();
+        status.observe(0, record.message);
+        #[cfg(all(target_os = "linux", feature = "alsa"))]
+        assert!(
+            status.recent[0].received_ms <= crate::realtime::monotonic_millis()
+                && status.recent[0].received_ms.is_some()
+        );
     }
 
     #[test]

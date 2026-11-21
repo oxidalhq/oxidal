@@ -228,9 +228,35 @@ export function StemMixEditor({
     };
   }, [running, source.id, source.title, slow]);
 
-  function hear(next: Draft) {
+  async function hear(next: Draft) {
     if (live && split && recipe && !sameRecipe(recipe, next.recipe))
-      void sendMix({ split: split.id, expected: recipe, recipe: next.recipe });
+      return sendMix({
+        split: split.id,
+        expected: recipe,
+        recipe: next.recipe,
+      });
+    return true;
+  }
+
+  async function stepHistory(direction: 'undo' | 'redo') {
+    if (!history || busy) return;
+    const next = direction === 'undo' ? undo(history) : redo(history);
+    if (!live || sameRecipe(history.current.recipe, next.current.recipe)) {
+      setHistory(next);
+      return;
+    }
+    setBusy(direction);
+    setError('');
+    try {
+      if (await hear(next.current))
+        setHistory((current) => (current === history ? next : current));
+      else
+        setError(
+          'The backing player did not apply the mix. Your undo history is still available.',
+        );
+    } finally {
+      setBusy('');
+    }
   }
 
   async function startSplit(mode: Mode) {
@@ -289,13 +315,13 @@ export function StemMixEditor({
   }
 
   function edit(next: Draft) {
-    hear(next);
+    void hear(next);
     setHistory((state) => state && commit(state, next));
   }
 
   /** Slider drags update live and become one undo step when released. */
   function drag(next: Draft) {
-    hear(next);
+    void hear(next);
     setHistory((state) => {
       if (!state) return state;
       gesture.current ??= state.current;
@@ -634,11 +660,7 @@ export function StemMixEditor({
                   aria-label="Undo"
                   title="Undo"
                   disabled={!mixable || !history.past.length}
-                  onClick={() => {
-                    const next = undo(history);
-                    hear(next.current);
-                    setHistory(next);
-                  }}
+                  onClick={() => void stepHistory('undo')}
                 >
                   <ArrowCounterClockwise aria-hidden="true" />
                 </Button>
@@ -648,11 +670,7 @@ export function StemMixEditor({
                   aria-label="Redo"
                   title="Redo"
                   disabled={!mixable || !history.future.length}
-                  onClick={() => {
-                    const next = redo(history);
-                    hear(next.current);
-                    setHistory(next);
-                  }}
+                  onClick={() => void stepHistory('redo')}
                 >
                   <ArrowClockwise aria-hidden="true" />
                 </Button>

@@ -8,9 +8,10 @@ pub use details::{
 };
 mod catalog;
 pub use catalog::{
-    CatalogStore, EntrySettings, LibraryAction, LibraryCatalog, LibraryItem, LibraryKind,
-    LibraryOrigin, LibraryUpdate, OccurrenceAction, OccurrenceEdit, PresetFamily, PresetVersion,
-    ResolvedOccurrence, SetOccurrence, SetOrder, VersionAction, VersionEdit, VersionView,
+    CatalogStore, EntrySettings, KeepReady, LibraryAction, LibraryCatalog, LibraryItem,
+    LibraryKind, LibraryOrigin, LibraryUpdate, OccurrenceAction, OccurrenceEdit, PresetFamily,
+    PresetVersion, ResolvedOccurrence, SetOccurrence, SetOrder, VersionAction, VersionEdit,
+    VersionView,
 };
 mod bundle;
 mod graph;
@@ -20,7 +21,7 @@ pub use graph::{GraphPreset, GraphStore, SavedGraph};
 mod midi;
 mod model;
 mod nam_info;
-pub use nam_info::NamInfo;
+pub use nam_info::{CaptureLevels, NamInfo};
 mod wav_info;
 pub use wav_info::WavInfo;
 mod native;

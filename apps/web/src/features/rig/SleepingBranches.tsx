@@ -1,8 +1,9 @@
+import { useState } from 'react';
+
+import { Button } from '@oxidal/design-system/components/button';
 import { Switch } from '@oxidal/design-system/components/switch';
 
-import { useState } from 'react';
-import { Button } from '@oxidal/design-system/components/button';
-import { rigSleepPlan, type RigSleepPlan, type RigAudioState } from '../../api';
+import { type RigAudioState, type RigSleepPlan, rigSleepPlan } from '../../api';
 import { useProtect } from '../../components/media/sessionMedia';
 type Control = NonNullable<RigAudioState['control']>;
 export function SleepingBranches({
@@ -68,7 +69,7 @@ export function PrepareSleepingBranches({
   const [review, setReview] = useState<RigSleepPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const protect = useProtect(true);
+  const protect = useProtect(!!review?.plan);
   async function check() {
     setLoading(true);
     setError('');

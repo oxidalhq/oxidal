@@ -730,6 +730,10 @@ pub(crate) async fn apply(
         inner.recent.pop_front();
     }
     inner.recent.push_back((request.request_id, result.clone()));
+    drop(inner);
+    if result.is_ok() && matches!(request.command, PlayerCommand::Stop) {
+        shared.tempo.backing_stopped(shared).await;
+    }
     result
 }
 

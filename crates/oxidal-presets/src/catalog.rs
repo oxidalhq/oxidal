@@ -1,4 +1,6 @@
 //! Device-local library labels/order/visibility; immutable tone payloads stay intact.
+mod keep_ready;
+pub use keep_ready::KeepReady;
 mod occurrences;
 pub use occurrences::{
     EntrySettings, OccurrenceAction, OccurrenceEdit, ResolvedOccurrence, SetOccurrence, SetOrder,
@@ -168,6 +170,8 @@ pub struct LibraryUpdate {
 #[derive(Clone)]
 struct Preferences {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    keep_ready: Option<KeepReady>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     occurrences: Option<Vec<SetOccurrence>>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     families: BTreeMap<String, PresetFamily>,
@@ -275,13 +279,19 @@ impl CatalogStore {
         }
         let mut candidate = self.preferences.clone();
         candidate.families.insert(family.logical_id.clone(), family);
-        Self::move_default_content(&mut candidate, old, new)?;
+        self.move_default_content(&mut candidate, old, new)?;
         self.persist(candidate)
     }
-    fn move_default_content(candidate: &mut Preferences, old: String, new: String) -> Result<()> {
+    fn move_default_content(
+        &self,
+        candidate: &mut Preferences,
+        old: String,
+        new: String,
+    ) -> Result<()> {
         if old == new {
             return Ok(());
         }
+        self.move_keep_ready(candidate, &old, &new)?;
         candidate.order.retain(|key| key != &new);
         match candidate.order.iter().position(|key| key == &old) {
             Some(place) => candidate.order[place] = new.clone(),

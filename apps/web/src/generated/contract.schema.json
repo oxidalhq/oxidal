@@ -55,6 +55,9 @@
     "capabilities": {
       "$ref": "#/$defs/Capabilities"
     },
+    "capture_levels": {
+      "$ref": "#/$defs/CaptureLevels"
+    },
     "capture_state": {
       "$ref": "#/$defs/CaptureState"
     },
@@ -232,6 +235,9 @@
     "reamp_request": {
       "$ref": "#/$defs/ReampRequest"
     },
+    "rehearsal": {
+      "$ref": "#/$defs/RehearsalReport"
+    },
     "removal_preview": {
       "$ref": "#/$defs/RemovalPreview"
     },
@@ -373,6 +379,12 @@
     "storage_state": {
       "$ref": "#/$defs/StorageState"
     },
+    "tempo_command": {
+      "$ref": "#/$defs/TempoCommand"
+    },
+    "tempo_state": {
+      "$ref": "#/$defs/TempoState"
+    },
     "terminal_command": {
       "$ref": "#/$defs/TerminalCommand"
     },
@@ -442,6 +454,8 @@
     "song_links",
     "song_link_update",
     "practice_timing",
+    "tempo_state",
+    "tempo_command",
     "player_snapshot",
     "player_request",
     "player_order",
@@ -461,6 +475,7 @@
     "removal_request",
     "removal_result",
     "local_model",
+    "capture_levels",
     "local_model_page",
     "native_defaults",
     "native_defaults_update",
@@ -538,6 +553,7 @@
     "preset_details_update",
     "library_catalog",
     "set_order",
+    "rehearsal",
     "occurrence_edit",
     "preset_versions",
     "preset_version_edit",
@@ -1253,6 +1269,27 @@
           "required": [
             "kind",
             "name"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "save_version"
+            },
+            "name": {
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/VersionTarget"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "name",
+            "target"
           ]
         },
         {
@@ -3559,6 +3596,32 @@
         "reamp"
       ]
     },
+    "CaptureLevels": {
+      "description": "Trainer-written references in dBu. These readings never change an audio gain.",
+      "type": "object",
+      "properties": {
+        "gear_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "input_dbu": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "output_dbu": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      }
+    },
     "CaptureState": {
       "type": "object",
       "properties": {
@@ -5805,6 +5868,27 @@
           "required": [
             "kind",
             "name"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "save_version"
+            },
+            "name": {
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/VersionTarget"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "name",
+            "target"
           ]
         },
         {
@@ -8862,6 +8946,16 @@
             }
           ]
         },
+        "tempo": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TempoState"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "xruns": {
           "description": "Recovered overruns/underruns for the current worker; unavailable with older workers.",
           "type": [
@@ -9056,6 +9150,17 @@
           ]
         },
         "previous": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Trigger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tap": {
+          "description": "A device-stamped performance tempo tap.",
           "anyOf": [
             {
               "$ref": "#/$defs/Trigger"
@@ -9382,6 +9487,15 @@
       "properties": {
         "message": {
           "$ref": "#/$defs/Message"
+        },
+        "received_ms": {
+          "description": "Device monotonic time at raw MIDI receipt. Older workers omit it.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
         },
         "seq": {
           "description": "Equals `Status::events` after this message; consecutive messages differ by one.",
@@ -11662,6 +11776,72 @@
         "seconds"
       ]
     },
+    "RehearsalEntry": {
+      "type": "object",
+      "properties": {
+        "accompaniment": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "sheet": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sound": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "$ref": "#/$defs/RehearsalStatus"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "status",
+        "sound",
+        "accompaniment",
+        "sheet"
+      ]
+    },
+    "RehearsalReport": {
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RehearsalEntry"
+          }
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "revision",
+        "entries"
+      ]
+    },
+    "RehearsalStatus": {
+      "type": "string",
+      "enum": [
+        "prepared",
+        "loads_on_recall",
+        "blocked"
+      ]
+    },
     "RemovalPreview": {
       "type": "object",
       "properties": {
@@ -12235,6 +12415,27 @@
           "required": [
             "kind",
             "name"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "save_version"
+            },
+            "name": {
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/VersionTarget"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "name",
+            "target"
           ]
         }
       ]
@@ -13151,6 +13352,13 @@
       "enum": [
         "rig",
         "set_list"
+      ]
+    },
+    "SelectTempoSource": {
+      "type": "string",
+      "enum": [
+        "song",
+        "preset"
       ]
     },
     "SetOccurrence": {
@@ -15373,6 +15581,85 @@
             "port"
           ]
         }
+      ]
+    },
+    "TempoCommand": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "tap"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "expected_revision": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "select"
+            },
+            "source": {
+              "$ref": "#/$defs/SelectTempoSource"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "source",
+            "expected_revision"
+          ]
+        }
+      ]
+    },
+    "TempoSource": {
+      "type": "string",
+      "enum": [
+        "tap",
+        "song",
+        "preset"
+      ]
+    },
+    "TempoState": {
+      "type": "object",
+      "properties": {
+        "bpm": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "source": {
+          "$ref": "#/$defs/TempoSource"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "source"
       ]
     },
     "TerminalCommand": {

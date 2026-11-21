@@ -40,13 +40,13 @@ import { parseSong } from '../lib/song';
 import { tempoFromTaps } from '../lib/tempo';
 import { useRemembered } from '../lib/use-remembered';
 import { SCENES } from '../patterns/rig.fixtures';
+import { type PerformanceTempo, TempoSource } from '../patterns/tempo-source';
 import { CONTROLLERS, type SwitchAction } from '../widgets/controllers';
 import { Footswitches, type StageState } from '../widgets/footswitches';
 import { Meter } from '../widgets/meter';
 import { MidiTarget } from '../widgets/midi';
 import { SheetViewer } from '../widgets/sheet-viewer';
-import { TapTempo } from '../widgets/tap-tempo';
-import { Transport } from '../widgets/transport';
+import { Transport, type TransportState } from '../widgets/transport';
 import { TunerFace } from '../widgets/tuner-face';
 import { CaptureSceneSheet } from './capture-scene-sheet';
 import { FRIDAY_SET } from './perform.data';
@@ -110,9 +110,13 @@ export function Perform({
   };
   const [boost, setBoost] = useState(false);
   const [tuner, setTuner] = useState(false);
-  const [playing, setPlaying] = useState(true);
+  const [transport, setTransport] = useState<TransportState>('playing');
+  const playing = transport === 'playing';
   const [loop, setLoop] = useState(false);
-  const [bpm, setBpm] = useState(FRIDAY_SET[0]!.bpm ?? 120);
+  const [tempoSource, setTempoSource] =
+    useState<PerformanceTempo['source']>('song');
+  const [tapBpm, setTapBpm] = useState<number>();
+  const presetBpm = 120;
   const [protect, setProtect] = useState(true);
   const [controller, setController] = useState(initialController);
   const [showSheet, setShowSheet] = useState(initialSheet);
@@ -124,6 +128,24 @@ export function Perform({
   const taps = useRef<number[]>([]);
 
   const entry = FRIDAY_SET[index]!;
+  const bpm =
+    tempoSource === 'tap'
+      ? tapBpm
+      : tempoSource === 'song'
+        ? playing
+          ? entry.bpm
+          : undefined
+        : presetBpm;
+  const tempo: PerformanceTempo = {
+    source: tempoSource,
+    bpm,
+    reason:
+      bpm == null
+        ? tempoSource === 'tap'
+          ? 'Tap again to set a tempo'
+          : 'No confirmed track tempo'
+        : undefined,
+  };
   const next = FRIDAY_SET[index + 1];
   const profile =
     CONTROLLERS.find((c) => c.id === controller) ?? CONTROLLERS[0]!;
@@ -143,7 +165,6 @@ export function Perform({
     const at = Math.max(0, Math.min(FRIDAY_SET.length - 1, to));
     setIndex(at);
     selectScene('a');
-    setBpm(FRIDAY_SET[at]!.bpm ?? bpm);
   };
 
   const act = (action: SwitchAction) => {
@@ -164,7 +185,7 @@ export function Perform({
       case 'boost':
         return setBoost((on) => !on);
       case 'play':
-        return setPlaying((on) => !on);
+        return setTransport(playing ? 'paused' : 'playing');
       case 'loop':
         return setLoop((on) => !on);
       case 'tap': {
@@ -173,7 +194,8 @@ export function Perform({
         taps.current =
           last && now - last > 2000 ? [now] : [...taps.current.slice(-7), now];
         const t = tempoFromTaps(taps.current);
-        if (t && t >= 30 && t <= 300) setBpm(t);
+        setTempoSource('tap');
+        if (t && t >= 40 && t <= 240) setTapBpm(t);
         return;
       }
       case 'none':
@@ -181,6 +203,17 @@ export function Perform({
     }
   };
 
+  function selectTempo(source: PerformanceTempo['source']) {
+    if (source === 'tap') act({ kind: 'tap' });
+    else {
+      taps.current = [];
+      setTempoSource(source);
+    }
+  }
+  function changeTransport(state: TransportState) {
+    setTransport(state);
+    if (state === 'cued' && tempoSource === 'song') setTempoSource('preset');
+  }
   const state: StageState = {
     scene,
     scenes,
@@ -393,7 +426,7 @@ export function Perform({
             (m.kind === 'pc' || m.value > 0) && act({ kind: 'tap' })
           }
         >
-          <TapTempo bpm={bpm} onBpm={setBpm} trackBpm={entry.bpm} />
+          <TempoSource state={tempo} onSelect={selectTempo} />
         </MidiTarget>
         <MidiTarget
           id="stage:tuner"
@@ -411,9 +444,9 @@ export function Perform({
         <div className="flex min-w-0 items-center gap-3">
           <Transport
             compact
-            state={playing ? 'playing' : 'paused'}
-            onPlay={() => setPlaying(true)}
-            onPause={() => setPlaying(false)}
+            state={transport}
+            onPlay={() => changeTransport('playing')}
+            onPause={() => changeTransport('paused')}
           />
           <div className="grid min-w-0 flex-1 gap-1">
             <span className="truncate text-sm font-medium">
@@ -437,7 +470,14 @@ export function Perform({
         </div>
       </div>
 
-      <PlayerSheet open={player} onOpenChange={setPlayer} />
+      <PlayerSheet
+        open={player}
+        onOpenChange={setPlayer}
+        state={transport}
+        onTransport={changeTransport}
+        tempo={tempo}
+        onTempo={selectTempo}
+      />
 
       <Sheet open={list} onOpenChange={setList}>
         <SheetContent onOpenChange={setList}>

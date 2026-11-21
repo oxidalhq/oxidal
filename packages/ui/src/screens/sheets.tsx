@@ -11,6 +11,7 @@ import {
 } from '../components/ui/sheet';
 import { Label } from '../components/ui/text';
 import { Toggle } from '../components/ui/toggle';
+import { type PerformanceTempo, TempoSource } from '../patterns/tempo-source';
 import { PracticePanel } from '../widgets/practice';
 import { exampleWaveform } from '../widgets/practice.data';
 import {
@@ -31,11 +32,18 @@ const WAVEFORM = exampleWaveform();
 export function PlayerSheet({
   open,
   onOpenChange,
+  state,
+  onTransport,
+  tempo,
+  onTempo,
 }: {
+  state: TransportState;
+  onTransport: (state: TransportState) => void;
+  tempo: PerformanceTempo;
+  onTempo: (source: PerformanceTempo['source']) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [state, setState] = useState<TransportState>('playing');
   const [stems, setStems] = useState<Partial<Record<StemRole, StemControls>>>({
     vocals: { level: -60, muted: true, solo: false },
     drums: { level: 0, muted: false, solo: false },
@@ -57,14 +65,15 @@ export function PlayerSheet({
         <SheetBody>
           <Transport
             state={state}
-            onPlay={() => setState('playing')}
-            onPause={() => setState('paused')}
+            onPlay={() => onTransport('playing')}
+            onPause={() => onTransport('paused')}
             onStop={() => {
-              setState('cued');
+              onTransport('cued');
             }}
             onPrevious={() => {}}
             onNext={() => {}}
           />
+          <TempoSource state={tempo} onSelect={onTempo} />
           <PracticePanel
             waveform={WAVEFORM}
             duration={222}

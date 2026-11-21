@@ -520,7 +520,12 @@ fn save_copy() -> Result<(), Box<dyn std::error::Error>> {
     if bytes.len() > PLAYBACK_FRAME_BYTES || bytes.last() != Some(&b'\n') {
         return Err("Invalid save request".into());
     }
-    let request: SavePlayback = serde_json::from_slice(&bytes)?;
+    let (request, target) =
+        serde_json::from_slice::<oxidal_audio::lifecycle::SaveInput<SavePlayback>>(&bytes)?
+            .into_parts();
+    if target.is_some() && (!request.settings.owned || request.settings.draft) {
+        return Err("Choose an owned preset version".into());
+    }
     request.settings.validate()?;
     if !valid_preset_name(&request.name) || !valid_controls(&request.controls) {
         return Err("Invalid save name or controls".into());
@@ -567,28 +572,55 @@ fn save_copy() -> Result<(), Box<dyn std::error::Error>> {
     {
         return Err("Saved control readback differs".into());
     }
-    if !request.settings.draft {
-        use oxidal_presets::{DetailsStore, LibraryKind, LibraryReference, inspect};
-        DetailsStore::new(root).inherit(
-            LibraryReference {
-                kind: LibraryKind::Owned,
-                id: inspect(&bytes)?.sha256,
-            },
-            LibraryReference {
-                kind: if request.settings.owned {
-                    LibraryKind::Owned
-                } else {
-                    LibraryKind::Original
+    let id = oxidal_presets::inspect(&bytes)?.sha256;
+    let target_is_version = target.is_some();
+    let publish = || -> Result<(), oxidal_presets::Error> {
+        if target_is_version && root.join("owned").join(&id).try_exists()? {
+            owned.read(&id)?;
+            return Ok(());
+        }
+        if !request.settings.draft {
+            use oxidal_presets::{DetailsStore, LibraryKind, LibraryReference, inspect};
+            DetailsStore::new(root.clone()).inherit(
+                LibraryReference {
+                    kind: LibraryKind::Owned,
+                    id: inspect(&bytes)?.sha256,
                 },
-                id: request.settings.preset_id.clone(),
-            },
-        )?;
-    }
-    let saved = match source {
-        Some(source) => owned.save(&source, &bytes)?,
-        None => owned.save_created(&bytes)?,
+                LibraryReference {
+                    kind: if request.settings.owned {
+                        LibraryKind::Owned
+                    } else {
+                        LibraryKind::Original
+                    },
+                    id: request.settings.preset_id.clone(),
+                },
+            )?;
+        }
+        match source {
+            Some(source) => owned.save(&source, &bytes)?,
+            None => owned.save_created(&bytes)?,
+        };
+        Ok(())
     };
-    println!("{}", saved.id);
+    let saved_id = if let Some(target) = target {
+        use sha2::{Digest, Sha256};
+        let input_hash = format!("{:x}", Sha256::digest(serde_json::to_vec(&request)?));
+        let version = target.version.clone();
+        let result = oxidal_presets::CatalogStore::publish_export(
+            &root,
+            oxidal_presets::LibraryKind::Owned,
+            &request.settings.preset_id,
+            target,
+            &id,
+            Some(&input_hash),
+            publish,
+        )?;
+        result.content(&version)?.to_owned()
+    } else {
+        publish()?;
+        id
+    };
+    println!("{saved_id}");
     std::io::stdout().flush()?;
     Ok(())
 }

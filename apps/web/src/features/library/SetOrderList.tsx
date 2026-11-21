@@ -14,8 +14,10 @@ import {
   setOrder,
   songView,
 } from '../../api';
+import { CueEntryBacking } from '../../components/media/SongLinkControls';
 import { friendlyError } from '../../lib/friendlyError';
 import { readScenes } from '../../sceneFormat';
+import { RehearsalReport } from './RehearsalReport';
 
 type Row = SetOrder['entries'][number];
 type Settings = Row['entry']['settings'];
@@ -188,7 +190,9 @@ function EntryEditor({
         empty="Use preset or track sheet"
         onChange={(sheet) => setDraft({ ...draft, sheet })}
       />
-      <Button onClick={() => void onSave({...draft,own_media:true})}>Save entry settings</Button>
+      <Button onClick={() => void onSave({ ...draft, own_media: true })}>
+        Save entry settings
+      </Button>
       {error && <p role="alert">{error}</p>}
     </fieldset>
   );
@@ -264,6 +268,7 @@ export function SetOrderList({
   if (!order) return error ? <p role="status">{error}</p> : null;
   return (
     <div className="space-y-3">
+      <RehearsalReport revision={order.revision} />
       <LibraryList
         items={order.entries.map((r, i) => ({
           id: r.entry.id,
@@ -343,6 +348,7 @@ export function SetOrderList({
                   Remove entry
                 </Button>
               </fieldset>
+              <CueEntryBacking row={row} disabled={!connected || busy} />
               {confirm === item.id && (
                 <div>
                   <p>Remove this occurrence of {row.name} from the set?</p>
