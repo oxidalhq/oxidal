@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 /// One-shot, non-PCM creation of a preset from a staged model.
-fn create_from_model() -> Result<(), Box<dyn std::error::Error>> {
+fn create_from_model(render_only: bool) -> Result<(), Box<dyn std::error::Error>> {
     #[derive(serde::Deserialize)]
     #[serde(deny_unknown_fields)]
     struct Request {
@@ -23,14 +23,24 @@ fn create_from_model() -> Result<(), Box<dyn std::error::Error>> {
     }
     let request: Request = serde_json::from_slice(&bytes)?;
     let root = std::path::PathBuf::from(std::env::var("OXIDAL_PRESET_DIR")?);
-    let id = oxidal_tone3000::factory_voice::create(&root, &request.name, &request.asset)?;
-    println!("{id}");
+    if render_only {
+        let preset = oxidal_tone3000::factory_voice::render(&root, &request.name, &request.asset)?;
+        std::io::stdout().lock().write_all(&preset)?;
+    } else {
+        let id = oxidal_tone3000::factory_voice::create(&root, &request.name, &request.asset)?;
+        println!("{id}");
+    }
     std::io::stdout().flush()?;
     Ok(())
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    if std::env::args().nth(1).as_deref() == Some("--create-from-model") {
-        return create_from_model();
+    match std::env::args().nth(1).as_deref() {
+        Some("--create-from-model") => return create_from_model(false),
+        Some("--render-model") => {
+            oxidal_audio::realtime::background_owner();
+            return create_from_model(true);
+        }
+        _ => {}
     }
     let root = std::path::PathBuf::from(std::env::var("OXIDAL_PRESET_DIR")?);
     let mut editor = Editor::new(root)?;

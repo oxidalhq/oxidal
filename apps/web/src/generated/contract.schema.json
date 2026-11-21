@@ -58,6 +58,9 @@
     "capture_levels": {
       "$ref": "#/$defs/CaptureLevels"
     },
+    "capture_rig_request": {
+      "$ref": "#/$defs/CaptureRigRequest"
+    },
     "capture_state": {
       "$ref": "#/$defs/CaptureState"
     },
@@ -482,6 +485,7 @@
     "rig_document",
     "rig_library",
     "rig_publish",
+    "capture_rig_request",
     "rig_sleep_plan",
     "rig_native_sources",
     "lv2_catalog",
@@ -3621,6 +3625,45 @@
           "format": "double"
         }
       }
+    },
+    "CaptureRigRequest": {
+      "type": "object",
+      "properties": {
+        "cabinet": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "captures": {
+          "description": "Clean, Crunch, Lead and Dirt, in that order.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RigCapture"
+          },
+          "maxItems": 4,
+          "minItems": 4
+        },
+        "name": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "request_id",
+        "captures"
+      ]
+    },
+    "CaptureRole": {
+      "type": "string",
+      "enum": [
+        "amp",
+        "full_rig"
+      ]
     },
     "CaptureState": {
       "type": "object",
@@ -12554,6 +12597,22 @@
         "phase",
         "processed_frames",
         "device_owned"
+      ]
+    },
+    "RigCapture": {
+      "type": "object",
+      "properties": {
+        "asset": {
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/CaptureRole"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "asset",
+        "role"
       ]
     },
     "RigDocument": {

@@ -791,6 +791,22 @@ export async function publishRig(
   return body;
 }
 
+export async function publishCaptureRig(
+  request: Contract['capture_rig_request'],
+  signal: AbortSignal,
+) {
+  const body = await presetResponse(
+    await fetch('/api/v1/presets/rigs/from-captures', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+      signal,
+    }),
+  );
+  if (!rigDocumentValidator(body)) throw new Error('Incompatible saved rig');
+  return body;
+}
+
 const rigSourcesValidator = ajv.compile<Contract['rig_native_sources']>({
   $defs: schema.$defs,
   type: 'array',

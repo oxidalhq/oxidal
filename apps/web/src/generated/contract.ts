@@ -466,6 +466,7 @@ export type Phase2 = "idle" | "listening" | "done" | "timeout";
 export type ModelPhase = "verifying" | "preparing" | "ready" | "applying" | "applied" | "failed" | "cancelled";
 export type AudioPhase = "unavailable" | "stopped" | "starting" | "running" | "stopping" | "failed";
 export type CalibrationAction = "run" | "run_all" | "cancel" | "reset";
+export type CaptureRole = "amp" | "full_rig";
 export type CaptureKind = "di" | "reamp";
 export type JobPhase = ("running" | "done" | "failed" | "cancelled") | "starting" | "finishing";
 /**
@@ -1220,6 +1221,7 @@ export interface Contract {
   calibration_coverage: CalibrationCoverage;
   capabilities: Capabilities;
   capture_levels: CaptureLevels;
+  capture_rig_request: CaptureRigRequest;
   capture_state: CaptureState;
   capture_stop: StopRequest;
   command: Command;
@@ -2001,6 +2003,22 @@ export interface CaptureLevels {
   gear_type?: string | null;
   input_dbu?: number | null;
   output_dbu?: number | null;
+}
+export interface CaptureRigRequest {
+  cabinet?: string | null;
+  /**
+   * Clean, Crunch, Lead and Dirt, in that order.
+   *
+   * @minItems 4
+   * @maxItems 4
+   */
+  captures: [RigCapture, RigCapture, RigCapture, RigCapture];
+  name: string;
+  request_id: string;
+}
+export interface RigCapture {
+  asset: string;
+  role: CaptureRole;
 }
 export interface CaptureState {
   job?: CaptureJob | null;

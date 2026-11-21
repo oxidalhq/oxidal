@@ -28,6 +28,12 @@ pub fn idle() {
     imp::idle();
 }
 
+/// Lowers an offline native owner and its future threads within the ordinary
+/// CPU scheduler. JUCE loader threads cannot start from the idle CPU policy.
+pub fn background_owner() {
+    imp::background_owner();
+}
+
 /// Milliseconds from the Linux monotonic clock shared across worker processes.
 pub fn monotonic_millis() -> Option<u64> {
     imp::monotonic_millis()
@@ -79,15 +85,26 @@ mod imp {
             libc::pthread_setschedparam(libc::pthread_self(), libc::SCHED_OTHER, &param);
         }
     }
+    pub fn background_owner() {
+        // SAFETY: a zero process ID names the caller. Lowering ordinary
+        // scheduling priority needs no realtime or administrator privileges.
+        unsafe { libc::setpriority(libc::PRIO_PROCESS, 0, 10) };
+        idle_io();
+    }
     pub fn idle() {
+        let param = libc::sched_param { sched_priority: 0 };
+        // SAFETY: valid policy and parameter for the current thread.
+        unsafe {
+            libc::pthread_setschedparam(libc::pthread_self(), libc::SCHED_IDLE, &param);
+        }
+        idle_io();
+    }
+    fn idle_io() {
         const IOPRIO_WHO_PROCESS: libc::c_long = 1;
         const IOPRIO_CLASS_IDLE: libc::c_long = 3;
         const IOPRIO_CLASS_SHIFT: libc::c_long = 13;
-        let param = libc::sched_param { sched_priority: 0 };
-        // SAFETY: valid policy and parameter for the current thread; the
-        // ioprio call names the calling thread (0) with a valid class.
+        // SAFETY: the ioprio call names the calling thread (0) with a valid class.
         unsafe {
-            libc::pthread_setschedparam(libc::pthread_self(), libc::SCHED_IDLE, &param);
             libc::syscall(
                 libc::SYS_ioprio_set,
                 IOPRIO_WHO_PROCESS,
@@ -105,6 +122,7 @@ mod imp {
     }
     pub fn leave() {}
     pub fn idle() {}
+    pub fn background_owner() {}
     pub fn monotonic_millis() -> Option<u64> {
         None
     }

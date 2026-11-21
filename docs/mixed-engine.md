@@ -221,3 +221,22 @@ worker before replacing the current sound. The new stream starts at that scene
 and confirms processed frames before the device reports the entry as selected.
 This path reopens the audio device. Protect allows recalls of the current rig
 or an already prepared alternative.
+
+## Build a rig from captures
+
+The Library builds an owned rig from four verified NAM assets and their
+confirmed roles. Enter the captures in Clean, Crunch, Lead, Dirt order. The
+rig starts on Clean. Each scene opens one capture return and keeps the
+shared Echo and Bloom after the returns. The capture processors run at 1×
+oversampling and stay warm during scene changes.
+
+A separate WAV cabinet processes the amp returns together. Full-rig returns
+join after the cabinet. The build refuses role mismatches and checks the
+embedded native files, routing, native loading and all four scenes in an
+isolated worker before publishing. Existing audio keeps running during the
+build. The saved rig owns its embedded captures and cabinet.
+
+A retry with the same request ID and inputs returns the same saved revision.
+Change the request ID when starting a different build. The isolated 48 kHz
+check verifies preparation and rendering. Playback still checks the selected
+device configuration and the rig's resource needs.

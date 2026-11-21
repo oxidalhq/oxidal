@@ -5,12 +5,22 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
-import { type LocalModel, localModels, uploadLocalModel } from './api';
+import {
+  type LocalModel,
+  localModels,
+  publishCaptureRig,
+  uploadLocalModel,
+} from './api';
 import { ModelLibrary } from './ModelLibrary';
-vi.mock('./api', () => ({ localModels: vi.fn(), uploadLocalModel: vi.fn() }));
+vi.mock('./api', () => ({
+  localModels: vi.fn(),
+  uploadLocalModel: vi.fn(),
+  publishCaptureRig: vi.fn(),
+}));
 const model = (title: string, tone_id = 0): LocalModel => ({
   id: title,
   title,
@@ -143,4 +153,69 @@ it('cancels the in-flight upload and does not start remaining files', async () =
   );
   await screen.findByText(/Import cancelled: 0 of 2 files/);
   expect(uploadLocalModel).toHaveBeenCalledTimes(1);
+});
+
+it('builds four ordered scenes from Library, confirms unknown roles and retries the same request', async () => {
+  const names = ['Combo', 'Head', 'Stack', 'Mystery'];
+  const roles = ['amp-cab', 'amp', 'full-rig', ''];
+  vi.mocked(localModels).mockImplementation(
+    async (_after, _signal, _all, filter) => ({
+      data:
+        filter?.format === 'ir'
+          ? [model('Cabinet')]
+          : names.map((name, i) => ({
+              ...model(name),
+              gear: roles[i],
+              format: 'nam',
+            })),
+      next: null,
+    }),
+  );
+  vi.mocked(publishCaptureRig)
+    .mockRejectedValueOnce(new Error('Temporary failure'))
+    .mockResolvedValueOnce({ manifest: { name: 'Four sounds' } } as Awaited<
+      ReturnType<typeof publishCaptureRig>
+    >);
+  render(<ModelLibrary format="nam" connected />);
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Build a rig from captures' }),
+  );
+  const dialog = within(
+    await screen.findByRole('dialog', { name: 'Build a rig from captures' }),
+  );
+  fireEvent.change(dialog.getByLabelText('Rig name'), {
+    target: { value: 'Four sounds' },
+  });
+  for (const [i, scene] of ['Clean', 'Crunch', 'Lead', 'Dirt'].entries()) {
+    fireEvent.click(
+      dialog.getByRole('button', { name: scene + ' · Choose capture' }),
+    );
+    fireEvent.click(await dialog.findByRole('button', { name: names[i] }));
+  }
+  const save = dialog.getByRole('button', { name: 'Save rig' });
+  expect(save).toBeDisabled();
+  fireEvent.change(dialog.getByLabelText('Dirt capture type'), {
+    target: { value: 'amp' },
+  });
+  fireEvent.change(
+    dialog.getByLabelText('Shared cabinet for amp-only scenes'),
+    { target: { value: 'Cabinet' } },
+  );
+  fireEvent.click(save);
+  await dialog.findByRole('alert');
+  fireEvent.click(save);
+  await screen.findByText('Saved Four sounds in Mine.');
+  const requests = vi
+    .mocked(publishCaptureRig)
+    .mock.calls.map(([body]) => body);
+  expect(requests[0]).toEqual({
+    request_id: expect.any(String),
+    name: 'Four sounds',
+    cabinet: 'Cabinet',
+    captures: names.map((asset, i) => ({
+      asset,
+      role: i % 2 ? 'amp' : 'full_rig',
+    })),
+  });
+  expect(requests[1]).toEqual(requests[0]);
 });

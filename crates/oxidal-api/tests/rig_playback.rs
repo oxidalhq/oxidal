@@ -1762,3 +1762,247 @@ async fn repeated_set_entry_confirms_its_scene_before_replacing_the_playing_rig(
     server.abort();
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[tokio::test]
+#[ignore = "requires isolated Native and Mixed workers, real NAM fixtures, and shipped Echo/Bloom"]
+async fn builds_four_capture_scenes_offline_and_reopens_with_a_conditional_cabinet() {
+    use oxidal_presets::{Bundle, ModelStore};
+    use tower::ServiceExt;
+    let _worker_test = WORKER_TEST.lock().await;
+    let rig = std::path::PathBuf::from(std::env::var_os("OXIDAL_TEST_RIG_WORKER").unwrap());
+    let native = std::path::PathBuf::from(std::env::var_os("OXIDAL_TEST_NATIVE_WORKER").unwrap());
+    let graph = std::path::PathBuf::from(std::env::var_os("OXIDAL_TEST_GRAPH_WORKER").unwrap());
+    let root = std::env::temp_dir().join(format!("oxidal-four-capture-{}", std::process::id()));
+    let presets = root.join("presets");
+    let store = BundleStore::new(presets.join("bundles"));
+    let models = ModelStore::new(presets.join("audition-models"));
+    let a2 = std::fs::read(std::env::var_os("OXIDAL_TONE3000_TEST_MODEL").unwrap()).unwrap();
+    let lstm = std::fs::read(std::env::var_os("OXIDAL_TONE3000_TEST_LSTM").unwrap()).unwrap();
+    let (clean, _) = models.stage_local("clean.nam", &a2).unwrap();
+    let (crunch, _) = models.stage_local("crunch.nam", &lstm).unwrap();
+    let two = |payload: &[u8], spaces: &[u8], name| {
+        let mut bytes = payload.to_vec();
+        bytes.extend_from_slice(spaces);
+        models.stage_local(name, &bytes).unwrap().0
+    };
+    let extra = |env, name| {
+        let bytes = std::fs::read(std::env::var_os(env).unwrap()).unwrap();
+        models.stage_local(name, &bytes).unwrap().0
+    };
+    let lead = extra("OXIDAL_TONE3000_TEST_WAVENET", "lead.nam");
+    let dirt = extra("OXIDAL_TONE3000_TEST_FULL_RIG", "dirt.nam");
+    let bad = two(&a2, b"\n ", "damaged.nam");
+    let (_, bad_path) = models.read(&bad).unwrap();
+    std::fs::write(&bad_path, b"integrity mismatch").unwrap();
+    let frames = 512u32;
+    let mut ir = b"RIFF".to_vec();
+    ir.extend((36 + frames * 2).to_le_bytes());
+    ir.extend(b"WAVEfmt ");
+    ir.extend(16u32.to_le_bytes());
+    ir.extend([1, 0, 1, 0]);
+    ir.extend(48000u32.to_le_bytes());
+    ir.extend(96000u32.to_le_bytes());
+    ir.extend([2, 0, 16, 0]);
+    ir.extend(b"data");
+    ir.extend((frames * 2).to_le_bytes());
+    for i in 0..frames {
+        let sample = match i {
+            16 => 16000i16,
+            31 => -4400,
+            107 => 2300,
+            _ => 0,
+        };
+        ir.extend(sample.to_le_bytes());
+    }
+    let (cab, _) = models.stage_local("cabinet.wav", &ir).unwrap();
+    let stale = json!({
+        "format":"oxidal.preset","formatVersion":1,"id":"68448a6d-0168-4fc8-b337-c12959165271",
+        "name":"Previous dry rig","tone3000":{"instances":[]},"resources":[],"extensions":{},"requiredExtensions":[],
+        "oxidal":{"graph":{"nodes":[
+            {"id":"in","kind":"input","audioInputs":0,"audioOutputs":2},
+            {"id":"out","kind":"output","audioInputs":2,"audioOutputs":0}
+        ],"edges":[{"from":{"node":"in","port":0},"to":{"node":"out","port":0}},
+            {"from":{"node":"in","port":1},"to":{"node":"out","port":1}}
+        ]},"lv2":[],"recall":{"tails":"cut"}}
+    });
+    let old = Bundle::from_parts(stale.to_string().into_bytes(), Default::default()).unwrap();
+    let old = store.save(&old).unwrap();
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let (app, stopped) = router_with_shutdown(Config {
+        debug_socket: None,
+        device_socket: None,
+        graph_worker: Some(graph),
+        audio_worker: None,
+        native_worker: Some(native),
+        rig_worker: Some(rig.clone()),
+        shutdown: Some(signal),
+        simulator: false,
+        mapping_path: root.join("mapping.json"),
+        preset_dir: presets.clone(),
+        media_dir: None,
+        ui_dir: root.join("ui"),
+    })
+    .unwrap();
+    let cancel_app = app.clone();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let c = Client::builder()
+        .timeout(Duration::from_secs(100))
+        .build()
+        .unwrap();
+    let playing = apply(
+        &c,
+        &url,
+        json!({"kind":"start","settings":{"revision":old,"stream":stream()}}),
+    )
+    .await;
+    let previous_pid = pids(&rig);
+    assert_eq!(previous_pid.len(), 1);
+    let request = json!({"name":"Four capture scenes","request_id":"builder-05",
+        "captures":[{"asset":clean,"role":"amp"},{"asset":crunch,"role":"full_rig"},
+            {"asset":lead,"role":"full_rig"},{"asset":dirt,"role":"full_rig"}],"cabinet":cab});
+    let build = |body: &Value| {
+        c.post(format!("{url}/presets/rigs/from-captures"))
+            .json(body)
+            .send()
+    };
+    let cancellation = tokio::spawn(
+        cancel_app.oneshot(
+            axum::http::Request::post("/api/v1/presets/rigs/from-captures")
+                .header("host", "127.0.0.1")
+                .header("content-type", "application/json")
+                .body(axum::body::Body::from(request.to_string()))
+                .unwrap(),
+        ),
+    );
+    let builds = presets.join("capture-builds");
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            if std::fs::read_dir(&builds).is_ok_and(|mut files| {
+                files.any(|entry| {
+                    entry.is_ok_and(|entry| entry.file_name().to_string_lossy().starts_with('.'))
+                })
+            }) {
+                break;
+            }
+            assert!(
+                !cancellation.is_finished(),
+                "Build completed before cancellation"
+            );
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("The isolated build reached preparation");
+    cancellation.abort();
+    assert!(cancellation.await.unwrap_err().is_cancelled());
+    assert_eq!(std::fs::read_dir(&builds).unwrap().count(), 0);
+    assert_eq!(store.list().unwrap().len(), 1);
+    assert_eq!(pids(&rig), previous_pid);
+
+    let mut failure = request.clone();
+    failure["captures"][0]["asset"] = json!(bad);
+    let response = build(&failure).await.unwrap();
+    assert_eq!(response.status(), 422, "{}", response.text().await.unwrap());
+    assert_eq!(store.list().unwrap().len(), 1);
+    assert_eq!(
+        get(&c, &url, "rig-audio").await["control"]["session"],
+        playing["control"]["session"]
+    );
+    assert_eq!(pids(&rig), previous_pid);
+
+    let response = build(&request).await.unwrap();
+    let code = response.status();
+    let built: Value = response.json().await.unwrap();
+    assert_eq!(code, 200, "{built}");
+    let revision = built["revision"].as_str().unwrap();
+    assert_eq!(store.list().unwrap().len(), 2);
+    assert_eq!(
+        built,
+        get(&c, &url, &format!("presets/rigs/{revision}")).await
+    );
+    let retried: Value = build(&request)
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(retried, built);
+    let mut changed = request.clone();
+    changed["name"] = json!("Conflicting retry");
+    assert_eq!(build(&changed).await.unwrap().status(), 409);
+    assert_eq!(
+        get(&c, &url, "rig-audio").await["control"]["session"],
+        playing["control"]["session"]
+    );
+    assert_eq!(pids(&rig), previous_pid);
+    assert!(
+        get(&c, &url, "rig-audio").await["processed_frames"]
+            .as_u64()
+            .unwrap()
+            > playing["processed_frames"].as_u64().unwrap()
+    );
+
+    let bundle = store.read(revision).unwrap();
+    assert_eq!(bundle.manifest().tone3000.instances.len(), 5);
+    assert!(!presets.join("owned").exists());
+    let host = bundle.manifest().oxidal.as_ref().unwrap();
+    assert!(
+        host.graph
+            .edges
+            .iter()
+            .filter(|edge| edge.to.node == "cabinet")
+            .all(|edge| edge.from.node.starts_with("amp-return"))
+    );
+    assert!(
+        host.graph
+            .edges
+            .iter()
+            .filter(|edge| edge.from.node == "crunch")
+            .all(|edge| edge.to.node.starts_with("full-rig-return"))
+    );
+    assert!(
+        host.graph
+            .edges
+            .iter()
+            .any(|edge| edge.from.node == "echo" && edge.to.node == "bloom")
+    );
+
+    // A completed bundle owns the exact native payloads it needs.
+    std::fs::rename(
+        presets.join("audition-models"),
+        root.join("detached-fixtures"),
+    )
+    .unwrap();
+    apply(&c, &url, json!({"kind":"stop"})).await;
+    let mut active = apply(
+        &c,
+        &url,
+        json!({"kind":"start","settings":{"revision":revision,"stream":stream()}}),
+    )
+    .await;
+    assert_eq!(active["control"]["scene"], "clean");
+    for scene in ["crunch", "lead", "dirt", "clean"] {
+        let command = json!({"kind":"scene","command":{"scene":scene,
+            "session":active["control"]["session"],"expected_revision":active["control"]["revision"]}});
+        active = apply(&c, &url, command).await;
+        assert_eq!(active["control"]["scene"], scene);
+        assert_eq!(active["phase"], "running");
+        for _ in 0..100 {
+            if active["control"]["scene_transitioning"] == false {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            active = get(&c, &url, "rig-audio").await;
+        }
+        assert_eq!(active["control"]["scene"], scene);
+        assert_eq!(active["control"]["scene_transitioning"], false);
+    }
+    shutdown.send_replace(true);
+    stopped.wait().await.unwrap();
+    server.abort();
+    std::fs::remove_dir_all(root).unwrap();
+}

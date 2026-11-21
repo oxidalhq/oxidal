@@ -25,6 +25,7 @@ import {
   SheetHeader,
 } from '../components/ui/sheet';
 import { PageHeading } from '../patterns/app-shell';
+import { CaptureBuilderDemo } from '../patterns/capture-builder.demo';
 import { type LibraryItem, LibraryList } from '../patterns/library-list';
 import { ModelBrowser } from '../patterns/model-browser';
 import { SoundBrowser } from '../patterns/sound-browser';
@@ -191,6 +192,7 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
         {section === 'tone3000' && <Tone3000Section />}
         {section === 'setlist' && <SetListSection />}
         {section === 'songbook' && <Songbook />}
+        {section === 'tones' && <CaptureBuilderDemo />}
         {section === 'tones' && (
           <LibraryList
             {...common}

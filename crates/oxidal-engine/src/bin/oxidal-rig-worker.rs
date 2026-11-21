@@ -2,7 +2,11 @@
 #[cfg(target_os = "linux")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // First, so the engine's own DSP threads started below inherit it.
-    eprintln!("Hybrid audio {}", oxidal_audio::realtime::enter());
+    if std::env::args().nth(1).as_deref() == Some("--check-built-rig") {
+        oxidal_audio::realtime::background_owner();
+    } else {
+        eprintln!("Hybrid audio {}", oxidal_audio::realtime::enter());
+    }
     use std::io::Write;
     let result = run();
     if let Err(error) = &result
@@ -62,6 +66,37 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let model_root = std::env::var_os("OXIDAL_PRESET_DIR").map(std::path::PathBuf::from);
     let args: Vec<_> = std::env::args().skip(1).collect();
     if !args.is_empty() {
+        if args == ["--check-built-rig"] {
+            let settings: StartRig = serde_json::from_slice(&frame(&mut std::io::stdin().lock())?)?;
+            let result: Result<(), String> = (|| {
+                let world = World::discover().map_err(|error| error.to_string())?;
+                let mut resident = ResidentSet::new_with_models(
+                    &store,
+                    &world,
+                    &settings,
+                    BUFFER_BUDGET,
+                    model_root.as_deref(),
+                )?;
+                let scenes = resident.snapshot().scenes.ok_or("No built scenes")?;
+                if scenes.scenes.len() != 4 {
+                    return Err("Expected four built scenes".into());
+                }
+                let n = settings.stream.input.period_frames as usize;
+                let mut input = vec![0.0; n];
+                input[0] = 0.125;
+                let mut left = vec![0.0; n];
+                let mut right = left.clone();
+                for scene in scenes.scenes {
+                    resident.active_mut().prepare_initial_scene(scene.id)?;
+                    resident.process(&[&input, &input], &mut [&mut left, &mut right])?;
+                    resident.pump()?;
+                }
+                Ok(())
+            })();
+            serde_json::to_writer(std::io::stdout().lock(), &result)?;
+            std::io::stdout().flush()?;
+            return Ok(());
+        }
         if args == ["--check-occurrence"] {
             let request: OccurrenceStart =
                 serde_json::from_slice(&frame(&mut std::io::stdin().lock())?)?;

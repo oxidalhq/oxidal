@@ -9,6 +9,7 @@ mod blends;
 mod boosts;
 mod calibration;
 mod capture;
+mod capture_rig;
 mod debug;
 mod device;
 mod device_addresses;
@@ -205,6 +206,7 @@ pub struct Contract {
     pub rig_document: rig_library::RigDocument,
     pub rig_library: rig_library::RigPage,
     pub rig_publish: rig_library::RigPublish,
+    pub capture_rig_request: capture_rig::CaptureRigRequest,
     pub rig_sleep_plan: oxidal_presets::manifest::RigSleepPlan,
     pub rig_native_sources: Vec<rig_library::RigNativeSource>,
     pub lv2_catalog: oxidal_lv2::PluginCatalog,
@@ -653,6 +655,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             get(rig_library::list)
                 .post(rig_library::publish)
                 .layer(DefaultBodyLimit::max(rig_library::PUBLISH_LIMIT)),
+        )
+        .route(
+            "/presets/rigs/from-captures",
+            post(capture_rig::build).layer(DefaultBodyLimit::max(4096)),
         )
         .route("/presets/rigs/{revision}", get(rig_library::read))
         .route(

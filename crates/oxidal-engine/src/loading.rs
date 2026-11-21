@@ -183,6 +183,19 @@ impl PreparedPorts {
                 continue;
             }
             let mut engine = Engine::new(rate, frames).map_err(|e| e.to_string())?;
+            let settings = native_settings
+                .as_ref()
+                .and_then(|settings| settings.instances.get(&native.id));
+            if let Some(settings) = settings {
+                // Fix the processing domain before loading embedded models,
+                // so background preparation starts with the saved rate.
+                for id in ["osFactor", "osEnabled"] {
+                    engine
+                        .set_normalized(id, settings.parameters[id])
+                        .map_err(|e| e.to_string())?;
+                }
+                engine.pump().map_err(|e| e.to_string())?;
+            }
             engine
                 .load_preset(
                     bundle
@@ -196,10 +209,7 @@ impl PreparedPorts {
             engine
                 .set_input_mode(InputMode::Stereo)
                 .map_err(|e| e.to_string())?;
-            if let Some(settings) = native_settings
-                .as_ref()
-                .and_then(|s| s.instances.get(&native.id))
-            {
+            if let Some(settings) = settings {
                 engine
                     .set_input_mode(settings.input_mode)
                     .map_err(|e| e.to_string())?;
@@ -208,7 +218,9 @@ impl PreparedPorts {
                         .set_normalized(id, *value)
                         .map_err(|e| e.to_string())?;
                 }
-                engine.wait_ready().map_err(|e| e.to_string())?;
+                engine
+                    .wait_ready()
+                    .map_err(|e| format!("Native instance {}: {e}", native.id))?;
                 let catalog: Vec<oxidal_tone3000::protocol::Parameter> =
                     serde_json::from_value(engine.catalog().map_err(|e| e.to_string())?)
                         .map_err(|e| e.to_string())?;
@@ -227,7 +239,9 @@ impl PreparedPorts {
                     .iter()
                     .find(|n| n.instance.as_ref() == Some(&native.id))
                     .ok_or("Missing native node")?;
-                engine.wait_ready().map_err(|e| e.to_string())?;
+                engine
+                    .wait_ready()
+                    .map_err(|e| format!("Native instance {}: {e}", native.id))?;
                 bypass = saved_bypass(&mut engine, &node.id, defaults);
             }
             if let Some((root, rows)) = working {

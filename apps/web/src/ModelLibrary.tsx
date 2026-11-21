@@ -15,6 +15,7 @@ import { Button } from '@oxidal/design-system/components/button';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import type { LocalModel } from './api';
 import { type LocalModelPage, localModels, uploadLocalModel } from './api';
+import { CaptureRigBuilder } from './features/library/CaptureRigBuilder';
 import { DeleteSoundDialog } from './features/library/DeleteSoundDialog';
 import { GearLabel } from './GearIcon';
 import { groupIrs } from './irPresentation';
@@ -70,6 +71,8 @@ export function ModelLibrary({
   const [progress, setProgress] = useState<ImportState | null>(null);
   const [importing, setImporting] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
+  const [building, setBuilding] = useState(false);
+  const [saved, setSaved] = useState('');
   const [importOpen, setImportOpen] = useState(false);
   const [preview, setPreview] = useState<LocalModel | null>(null);
   const [deleting, setDeleting] = useState<LocalModel | null>(null);
@@ -219,6 +222,18 @@ export function ModelLibrary({
       </div>
       <div className="library-bar asset-library-bar">
         <div className="asset-library-actions">
+          {format === 'nam' && (
+            <Button
+              variant="outline"
+              disabled={!connected || importing}
+              onClick={() => {
+                setSaved('');
+                setBuilding(true);
+              }}
+            >
+              Build a rig from captures
+            </Button>
+          )}
           <Button
             variant="ghost"
             disabled={importing || !connected}
@@ -480,6 +495,16 @@ export function ModelLibrary({
           void add(files);
         }}
       />
+      {format === 'nam' && saved && <p role="status">Saved {saved} in Mine.</p>}
+      {building && (
+        <CaptureRigBuilder
+          onClose={() => setBuilding(false)}
+          onSaved={(name) => {
+            setSaved(name);
+            setBuilding(false);
+          }}
+        />
+      )}
       {importOpen && (
         <AdjustmentDialog
           title={`Import ${label}`}

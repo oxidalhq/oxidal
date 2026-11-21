@@ -248,6 +248,23 @@ impl BundleStore {
         }
         result
     }
+    /// Atomically promote a checked bundle staged on this filesystem. The
+    /// staged revision directory is consumed, so a receipt cannot resurrect
+    /// a revision deleted after successful publication.
+    pub fn publish_prepared(&self, staging: &Self, revision: &str) -> Result<Bundle> {
+        let target = self.path(revision)?;
+        if target.try_exists()? {
+            return self.read(revision);
+        }
+        let bundle = staging.read(revision)?;
+        fs::create_dir_all(&self.root)?;
+        directory(&self.root)?;
+        fs::rename(staging.path(revision)?, &target)?;
+        fs::File::open(&self.root)?.sync_all()?;
+        fs::File::open(&staging.root)?.sync_all()?;
+        Ok(bundle)
+    }
+
     pub fn list(&self) -> Result<Vec<String>> {
         let entries = match fs::read_dir(&self.root) {
             Ok(entries) => entries,
