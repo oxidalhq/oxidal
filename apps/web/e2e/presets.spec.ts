@@ -729,12 +729,12 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
     editor.getByLabel('Native control'),
     'osEnabled',
   );
-  await editor
-    .getByRole('button', { name: 'Adjust native value', exact: true })
-    .click();
   const stagedBefore = await editor
     .getByTestId('native-readback')
     .textContent();
+  await editor
+    .getByRole('button', { name: 'Adjust native value', exact: true })
+    .click();
   await touch.press('End');
   await expect(
     page.getByRole('dialog').getByLabel('Normalized value (0–1)'),

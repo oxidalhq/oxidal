@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -544,8 +545,16 @@ it('opens the shared phone block sheet with a scrim and commits its slider throu
         revision: manualEditBegun.revision + 1,
       });
     const exact = screen.getByRole('button', { name: 'Edit exact Input gain' });
+    await waitFor(() => expect(exact).toBeEnabled());
     expect(exact).toHaveTextContent('0.5 dB');
     fireEvent.click(exact);
+    expect(playbackCommand).toHaveBeenNthCalledWith(3, confirmed, {
+      kind: 'authoring',
+      action: {
+        kind: 'gesture',
+        edit: expect.objectContaining({ phase: 'begin' }),
+      },
+    });
     const editor = await screen.findByRole('dialog', { name: /inputGain/i });
     fireEvent.click(within(editor).getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(editor).not.toBeInTheDocument());

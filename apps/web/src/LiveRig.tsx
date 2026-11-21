@@ -1178,14 +1178,14 @@ export function LiveRig({
     <BlockEditor
       key={`${state.session}:${selectedBlock}`}
       block={blockModel}
-      open={phone && quickBlock === selectedBlock}
+      open={!adjusting && phone && quickBlock === selectedBlock}
       onOpenChange={(open) => {
         if (!open && adjustment.current && !adjusting)
           void finishAdjustment(true);
         setQuickBlock(open ? (selectedBlock ?? null) : null);
       }}
       anchor={null}
-      fullOpen={fullSelected}
+      fullOpen={!adjusting && fullSelected}
       onFullOpenChange={setNativeFull}
       disabled={disabled}
       onControl={(_block, id, value) => void apply(id, value)}
@@ -1402,7 +1402,7 @@ export function LiveRig({
     );
   return (
     <section
-      className="instrument-surface live-rig space-y-3"
+      className="instrument-surface live-rig space-y-2 py-0"
       aria-label="Sounding rig"
     >
       <RigHeading
@@ -1512,7 +1512,7 @@ export function LiveRig({
           </Button>
         </div>
       )}
-      <div className="rig-workspace" data-inspecting={!!selectedBlock}>
+      <div className="rig-workspace gap-3" data-inspecting={!!selectedBlock}>
         <div className="rig-chain-column">
           {editingChain && (
             <div className="chain-bar">
