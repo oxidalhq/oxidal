@@ -820,7 +820,7 @@ it('performs a preset with effects: a Hold tile engages the hold, other tiles sw
   const tile = await screen.findByRole(
     'button',
     {
-      name: 'Oxidal Hold (Stereo) on',
+      name: /Oxidal Hold \(Stereo\) on$/,
     },
     { timeout: 3000 },
   );

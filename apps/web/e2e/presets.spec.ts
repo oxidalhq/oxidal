@@ -1444,7 +1444,9 @@ test('playback lifecycle keeps native authoring available after stop and restart
       });
     }
     await page.setViewportSize(portrait);
-    await sounding.getByRole('button', { name: 'Tone', exact: true }).click();
+    await sounding
+      .getByRole('button', { name: 'Close block panel', exact: true })
+      .click();
     const outputControl = liveControls.controls.find(
       (c: { target: string }) => c.target === 'outputLevel',
     );

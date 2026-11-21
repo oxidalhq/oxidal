@@ -18,14 +18,12 @@ export function StageHeading({
       data-slot="stage-heading"
       className="grid min-w-0 justify-items-center gap-1 text-center"
     >
-      <Eyebrow className="inline-flex items-center gap-1.5">
-        {state}
-      </Eyebrow>
+      <Eyebrow className="inline-flex items-center gap-1.5">{state}</Eyebrow>
       <Title
         key={name}
         aria-live="polite"
         size={compact ? 'lg' : 'display'}
-        className="w-full text-balance break-words motion-safe:animate-arrive"
+        className="w-full text-balance break-words"
       >
         {name}
       </Title>

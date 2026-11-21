@@ -50,9 +50,12 @@ import {
   type Action,
   capabilities,
   deviceStorage,
+  graphAudioState,
   type MappingFile,
   parseMidiAction,
   parseSnapshot,
+  playbackState,
+  rigDocument,
   sendCommand,
   type Snapshot,
   type StorageState,
@@ -492,6 +495,39 @@ function InstrumentApp() {
     showSettings();
     setSettingsSection('audio');
   });
+  const presetId = resource.preset?.id;
+  const presetKind = resource.preset?.kind;
+  const [headerPreset, setHeaderPreset] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  useEffect(() => {
+    if (view === 'rig' || !presetId || !presetKind) return;
+    let current = true;
+    const reading =
+      presetKind === 'rig'
+        ? rigDocument(presetId).then((doc) => doc.manifest.name)
+        : presetKind === 'graph'
+          ? graphAudioState().then((audio) => audio.configured?.name)
+          : playbackState().then((audio) => audio.preset_name);
+    void reading.then(
+      (name) => {
+        if (current && name) setHeaderPreset({ id: presetId, name });
+      },
+      () => {},
+    );
+    return () => {
+      current = false;
+    };
+  }, [view, presetId, presetKind]);
+  const headerName =
+    view === 'rig'
+      ? (playingName ?? graphName ?? mixedName)
+      : resource.running
+        ? headerPreset && headerPreset.id === presetId
+          ? headerPreset.name
+          : 'Current rig'
+        : null;
   const parallel = state?.rig.nodes.some((node) => node.id === 'nam-b');
   const named = (id: string) => state?.rig.nodes.find((node) => node.id === id);
   const selectedBlock = named(focusedBlock) ? focusedBlock : 'nam-a';
@@ -515,7 +551,7 @@ function InstrumentApp() {
       }}
       nowPlaying={
         <>
-          <PlayingPreset name={playingName ?? graphName ?? mixedName} />
+          <PlayingPreset name={headerName} />
           <SplitStatus />
         </>
       }

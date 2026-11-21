@@ -1635,6 +1635,7 @@ export function LiveRig({
                     <button
                       type="button"
                       className="live-value-trigger value-row"
+                      aria-label={`Adjust sounding ${shortControlLabel(item.label)} ${item.display}`}
                       data-toggle={item.toggle || undefined}
                       key={item.target}
                       disabled={disabled}
@@ -1652,7 +1653,6 @@ export function LiveRig({
                         else openAdjustment(item);
                       }}
                     >
-                      <span className="sr-only">Adjust sounding </span>
                       <span className="value-row-label">
                         {shortControlLabel(item.label)}
                       </span>{' '}

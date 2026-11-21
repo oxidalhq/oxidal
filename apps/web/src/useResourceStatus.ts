@@ -106,6 +106,8 @@ export function useResourceStatus(
   return {
     connected: connected && state !== null && !disconnected,
     label: status,
+    preset: connected && !disconnected && running ? state?.preset : null,
+    running: connected && !disconnected && running,
     state: (!connected || disconnected
       ? 'disconnected'
       : !running
