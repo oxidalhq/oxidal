@@ -1,4 +1,5 @@
 import type { BlockModel } from '../widgets/block-editor';
+import { SOURCES } from '../widgets/block-source.data';
 import discovery from './moment.fixture.json';
 import type { PluginControl, PluginView } from './plugin-panel';
 
@@ -53,6 +54,7 @@ export function moment(id: string): BlockModel {
     caption: 'Micro-looper',
     kind: 'time',
     role: 'micro-loop',
+    origin: SOURCES.moment,
     on: true,
     controls: MOMENT_CONTROLS.map((c) => ({
       id: c.symbol,

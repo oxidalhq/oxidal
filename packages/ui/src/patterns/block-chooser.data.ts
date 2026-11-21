@@ -105,6 +105,7 @@ const guitarix = {
   qualification: 'Passes the ARM64 check; Pi run pending',
 };
 const ORIGINS: Record<string, BlockSource> = {
+  moment: SOURCES.moment,
   bloom: SOURCES.bloom,
   echo: SOURCES.echo,
   motion: SOURCES.motion,

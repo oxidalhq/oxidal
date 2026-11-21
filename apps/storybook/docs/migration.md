@@ -243,6 +243,7 @@ story or exported component.
 - `main.tsx`, `SessionMediaProvider.tsx`, API/feed modules and native adapters
   remain integration code. Package imports do not copy public assets: verify
   web-served brand/source images and exclude demos/fixtures from runtime imports.
-- The integrated Moment effect belongs in the catalogue, About and block panels:
-  use its 24 real controls and memory-only loop semantics from
-  `docs/native-moment.md`; the original four-effect fixture list is incomplete.
+- Moment appears in the effect chooser and the Caught Moments sound. Its block
+  panel fixture uses all 24 input controls discovered from the bundled stereo
+  plugin. The app lists Moment in About and explains the lifetime of its caught
+  loop. See [Oxidal Moment](../../../docs/native-moment.md).

@@ -181,10 +181,11 @@ async function openBrown(onOpenRig = () => {}, onChanged = () => {}) {
   render(
     <OxidalSounds connected onChanged={onChanged} onOpenRig={onOpenRig} />,
   );
-  await user.type(
-    await screen.findByRole('searchbox', { name: 'Search Oxidal sounds' }),
-    BROWN,
-  );
+  const search = await screen.findByRole('searchbox', {
+    name: 'Search Oxidal sounds',
+  });
+  await user.click(search);
+  await user.paste(BROWN);
   const card = await screen.findByRole('article', { name: BROWN });
   await waitFor(() =>
     expect(card).not.toHaveAttribute('data-state', 'loading'),

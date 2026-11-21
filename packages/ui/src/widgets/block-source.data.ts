@@ -66,6 +66,17 @@ export const SOURCES = {
       qualification: 'Passes the ARM64 check; Pi run pending',
     },
   },
+  moment: {
+    kind: 'oxidal',
+    title: 'Moment',
+    crate: 'oxidal-moment',
+    licence: 'Apache-2.0',
+    repo: 'https://github.com/oxidalhq/oxidal/tree/main/crates/oxidal-moment',
+    references: [
+      'Curtis Roads, “Microsound”',
+      'Julius O. Smith, “Digital Audio Resampling”',
+    ],
+  },
   echo: {
     kind: 'oxidal',
     title: 'Echo',
