@@ -193,7 +193,7 @@ it('explains a silent track and an unplayable one, and opens the full player', (
   expect(screen.getByText('Output muted')).toBeVisible();
   fireEvent.click(
     screen.getByRole('button', {
-      name: 'Open backing player: Rehearsal 01, Playing',
+      name: /Open backing player: Rehearsal 01 Playing .*Output muted/,
     }),
   );
   expect(value.setSheet).toHaveBeenCalledWith({ kind: 'player' });

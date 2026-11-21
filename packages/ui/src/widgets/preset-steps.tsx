@@ -22,13 +22,12 @@ export function PresetNameButton({
     <button
       type="button"
       className={className}
-      aria-label={`${label}: ${name}`}
       aria-haspopup="dialog"
       title={name}
       disabled={disabled}
       onClick={onOpen}
     >
-      {children ?? name}
+      <span className="sr-only">{label}:</span> {children ?? name}
       <CaretDown aria-hidden="true" />
     </button>
   );

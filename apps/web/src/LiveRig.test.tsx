@@ -17,6 +17,7 @@ import {
   removePreset,
 } from './api';
 import { LiveRig } from './LiveRig';
+import type { PresetChoice } from './presetChoices';
 import { WorkspaceMemory } from './workspaceMemory';
 // Mute/Protect have their own tests; the Rig header only places them.
 vi.mock('./features/stage/StageControls', () => ({
@@ -29,7 +30,33 @@ vi.mock('./api', () => ({
   removalPreview: vi.fn(),
   removePreset: vi.fn(),
 }));
-vi.mock('./RigPresetSelector', () => ({ RigPresetSelector: () => null }));
+vi.mock('./RigPresetSelector', () => ({
+  RigPresetSelector: ({
+    phase,
+    disabled,
+    onSelect,
+  }: {
+    phase: string;
+    disabled: boolean;
+    onSelect: (choice: PresetChoice) => void;
+  }) =>
+    phase === 'stopped' ? (
+      <button
+        disabled={disabled}
+        onClick={() =>
+          onSelect({
+            kind: 'tone3000',
+            id: 'next-tone',
+            owned: true,
+            name: 'Next tone',
+            origin: 'mine',
+          })
+        }
+      >
+        Choose Next tone
+      </button>
+    ) : null,
+}));
 vi.mock('./GuitarSettings', () => ({
   GuitarPicker: () => null,
   GuitarSwitch: () => null,
@@ -350,4 +377,27 @@ it('returns to the source before permanently discarding an automatic copy', asyn
     expected_preview: 'sealed-preview',
     delete_models: false,
   });
+});
+
+it('chooses a saved native tone from the stopped editor without resuming the previous sound', async () => {
+  const stopped = { ...opening, phase: 'stopped' } as AudioState;
+  vi.mocked(playbackState).mockResolvedValue(stopped);
+  vi.mocked(playbackCommand).mockResolvedValue({
+    ...opening,
+    preset_name: 'Next tone',
+  });
+  show();
+  const choose = await screen.findByRole('button', {
+    name: 'Choose Next tone',
+  });
+  expect(playbackCommand).not.toHaveBeenCalled();
+  fireEvent.click(choose);
+  await waitFor(() =>
+    expect(playbackCommand).toHaveBeenCalledWith(stopped, {
+      kind: 'load_preset',
+      preset_id: 'next-tone',
+      owned: true,
+    }),
+  );
+  expect(playbackCommand).toHaveBeenCalledTimes(1);
 });

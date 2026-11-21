@@ -382,25 +382,22 @@ export function RigPresetSelector({
           }}
         >
           {playingNumber > 0 && (
-            <span className="preset-picker-number" aria-hidden="true">
-              {playingNumber}
-            </span>
-          )}
+            <span className="preset-picker-number">{playingNumber}</span>
+          )}{' '}
           <span className="preset-picker-text">
             <span className="preset-picker-title">
-              <span className="preset-picker-label">{name}</span>
+              <span className="preset-picker-label">{name}</span>{' '}
               {playing.modified && (
                 <span className="preset-picker-edited">
                   <span
                     className="preset-modified"
-                    role="img"
-                    aria-label="Modified preset"
+                    aria-hidden="true"
                     title="This playing sound has unsaved edits"
                   />
                   edited
                 </span>
               )}
-            </span>
+            </span>{' '}
             <span className="preset-picker-meta">
               {unconfirmed
                 ? preparing

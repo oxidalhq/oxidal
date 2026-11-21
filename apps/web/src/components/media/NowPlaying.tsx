@@ -79,15 +79,19 @@ export function NowPlaying({
         <button
           type="button"
           className="now-playing-open"
-          aria-label={`Open backing player: ${title}, ${stateWord[shown]}`}
           onClick={() => media.setSheet({ kind: 'player' })}
         >
+          <span className="sr-only">Open backing player:</span>{' '}
           {!bottom && <MusicNote aria-hidden="true" weight="bold" />}
-          <span className="now-playing-title">{title}</span>
+          <span className="now-playing-title">{title}</span>{' '}
           <span className="now-playing-line">
-            {chip && <StateChip state={shown} />}
-            <span className="now-playing-time">{time}</span>
-            {muted && <strong>Output muted</strong>}
+            {chip ? (
+              <StateChip state={shown} />
+            ) : (
+              <span className="sr-only">{stateWord[shown]}</span>
+            )}{' '}
+            <span className="now-playing-time">{time}</span>{' '}
+            {muted && <strong>Output muted</strong>}{' '}
             {notice && <span className="now-playing-notice">{notice}</span>}
           </span>
         </button>

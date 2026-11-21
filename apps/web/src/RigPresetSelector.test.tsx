@@ -81,7 +81,7 @@ it('selects original and owned identities without optimistically changing the so
     <RigPresetSelector current={state} disabled={false} onSelect={select} />,
   );
   const picker = screen.getByRole('button', {
-    name: 'Playing preset: Amp A',
+    name: /^Playing preset: (?:\d+ )?Amp A(?: |$)/,
   });
   await waitFor(() => expect(picker).toBeEnabled());
   const next = screen.getByRole('button', { name: 'Next preset: Amp B' });
@@ -90,7 +90,7 @@ it('selects original and owned identities without optimistically changing the so
   ).toBeDisabled();
   fireEvent.click(next);
   expect(select).toHaveBeenCalledWith(tone('b', false));
-  expect(picker).toHaveAccessibleName('Playing preset: Amp A');
+  expect(picker).toHaveAccessibleName(/^Playing preset: (?:\d+ )?Amp A(?: |$)/);
   select.mockClear();
   fireEvent.click(picker);
   // Opens on the playing preset's source; every row has one summary form.
@@ -105,7 +105,7 @@ it('selects original and owned identities without optimistically changing the so
   fireEvent.click(screen.getByRole('tab', { name: /Mine/ }));
   fireEvent.click(screen.getByRole('button', { name: /^My A\s*NAM chain$/ }));
   expect(select).toHaveBeenCalledWith(tone('a', true));
-  expect(picker).toHaveAccessibleName('Playing preset: Amp A');
+  expect(picker).toHaveAccessibleName(/^Playing preset: (?:\d+ )?Amp A(?: |$)/);
   fireEvent.click(picker);
   fireEvent.change(screen.getByRole('searchbox', { name: 'Find a preset' }), {
     target: { value: 'b' },
@@ -135,7 +135,7 @@ it('scrolls the playing preset into view once per opening, not on every redraw',
       <RigPresetSelector current={state} disabled={false} onSelect={select} />,
     );
     const picker = screen.getByRole('button', {
-      name: 'Playing preset: Amp A',
+      name: /^Playing preset: (?:\d+ )?Amp A(?: |$)/,
     });
     await waitFor(() => expect(picker).toBeEnabled());
     fireEvent.click(picker);
@@ -176,7 +176,9 @@ it('keeps the current rig visible when the library fails, and permits retry', as
     <RigPresetSelector current={state} disabled={false} onSelect={() => {}} />,
   );
   await screen.findByText('Some presets are unavailable (originals)');
-  const picker = screen.getByRole('button', { name: 'Playing preset: Amp A' });
+  const picker = screen.getByRole('button', {
+    name: /^Playing preset: (?:\d+ )?Amp A(?: |$)/,
+  });
   library();
   fireEvent.click(screen.getByRole('button', { name: 'Retry presets' }));
   await waitFor(() =>
@@ -272,7 +274,9 @@ it('opens Mine gig pads on the playing bank and keeps playing identity during in
     />,
   );
   expect(
-    screen.getByRole('button', { name: 'Playing preset: Tone 10' }),
+    screen.getByRole('button', {
+      name: /^Playing preset: (?:\d+ )?Tone 10(?: |$)/,
+    }),
   ).toBeInTheDocument();
   view.rerender(
     <RigPresetSelector
@@ -333,7 +337,9 @@ it('keeps available originals selectable when saved copies cannot be read', asyn
   );
   await screen.findByText('Some presets are unavailable (saved copies)');
   fireEvent.click(
-    screen.getByRole('button', { name: 'Playing preset: Amp A' }),
+    screen.getByRole('button', {
+      name: /^Playing preset: (?:\d+ )?Amp A(?: |$)/,
+    }),
   );
   fireEvent.click(screen.getByRole('button', { name: /^Amp B\s*NAM chain$/ }));
   expect(select).toHaveBeenCalledWith(tone('b', false));
@@ -347,7 +353,9 @@ it('keeps saved copies selectable when originals cannot be read', async () => {
   );
   await screen.findByText('Some presets are unavailable (originals)');
   fireEvent.click(
-    screen.getByRole('button', { name: 'Playing preset: Amp A' }),
+    screen.getByRole('button', {
+      name: /^Playing preset: (?:\d+ )?Amp A(?: |$)/,
+    }),
   );
   fireEvent.click(screen.getByRole('button', { name: /^My A\s*NAM chain$/ }));
   expect(select).toHaveBeenCalledWith(tone('a', true));
@@ -390,7 +398,9 @@ it('lists presets with scenes first, tagged by scene count, and plays them as on
   render(
     <RigPresetSelector current={state} disabled={false} onSelect={select} />,
   );
-  const picker = screen.getByRole('button', { name: 'Playing preset: Amp A' });
+  const picker = screen.getByRole('button', {
+    name: /^Playing preset: (?:\d+ )?Amp A(?: |$)/,
+  });
   await waitFor(() => expect(picker).toBeEnabled());
   fireEvent.click(picker);
   expect(
@@ -427,11 +437,15 @@ it('renames from the rig header and refreshes its device label without recalling
   );
   await waitFor(() =>
     expect(
-      screen.getByRole('button', { name: 'Playing preset: Amp A' }),
+      screen.getByRole('button', {
+        name: /^Playing preset: (?:\d+ )?Amp A(?: |$)/,
+      }),
     ).toBeEnabled(),
   );
   fireEvent.click(
-    screen.getByRole('button', { name: 'Playing preset: Amp A' }),
+    screen.getByRole('button', {
+      name: /^Playing preset: (?:\d+ )?Amp A(?: |$)/,
+    }),
   );
   // Manage lives in the playing preset's Details.
   fireEvent.click(
@@ -456,7 +470,7 @@ it('renames from the rig header and refreshes its device label without recalling
   await waitFor(() =>
     expect(
       screen.getByRole('button', {
-        name: 'Playing preset: My new label',
+        name: /^Playing preset: (?:\d+ )?My new label(?: |$)/,
         hidden: true,
       }),
     ).toBeInTheDocument(),
@@ -489,7 +503,9 @@ it('searches descriptions and opens preset details without recalling it', async 
   render(
     <RigPresetSelector current={state} disabled={false} onSelect={select} />,
   );
-  const trigger = screen.getByRole('button', { name: 'Playing preset: Amp A' });
+  const trigger = screen.getByRole('button', {
+    name: /^Playing preset: (?:\d+ )?Amp A(?: |$)/,
+  });
   await waitFor(() => expect(trigger).toBeEnabled());
   fireEvent.click(trigger);
   fireEvent.change(
@@ -551,7 +567,9 @@ it('offers ready Oxidal sounds that are not saved yet, and saves one before play
   render(
     <RigPresetSelector current={state} disabled={false} onSelect={select} />,
   );
-  const picker = screen.getByRole('button', { name: 'Playing preset: Amp A' });
+  const picker = screen.getByRole('button', {
+    name: /^Playing preset: (?:\d+ )?Amp A(?: |$)/,
+  });
   await waitFor(() => expect(picker).toBeEnabled());
   fireEvent.click(picker);
   fireEvent.click(await screen.findByRole('tab', { name: /Oxidal sounds 1/ }));
@@ -584,7 +602,9 @@ it('keeps the confirmed name while the device prepares a different preset or ref
   );
   await waitFor(() =>
     expect(
-      screen.getByRole('button', { name: 'Playing preset: Amp A' }),
+      screen.getByRole('button', {
+        name: /^Playing preset: (?:\d+ )?Amp A(?: |$)/,
+      }),
     ).toBeEnabled(),
   );
   view.rerender(
@@ -596,10 +616,14 @@ it('keeps the confirmed name while the device prepares a different preset or ref
     />,
   );
   expect(
-    screen.getByRole('button', { name: 'Last playing preset: Amp A' }),
+    screen.getByRole('button', {
+      name: /^Last playing preset: (?:\d+ )?Amp A(?: |$)/,
+    }),
   ).toBeDisabled();
   expect(
-    screen.queryByRole('button', { name: 'Playing preset: Amp B' }),
+    screen.queryByRole('button', {
+      name: /^Playing preset: (?:\d+ )?Amp B(?: |$)/,
+    }),
   ).toBeNull();
   view.rerender(
     <RigPresetSelector
@@ -610,7 +634,9 @@ it('keeps the confirmed name while the device prepares a different preset or ref
     />,
   );
   expect(
-    screen.getByRole('button', { name: 'Last playing preset: Amp A' }),
+    screen.getByRole('button', {
+      name: /^Last playing preset: (?:\d+ )?Amp A(?: |$)/,
+    }),
   ).toHaveTextContent('Audio failed');
   view.rerender(
     <RigPresetSelector
@@ -621,6 +647,8 @@ it('keeps the confirmed name while the device prepares a different preset or ref
     />,
   );
   expect(
-    screen.getByRole('button', { name: 'Playing preset: Amp B' }),
+    screen.getByRole('button', {
+      name: /^Playing preset: (?:\d+ )?Amp B(?: |$)/,
+    }),
   ).toBeEnabled();
 });
