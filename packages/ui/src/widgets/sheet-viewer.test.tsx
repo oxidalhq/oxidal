@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 
 import { parseSong } from '../lib/song';
-import { type SheetMidiCommand,SheetViewer } from './sheet-viewer';
+import { type SheetMidiCommand, SheetViewer } from './sheet-viewer';
 
 afterEach(() => {
   cleanup();

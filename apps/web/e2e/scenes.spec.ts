@@ -7,7 +7,7 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
-import type { Preset } from '../src/api';
+import type { MidiMap, Preset } from '../src/api';
 import type { RigPublish } from '../src/generated/contract';
 import { sceneRig } from '../src/rigDraft';
 import { expectWorkspaceSection, selectWorkspaceSection } from './display';
@@ -1075,24 +1075,28 @@ async function bind(
   revision: string,
   scenes: [string, number][],
 ) {
-  const { revision: expected, ...map } = await (
+  const { revision: expected, ...map }: MidiMap = await (
     await request.get('/api/v1/midi/map')
   ).json();
+  const existing = map.entries.find(
+    ({ entry }) => entry.kind === 'rig' && entry.id === revision,
+  );
   const response = await request.post('/api/v1/midi/map', {
     data: {
       ...map,
       expected_revision: expected,
       entries: [
-        ...map.entries,
+        ...map.entries.filter((entry) => entry !== existing),
         {
+          branch_bindings: [],
+          parameter_bindings: [],
+          ...existing,
           entry: { kind: 'rig', id: revision },
           bindings: scenes.map(([scene, controller]) => ({
             scene,
             program: null,
             controller,
           })),
-          branch_bindings: [],
-          parameter_bindings: [],
         },
       ],
     },

@@ -166,12 +166,12 @@ export function TunerFace({
                   : `${shown} cents`
                 : undefined
             }
-            className="flex justify-between small-caps text-sm font-medium opacity-70"
+            className="flex justify-between small-caps text-sm font-medium"
           >
             <span
               data-on={heard && !inTune && cents < 0}
               className={
-                precision ? 'opacity-45 data-[on=true]:opacity-100' : undefined
+                precision ? 'opacity-70 data-[on=true]:opacity-100' : undefined
               }
             >
               ♭ flat
@@ -188,7 +188,7 @@ export function TunerFace({
             <span
               data-on={heard && !inTune && cents > 0}
               className={
-                precision ? 'opacity-45 data-[on=true]:opacity-100' : undefined
+                precision ? 'opacity-70 data-[on=true]:opacity-100' : undefined
               }
             >
               sharp ♯
