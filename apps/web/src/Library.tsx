@@ -651,12 +651,14 @@ export function Library({
         )}
         {section === 'oxidal' && (
           <div>
-            <StarterOffer
-              connected={connected}
-              refresh={refresh}
-              onChanged={() => setRefresh((v) => v + 1)}
-            />
             <OxidalSounds
+              starterOffer={
+                <StarterOffer
+                  connected={connected}
+                  refresh={refresh}
+                  onChanged={() => setRefresh((v) => v + 1)}
+                />
+              }
               connected={connected}
               onOpenRig={onOpenRig}
               onChanged={() => setRefresh((v) => v + 1)}

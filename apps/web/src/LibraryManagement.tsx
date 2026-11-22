@@ -30,6 +30,7 @@ import { SetOrderList } from './features/library/SetOrderList';
 import { friendlyError } from './lib/friendlyError';
 import { useFailure } from './lib/useFailure';
 import { requestMidiAssignments } from './midiNavigation';
+import { setPerform } from './performState';
 import { playScenes, playTone3000 } from './presetChoices';
 import { PresetManagement } from './PresetManagement';
 import { useSetListDrag } from './useSetListDrag';
@@ -190,8 +191,25 @@ export function LibraryManagement({
   const disabled = busy || !connected;
   return (
     <section className="space-y-3" aria-label="Set list">
+      {catalog && !removed && (
+        <div hidden={managePresets}>
+          <SetOrderList
+            catalog={catalog}
+            connected={connected && !busy}
+            onReady={setOrderReady}
+            onChanged={() => {
+              setReload((n) => n + 1);
+              onChanged();
+            }}
+            onPlay={() => {
+              setPerform({ on: true, mode: 'play' });
+              onOpenRig?.();
+            }}
+          />
+        </div>
+      )}
       <div className="section-heading">
-        <h2>Set list</h2>
+        {(!orderReady || removed || managePresets) && <h2>Set list</h2>}
         <Button
           variant="outline"
           disabled={disabled || !catalog}
@@ -200,11 +218,13 @@ export function LibraryManagement({
           <Plus aria-hidden="true" /> Add starter set list
         </Button>
       </div>
-      <p className="caption">
-        One set-list order for the preset picker, MIDI program changes and
-        Perform. Hold a handle to drag, or use Move up and Move down. Removed
-        entries can be restored.
-      </p>
+      {(!orderReady || managePresets) && (
+        <p className="caption">
+          One set-list order for the preset picker, MIDI program changes and
+          Perform. Hold a handle to drag, or use Move up and Move down. Removed
+          entries can be restored.
+        </p>
+      )}
       <div className="action-row" aria-label="Suggested set lists">
         {(Object.keys(suggestedSets) as SuggestedSet[]).map((key) => (
           <Button
@@ -250,7 +270,7 @@ export function LibraryManagement({
         </p>
       )}
       {!catalog && <Loading label="Loading the set list…" />}
-      {catalog && !removed && !members.length && (
+      {catalog && !removed && !members.length && !orderReady && (
         <div className="set-list-empty">
           <p className="caption">
             No presets in your set list yet. Add from Mine, or start with the
@@ -258,28 +278,13 @@ export function LibraryManagement({
           </p>
         </div>
       )}
-      {catalog && !removed && (
-        <>
-          {orderReady && (
-            <Button
-              variant="outline"
-              onClick={() => setManagePresets(!managePresets)}
-            >
-              {managePresets ? 'Performance order' : 'Manage presets'}
-            </Button>
-          )}
-          <div hidden={managePresets}>
-            <SetOrderList
-              connected={connected}
-              revision={catalog.revision}
-              onReady={setOrderReady}
-              onChanged={() => {
-                setReload((n) => n + 1);
-                onChanged();
-              }}
-            />
-          </div>
-        </>
+      {catalog && !removed && orderReady && (
+        <Button
+          variant="outline"
+          onClick={() => setManagePresets(!managePresets)}
+        >
+          {managePresets ? 'Performance order' : 'Manage presets'}
+        </Button>
       )}
       <div
         ref={root}

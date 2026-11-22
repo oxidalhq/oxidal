@@ -7173,6 +7173,27 @@
           ]
         },
         {
+          "description": "Append saved presets in selection order without changing first-use setup.",
+          "type": "object",
+          "properties": {
+            "entries": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/LibraryReference"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "append_set"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "entries"
+          ]
+        },
+        {
           "description": "Make \"Name copy\" in Mine with the preset's scenes, MIDI and levels.\nThe copy is not in the set list; the reply names it in `created`.",
           "type": "object",
           "properties": {

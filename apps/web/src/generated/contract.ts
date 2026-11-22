@@ -652,6 +652,10 @@ export type LibraryAction =
       kind: "starter";
     }
   | {
+      entries: LibraryReference[];
+      kind: "append_set";
+    }
+  | {
       kind: "duplicate";
     };
 export type MediaKind = "backing" | "di" | "reamp";

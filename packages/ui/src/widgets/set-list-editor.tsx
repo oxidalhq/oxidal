@@ -43,12 +43,20 @@ export type PresetChoice = {
 export type SetListEntry = {
   key: string;
   preset: string;
+  name?: string;
   version: string;
   scene: string;
   track?: string;
   sheet?: string;
 };
 export type Choice = { id: string; label: string };
+type EntryActions = {
+  add: (ids: string[]) => Promise<boolean>;
+  move: (key: string, before: string | null) => void;
+  repeat: (key: string) => void;
+  remove: (key: string) => Promise<boolean>;
+  details: (key: string, form: string, close: () => void) => React.ReactNode;
+};
 
 /**
  * A set list in one place: the order you will play tonight. Three things,
@@ -71,23 +79,31 @@ export function SetListEditor({
   sheets,
   onPlay,
   onPlayFrom,
+  actions,
+  disabled = false,
+  error,
   className,
 }: {
   name: string;
   entries: SetListEntry[];
-  onChange: (entries: SetListEntry[]) => void;
+  onChange?: (entries: SetListEntry[]) => void;
   presets: PresetChoice[];
   tracks: Choice[];
   sheets: Choice[];
   onPlay?: () => void;
   /** Start the set from this song. */
   onPlayFrom?: (key: string) => void;
+  actions?: EntryActions;
+  disabled?: boolean;
+  error?: React.ReactNode;
   className?: string;
 }) {
   const [adding, setAdding] = React.useState(false);
   const [editing, setEditing] = React.useState<string | null>(null);
   const [picked, setPicked] = React.useState<string[]>([]);
   const [query, setQuery] = React.useState('');
+  const form = React.useId();
+  const moveHint = React.useId();
   const list = React.useRef<HTMLOListElement>(null);
   const startY = React.useRef(0);
   const [drag, setDrag] = React.useState<{ key: string; over: number } | null>(
@@ -97,13 +113,46 @@ export function SetListEditor({
   const flip = useFlip(list, entries.map((e) => e.key).join('|'));
   const presetOf = (id: string) => presets.find((p) => p.id === id);
   const entry = entries.find((e) => e.key === editing);
+  const nameOf = (entry: SetListEntry) =>
+    entry.name ?? presetOf(entry.preset)?.name ?? 'Missing preset';
+  const openAdd = () => {
+    setPicked([]);
+    setQuery('');
+    setAdding(true);
+  };
+  const closeEdit = () => setEditing(null);
+
+  async function add() {
+    if (actions) {
+      if (!(await actions.add(picked))) return;
+    } else {
+      onChange?.([
+        ...entries,
+        ...picked.map((id, i) => ({
+          key: `${id}-${Date.now()}-${i}`,
+          preset: id,
+          version: 'Default',
+          scene: presetOf(id)?.scenes[0] ?? 'Scene 1',
+        })),
+      ]);
+    }
+    setAdding(false);
+  }
 
   const move = (from: number, to: number) => {
-    if (to < 0 || to >= entries.length || from === to) return;
+    if (disabled || from < 0 || to < 0 || to >= entries.length || from === to)
+      return;
+    if (actions) {
+      actions.move(
+        entries[from]!.key,
+        entries[to + Number(from < to)]?.key ?? null,
+      );
+      return;
+    }
     const next = [...entries];
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved!);
-    onChange(next);
+    onChange?.(next);
   };
   const overIndex = (clientY: number) => {
     let index = entries.length - 1;
@@ -124,9 +173,12 @@ export function SetListEditor({
   const describe = (e: SetListEntry) =>
     [
       e.version !== 'Default' && `${e.version} version`,
-      `starts on ${e.scene}`,
-      e.track ? tracks.find((t) => t.id === e.track)?.label : 'no track',
-      e.sheet && `sheet: ${sheets.find((s) => s.id === e.sheet)?.label}`,
+      e.scene && `starts on ${e.scene}`,
+      e.track
+        ? (tracks.find((t) => t.id === e.track)?.label ?? 'linked track')
+        : 'no track',
+      e.sheet &&
+        `sheet: ${sheets.find((s) => s.id === e.sheet)?.label ?? 'linked sheet'}`,
     ]
       .filter(Boolean)
       .join(' · ');
@@ -147,17 +199,10 @@ export function SetListEditor({
           </Caption>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            onClick={() => {
-              setPicked([]);
-              setQuery('');
-              setAdding(true);
-            }}
-          >
+          <Button variant="outline" disabled={disabled} onClick={openAdd}>
             <Plus /> Add presets
           </Button>
-          <Button disabled={!entries.length} onClick={onPlay}>
+          <Button disabled={disabled || !entries.length} onClick={onPlay}>
             <Play weight="fill" /> Play this set
           </Button>
         </div>
@@ -188,7 +233,7 @@ export function SetListEditor({
         <EmptyState
           title="No songs in this set yet"
           action={
-            <Button onClick={() => setAdding(true)}>
+            <Button disabled={disabled} onClick={openAdd}>
               <Plus /> Add presets
             </Button>
           }
@@ -222,9 +267,16 @@ export function SetListEditor({
             }
             setDrag(null);
           }}
+          onPointerCancel={() => {
+            if (drag) {
+              const row = rows.current.get(drag.key);
+              if (row) row.style.translate = '';
+            }
+            setDrag(null);
+          }}
         >
           {entries.map((e, index) => {
-            const preset = presetOf(e.preset);
+            const name = nameOf(e);
             const dragging = drag?.key === e.key;
             const dropHere = drag && !dragging && drag.over === index;
             return (
@@ -245,9 +297,11 @@ export function SetListEditor({
               >
                 <button
                   type="button"
-                  aria-label={`Move ${preset?.name ?? 'song'}, position ${index + 1} of ${entries.length}`}
-                  aria-describedby="set-list-move-hint"
+                  aria-label={`Move ${name}, position ${index + 1} of ${entries.length}`}
+                  aria-describedby={moveHint}
+                  aria-disabled={disabled || undefined}
                   onPointerDown={(event) => {
+                    if (disabled) return;
                     event.currentTarget.setPointerCapture(event.pointerId);
                     startY.current = event.clientY;
                     setDrag({ key: e.key, over: index });
@@ -273,9 +327,7 @@ export function SetListEditor({
                   onClick={() => setEditing(e.key)}
                   className="grid min-w-0 gap-0.5 rounded-md py-1 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
-                  <span className="truncate text-md font-semibold">
-                    {preset?.name ?? 'Missing preset'}
-                  </span>{' '}
+                  <span className="truncate text-md font-semibold">{name}</span>{' '}
                   <span className="truncate text-xs text-muted-foreground">
                     {describe(e)}
                   </span>
@@ -293,7 +345,7 @@ export function SetListEditor({
                   <Button
                     size="sm"
                     variant="outline"
-                    aria-label={`Edit ${preset?.name ?? 'song'}`}
+                    aria-label={`Edit ${name}`}
                     onClick={() => setEditing(e.key)}
                   >
                     <PencilSimple />
@@ -303,7 +355,8 @@ export function SetListEditor({
                     <Button
                       size="sm"
                       variant="outline"
-                      aria-label={`Play from ${preset?.name ?? 'song'}`}
+                      aria-label={`Play from ${name}`}
+                      disabled={disabled}
                       onClick={() => onPlayFrom(e.key)}
                     >
                       <Play />
@@ -316,10 +369,11 @@ export function SetListEditor({
           })}
         </ol>
       )}
-      <Caption id="set-list-move-hint" className="text-xs">
+      <Caption id={moveHint} className="text-xs">
         Drag a handle to reorder, or focus it and press the up and down arrows.
         Removing a song never deletes the preset.
       </Caption>
+      {!adding && !entry && error}
 
       <Sheet open={adding} onOpenChange={setAdding}>
         <SheetContent onOpenChange={setAdding}>
@@ -328,6 +382,7 @@ export function SetListEditor({
             description="Pick one or several; they go to the end of the set in the order you pick them."
           />
           <SheetBody>
+            {error}
             <input
               type="search"
               aria-label="Find a preset"
@@ -372,25 +427,19 @@ export function SetListEditor({
                   );
                 })}
             </ul>
+            {!presets.length && (
+              <Caption>There are no presets available to add.</Caption>
+            )}
           </SheetBody>
           <SheetFooter>
             <Button variant="outline" onClick={() => setAdding(false)}>
               Cancel
             </Button>
             <Button
-              disabled={!picked.length}
-              onClick={() => {
-                onChange([
-                  ...entries,
-                  ...picked.map((id, i) => ({
-                    key: `${id}-${Date.now()}-${i}`,
-                    preset: id,
-                    version: 'Default',
-                    scene: presetOf(id)?.scenes[0] ?? 'Scene 1',
-                  })),
-                ]);
-                setAdding(false);
-              }}
+              disabled={
+                disabled || !picked.length || picked.some((id) => !presetOf(id))
+              }
+              onClick={() => void add()}
             >
               Add {picked.length || ''} to the set
             </Button>
@@ -402,95 +451,98 @@ export function SetListEditor({
         {entry && (
           <SheetContent onOpenChange={(open) => !open && setEditing(null)}>
             <SheetHeader
-              title={`${entries.indexOf(entry) + 1} · ${presetOf(entry.preset)?.name ?? ''}`}
+              title={`${entries.indexOf(entry) + 1} · ${nameOf(entry)}`}
               description="What this song uses when the set reaches it."
             />
             <SheetBody>
-              {(() => {
-                const preset = presetOf(entry.preset)!;
-                const set = (change: Partial<SetListEntry>) =>
-                  onChange(
-                    entries.map((x) =>
-                      x.key === entry.key ? { ...x, ...change } : x,
-                    ),
-                  );
-                return (
-                  <>
-                    <div className="grid gap-1">
-                      <Label as="span">Version</Label>
-                      <SegmentedControl
-                        value={entry.version}
-                        onValueChange={(version) => set({ version })}
-                        aria-label="Version"
-                        className="w-full"
-                      >
-                        {preset.versions.map((v) => (
-                          <Segment key={v} value={v}>
-                            {v}
-                          </Segment>
-                        ))}
-                      </SegmentedControl>
-                    </div>
-                    <div className="grid gap-1">
-                      <Label as="span">Starts on</Label>
-                      <SegmentedControl
-                        value={entry.scene}
-                        onValueChange={(scene) => set({ scene })}
-                        aria-label="Starts on scene"
-                        className="w-full"
-                      >
-                        {preset.scenes.map((s) => (
-                          <Segment key={s} value={s}>
-                            {s}
-                          </Segment>
-                        ))}
-                      </SegmentedControl>
-                    </div>
-                    <div className="grid gap-1">
-                      <Label htmlFor="entry-track">Backing track</Label>
-                      <Select
-                        value={entry.track ?? 'none'}
-                        onValueChange={(v) =>
-                          set({ track: v === 'none' ? undefined : v })
-                        }
-                      >
-                        <SelectTrigger id="entry-track">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">None</SelectItem>
-                          {tracks.map((t) => (
-                            <SelectItem key={t.id} value={t.id}>
-                              {t.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-1">
-                      <Label htmlFor="entry-sheet">Chord sheet</Label>
-                      <Select
-                        value={entry.sheet ?? 'none'}
-                        onValueChange={(v) =>
-                          set({ sheet: v === 'none' ? undefined : v })
-                        }
-                      >
-                        <SelectTrigger id="entry-sheet">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">None</SelectItem>
-                          {sheets.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              {s.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </>
-                );
-              })()}
+              {error}
+              {actions
+                ? actions.details(entry.key, form, closeEdit)
+                : (() => {
+                    const preset = presetOf(entry.preset)!;
+                    const set = (change: Partial<SetListEntry>) =>
+                      onChange?.(
+                        entries.map((x) =>
+                          x.key === entry.key ? { ...x, ...change } : x,
+                        ),
+                      );
+                    return (
+                      <>
+                        <div className="grid gap-1">
+                          <Label as="span">Version</Label>
+                          <SegmentedControl
+                            value={entry.version}
+                            onValueChange={(version) => set({ version })}
+                            aria-label="Version"
+                            className="w-full"
+                          >
+                            {preset.versions.map((v) => (
+                              <Segment key={v} value={v}>
+                                {v}
+                              </Segment>
+                            ))}
+                          </SegmentedControl>
+                        </div>
+                        <div className="grid gap-1">
+                          <Label as="span">Starts on</Label>
+                          <SegmentedControl
+                            value={entry.scene}
+                            onValueChange={(scene) => set({ scene })}
+                            aria-label="Starts on scene"
+                            className="w-full"
+                          >
+                            {preset.scenes.map((s) => (
+                              <Segment key={s} value={s}>
+                                {s}
+                              </Segment>
+                            ))}
+                          </SegmentedControl>
+                        </div>
+                        <div className="grid gap-1">
+                          <Label htmlFor="entry-track">Backing track</Label>
+                          <Select
+                            value={entry.track ?? 'none'}
+                            onValueChange={(v) =>
+                              set({ track: v === 'none' ? undefined : v })
+                            }
+                          >
+                            <SelectTrigger id="entry-track">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">None</SelectItem>
+                              {tracks.map((t) => (
+                                <SelectItem key={t.id} value={t.id}>
+                                  {t.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid gap-1">
+                          <Label htmlFor="entry-sheet">Chord sheet</Label>
+                          <Select
+                            value={entry.sheet ?? 'none'}
+                            onValueChange={(v) =>
+                              set({ sheet: v === 'none' ? undefined : v })
+                            }
+                          >
+                            <SelectTrigger id="entry-sheet">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">None</SelectItem>
+                              {sheets.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>
+                                  {s.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </>
+                    );
+                  })()}
             </SheetBody>
             <SheetFooter>
               <div className="grid w-full gap-2">
@@ -498,7 +550,7 @@ export function SetListEditor({
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={entries.indexOf(entry) === 0}
+                    disabled={disabled || entries.indexOf(entry) === 0}
                     onClick={() =>
                       move(entries.indexOf(entry), entries.indexOf(entry) - 1)
                     }
@@ -508,7 +560,9 @@ export function SetListEditor({
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={entries.indexOf(entry) === entries.length - 1}
+                    disabled={
+                      disabled || entries.indexOf(entry) === entries.length - 1
+                    }
                     onClick={() =>
                       move(entries.indexOf(entry), entries.indexOf(entry) + 1)
                     }
@@ -518,9 +572,14 @@ export function SetListEditor({
                   <Button
                     size="sm"
                     variant="outline"
+                    disabled={disabled}
                     onClick={() => {
+                      if (actions) {
+                        actions.repeat(entry.key);
+                        return;
+                      }
                       const at = entries.indexOf(entry);
-                      onChange([
+                      onChange?.([
                         ...entries.slice(0, at + 1),
                         { ...entry, key: `${entry.key}-copy-${Date.now()}` },
                         ...entries.slice(at + 1),
@@ -532,15 +591,26 @@ export function SetListEditor({
                   <Button
                     size="sm"
                     variant="destructive"
-                    onClick={() => {
-                      onChange(entries.filter((x) => x.key !== entry.key));
-                      setEditing(null);
+                    disabled={disabled}
+                    onClick={async () => {
+                      if (actions) {
+                        if (!(await actions.remove(entry.key))) return;
+                      } else {
+                        onChange?.(entries.filter((x) => x.key !== entry.key));
+                      }
+                      closeEdit();
                     }}
                   >
                     <Trash /> Remove from set
                   </Button>
                 </div>
-                <Button onClick={() => setEditing(null)}>Done</Button>
+                {actions ? (
+                  <Button type="submit" form={form} disabled={disabled}>
+                    Done
+                  </Button>
+                ) : (
+                  <Button onClick={closeEdit}>Done</Button>
+                )}
               </div>
             </SheetFooter>
           </SheetContent>

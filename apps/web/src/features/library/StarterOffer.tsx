@@ -41,7 +41,10 @@ export function StarterOffer({
         const offer =
           !catalog.starter_offered && !catalog.items.some((i) => i.in_set_list);
         const needs = offer
-          ? await effectsOnlyNeeds(starterRecipes()).catch(() => null)
+          ? await effectsOnlyNeeds(starterRecipes()).catch((cause) => ({
+              packs: [],
+              blocked: friendlyError(cause, 'check the starter effects'),
+            }))
           : null;
         if (!alive) return;
         setPacks(needs?.packs ?? []);
@@ -80,17 +83,17 @@ export function StarterOffer({
     ) : null;
   return (
     <div className="starter-offer" role="region" aria-label="Starter set list">
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 grow basis-72">
         <strong>Start with a set list?</strong>
         <p className="caption">
           Nine Oxidal sounds, one per core genre, in a playable order.{' '}
           {packs.length
             ? `They use ${packs.length === 1 ? 'one effect pack' : `${packs.length} effect packs`} this unit does not have yet (${packs.map((p) => p.name).join(', ')}; about ${packs.reduce((sum, p) => sum + p.sizeMib, 0)} MB). Oxidal downloads and installs ${packs.length === 1 ? 'it' : 'them'} for you.`
-            : 'Everything they need is on this unit.'}
+            : !blocked && 'Everything they need is on this unit.'}
         </p>
         {blocked && <p className="caption">{blocked}</p>}
       </div>
-      <div className="action-row">
+      <div className="action-row flex-wrap">
         <Button
           disabled={busy || !connected || !!blocked}
           onClick={() => void answer(true)}

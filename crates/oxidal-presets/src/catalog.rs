@@ -151,6 +151,10 @@ pub enum LibraryAction {
     Starter {
         entries: Vec<crate::LibraryReference>,
     },
+    /// Append saved presets in selection order without changing first-use setup.
+    AppendSet {
+        entries: Vec<crate::LibraryReference>,
+    },
     /// Make "Name copy" in Mine with the preset's scenes, MIDI and levels.
     /// The copy is not in the set list; the reply names it in `created`.
     Duplicate,
@@ -541,9 +545,15 @@ impl CatalogStore {
         }
         let catalog = self.view(items)?;
         let mut candidate = self.preferences.clone();
-        if let LibraryAction::Starter { entries } = &request.action {
-            if entries.len() > 64 {
+        if let LibraryAction::Starter { entries } | LibraryAction::AppendSet { entries } =
+            &request.action
+        {
+            let starter = matches!(request.action, LibraryAction::Starter { .. });
+            if starter && entries.len() > 64 {
                 return Err(Error::Invalid("A starter set list has at most 64 presets"));
+            }
+            if entries.len() > 4096 {
+                return Err(Error::Invalid("A set list has at most 4096 presets"));
             }
             let mut order = catalog
                 .items
@@ -555,7 +565,11 @@ impl CatalogStore {
                     .items
                     .iter()
                     .find(|i| i.kind == entry.kind && i.id == entry.id)
-                    .ok_or(Error::Invalid("A starter preset is not on this unit"))?;
+                    .ok_or(Error::Invalid(if starter {
+                        "A starter preset is not on this unit"
+                    } else {
+                        "A selected preset is not on this unit"
+                    }))?;
                 if item.in_set_list
                     || candidate.added.contains(&item.kind.key(&item.id)?)
                     || (item.origin == LibraryOrigin::Mine
@@ -566,7 +580,7 @@ impl CatalogStore {
                 Self::join(&catalog, &mut candidate, &mut order, item)?;
             }
             candidate.order = order;
-            candidate.starter_offered = true;
+            candidate.starter_offered |= starter;
             return self.commit(candidate, catalog.items);
         }
         let key = request.entry_kind.key(&request.id)?;
@@ -728,7 +742,9 @@ impl CatalogStore {
                     candidate.added.remove(&key);
                 }
             }
-            LibraryAction::Starter { .. } => unreachable!("handled above"),
+            LibraryAction::Starter { .. } | LibraryAction::AppendSet { .. } => {
+                unreachable!("handled above")
+            }
             LibraryAction::Duplicate => {
                 return Err(Error::Invalid("Duplicate needs the preset store"));
             }
@@ -1492,6 +1508,67 @@ mod tests {
         assert_eq!(members(&restored), ['b', 'a', 'd']);
         fs::remove_dir_all(root).unwrap();
     }
+    #[test]
+    fn append_set_preserves_order_and_starter_offer_across_reopen() {
+        let root = std::env::temp_dir().join(format!("oxidal-append-set-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let rows = rows(&[
+            ("a", LibraryOrigin::Mine),
+            ("b", LibraryOrigin::OxidalExample),
+            ("c", LibraryOrigin::OxidalExample),
+            ("d", LibraryOrigin::Tone3000),
+        ]);
+        let reference = |id: &str| crate::LibraryReference {
+            kind: LibraryKind::Rig,
+            id: id.repeat(64),
+        };
+        let mut store = CatalogStore::open(root.clone()).unwrap();
+        let initial = store.reconcile(rows.clone()).unwrap();
+        let request = |revision: String, entries| LibraryUpdate {
+            expected_revision: revision,
+            entry_kind: LibraryKind::default(),
+            id: String::new(),
+            action: LibraryAction::AppendSet { entries },
+        };
+
+        // A rejected batch must not partially add earlier valid entries.
+        assert!(
+            store
+                .update(
+                    rows.clone(),
+                    request(
+                        initial.revision.clone(),
+                        vec![reference("b"), reference("d")]
+                    ),
+                )
+                .is_err()
+        );
+        let unchanged = store.view(rows.clone()).unwrap();
+        assert_eq!(unchanged.revision, initial.revision);
+        assert_eq!(members(&unchanged), ['a']);
+        assert!(!unchanged.starter_offered);
+
+        let saved = store
+            .update(
+                rows.clone(),
+                request(
+                    unchanged.revision,
+                    vec![reference("c"), reference("b"), reference("c")],
+                ),
+            )
+            .unwrap();
+        assert_eq!(members(&saved), ['a', 'c', 'b']);
+        assert!(!saved.starter_offered);
+        let reopened = CatalogStore::open(root.clone())
+            .unwrap()
+            .view(rows)
+            .unwrap();
+        assert_eq!(reopened.revision, saved.revision);
+        assert_eq!(members(&reopened), ['a', 'c', 'b']);
+        assert!(!reopened.starter_offered);
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn set_list_add_remove_starter_append_and_saved_again_keep_membership() {
         let root = std::env::temp_dir().join(format!("oxidal-set-list-{}", std::process::id()));
