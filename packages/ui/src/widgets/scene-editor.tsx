@@ -355,25 +355,11 @@ export function SceneEditor({
                     </td>
                   ))}
                   <td className="p-1">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          aria-label={`More for ${row.block.label}`}
-                        >
-                          <DotsThree />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onSelect={() => duplicate(row.block)}>
-                          <Copy /> Duplicate with its settings
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => remove(row.block)}>
-                          <Trash /> Remove from the preset
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <SceneBlockActions
+                      label={row.block.label}
+                      onDuplicate={() => duplicate(row.block)}
+                      onRemove={() => remove(row.block)}
+                    />
                   </td>
                 </tr>
               ),
@@ -389,6 +375,43 @@ export function SceneEditor({
         settings, duplicate it: the copy starts off everywhere.
       </Caption>
     </div>
+  );
+}
+
+export function SceneBlockActions({
+  label,
+  onDuplicate,
+  onRemove,
+  disabled,
+}: {
+  label: string;
+  onDuplicate: () => void;
+  onRemove?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          size="sm"
+          variant="ghost"
+          aria-label={`More for ${label}`}
+          disabled={disabled}
+        >
+          <DotsThree />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={onDuplicate}>
+          <Copy /> Duplicate with its settings
+        </DropdownMenuItem>
+        {onRemove && (
+          <DropdownMenuItem onSelect={onRemove}>
+            <Trash /> Remove from the preset
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

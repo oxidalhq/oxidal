@@ -20,6 +20,8 @@ export function SleepingBranches({
   if (!sleep) return null;
   const sceneName = (id: string) =>
     control.scenes?.scenes.find((s) => s.id === id)?.name ?? id;
+  const playing = control.branches?.filter((branch) => branch.enabled);
+  const asleep = sleep.branches.filter((branch) => branch.phase === 'asleep');
   return (
     <section
       aria-label="Branch processing"
@@ -38,7 +40,19 @@ export function SleepingBranches({
         {sleep.running_processors} of {sleep.admitted_processors} admitted
         processors running
       </p>
-      {sleep.active_scene && <p>Playing {sceneName(sleep.active_scene)}</p>}
+      {playing && (
+        <p>
+          {playing.length} playing · {asleep.length} asleep
+        </p>
+      )}
+      {sleep.active_scene && (
+        <p>
+          Playing {sceneName(sleep.active_scene)}
+          {playing?.length
+            ? `: ${playing.map((branch) => branch.name).join(' and ')}.`
+            : ''}
+        </p>
+      )}
       {sleep.requested_scene &&
         sleep.requested_scene !== sleep.active_scene && (
           <p role="status">Preparing {sceneName(sleep.requested_scene)}</p>

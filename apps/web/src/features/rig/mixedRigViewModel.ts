@@ -640,6 +640,11 @@ export function mixedRigViewModel({
               rigNodeLabel(matching, id) ??
               'Path',
           ),
+          enabled: sceneBranchIds.map(
+            (id) =>
+              state.control?.branches?.find((branch) => branch.id === id)
+                ?.enabled,
+          ),
           sounding: (() => {
             const at = sceneLanes.findIndex((lane) => lane.active);
             return at < 0 ? null : at;

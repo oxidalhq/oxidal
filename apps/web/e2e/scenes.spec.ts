@@ -5,7 +5,11 @@ import {
   test,
 } from '@playwright/test';
 import { createHash, randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
+import type { Preset } from '../src/api';
+import type { RigPublish } from '../src/generated/contract';
+import { sceneRig } from '../src/rigDraft';
 import { expectWorkspaceSection, selectWorkspaceSection } from './display';
 
 /**
@@ -72,9 +76,10 @@ function manifest(
 async function publish(
   request: APIRequestContext,
   document: object,
+  resources: RigPublish['resources'] = {},
 ): Promise<string> {
   const response = await request.post('/api/v1/presets/rigs', {
-    data: { manifest_json: JSON.stringify(document), resources: {} },
+    data: { manifest_json: JSON.stringify(document), resources },
   });
   expect(response.ok(), await response.text()).toBe(true);
   return (await response.json()).revision;
@@ -379,6 +384,40 @@ async function mockRig(
     period_frames: 128,
     periods: 3,
   };
+  function branchStates(
+    layout: {
+      branches?: {
+        id: string;
+        name: string;
+        gains: { node: string; port: number; value: number }[];
+      }[];
+      scenes: {
+        id: string;
+        gains: { node: string; port: number; value: number }[];
+      }[];
+    },
+    sceneId: string,
+  ) {
+    const gains = layout.scenes.find((scene) => scene.id === sceneId)?.gains;
+    return layout.branches?.map(({ id, name, gains: expected }) => ({
+      id,
+      name,
+      enabled: expected.some(({ node, port }) =>
+        gains?.some(
+          (gain) =>
+            gain.node === node && gain.port === port && gain.value !== 0,
+        ),
+      ),
+      partial: false,
+    }));
+  }
+  const wetGroup = (enabled: boolean) => ({
+    id: 'wet',
+    name: 'Wet',
+    nodes: ['echo'],
+    enabled,
+    partial: false,
+  });
   const running = async (rev: string) => {
     const document = await (
       await request.get(`/api/v1/presets/rigs/${rev}`)
@@ -411,10 +450,15 @@ async function mockRig(
         controls: [],
         scenes,
         scene: scenes.scenes[0].id,
+        branches: branchStates(scenes, scenes.scenes[0].id),
+        stomp_scene: null as string | null,
+        stomp_groups: undefined as
+          { id: string; enabled: boolean; partial: boolean }[] | undefined,
       },
     };
   };
   let state = await running(revision);
+  let testingWet = false;
   // These presets hold no effects; the unit's effect scan is not needed.
   await page.route('**/api/v1/plugins/lv2?*', (route) =>
     route.fulfill({ json: { sample_rate: 48000, plugins: [] } }),
@@ -426,19 +470,486 @@ async function mockRig(
         state = { ...state, phase: 'stopped', device_owned: false };
       else if (action.kind === 'start')
         state = await running(action.settings.revision);
-      else if (action.kind === 'scene')
+      else if (
+        action.kind === 'stomp_group' &&
+        action.command.group === 'wet'
+      ) {
+        expect(action.command.session).toBe(state.control.session);
+        expect(action.command.expected_revision).toBe(state.control.revision);
+        testingWet = !testingWet;
+        state = {
+          ...state,
+          control: {
+            ...state.control,
+            stomp_scene: state.control.scene,
+            revision: state.control.revision + 1,
+            stomp_groups: [wetGroup(testingWet)],
+          },
+        };
+      } else if (action.kind === 'scene') {
+        testingWet = false;
         state = {
           ...state,
           control: {
             ...state.control,
             scene: action.command.scene,
+            branches: branchStates(state.control.scenes, action.command.scene),
             revision: state.control.revision + 1,
+            ...(state.control.stomp_groups
+              ? {
+                  stomp_scene: action.command.scene,
+                  stomp_groups: [wetGroup(false)],
+                }
+              : {}),
           },
         };
+      }
     }
     await route.fulfill({ json: state });
   });
-  return () => state.configured.revision as string;
+  return Object.assign(() => state.configured.revision as string, {
+    changeCursor: () => {
+      state.control = {
+        ...state.control,
+        revision: state.control.revision + 1,
+      };
+    },
+    recall: async (next: string) => {
+      state = await running(next);
+    },
+    addWetReadback: () => {
+      state.control = {
+        ...state.control,
+        stomp_groups: [wetGroup(false)],
+      };
+    },
+  });
+}
+
+test('mixed rig authoring: four- and ten-switch Stage follows confirmed scenes and Set list', async ({
+  page,
+  request,
+}) => {
+  const set = ['Friday rhythm', 'Ambient swell', 'Lead boost', 'Brown Crunch'];
+  const scenes = [
+    { id: 'clean', name: 'Clean', value: 1 },
+    { id: 'crunch', name: 'Crunch', value: 0.8 },
+    { id: 'lead', name: 'Lead', value: 0.6 },
+    { id: 'space', name: 'Space', value: 0.5 },
+  ];
+  const first = manifest(set[0]!, scenes);
+  const wetExtension = {
+    'urn:oxidal:stomp-groups:1': {
+      groups: [{ id: 'wet', name: 'Wet', nodes: ['echo'] }],
+    },
+  };
+  Object.assign(first.extensions, wetExtension);
+  first.requiredExtensions.push('urn:oxidal:stomp-groups:1');
+  first.oxidal.graph.nodes.splice(1, 0, {
+    id: 'echo',
+    kind: 'lv2',
+    audioInputs: 1,
+    audioOutputs: 1,
+    instance: 'echo',
+    bypassed: true,
+  } as never);
+  first.oxidal.graph.edges = [
+    { from: { node: 'in', port: 0 }, to: { node: 'echo', port: 0 } },
+    { from: { node: 'echo', port: 0 }, to: { node: 'scene-gain', port: 0 } },
+    { from: { node: 'scene-gain', port: 0 }, to: { node: 'out', port: 0 } },
+  ];
+  Object.assign(first.oxidal, {
+    lv2: [
+      {
+        id: 'echo',
+        pluginUri: 'urn:oxidal:plugin:echo#mono',
+        controls: {},
+        assets: [],
+        requiredFeatures: [],
+      },
+    ],
+  });
+  const firstScene = first.extensions['urn:oxidal:scenes:1'];
+  Object.assign(first.extensions, {
+    'urn:oxidal:scenes:3': {
+      ...firstScene,
+      scenes: firstScene.scenes.map((item) => ({
+        ...item,
+        bypass: [{ node: 'echo', value: true }],
+      })),
+    },
+  });
+  delete (first.extensions as Record<string, unknown>)['urn:oxidal:scenes:1'];
+  first.requiredExtensions[1] = 'urn:oxidal:scenes:3';
+  const revisions = [await publish(request, first)];
+  for (const name of set.slice(1))
+    revisions.push(await publish(request, manifest(name, scenes)));
+  const playing = await mockRig(page, request, revisions[0]!);
+  playing.addWetReadback();
+  const order = {
+    revision: 'b'.repeat(64),
+    entries: set.map((name, index) => ({
+      name,
+      content: revisions[index],
+      entry: {
+        id: randomUUID(),
+        preset: { kind: 'rig', id: revisions[index] },
+        settings: {},
+      },
+    })),
+  };
+  let index = 0;
+  let steps = 0;
+  let jumps = 0;
+  await page.route('**/api/v1/midi/position', (route) =>
+    route.fulfill({
+      json: { index, length: set.length, occurrence: order.entries[index] },
+    }),
+  );
+  await page.route('**/api/v1/midi/navigate', async (route) => {
+    expect(route.request().postDataJSON()).toEqual({ direction: 'next' });
+    steps++;
+    index++;
+    await playing.recall(revisions[index]!);
+    await route.fulfill({ status: 204 });
+  });
+  await page.route('**/api/v1/presets/set-list', (route) =>
+    route.fulfill({ json: order }),
+  );
+  await page.route('**/api/v1/presets/set-list/*/recall', async (route) => {
+    expect(route.request().postDataJSON()).toEqual({
+      expected_revision: order.revision,
+    });
+    expect(new URL(route.request().url()).pathname).toContain(
+      order.entries[3]!.entry.id,
+    );
+    jumps++;
+    index = 3;
+    await playing.recall(revisions[index]!);
+    await route.fulfill({ status: 204 });
+  });
+  try {
+    await page.goto('/#rig');
+    await page.getByRole('button', { name: 'Perform view' }).click();
+    const stage = page.getByRole('region', { name: 'Perform' });
+    const layout = stage.getByRole('combobox', {
+      name: 'On-screen controller layout',
+    });
+    await layout.click();
+    await page.getByRole('option', { name: 'Four switches' }).click();
+    const board = stage.getByRole('group', {
+      name: /Footswitches.*4 switches/,
+    });
+    await expect(board.getByRole('button')).toHaveCount(4);
+    await stage.getByRole('button', { name: 'Wet · Off' }).click();
+    await expect(
+      stage.getByRole('button', { name: 'Wet · On' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await board.getByRole('button', { name: /^B Crunch/ }).click();
+    await expect(
+      stage.getByText('Scene · Crunch', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      stage.getByRole('button', { name: 'Wet · Off' }),
+    ).toHaveAttribute('aria-pressed', 'false');
+    await board.getByRole('button', { name: /^D Next/ }).click();
+    await expect(
+      stage.getByRole('heading', { name: 'Ambient swell' }),
+    ).toBeVisible();
+    expect(steps).toBe(1);
+    await stage.getByRole('button', { name: /^Set list:/ }).click();
+    const list = page.getByRole('dialog', { name: 'Set list' });
+    await list.getByRole('button', { name: '4 · Brown Crunch' }).click();
+    await expect(
+      stage.getByRole('heading', { name: 'Brown Crunch' }),
+    ).toBeVisible();
+    expect(jumps).toBe(1);
+    await layout.click();
+    await page.getByRole('option', { name: 'Ten switches' }).click();
+    const ten = stage.getByRole('group', { name: /Footswitches.*10 switches/ });
+    await expect(ten.getByRole('button')).toHaveCount(10);
+    await ten.getByRole('button', { name: '3 Lead' }).click();
+    await expect(
+      stage.getByText('Scene · Lead', { exact: true }),
+    ).toBeVisible();
+    await expect(ten.getByRole('button', { name: 'C —' })).toBeDisabled();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+  } finally {
+    await remove(request, revisions);
+  }
+});
+
+test('mixed rig authoring: duplicate a pedal for one saved scene with a checked cursor', async ({
+  page,
+  request,
+}, info) => {
+  const document = manifest(`Pedal copy ${info.project.name}`, [
+    { id: 'verse', name: 'Verse', value: 1 },
+    { id: 'chorus', name: 'Chorus', value: 0.7 },
+  ]);
+  document.oxidal.graph.nodes.splice(1, 0, {
+    id: 'ts9',
+    kind: 'lv2',
+    instance: 'ts9',
+    audioInputs: 1,
+    audioOutputs: 1,
+    bypassed: false,
+  } as never);
+  document.oxidal.graph.edges = [
+    { from: { node: 'in', port: 0 }, to: { node: 'ts9', port: 0 } },
+    { from: { node: 'ts9', port: 0 }, to: { node: 'scene-gain', port: 0 } },
+    { from: { node: 'scene-gain', port: 0 }, to: { node: 'out', port: 0 } },
+  ];
+  Object.assign(document.oxidal, {
+    lv2: [
+      {
+        id: 'ts9',
+        pluginUri: 'urn:oxidal:plugin:drive#mono',
+        controls: { drive: 0.1, tone: 0.5 },
+        assets: [],
+        requiredFeatures: [],
+      },
+    ],
+  });
+  Object.assign(document.extensions['urn:oxidal:authoring'], {
+    labels: { ts9: 'TS9 tight' },
+  });
+  const old = document.extensions['urn:oxidal:scenes:1'];
+  const layouts = document.extensions as Record<string, unknown>;
+  layouts['urn:oxidal:scenes:2'] = {
+    ...old,
+    scenes: old.scenes.map((scene, index) => ({
+      ...scene,
+      controls: [
+        { node: 'ts9', symbol: 'drive', value: index === 0 ? 0.25 : 0.75 },
+      ],
+    })),
+  };
+  delete layouts['urn:oxidal:scenes:1'];
+  document.requiredExtensions[1] = 'urn:oxidal:scenes:2';
+  const first = await publish(request, document);
+  const playing = await mockRig(page, request, first);
+  let published = 0;
+  page.on('request', (incoming) => {
+    if (
+      incoming.method() === 'POST' &&
+      new URL(incoming.url()).pathname === '/api/v1/presets/rigs'
+    )
+      published++;
+  });
+  const versionsUrl = `/api/v1/presets/catalog/rig/${first}/versions`;
+  const savedVersion = async () => {
+    const response = await request.get(versionsUrl);
+    expect(response.ok(), await response.text()).toBe(true);
+    const view = await response.json();
+    return view.preset.versions.find(
+      (entry: { id: string }) => entry.id === view.preset.default_version,
+    ).content as string;
+  };
+  let saved = first;
+  try {
+    await page.goto('/#rig');
+    await page
+      .getByRole('button', { name: 'Edit scenes', exact: true })
+      .click();
+    const grid = page.getByRole('dialog', { name: 'Edit scenes' });
+    const dialog = page.getByRole('dialog', { name: 'Duplicate TS9 tight' });
+    const save = dialog.getByRole('button', { name: 'Duplicate and save' });
+    const open = async () => {
+      await grid
+        .getByRole('button', { name: 'More for TS9 tight', exact: true })
+        .click();
+      await page
+        .getByRole('menuitem', { name: 'Duplicate with its settings' })
+        .click();
+      await dialog.getByLabel('Destination scene').selectOption('chorus');
+      await expect(save).toBeEnabled();
+    };
+    await open();
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(grid).toBeVisible();
+    expect(published).toBe(0);
+
+    await open();
+    playing.changeCursor();
+    await save.click();
+    await expect(dialog.getByRole('alert')).toContainText('changed');
+    await expect(save).toBeDisabled();
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    expect(published).toBe(0);
+    await open();
+    await save.click();
+    await expect(grid.getByRole('status')).toContainText('on in Chorus');
+    expect(published).toBe(1);
+    expect(playing()).toBe(first);
+    saved = await savedVersion();
+    expect(saved).not.toBe(first);
+
+    const reopened = await (
+      await request.get(`/api/v1/presets/rigs/${saved}`)
+    ).json();
+    const split = reopened.manifest.extensions['urn:oxidal:scenes:3'];
+    const copy = reopened.manifest.oxidal.lv2.find(
+      (instance: { id: string }) => instance.id !== 'ts9',
+    );
+    expect(copy.controls).toEqual({ drive: 0.25, tone: 0.5 });
+    expect(
+      split.scenes.map((scene: { bypass: unknown }) => scene.bypass),
+    ).toEqual([
+      [{ node: copy.id, value: true }],
+      [{ node: copy.id, value: false }],
+    ]);
+    expect(
+      split.scenes.map((scene: { controls: unknown }) => scene.controls),
+    ).toEqual([
+      [{ node: 'ts9', symbol: 'drive', value: 0.25 }],
+      [{ node: 'ts9', symbol: 'drive', value: 0.75 }],
+    ]);
+    expect(reopened.manifest.oxidal.graph.edges).toContainEqual({
+      from: { node: 'ts9', port: 0 },
+      to: { node: copy.id, port: 0 },
+    });
+    await playing.recall(saved);
+    await page.reload();
+    await page
+      .getByRole('button', { name: 'Edit scenes', exact: true })
+      .click();
+    await expect(
+      grid.getByRole('button', { name: 'TS9 tight (2) in Chorus' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await expect(
+      grid.getByRole('button', { name: 'TS9 tight (2) in Verse' }),
+    ).toHaveAttribute('aria-pressed', 'false');
+  } finally {
+    await remove(request, [...new Set([first, saved])]);
+  }
+});
+
+for (const count of [5, 7, 10]) {
+  test(`mixed rig authoring: many scene paths (${count}) fold only confirmed silent branches`, async ({
+    page,
+    request,
+  }) => {
+    const original = await request.post('/api/v1/presets', {
+      data: readFileSync(
+        new URL(
+          '../../../crates/oxidal-presets/tests/fixtures/authored-current.t3kpreset',
+          import.meta.url,
+        ),
+      ),
+      headers: { 'Content-Type': 'application/octet-stream' },
+    });
+    expect(original.ok(), await original.text()).toBe(true);
+    const preset = (await original.json()) as Preset;
+    const names = [
+      'Clean',
+      'Chime',
+      'Crunch',
+      'Lead',
+      'Space',
+      'Glass',
+      'Bright',
+      'Warm',
+      'Heavy',
+      'Bass',
+    ].slice(0, count);
+    const input = sceneRig(
+      randomUUID(),
+      `Many amps replay ${count}`,
+      names.map((name) => ({
+        id: name.toLowerCase(),
+        kind: 'native',
+        name,
+        preset,
+        source: { kind: 'original', preset: preset.sha256 },
+      })),
+      'tone3000-plugin:' + 'a'.repeat(40),
+    );
+    const document = JSON.parse(input.manifest_json);
+    const layout = document.extensions['urn:oxidal:scenes:1'];
+    const heavy = layout.scenes.find(
+      (scene: { id: string }) => scene.id === 'heavy',
+    )!;
+    if (heavy) {
+      heavy.name = 'Heavy + bass';
+      for (const gain of heavy.gains)
+        if (gain.port === names.length - 1) gain.value = 0.5;
+    }
+    const first = await publish(request, document, input.resources);
+    const playing = await mockRig(page, request, first);
+    try {
+      await page.goto('/#rig');
+      const route = page.getByRole('group', {
+        name: 'Scene lanes',
+        exact: true,
+      });
+      const cards = page.getByRole('group', { name: 'Scenes', exact: true });
+      const phone = page.viewportSize()!.width < 768;
+      const paths = route.locator('.route-path');
+      await expect(paths).toHaveCount(phone ? 1 : count);
+      const initialFold = route.getByRole('button', {
+        name: phone
+          ? new RegExp(`^Show ${count - 1} silent`)
+          : `Fold ${count - 1} silent branches`,
+      });
+      await initialFold.click();
+      await expect(paths).toHaveCount(phone ? count : 1);
+      await cards.getByRole('button', { name: /^Scene 3: Crunch/ }).click();
+      await expect(
+        route.getByRole('group', { name: 'Scene 3 Crunch, sounding' }),
+      ).toBeVisible();
+      if (count === 5) {
+        await page
+          .getByRole('button', { name: 'Edit scenes', exact: true })
+          .click();
+        const grid = page.getByRole('dialog', { name: 'Edit scenes' });
+        const chimeInCrunch = grid.getByRole('switch', {
+          name: 'Chime branch in Crunch',
+        });
+        const chimeInClean = grid.getByRole('switch', {
+          name: 'Chime branch in Clean',
+        });
+        await expect(chimeInCrunch).not.toBeChecked();
+        await chimeInCrunch.click();
+        await expect(chimeInCrunch).toBeChecked();
+        await expect(chimeInClean).not.toBeChecked();
+        await grid.getByRole('button', { name: 'Save scenes' }).click();
+        await expect.poll(playing).not.toBe(first);
+        const saved = await (
+          await request.get(`/api/v1/presets/rigs/${playing()}`)
+        ).json();
+        const changed = (
+          saved.manifest.extensions['urn:oxidal:scenes:1'] ??
+          saved.manifest.extensions['urn:oxidal:scenes:3']
+        ).scenes.find((scene: { id: string }) => scene.id === 'crunch');
+        expect(
+          changed.gains
+            .filter((gain: { port: number }) => gain.port === 1)
+            .map((gain: { value: number }) => gain.value),
+        ).toEqual([1, 1]);
+      }
+      if (count < 10) return;
+      await cards.getByRole('button', { name: /^Scene 9: Heavy/ }).click();
+      await expect(
+        route.getByRole('group', { name: 'Scene 9 Heavy + bass, sounding' }),
+      ).toBeVisible();
+      await expect(
+        route.getByRole('group', { name: 'Scene 10 Bass, sounding' }),
+      ).toBeVisible();
+      const blendFold = route.getByRole('button', {
+        name: phone ? 'Fold 8 silent branches' : /^Show 8 silent/,
+      });
+      await blendFold.click();
+      await expect(paths).toHaveCount(phone ? 2 : 10);
+      expect(playing()).toBe(first);
+    } finally {
+      await remove(request, [...new Set([first, playing()])]);
+    }
+  });
 }
 
 test('mixed rig authoring: scene grid saves block On/Off in version 3 and reopens it', async ({

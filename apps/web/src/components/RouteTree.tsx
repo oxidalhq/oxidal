@@ -13,6 +13,7 @@ import {
 import { Button } from '@oxidal/design-system/components/button';
 import { useFlip } from '@oxidal/design-system/lib/use-flip';
 import { useVerticalRig } from '@oxidal/design-system/lib/use-media';
+import { SilentBranchesToggle } from '@oxidal/design-system/widgets/silent-branches-toggle';
 
 import './RouteTree.css';
 import { RigTile } from '../ChainView';
@@ -30,6 +31,8 @@ export type SceneLanes = {
   names: string[];
   /** The path that sounds now, if one does. */
   sounding: number | null;
+  /** Confirmed branch readback in route order. Unknown branches stay visible. */
+  enabled?: (boolean | undefined)[];
 };
 
 type Props = {
@@ -73,6 +76,7 @@ export function RouteTree(props: Props) {
   const root = useRef<HTMLDivElement>(null);
   const vertical = useVerticalRig();
   const scroller = useRef<HTMLDivElement>(null);
+  const [expanded, setExpanded] = useState<boolean | null>(null);
   useFlip(scroller, JSON.stringify(route, ['split', 'branches']));
   const drag = useGapDrag(
     root,
@@ -117,7 +121,14 @@ export function RouteTree(props: Props) {
       >
         <div className="route-row">
           <span className="route-port">IN</span>
-          <RowSteps {...props} drag={drag} steps={route} owner={null} />
+          <RowSteps
+            {...props}
+            drag={drag}
+            steps={route}
+            owner={null}
+            silentExpanded={expanded ?? !vertical}
+            onToggleSilent={() => setExpanded(!(expanded ?? !vertical))}
+          />
           <span className="route-port">OUT</span>
         </div>
       </div>
@@ -148,9 +159,27 @@ const describe = (at: RouteAt, owner: string | null) =>
 
 type Drag = ReturnType<typeof useGapDrag>;
 type Owner = { split: Split; path: number; name: string } | null;
+const soundingAt = (scene: SceneLanes, path: number) =>
+  scene.enabled?.[path] ?? scene.sounding === path;
+function containsSelected(steps: IdStep[], props: Props): boolean {
+  return (
+    !!props.selected &&
+    steps.some((step) =>
+      typeof step === 'string'
+        ? props.tiles(step).some((tile) => tile.id === props.selected)
+        : step.branches.some((branch) => containsSelected(branch, props)),
+    )
+  );
+}
 
 function RowSteps(
-  props: Props & { drag: Drag; steps: IdStep[]; owner: Owner },
+  props: Props & {
+    drag: Drag;
+    steps: IdStep[];
+    owner: Owner;
+    silentExpanded: boolean;
+    onToggleSilent: () => void;
+  },
 ) {
   const { steps, owner, drag } = props;
   const at = (index: number): RouteAt =>
@@ -189,6 +218,15 @@ function RowSteps(
       return;
     }
     const scene = props.scenes?.split === step.split ? props.scenes : null;
+    const silent =
+      step.branches.length > 3 && scene
+        ? scene.names.flatMap((name, path) =>
+            scene.enabled?.[path] === false &&
+            !containsSelected(step.branches[path] ?? [], props)
+              ? [{ name, path }]
+              : [],
+          )
+        : [];
     out.push(
       <div
         key={step.split}
@@ -199,10 +237,15 @@ function RowSteps(
         }
       >
         {step.branches.map((branch, path) => {
+          if (
+            !props.silentExpanded &&
+            silent.some((item) => item.path === path)
+          )
+            return null;
           const name = scene
             ? `scene ${path + 1}`
             : `path ${path + 1}${owner ? ` of ${owner.name}` : ''}`;
-          const sounding = scene ? scene.sounding === path : undefined;
+          const sounding = scene ? soundingAt(scene, path) : undefined;
           const empty: RouteAt = { split: step.split, path, index: 0 };
           return (
             <div
@@ -255,6 +298,13 @@ function RowSteps(
             </div>
           );
         })}
+        {silent.length > 0 && (
+          <SilentBranchesToggle
+            names={silent.map(({ name }) => name)}
+            expanded={props.silentExpanded}
+            onToggle={props.onToggleSilent}
+          />
+        )}
       </div>,
     );
   });
@@ -401,7 +451,7 @@ function ListSplit(props: Props & { split: Split }) {
               </strong>{' '}
               <span className="caption">
                 {scene
-                  ? scene.sounding === path
+                  ? soundingAt(scene, path)
                     ? '(sounding)'
                     : ''
                   : props.plain

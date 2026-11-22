@@ -111,6 +111,16 @@ export function MixedRig(props: {
           switching={performSwitching}
           onToggle={switchTile}
           onEdit={() => setPerforming(false)}
+          sceneControls={
+            state.control?.scenes
+              ? {
+                  scenes: state.control.scenes.scenes,
+                  active:
+                    state.control.stomp_scene ?? state.control.scene ?? null,
+                  onSelect: (scene) => void recallScene(scene),
+                }
+              : undefined
+          }
           scenes={
             !!state.control?.scenes?.scenes.length && (
               <>

@@ -1,4 +1,4 @@
-import { CaretDown, CaretUp, GitFork, Plus } from '@phosphor-icons/react';
+import { GitFork, Plus } from '@phosphor-icons/react';
 import * as React from 'react';
 
 import { Button } from '../components/ui/button';
@@ -27,6 +27,7 @@ import {
 import { useFlip } from '../lib/use-flip';
 import { useVerticalRig } from '../lib/use-media';
 import { ChainBlock, type ChainBlockModel, ChainPort } from './chain';
+import { SilentBranchesToggle } from './silent-branches-toggle';
 
 export type RouteBlock = ChainBlockModel;
 export type Route = Step<RouteBlock>[];
@@ -704,31 +705,14 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
                   </div>
                 ))}
               {foldable(step) && (
-                <button
-                  type="button"
-                  aria-expanded={!folded(step)}
-                  onClick={() =>
+                <SilentBranchesToggle
+                  expanded={!folded(step)}
+                  names={silentOf(step).map((b) => branchName(step, b))}
+                  onToggle={() =>
                     setUnfolded((all) => ({ ...all, [step.id]: folded(step) }))
                   }
-                  className={cn(
-                    'col-span-2 ml-2 inline-flex min-h-8 items-center gap-1.5 justify-self-start rounded-full border border-dashed border-wire px-3 text-left text-xs text-muted-foreground hover:border-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-                    vertical && 'ml-3',
-                  )}
-                >
-                  {folded(step) ? (
-                    <>
-                      <CaretDown aria-hidden="true" className="size-3.5" />
-                      {`Show ${silentOf(step).length} silent: ${silentOf(step)
-                        .map((b) => branchName(step, b))
-                        .join(', ')}`}
-                    </>
-                  ) : (
-                    <>
-                      <CaretUp aria-hidden="true" className="size-3.5" />
-                      {`Fold ${silentOf(step).length} silent branches`}
-                    </>
-                  )}
-                </button>
+                  className={cn('col-span-2 ml-2', vertical && 'ml-3')}
+                />
               )}
             </div>
             {vertical ? (

@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import { Button } from '@oxidal/design-system/components/button';
 import { NumberField } from '@oxidal/design-system/components/number-field';
 import {
@@ -6,13 +8,17 @@ import {
   SheetContent,
   SheetHeader,
 } from '@oxidal/design-system/components/sheet';
+import { Switch } from '@oxidal/design-system/components/switch';
 import { sceneColour } from '@oxidal/design-system/lib/scene-colours';
+import { SceneBlockActions } from '@oxidal/design-system/widgets/scene-editor';
 
 import { blockLabel } from '../../sceneEdit';
 import {
   canPreviewNativeBypass,
   nativeBypassKey,
 } from '../../sceneNativeBypass';
+import { scenePedalCopies } from '../../scenePedalCopy';
+import { DuplicateScenePedal } from './DuplicateScenePedal';
 import { rigBusy } from './mixedRigViewModel';
 import type { RigViewProps } from './useMixedRigSession';
 
@@ -26,9 +32,16 @@ export function SceneGrid({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const [copy, setCopy] = useState<{
+    node: string;
+    name: string;
+    source: string;
+  }>();
+  const [copyNotice, setCopyNotice] = useState('');
   const control = vm.state.control;
   if (!control?.scenes || !rig.matching) return null;
   const manifest = rig.matching.manifest;
+  const source = control.stomp_scene ?? control.scene;
   const draft =
     rig.sceneUpdates?.session === control.session ? rig.sceneUpdates : null;
   const scenes = [...control.scenes.scenes, ...(draft?.added ?? [])];
@@ -78,6 +91,25 @@ export function SceneGrid({
       },
     });
   };
+  if (copy && open)
+    return (
+      <DuplicateScenePedal
+        document={rig.matching}
+        cursor={{
+          session: control.session,
+          revision: control.revision,
+          preset: control.source_revision,
+        }}
+        {...copy}
+        onReadback={rig.accept}
+        onClose={() => setCopy(undefined)}
+        onSaved={(message) => {
+          setCopy(undefined);
+          setCopyNotice(message);
+        }}
+      />
+    );
+  const canCopy = scenePedalCopies(rig.matching);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -155,7 +187,22 @@ export function SceneGrid({
                         scope="row"
                         className="sticky left-0 z-10 bg-card px-3 py-2 text-left font-medium"
                       >
-                        {label}
+                        <span className="flex items-center gap-1">
+                          {label}
+                          {source && canCopy.has(node.id) && (
+                            <SceneBlockActions
+                              label={label}
+                              disabled={disabled || !!draft || control.modified}
+                              onDuplicate={() =>
+                                setCopy({
+                                  node: node.id,
+                                  name: label,
+                                  source,
+                                })
+                              }
+                            />
+                          )}
+                        </span>
                       </th>
                       {scenes.map((scene) => {
                         const bypass =
@@ -295,6 +342,68 @@ export function SceneGrid({
                     </tr>
                   );
                 })}
+                {control.scenes.branches?.map((branch) => (
+                  <tr key={branch.id} className="border-b border-border">
+                    <th
+                      scope="row"
+                      className="sticky left-0 z-10 bg-card px-3 py-2 text-left font-medium"
+                    >
+                      {branch.name} branch
+                    </th>
+                    {scenes.map((scene) => {
+                      const today = draft?.gains[scene.id] ?? scene.gains;
+                      const matches = (
+                        a: { node: string; port: number },
+                        b: { node: string; port: number },
+                      ) => a.node === b.node && a.port === b.port;
+                      const owns = (gain: { node: string; port: number }) =>
+                        branch.gains.some((target) => matches(target, gain));
+                      const current = today.filter(owns);
+                      const complete =
+                        branch.gains.length > 0 &&
+                        branch.gains.every((gain) =>
+                          current.some((target) => matches(target, gain)),
+                        );
+                      const on = current.some((gain) => gain.value !== 0);
+                      const saved = scene.gains.filter(owns);
+                      const restore = saved.some((gain) => gain.value !== 0)
+                        ? saved
+                        : branch.gains;
+                      return (
+                        <td key={scene.id} className="px-2 py-1 text-center">
+                          <Switch
+                            aria-label={`${branch.name} branch in ${scene.name}`}
+                            checked={on}
+                            disabled={disabled || !complete}
+                            onCheckedChange={(enabled) => {
+                              rig.setSceneUpdates({
+                                ...(draft ?? {
+                                  session: control.session,
+                                  gains: {},
+                                }),
+                                gains: {
+                                  ...draft?.gains,
+                                  [scene.id]: today.map((gain) =>
+                                    owns(gain)
+                                      ? {
+                                          ...gain,
+                                          value: enabled
+                                            ? (restore.find((target) =>
+                                                matches(target, gain),
+                                              )?.value ?? 0)
+                                            : 0,
+                                        }
+                                      : gain,
+                                  ),
+                                },
+                              });
+                            }}
+                          />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
                 {gains.map((gain) => (
                   <tr
                     key={`${gain.node}:${gain.port}`}
@@ -349,10 +458,12 @@ export function SceneGrid({
               </tbody>
             </table>
           </div>
+          {copyNotice && <p role="status">{copyNotice}</p>}
           <p className="mt-3 text-sm text-muted-foreground">
-            Each branch input retains its own level and polarity. Muting sets
-            exact silence. Save scenes keeps these changes in the preset. Edited
-            capture block states are played after Save prepares them.
+            Each branch input has its own level and polarity. Switching on
+            restores its saved levels or the branch’s default levels. Save
+            scenes keeps these changes in the preset. Edited capture block
+            states are played after Save prepares them.
           </p>
           <Button
             className="mt-3"
