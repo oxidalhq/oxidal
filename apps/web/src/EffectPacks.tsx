@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 
+import { Card } from '@oxidal/design-system/components/card';
 import { Loading } from '@oxidal/design-system/components/states';
+import { Description } from '@oxidal/design-system/components/text';
 import { PluginPacks } from '@oxidal/design-system/patterns/engine-settings';
 
 import {
@@ -124,12 +126,12 @@ export function EffectPacks({
 
   const playing = audioRunning || Boolean(state?.audio_running);
   return (
-    <section className="panel effect-packs" aria-label="Effects">
+    <Card aria-label="Effects">
       <h2 className="sr-only">Effects</h2>
-      <p className="caption effect-packs-intro">
+      <Description>
         Qualified collections available to the effect chooser. Unsupported
         plugins stay hidden.
-      </p>
+      </Description>
 
       {state && !state.storage_writable && (
         <p role="status" className="rounded-md bg-muted px-3 py-2 text-sm">
@@ -183,6 +185,6 @@ export function EffectPacks({
           onRemove={(pack) => void change(pack.id, 'remove')}
         />
       )}
-    </section>
+    </Card>
   );
 }

@@ -1,6 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Card } from '@oxidal/design-system/components/card';
 import {
   Select,
   SelectContent,
@@ -319,11 +320,11 @@ export function PlaybackSettings({
     );
   // Monitor and output tests with Master level, one row (7.29).
   const test = (
-    <section className="control-stack audio-test" aria-label="Test">
+    <Card aria-label="Test">
       <h3>Test</h3>
       {hostControls}
       {level}
-    </section>
+    </Card>
   );
   if (
     effects?.configured &&
@@ -432,8 +433,8 @@ export function PlaybackSettings({
             <p className="caption">{resumeUnavailable}</p>
           )}
           {state?.configured && (
-            <section
-              className="control-stack applied-settings"
+            <Card
+              className="min-w-0 gap-3"
               aria-label="Playback session configuration"
             >
               <h4>Applied settings</h4>
@@ -457,7 +458,7 @@ export function PlaybackSettings({
                   void command({ kind: 'reconfigure', stream })
                 }
               />
-            </section>
+            </Card>
           )}
           {interfaceCard}
           {test}
@@ -539,7 +540,7 @@ export function PlaybackSettings({
                     </SelectContent>
                   </Select>
                 </label>
-                <details className="control-help channel-routing">
+                <details className="control-help col-span-full w-full">
                   <summary>Channel routing</summary>
                   <div className="form-grid">
                     {(

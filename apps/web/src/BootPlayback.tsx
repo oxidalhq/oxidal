@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import {
   type AudioState,
@@ -222,7 +223,10 @@ export function BootPlayback({
               ],
             ] as const
           ).map(([value, label, help]) => (
-            <label key={value} className="startup-option">
+            <label
+              key={value}
+              className="flex min-h-touch items-start gap-2 rounded-md py-1 focus-within:outline-2 focus-within:outline-ring"
+            >
               <input
                 type="radio"
                 name="startup-policy"
@@ -235,11 +239,9 @@ export function BootPlayback({
                 }
                 onChange={() => void choose(value)}
               />
-              <span className="startup-option-text">
+              <span className="grid flex-1 gap-0.5 text-sm sm:grid-cols-[minmax(8rem,12rem)_minmax(0,1fr)] sm:items-baseline sm:gap-4">
                 <span>{label}</span>
-                {/* Not Tailwind's `block`: the project `.block` class draws a
-                    tile and made each description a tall empty box (7.29). */}
-                <span className="caption">{help}</span>
+                <Caption as="span">{help}</Caption>
               </span>
             </label>
           ))}

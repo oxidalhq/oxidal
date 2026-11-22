@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Card, CardHeader } from '@oxidal/design-system/components/card';
 import {
   Select,
   SelectContent,
@@ -14,6 +15,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@oxidal/design-system/components/tabs';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import {
   type AudioDevices,
@@ -206,11 +208,8 @@ export function AudioSettings({ connected }: { connected: boolean }) {
             output={output}
             level={<MasterLevel />}
             interfaceCard={
-              <section
-                className="audio-diagnostics"
-                aria-labelledby="audio-interface-setup"
-              >
-                <div className="audio-card-heading">
+              <Card aria-labelledby="audio-interface-setup">
+                <CardHeader>
                   <h3 id="audio-interface-setup">Interface and buffers</h3>
                   <Button
                     variant="outline"
@@ -219,7 +218,7 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                   >
                     Refresh audio devices
                   </Button>
-                </div>
+                </CardHeader>
                 <p className="caption">
                   Connected interfaces appear automatically. Check input and
                   output before starting a new playback session.
@@ -228,9 +227,11 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                   <>
                     <fieldset
                       disabled={busy || !connected}
-                      className="audio-probe-fields"
+                      className="grid min-w-0 gap-3 border-0 p-0 [&_select]:max-w-full"
                     >
-                      <legend>Configuration check</legend>
+                      <legend className="mb-2 text-md font-semibold">
+                        Configuration check
+                      </legend>
                       <div className="form-grid">
                         <label className="field">
                           Input
@@ -431,9 +432,9 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                         >
                           Check input and output
                         </Button>
-                        <p role="status" className="audio-check-result">
+                        <Caption role="status">
                           {busy ? 'Inspecting audio…' : message}
-                        </p>
+                        </Caption>
                       </div>
                       <p className="caption">
                         The check opens and releases input, then output. It
@@ -453,7 +454,7 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                     ))}
                   </details>
                 )}
-              </section>
+              </Card>
             }
           />
         </section>

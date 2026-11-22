@@ -100,8 +100,8 @@ function StoppedAudioReconfigure({
       <p className="caption">
         Applying restarts audio. Your tone and live adjustments are kept.
       </p>
-      <div className="audio-routing-fields grid min-w-0 grid-cols-2 gap-3">
-        <label className="field col-span-2">
+      <div className="grid min-w-0 gap-3 sm:grid-cols-2 [&>label]:my-0">
+        <label className="field col-span-full">
           Sample rate (Hz)
           <Select
             value={String(draft.input.sample_rate)}

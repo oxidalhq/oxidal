@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Card } from '@oxidal/design-system/components/card';
 
 import {
   type AudioProbe,
@@ -111,8 +112,8 @@ export function EffectsPlaybackSettings({
         {stream.input.sample_rate} Hz · {stream.input.period_frames} samples ×{' '}
         {stream.input.periods} periods
       </p>
-      <section
-        className="control-stack applied-settings"
+      <Card
+        className="min-w-0 gap-3"
         aria-label="Playback session configuration"
       >
         <h4>Applied settings</h4>
@@ -130,7 +131,7 @@ export function EffectsPlaybackSettings({
           running={state.phase === 'running'}
           onApply={(stream) => void command({ kind: 'reconfigure', stream })}
         />
-      </section>
+      </Card>
     </section>
   );
 }

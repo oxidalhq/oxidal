@@ -7,6 +7,7 @@ import {
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Card } from '@oxidal/design-system/components/card';
 
 import { type DebugCommand, debugCommand, type DebugState } from './api';
 import { friendlyError } from './lib/friendlyError';
@@ -107,9 +108,11 @@ export function DebugConsole() {
   }
   const running = state?.job?.phase === 'running';
   return (
-    <section className="panel" aria-label="Debug console">
+    <Card aria-label="Debug console">
       <details open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
-        <summary>Debug console</summary>
+        <summary className="min-h-touch cursor-pointer py-2 font-semibold">
+          Debug console
+        </summary>
         <div className="action-row my-3">
           <Button
             variant="outline"
@@ -131,14 +134,12 @@ export function DebugConsole() {
             )}
             {following ? 'Freeze logs' : 'Follow logs'}
           </Button>
-          <a
-            className="inline-flex min-h-11 items-center rounded-md border px-3 text-sm"
-            href="/api/v1/debug/logs"
-            download="oxidal-logs.txt"
-          >
-            <DownloadSimple className="mr-2 size-4" aria-hidden="true" />
-            Download logs
-          </a>
+          <Button variant="outline" asChild>
+            <a href="/api/v1/debug/logs" download="oxidal-logs.txt">
+              <DownloadSimple className="mr-2 size-4" aria-hidden="true" />
+              Download logs
+            </a>
+          </Button>
         </div>
         {logMessage && <p role="status">{logMessage}</p>}
         {logText && (
@@ -270,6 +271,6 @@ export function DebugConsole() {
           </>
         )}
       </details>
-    </section>
+    </Card>
   );
 }
