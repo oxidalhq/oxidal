@@ -18,6 +18,7 @@ import {
   loadPresetChoices,
   playScenes,
   type PresetChoice,
+  readyRevisions,
   rigTopologyLabel,
 } from './presetChoices';
 vi.mock('./api', () => ({
@@ -110,6 +111,32 @@ it('asks before another scenes preset replaces unsaved edits, unless it is kept 
       playing,
     ),
   ).toBe(false);
+});
+
+it('keeps live edits when a prepared preset fails before the switch', async () => {
+  const failed = {
+    phase: 'running',
+    device_owned: true,
+    configured: { revision: a, stream: {} },
+    control: {
+      modified: true,
+      prepared: [{ revision: b, error: 'Load failed' }],
+    },
+  };
+  expect(
+    discardsSceneEdits(scenes(b), {
+      revision: a,
+      modified: true,
+      ready: readyRevisions(failed),
+    }),
+  ).toBe(true);
+
+  vi.mocked(rigAudioState).mockResolvedValue(failed as never);
+  const review = vi.fn();
+  await playScenes(b, [], review);
+  expect(review).toHaveBeenCalledOnce();
+  expect(rigAudioCommand).not.toHaveBeenCalled();
+  expect(playbackState).not.toHaveBeenCalled();
 });
 
 it('resumes the last scenes preset with its edits instead of starting it fresh', async () => {

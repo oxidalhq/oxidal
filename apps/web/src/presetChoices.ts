@@ -339,7 +339,11 @@ export async function playTone3000(id: string, owned: boolean) {
  * Plays a preset with scenes: a gapless switch when it is kept ready, a resume
  * with its unsaved edits when it was the last one playing, else a fresh start.
  */
-export async function playScenes(revision: string, adjacent: string[] = []) {
+export async function playScenes(
+  revision: string,
+  adjacent: string[] = [],
+  onColdStart?: () => void,
+) {
   const rig = await rigAudioState();
   if (rig.phase === 'running' && rig.control && rig.configured) {
     if (rig.configured.revision === revision) return;
@@ -366,6 +370,12 @@ export async function playScenes(revision: string, adjacent: string[] = []) {
     // Resuming keeps the unsaved edits the daemon holds for this preset.
     await freeInterface(null);
     await rigAudioCommand(await rigAudioState(), { kind: 'restart' });
+    return;
+  }
+  // The prepared bank can change after the picker renders. Review the cold
+  // start before releasing the interface that still owns the live edits.
+  if (onColdStart) {
+    onColdStart();
     return;
   }
   const stream = await freeInterface(null);
@@ -442,8 +452,8 @@ export function discardsSceneEdits(
   );
 }
 
-export function playChoice(choice: PresetChoice) {
+export function playChoice(choice: PresetChoice, onColdStart?: () => void) {
   return choice.kind === 'scenes'
-    ? playScenes(choice.revision)
+    ? playScenes(choice.revision, [], onColdStart)
     : playTone3000(choice.id, choice.owned);
 }

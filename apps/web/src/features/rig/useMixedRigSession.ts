@@ -29,6 +29,7 @@ import {
   playChoice,
   playScenes,
   type PresetChoice,
+  readyRevisions,
 } from '../../presetChoices';
 import {
   buildRoute,
@@ -827,16 +828,16 @@ export function useMixedRigSession({
   /** Any preset from the picker: scene presets stay here, TONE3000 ones hand over. */
   async function choose(choice: PresetChoice, confirmed = false) {
     const { changed } = view!;
-    const control = current.current?.control;
+    const opening = current.current;
+    const reviewColdStart = !confirmed && !performing && changed;
     // On stage a preset change discards unsaved edits without asking, as a
     // modeller does; the editor asks first.
     if (
-      !confirmed &&
-      !performing &&
+      reviewColdStart &&
       discardsSceneEdits(choice, {
         revision,
         modified: !!changed,
-        ready: control?.prepared?.map((p) => p.revision),
+        ready: opening ? readyRevisions(opening) : [],
       })
     ) {
       setDiscarding(choice);
@@ -850,7 +851,10 @@ export function useMixedRigSession({
     if (choice.kind === 'scenes')
       void loadDocument(choice.revision).catch(() => {});
     try {
-      await playChoice(choice);
+      await playChoice(
+        choice,
+        reviewColdStart ? () => setDiscarding(choice) : undefined,
+      );
       // Show the new rig now rather than at the next status poll.
       if (alive.current) await rigAudioState().then(accept, () => {});
     } catch (cause) {
