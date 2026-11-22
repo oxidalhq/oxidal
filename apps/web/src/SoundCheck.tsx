@@ -9,15 +9,28 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+} from '@oxidal/design-system/components/card';
 import { StateNotice } from '@oxidal/design-system/components/states';
+import {
+  Caption,
+  Description,
+  Eyebrow,
+  Readout,
+  Title,
+} from '@oxidal/design-system/components/text';
 import { SoundCheck as ReadinessList } from '@oxidal/design-system/patterns/guitar-tools';
 import {
   LEVELS_SECTIONS,
   type LevelsSection,
 } from '@oxidal/design-system/patterns/levels-sections';
+import { SettingRow } from '@oxidal/design-system/patterns/settings-page';
 import { Workspace } from '@oxidal/design-system/patterns/workspace';
+import { Meter } from '@oxidal/design-system/widgets/meter';
 
-import './SoundCheck.css';
 import {
   boosts,
   type BoostState,
@@ -352,7 +365,7 @@ export function SoundCheck({
   }
 
   return (
-    <section className="sound-check" aria-label="Levels">
+    <section className="grid min-w-0 gap-6" aria-label="Levels">
       <Workspace
         label="Levels"
         sections={LEVELS_SECTIONS}
@@ -363,9 +376,12 @@ export function SoundCheck({
             leaveScreen(() => setView(id as LevelsSection));
         }}
       >
-        <header className="sound-check-intro">
-          <div>
-            <Badge data-state={fixes.length ? 'attention' : 'ready'}>
+        <CardHeader className="border-b border-border pb-4">
+          <div className="grid max-w-prose justify-items-start gap-2">
+            <Badge
+              tone={fixes.length ? 'warning' : 'neutral'}
+              data-state={fixes.length ? 'attention' : 'ready'}
+            >
               {fixes.length ? (
                 <WarningCircle aria-hidden="true" />
               ) : (
@@ -377,17 +393,17 @@ export function SoundCheck({
                   ? `${fixes.length} to review`
                   : 'No current software warnings'}
             </Badge>
-            <h2>Is the whole instrument ready?</h2>
-            <p>
+            <Title as="h2">Is the whole instrument ready?</Title>
+            <Description>
               One view of the guitar, interface, loudness, intentional boosts
               and live processing health. Digital readings cannot judge a
               physical output knob or room loudness.
-            </p>
+            </Description>
           </div>
           <Button variant="outline" disabled={loading} onClick={load}>
             Refresh checks
           </Button>
-        </header>
+        </CardHeader>
 
         {error && (
           <StateNotice kind="error" title="Levels could not refresh">
@@ -395,35 +411,30 @@ export function SoundCheck({
           </StateNotice>
         )}
         {view === 'overview' && (
-          <div className="sound-check-tab-panel">
-            <section
-              aria-label="Output controls"
-              className="grid gap-3 rounded-lg border border-border bg-card p-4"
-            >
+          <div className="grid min-w-0 gap-6">
+            <Card aria-label="Output controls">
               <h3>Output</h3>
               <MasterLevel disabled={!connected} />
               <VenueEq connected={connected} />
-            </section>
+            </Card>
             <div
               id="sound-check-meters"
               tabIndex={-1}
-              className="sound-check-meters"
+              className="grid grid-cols-2 gap-2 min-[761px]:grid-cols-5 max-[760px]:[&>:last-child]:col-span-full"
               role="group"
               aria-label="Live levels"
             >
-              <MeterTile
+              <PeakTile
                 label="Input"
-                value={live ? dbfs(inputPeak) : '—'}
-                level={live ? dbToFraction(inputPeak) : null}
-                state={!live ? 'idle' : inputClips > 0 ? 'warn' : 'ok'}
-                note={live ? `${inputClips} clips` : 'No stream'}
+                live={live}
+                peak={inputPeak}
+                clips={inputClips}
               />
-              <MeterTile
+              <PeakTile
                 label="Output"
-                value={live ? dbfs(outputPeak) : '—'}
-                level={live ? dbToFraction(outputPeak) : null}
-                state={!live ? 'idle' : outputClips > 0 ? 'warn' : 'ok'}
-                note={live ? `${outputClips} clips` : 'No stream'}
+                live={live}
+                peak={outputPeak}
+                clips={outputClips}
               />
               <MeterTile
                 label="DSP load"
@@ -512,7 +523,7 @@ export function SoundCheck({
               />
             )}
 
-            <div className="sound-check-grid">
+            <div className="grid min-w-0 items-start gap-5 min-[761px]:grid-cols-2">
               <ToolSection
                 title="Loudness"
                 scope="Reference riff · before intentional Boost"
@@ -667,7 +678,7 @@ export function SoundCheck({
                   }
                   detail={`${processing.peak == null ? 'No session peak' : `${processing.peak.toFixed(0)}% session peak`} · ${monitor?.xruns ?? 0} recovered xruns · ${deadlineMisses} missed deadlines.`}
                 >
-                  <Pulse aria-hidden="true" className="sound-check-row-icon" />
+                  <Pulse aria-hidden="true" className="size-4" />
                 </ToolRow>
               </ToolSection>
             </div>
@@ -677,7 +688,7 @@ export function SoundCheck({
               scope="Shown separately so correction is not confused with solo Boost"
               label="Playing level stages"
             >
-              <div className="sound-check-stages">
+              <div className="grid gap-x-4 min-[761px]:grid-cols-3">
                 <ToolRow
                   title="Guitar trim"
                   value={db(data.levels?.input_trim_db)}
@@ -722,76 +733,76 @@ export function SoundCheck({
         )}
 
         {view === 'loudness' && (
-          <div className="sound-check-tab-panel">
+          <div className="grid min-w-0 gap-6">
             <CaptureListening
               appliedTrim={data.levels?.input_trim_db ?? null}
               audition
             />
-            <div className="sound-check-metrics" aria-label="Loudness summary">
-              <div className="sound-check-metric">
-                <span>Target</span>
-                <strong>{lufs(data.calibration?.target_lufs)}</strong>
-                <small>Reference riff, before intentional Boost</small>
-              </div>
-              <div className="sound-check-metric">
-                <span>Before correction</span>
-                <strong>
+            <div
+              className="grid gap-3 min-[761px]:grid-cols-3"
+              role="group"
+              aria-label="Loudness summary"
+            >
+              <Card className="min-w-0 gap-2">
+                <Eyebrow>Target</Eyebrow>
+                <Readout size="lg">
+                  {lufs(data.calibration?.target_lufs)}
+                </Readout>
+                <Caption>Reference riff, before intentional Boost</Caption>
+              </Card>
+              <Card className="min-w-0 gap-2">
+                <Eyebrow>Before correction</Eyebrow>
+                <Readout size="lg">
                   {spread == null ? '—' : `${spread.toFixed(1)} LU`}
-                </strong>
-                <small>Measured loudest-to-quietest spread</small>
-              </div>
-              <div className="sound-check-metric">
-                <span>After correction</span>
-                <strong>
+                </Readout>
+                <Caption>Measured loudest-to-quietest spread</Caption>
+              </Card>
+              <Card className="min-w-0 gap-2">
+                <Eyebrow>After correction</Eyebrow>
+                <Readout size="lg">
                   {correctedSpread == null
                     ? '—'
                     : `${correctedSpread.toFixed(1)} LU`}
-                </strong>
-                <small>Bounded automatic correction applied</small>
-              </div>
+                </Readout>
+                <Caption>Bounded automatic correction applied</Caption>
+              </Card>
             </div>
 
             {limitedCorrections.length > 0 && (
-              <section
-                className="sound-check-limit"
-                aria-labelledby="sound-check-limit-title"
-              >
-                <div className="sound-check-limit-heading">
-                  <div>
+              <Card aria-labelledby="sound-check-limit-title">
+                <CardHeader>
+                  <div className="grid max-w-prose justify-items-start gap-2">
                     <Badge>{limitedCorrections.length} scenes</Badge>
                     <h3 id="sound-check-limit-title">
                       Automatic correction stopped at ±24 dB
                     </h3>
-                    <p>
+                    <Description>
                       These sounds remain outside the reachable common level and
                       need manual preset-level review.
-                    </p>
+                    </Description>
                   </div>
                   <Button variant="outline" onClick={onLibrary}>
                     Preset library
                   </Button>
-                </div>
-                <details className="sound-check-limit-details">
-                  <summary>
+                </CardHeader>
+                <details>
+                  <summary className="min-h-touch cursor-pointer border-t border-border py-3 text-sm font-semibold">
                     Show {limitedGroups.length}{' '}
                     {limitedGroups.length === 1 ? 'preset' : 'presets'}
                   </summary>
-                  <div className="sound-check-limit-groups">
+                  <div>
                     {limitedGroups.map((group) => (
-                      <div key={group.preset}>
-                        <strong>{group.preset}</strong>
-                        <span>
-                          {group.scenes
-                            .map(
-                              (scene) => `${scene.name} (${db(scene.offset)})`,
-                            )
-                            .join(' · ')}
-                        </span>
-                      </div>
+                      <SettingRow
+                        key={group.preset}
+                        label={group.preset}
+                        caption={group.scenes
+                          .map((scene) => `${scene.name} (${db(scene.offset)})`)
+                          .join(' · ')}
+                      />
                     ))}
                   </div>
                 </details>
-              </section>
+              </Card>
             )}
 
             <EvenOut connected={connected} />
@@ -799,14 +810,14 @@ export function SoundCheck({
         )}
 
         {view === 'diagnostics' && (
-          <div className="sound-check-tab-panel">
-            <div className="sound-check-diagnostics-heading">
-              <h2>Live diagnostics &amp; history</h2>
-              <p>
+          <div className="grid min-w-0 gap-6">
+            <Card>
+              <CardTitle>Live diagnostics &amp; history</CardTitle>
+              <Description>
                 Detailed meters, recent charts, retained device history and the
                 redacted control audit remain available for investigation.
-              </p>
-            </div>
+              </Description>
+            </Card>
             <Monitoring displayMode={displayMode} />
           </div>
         )}
@@ -815,13 +826,37 @@ export function SoundCheck({
   );
 }
 
-/** Map a dBFS peak onto a 0–1 meter, −60 dB to 0 dB. */
-function dbToFraction(db: number | null) {
-  if (db == null || !Number.isFinite(db)) return 0;
-  return Math.max(0, Math.min(1, (db + 60) / 60));
+function PeakTile({
+  label,
+  live,
+  peak,
+  clips,
+}: {
+  label: string;
+  live: boolean;
+  peak: number | null;
+  clips: number;
+}) {
+  return (
+    <Card className="min-w-0 gap-2 p-3">
+      <Meter
+        label={label}
+        value={live ? peak : null}
+        state={live && peak != null ? 'live' : 'unavailable'}
+        clipped={live && clips > 0}
+      />
+      <Caption>
+        {!live
+          ? 'No stream'
+          : clips > 0
+            ? `${dbfs(peak)} · ${clips} clips`
+            : '0 clips'}
+      </Caption>
+    </Card>
+  );
 }
 
-/** One at-a-glance reading: a name, a big value, a bar and a status LED. */
+/** The remaining readings have their own units and scales. */
 function MeterTile({
   label,
   value,
@@ -836,25 +871,27 @@ function MeterTile({
   note: string;
 }) {
   return (
-    <div className="meter-tile" data-state={state}>
-      <span className="meter-tile-label">
-        <i className="meter-tile-led" aria-hidden="true" />
-        {label}
-      </span>
-      <strong className="meter-tile-value">{value}</strong>
+    <Card className="min-w-0 gap-2 p-3" data-state={state}>
+      <Eyebrow>{label}</Eyebrow>
+      <Readout size="md" className="break-words">
+        {value}
+      </Readout>
       {level != null && (
-        <span
-          className="meter-tile-bar"
-          role="meter"
+        <meter
+          className="h-2 w-full"
           aria-label={`${label} level`}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(level * 100)}
-        >
-          <span style={{ width: `${Math.round(level * 100)}%` }} />
-        </span>
+          aria-valuetext={value}
+          min={0}
+          max={1}
+          value={Math.min(1, Math.max(0, level))}
+        />
       )}
-      <span className="meter-tile-note">{note}</span>
-    </div>
+      <Caption>
+        {state === 'warn' && (
+          <WarningCircle aria-label="Warning" className="mr-1 inline size-4" />
+        )}
+        {note}
+      </Caption>
+    </Card>
   );
 }

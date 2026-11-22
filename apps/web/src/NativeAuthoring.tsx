@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { type AudioAction, type AudioState, tone3000Tone } from './api';
@@ -303,7 +304,7 @@ export function NativeAuthoring({
         </details>
       )}
       {historyControls && (
-        <div className="tool-row-actions">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             disabled={editingDisabled || !status?.can_undo}
@@ -586,9 +587,7 @@ export function NativeAuthoring({
               (setting) => !setting.target.startsWith('block:'),
             ) ? (
             <ToolSection title="Engine" scope="Saved with this preset">
-              <p className="tool-row-detail">
-                Applying a change restarts audio briefly.
-              </p>
+              <Caption>Applying a change restarts audio briefly.</Caption>
               <div role="group" aria-label="Prepared DSP settings">
                 {status.settings
                   .filter((setting) => !setting.target.startsWith('block:'))

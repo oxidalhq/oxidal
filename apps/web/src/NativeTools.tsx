@@ -117,7 +117,7 @@ export function NativeTools({
           ),
       )}
       {soloing && (
-        <p className="tool-status" role="status">
+        <p className="m-0 text-sm" role="status">
           Solo is on: matching is paused until you listen to both chains.
         </p>
       )}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import {
   type AudioState,
@@ -78,10 +79,10 @@ export function EngineSettings({ connected }: { connected: boolean }) {
     >
       {settings.length ? (
         <>
-          <p className="tool-row-detail">
+          <Caption>
             Applying a change restarts audio briefly. Device defaults below are
             what a fresh start uses.
-          </p>
+          </Caption>
           <div role="group" aria-label="Prepared DSP settings">
             {settings.map((setting) => {
               const raw = defaults?.settings.parameters[setting.target];
@@ -126,17 +127,17 @@ export function EngineSettings({ connected }: { connected: boolean }) {
           </div>
         </>
       ) : other ? (
-        <p className="tool-row-detail" role="status">
+        <Caption role="status">
           {other === 'mixed'
             ? 'A mixed preset with TONE3000 blocks is playing. Its NAM blocks use the settings saved in the preset; change them on each block in Rig.'
             : 'An effects preset is playing. It has no TONE3000 blocks, so there is no engine setting to change.'}{' '}
           The device defaults below apply at the next audio start.
-        </p>
+        </Caption>
       ) : (
-        <p className="tool-row-detail">
+        <Caption>
           Audio is stopped. Play a TONE3000 preset to change the running engine;
           the device defaults below apply whenever audio starts.
-        </p>
+        </Caption>
       )}
       {error && <p role="alert">{error}</p>}
       {editing && state && (
