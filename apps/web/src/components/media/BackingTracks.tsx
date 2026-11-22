@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
+import { ActionRow } from '@oxidal/design-system/components/form-layout';
 import { Caption, Title } from '@oxidal/design-system/components/text';
 
 import {
@@ -116,7 +117,7 @@ export function BackingTracks({ connected }: { connected: boolean }) {
             Plays from the device over your guitar, even with this page closed.
           </Caption>
         </div>
-        <div className="min-w-0 text-xs break-words text-muted-foreground">
+        <ActionRow>
           {free !== null && (
             <Caption as="span">Free space: {gigabytes(free)}</Caption>
           )}
@@ -137,7 +138,7 @@ export function BackingTracks({ connected }: { connected: boolean }) {
               event.target.value = '';
             }}
           />
-        </div>
+        </ActionRow>
       </div>
       {protect && <Caption>{PROTECT_REASON}</Caption>}
       <UploadQueue />

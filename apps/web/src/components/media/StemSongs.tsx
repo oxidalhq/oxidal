@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
+import { ActionRow } from '@oxidal/design-system/components/form-layout';
 import { useConfirm } from '@oxidal/design-system/components/confirm';
 import { Progress } from '@oxidal/design-system/components/states';
 import { Caption, Title } from '@oxidal/design-system/components/text';
@@ -98,7 +99,7 @@ export function StemSongs({ connected }: { connected: boolean }) {
             save mixes for the Set list and your rigs.
           </Caption>
         </div>
-        <div className="min-w-0 text-xs break-words text-muted-foreground">
+        <ActionRow>
           <Button disabled={locked} onClick={() => setPicking(true)}>
             <Scissors aria-hidden="true" />
             Split a track…
@@ -111,7 +112,7 @@ export function StemSongs({ connected }: { connected: boolean }) {
             <FilePlus aria-hidden="true" />
             Import stems…
           </Button>
-        </div>
+        </ActionRow>
       </div>
       {protect && <Caption>{PROTECT_REASON}</Caption>}
       {(error || media.refusal) && (

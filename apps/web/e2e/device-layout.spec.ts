@@ -337,6 +337,108 @@ test('folding and unfolding preserves the active draft without reloading', async
   await expect(page.getByTestId('value-nam-a.level')).toHaveText('37%');
 });
 
+test('folding keeps populated Library titles and media actions readable', async ({
+  page,
+}) => {
+  const title = 'Matchless Crunch + Hold';
+  await page.route('**/api/v1/presets/catalog', (route) =>
+    route.fulfill({
+      json: {
+        revision: 'layout',
+        items: [
+          {
+            kind: 'owned',
+            id: 'a'.repeat(64),
+            name: title,
+            source_name: title,
+            archived: false,
+          },
+        ],
+      },
+    }),
+  );
+  const track = {
+    id: 'rehearsal',
+    title: 'Rehearsal track',
+    schema: 1,
+    kind: 'backing',
+    created_at: '2026-11-21T10:00:00Z',
+    renders: [],
+  };
+  await page.route('**/api/v1/media', (route) =>
+    route.fulfill({
+      json: {
+        assets: [track],
+        quarantined: [],
+        usedBytes: 0,
+        space: { availableBytes: 20e9, reserveBytes: 1e8, totalBytes: 32e9 },
+      },
+    }),
+  );
+  await page.route('**/api/v1/media/songs', (route) =>
+    route.fulfill({
+      json: {
+        songs: [
+          {
+            source: track.id,
+            mixes: [],
+            splits: [
+              {
+                id: 'band',
+                mode: 'four',
+                frames: 48000,
+                rate: 48000,
+                sourceSha256: 'b'.repeat(64),
+              },
+            ],
+          },
+        ],
+      },
+    }),
+  );
+
+  for (const width of [344, 690]) {
+    await page.setViewportSize({ width, height: 882 });
+    await page.goto('/#library/mine');
+    const name = page
+      .locator('[data-slot="library-row"]')
+      .getByText(title, { exact: true });
+    await expect(name).toBeVisible();
+    const text = await name.evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      return {
+        lines: range.getClientRects().length,
+        clipped:
+          element.scrollWidth > element.clientWidth + 1 ||
+          element.scrollHeight > element.clientHeight + 1,
+      };
+    });
+    expect(text.clipped).toBe(false);
+    if (width === 344) expect(text.lines).toBeGreaterThan(1);
+
+    for (const section of ['backing', 'stems']) {
+      await page.goto('/#library/' + section);
+      await expect(page.getByText(track.title, { exact: true })).toBeVisible();
+      const first =
+        section === 'backing'
+          ? page.getByText(/Free space:/)
+          : page.getByRole('button', { name: 'Split a track…' });
+      const second = page.getByRole('button', {
+        name: section === 'backing' ? 'Import WAV or MP3…' : 'Import stems…',
+      });
+      await expect(first).toBeVisible();
+      await expect(second).toBeVisible();
+      const a = (await first.boundingBox())!;
+      const b = (await second.boundingBox())!;
+      expect(
+        Math.max(b.x - a.x - a.width, b.y - a.y - a.height),
+        section + ' at ' + width + 'px',
+      ).toBeGreaterThanOrEqual(7.5);
+    }
+  }
+});
+
 test('stage display modes persist and stay accessible in both orientations', async ({
   page,
 }, testInfo) => {

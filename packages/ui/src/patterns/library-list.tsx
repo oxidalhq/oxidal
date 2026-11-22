@@ -168,11 +168,11 @@ export function LibraryRow({
         className="grid min-w-0 gap-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:outline-2 focus-visible:after:outline-ring"
       >
         {openPrefix && <span className="sr-only">{openPrefix} </span>}
-        <span className="truncate font-display text-lg leading-tight font-semibold">
+        <span className="truncate font-display text-lg leading-tight font-semibold max-[399px]:line-clamp-3 max-[399px]:wrap-anywhere max-[399px]:whitespace-normal">
           {item.title}
         </span>
         {item.caption && (
-          <span className="truncate text-sm text-muted-foreground">
+          <span className="truncate text-sm text-muted-foreground max-[399px]:line-clamp-2 max-[399px]:whitespace-normal">
             {item.caption}
           </span>
         )}

@@ -38,9 +38,10 @@ export function MediaRow({
           </span>
         }
         title={
-          <>
-            {name} {state}
-          </>
+          <span className="flex min-w-0 flex-wrap items-center gap-1">
+            <span className="wrap-anywhere whitespace-normal">{name}</span>
+            {state}
+          </span>
         }
         caption={sub}
         trailing={
