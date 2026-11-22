@@ -3,36 +3,6 @@
   display: grid;
   gap: 0.75rem;
 }
-.oxidal-filters {
-  display: grid;
-  gap: 0.5rem;
-  grid-template-columns: minmax(0, 1fr);
-}
-.oxidal-filters-toggle {
-  display: none;
-}
-.oxidal-filter-set {
-  display: grid;
-  gap: 0.5rem;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-.oxidal-filter {
-  display: grid;
-  gap: 0.25rem;
-  font-size: var(--text-sm);
-}
-@media (max-width: 640px) {
-  .oxidal-filters-toggle {
-    display: inline-flex;
-  }
-  .oxidal-filter-set {
-    display: none;
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .oxidal-filter-set[data-open] {
-    display: grid;
-  }
-}
 .oxidal-summary {
   display: flex;
   flex-wrap: wrap;

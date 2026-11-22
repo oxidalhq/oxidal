@@ -207,11 +207,6 @@ async function findBrown(page: Page) {
   await expect(card).not.toHaveAttribute('data-state', 'loading');
   return card;
 }
-async function showFilters(page: Page) {
-  const toggle = page.getByRole('button', { name: /^Filters/ });
-  if (await toggle.isVisible()) await toggle.click();
-}
-
 test('library sections: Oxidal sounds filters and search survive a reload', async ({
   page,
 }) => {
@@ -221,7 +216,6 @@ test('library sections: Oxidal sounds filters and search survive a reload', asyn
   await expect(
     page.getByText(/^Showing \d+ of \d+ · \d+ ready to play/),
   ).toBeVisible();
-  await showFilters(page);
   await page.getByRole('combobox', { name: 'Genre' }).click();
   await page.getByRole('option', { name: 'Funk', exact: true }).click();
   await page.getByRole('combobox', { name: 'Engine' }).click();
@@ -229,7 +223,6 @@ test('library sections: Oxidal sounds filters and search survive a reload', asyn
   await search.fill('a');
   await page.reload();
   await expect(search).toHaveValue('a');
-  await showFilters(page);
   await expect(page.getByRole('combobox', { name: 'Genre' })).toContainText(
     'Funk',
   );
@@ -371,14 +364,18 @@ test('library sections: Make my copy puts a copy in Mine and leaves the original
   const card = page.getByRole('article', { name: BROWN, exact: true });
   await expect(card).toHaveAttribute('data-state', 'ready');
   await card.getByRole('button', { name: `Details: ${BROWN}` }).click();
-  const sheet = page.getByRole('dialog', { name: BROWN });
+  const sheet =
+    (page.viewportSize()?.width ?? 0) >= 1024
+      ? page.getByRole('region', { name: `About ${BROWN}` })
+      : page.getByRole('dialog', { name: BROWN });
   await expect(sheet.getByText('How to play it')).toBeVisible();
   // a built Oxidal sound can join the set list by reference.
   await expect(
     sheet.getByRole('button', { name: 'Add to set list' }),
   ).toBeEnabled();
   await sheet.getByRole('button', { name: 'Make my copy' }).click();
-  await expect(sheet).toHaveCount(0);
+  if ((page.viewportSize()?.width ?? 0) < 1024)
+    await expect(sheet).toHaveCount(0);
   await expect(
     page.getByText(/Brown Crunch copy( \d+)? is in Mine\./),
   ).toBeVisible();

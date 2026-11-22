@@ -323,12 +323,17 @@ export function cardState(item: SoundItem, facts: UnitFacts): CardState {
 const needsAttention = (state: CardState) =>
   state.kind === 'tone' || state.kind === 'signed-out' || state.kind === 'pack';
 
+/** @see docs/factory-collection.md */
+export const isPlayable = (state: CardState) =>
+  state.kind === 'ready' || state.kind === 'build';
+
 export type Filters = {
   query: string;
   genre: string;
   engine: string;
   complexity: string;
   effect?: string;
+  readyOnly?: boolean;
   groupBy: 'genre' | 'engine';
 };
 export const noFilters: Filters = {
@@ -358,6 +363,7 @@ export function filterItems(items: SoundItem[], f: Filters): SoundItem[] {
         [
           item.name,
           item.description,
+          item.recipe?.era,
           item.meta.inspiration,
           ...item.meta.genres,
           ...item.meta.techniques,
@@ -396,9 +402,7 @@ export function groupItems(
 
 export function summaryLine(shown: number, states: CardState[]): string {
   const total = states.length;
-  const ready = states.filter(
-    (s) => s.kind === 'ready' || s.kind === 'build',
-  ).length;
+  const ready = states.filter(isPlayable).length;
   const need = states.filter(needsAttention).length;
   return `Showing ${shown} of ${total} · ${ready} ready to play · ${need} need a tone or pack`;
 }

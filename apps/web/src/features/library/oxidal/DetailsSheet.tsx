@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
-import { DialogFooter } from '@oxidal/design-system/components/dialog';
+import {
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetHeader,
+} from '@oxidal/design-system/components/sheet';
 
 import './oxidal.css';
-import { AdjustmentDialog } from '../../../AdjustmentDialog';
 import { libraryCatalog } from '../../../api';
 import { factoryRoles, factoryTopologySummary } from '../../../factoryRecipes';
 import { isFactoryVoice, primaryCapture } from '../../../factoryVoices';
@@ -30,19 +34,24 @@ import type { OxidalSounds } from './useOxidalSounds';
  * Make my copy.
  * @see docs/factory-collection.md
  */
-export function DetailsSheet({
+export function SoundDetails({
   item,
   state,
   unit,
   handlers,
+  inline,
   onClose,
 }: {
   item: SoundItem;
   state: CardState;
   unit: OxidalSounds;
   handlers: CardHandlers;
+  inline: boolean;
   onClose: () => void;
 }) {
+  const [returnFocus] = useState(
+    () => document.activeElement as HTMLElement | null,
+  );
   const primary = primaryFor(item, state, unit, handlers);
   const copyable = state.kind === 'ready' || state.kind === 'build';
   const needs =
@@ -89,126 +98,147 @@ export function DetailsSheet({
       setAdding(false);
     }
   }
-  return (
-    <AdjustmentDialog title={item.name} onCancel={onClose}>
-      <div className="control-stack oxidal-details">
-        <p className="caption">
-          {item.meta.genres.join(' · ')} · {engineLabel(item.meta.engine)} ·{' '}
-          {complexityLabel(item.meta.complexity)}
-        </p>
-        <p>{item.description}</p>
-        {item.meta.inspiration && <p>{item.meta.inspiration}</p>}
-        <section aria-label="How to play it">
-          <h3>How to play it</h3>
-          {item.meta.performance && <p>{item.meta.performance}</p>}
-          <ol className="oxidal-scenes">
-            {(guide.length
-              ? guide
-              : item.sceneNames.map((name) => ({ name, detail: '' }))
-            ).map((scene) => (
-              <li key={scene.name}>
-                <strong>{scene.name}</strong>
-                {scene.detail && <span> · {scene.detail}</span>}
-              </li>
-            ))}
-          </ol>
-        </section>
-        <dl className="oxidal-facts">
-          {item.recipe && (
-            <>
-              <dt>Chain</dt>
-              <dd>
-                {chainNames(item.recipe).join(' → ')}
-                <span className="caption block">
-                  {factoryTopologySummary(item.recipe)}
-                </span>
-              </dd>
-            </>
-          )}
-          <dt>Needs</dt>
-          <dd>
-            {tones.length > 0 &&
-            (state.kind === 'tone' || state.kind === 'signed-out') ? (
-              <>Tones from TONE3000 ({missing.size} not on this unit yet)</>
-            ) : (
-              needs
-            )}
-          </dd>
-          {tones.length > 0 && (
-            <>
-              <dt>Tones</dt>
-              <dd>
-                <ul className="oxidal-tone-refs">
-                  {tones.map(({ role, capture }) => (
-                    <li key={role}>
-                      <span>{roleLabel(role)}</span>
-                      <span className="caption">
-                        <ToneLink tone={capture.tone} />
-                        {capture.model !== undefined &&
-                          ` · model ${capture.model}`}
-                        {known &&
-                          (missing.has(role)
-                            ? ' · not on this unit'
-                            : ' · on this unit')}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </dd>
-            </>
-          )}
-          <dt>Load</dt>
-          <dd>{loadEstimate(item, unit.facts.frames)}</dd>
-        </dl>
-        {state.kind === 'heavy' && (
-          <p role="status">
-            Play is not offered: {cardLine(item, state, unit)}
-          </p>
-        )}
-        <DialogFooter>
-          {primary && (
-            <Button
-              disabled={primary.disabled}
-              onClick={() => {
-                onClose();
-                primary.run();
-              }}
-            >
-              {primary.label}
-            </Button>
-          )}
+  const content = (
+    <div className="grid min-w-0 gap-3 [overflow-wrap:anywhere]">
+      <p className="caption">
+        {item.meta.genres.join(' · ')} · {engineLabel(item.meta.engine)} ·{' '}
+        {complexityLabel(item.meta.complexity)}
+      </p>
+      <p>{item.description}</p>
+      <div className="action-row flex-wrap">
+        {!primary && <Button disabled>Try {item.name}</Button>}
+        {primary && (
           <Button
-            variant="outline"
-            disabled={!copyable || !!listed.place || adding || !unit.connected}
-            onClick={() => void addToSetList()}
-          >
-            {listed.place
-              ? `In the set list #${listed.place}`
-              : 'Add to set list'}
-          </Button>
-          <Button
-            variant="outline"
-            disabled={!copyable || unit.busy || !unit.connected}
+            disabled={primary.disabled}
             onClick={() => {
-              void unit.makeCopy(item).then((ok) => ok && onClose());
+              if (!inline) onClose();
+              primary.run();
             }}
           >
-            Make my copy
+            {primary.label}
           </Button>
-        </DialogFooter>
-        {!copyable && state.kind !== 'loading' && (
-          <p className="caption">
-            Install what it needs first; then it can join the set list or be
-            copied.
-          </p>
         )}
-        {setList && (
-          <p className="caption" role="status">
-            {setList}
-          </p>
-        )}
+        <Button
+          variant="outline"
+          disabled={!copyable || !!listed.place || adding || !unit.connected}
+          onClick={() => void addToSetList()}
+        >
+          {listed.place
+            ? `In the set list #${listed.place}`
+            : 'Add to set list'}
+        </Button>
+        <Button
+          variant="outline"
+          disabled={!copyable || unit.busy || !unit.connected}
+          onClick={() => {
+            void unit.makeCopy(item).then((ok) => ok && onClose());
+          }}
+        >
+          Make my copy
+        </Button>
       </div>
-    </AdjustmentDialog>
+      {item.meta.inspiration && <p>{item.meta.inspiration}</p>}
+      <section aria-label="How to play it">
+        <h3>How to play it</h3>
+        {item.meta.performance && <p>{item.meta.performance}</p>}
+        <ol className="oxidal-scenes">
+          {(guide.length
+            ? guide
+            : item.sceneNames.map((name) => ({ name, detail: '' }))
+          ).map((scene) => (
+            <li key={scene.name}>
+              <strong>{scene.name}</strong>
+              {scene.detail && <span> · {scene.detail}</span>}
+            </li>
+          ))}
+        </ol>
+      </section>
+      <dl className="oxidal-facts">
+        {item.recipe && (
+          <>
+            <dt>Chain</dt>
+            <dd>
+              {chainNames(item.recipe).join(' → ')}
+              <span className="block text-xs text-muted-foreground">
+                {factoryTopologySummary(item.recipe)}
+              </span>
+            </dd>
+          </>
+        )}
+        <dt>Needs</dt>
+        <dd>
+          {tones.length > 0 &&
+          (state.kind === 'tone' || state.kind === 'signed-out') ? (
+            <>Tones from TONE3000 ({missing.size} not on this unit yet)</>
+          ) : (
+            needs
+          )}
+        </dd>
+        {tones.length > 0 && (
+          <>
+            <dt>Tones</dt>
+            <dd>
+              <ul className="oxidal-tone-refs">
+                {tones.map(({ role, capture }) => (
+                  <li key={role}>
+                    <span>{roleLabel(role)}</span>
+                    <span className="caption">
+                      <ToneLink tone={capture.tone} />
+                      {capture.model !== undefined &&
+                        ` · model ${capture.model}`}
+                      {known &&
+                        (missing.has(role)
+                          ? ' · not on this unit'
+                          : ' · on this unit')}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </dd>
+          </>
+        )}
+        <dt>Load</dt>
+        <dd>{loadEstimate(item, unit.facts.frames)}</dd>
+      </dl>
+      {state.kind === 'heavy' && (
+        <p role="status">Play is not offered: {cardLine(item, state, unit)}</p>
+      )}
+      {!copyable && state.kind !== 'loading' && (
+        <p className="caption">
+          Install what it needs first; then it can join the set list or be
+          copied.
+        </p>
+      )}
+      {setList && (
+        <p className="caption" role="status">
+          {setList}
+        </p>
+      )}
+    </div>
+  );
+  if (inline)
+    return (
+      <section
+        aria-label={`About ${item.name}`}
+        className="sticky top-4 grid max-h-[calc(100dvh-6rem)] min-w-0 gap-3 overflow-auto rounded-lg border border-border bg-card p-4"
+      >
+        <h2 className="m-0 font-display text-xl font-semibold">{item.name}</h2>
+        {content}
+      </section>
+    );
+  return (
+    <Sheet open onOpenChange={(open) => !open && onClose()}>
+      <SheetContent
+        onOpenChange={(open) => !open && onClose()}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          returnFocus?.focus({ preventScroll: true });
+        }}
+      >
+        <SheetHeader title={item.name} />
+        <SheetBody>{content}</SheetBody>
+      </SheetContent>
+    </Sheet>
   );
 }
 

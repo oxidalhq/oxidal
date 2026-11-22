@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { safeLink } from '@oxidal/design-system/lib/links';
 import type { BlockSource } from '@oxidal/design-system/widgets/block-source';
 
 import { tone3000Tone, toneImage, type TonePage } from './api';
@@ -51,7 +52,7 @@ export function useToneSource(toneId: number | null, initialTone?: Tone) {
       username: tone.user.display_name ? tone.user.username : undefined,
       profile: tone.user.profile_url ?? undefined,
     },
-    page: toneLink(tone),
+    page: !tone.url || safeLink(tone.url) ? toneLink(tone) : '',
     image: toneImage(tone.id),
     gear: gearLabel(tone.gear),
     format: tone.format.toUpperCase(),

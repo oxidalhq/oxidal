@@ -1,23 +1,19 @@
-import { useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { FilterSelect } from '@oxidal/design-system/components/filter-select';
 import {
   Segment,
   SegmentedControl,
 } from '@oxidal/design-system/components/segmented';
+import { StepProgress } from '@oxidal/design-system/components/states';
+import { useMedia } from '@oxidal/design-system/lib/use-media';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@oxidal/design-system/components/select';
-import {
-  Loading,
-  StateNotice,
-  StepProgress,
-} from '@oxidal/design-system/components/states';
+  ReadySoundsFilter,
+  SoundBrowserStatus,
+  SoundSearch,
+} from '@oxidal/design-system/patterns/sound-browser';
 
 import './oxidal.css';
 import { factoryEngineLabels, factoryGenres } from '../../../factoryMetadata';
@@ -27,7 +23,7 @@ import {
   useSessionState,
 } from '../../../lib/sessionState';
 import type { CardHandlers } from './cardActions';
-import { DetailsSheet } from './DetailsSheet';
+import { SoundDetails } from './DetailsSheet';
 import { GetTonesDialog } from './GetTonesDialog';
 import {
   cardState,
@@ -35,6 +31,7 @@ import {
   filterItems,
   type Filters,
   groupItems,
+  isPlayable,
   noFilters,
   soundEffects,
   type SoundItem,
@@ -42,37 +39,6 @@ import {
 } from './oxidalSounds.model';
 import { SoundCard } from './SoundCard';
 import { useOxidalSounds } from './useOxidalSounds';
-
-function FilterSelect({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: [string, string][];
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="oxidal-filter">
-      <span>{label}</span>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger aria-label={label}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All</SelectItem>
-          {options.map(([id, text]) => (
-            <SelectItem key={id} value={id}>
-              {text}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </label>
-  );
-}
 
 /**
  * Oxidal sounds: every sound in the collection, finished, in one
@@ -83,10 +49,12 @@ export function OxidalSounds({
   connected,
   onChanged,
   onOpenRig,
+  starterOffer,
 }: {
   connected: boolean;
   onChanged: () => void;
   onOpenRig?: () => void;
+  starterOffer?: ReactNode;
 }) {
   const unit = useOxidalSounds({ connected, onChanged, onOpenRig });
   const [filters, setFilters] = useSessionState<Filters>(
@@ -99,18 +67,27 @@ export function OxidalSounds({
   );
   const [details, setDetails] = useState<string | null>(null);
   const [tones, setTones] = useState<string | null>(null);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const wide = useMedia('(min-width: 64rem)');
+  const offline = Boolean(unit.loadError || (!connected && unit.facts.ready));
   useScrollMemory('oxidal-sounds', unit.items.length > 0);
 
   const states = useMemo(
-    () => new Map(unit.items.map((i) => [i.key, cardState(i, unit.facts)])),
-    [unit.items, unit.facts],
+    () =>
+      new Map(
+        unit.items.map((i) => [
+          i.key,
+          cardState(i, offline ? { ...unit.facts, ready: false } : unit.facts),
+        ]),
+      ),
+    [unit.items, unit.facts, offline],
   );
   const effects = useMemo(
     () => [...new Set(unit.items.flatMap(soundEffects))].sort(),
     [unit.items],
   );
-  const shown = filterItems(unit.items, filters);
+  const shown = filterItems(unit.items, filters).filter(
+    (item) => !filters.readyOnly || isPlayable(states.get(item.key)!),
+  );
   const groups = groupItems(shown, filters.groupBy);
   const byKey = (key: string | null) =>
     unit.items.find((item) => item.key === key) ?? null;
@@ -132,7 +109,20 @@ export function OxidalSounds({
   ).length;
   const set = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
-  const detailItem = byKey(details);
+  const detailItem =
+    shown.find((item) => item.key === details) ??
+    (wide ? groups[0]?.items[0] : undefined);
+  const detail = detailItem && (
+    <SoundDetails
+      key={detailItem.key}
+      item={detailItem}
+      state={states.get(detailItem.key)!}
+      unit={unit}
+      handlers={handlers}
+      inline={wide}
+      onClose={() => setDetails(null)}
+    />
+  );
   // After TONE3000 sign-in the same Get tones dialog returns.
   const tonesItem =
     byKey(tones) ??
@@ -145,58 +135,69 @@ export function OxidalSounds({
       state={states.get(item.key)!}
       unit={unit}
       handlers={handlers}
+      active={detailItem?.key === item.key}
       onDetails={() => setDetails(item.key)}
     />
   );
 
   return (
     <section className="oxidal-sounds" aria-label="Oxidal sounds">
-      <div className="oxidal-filters">
-        <input
-          type="search"
-          value={filters.query}
-          onChange={(event) => set({ query: event.target.value })}
-          placeholder="Search Oxidal sounds"
-          aria-label="Search Oxidal sounds"
-          className="h-11 w-full min-w-0 rounded-md border border-input bg-card px-3"
+      {connected && starterOffer}
+      <SoundBrowserStatus
+        status={
+          offline
+            ? { state: 'offline' }
+            : unit.facts.ready
+              ? { state: 'ready' }
+              : { state: 'checking', checked: 0 }
+        }
+        total={unit.items.length}
+        onRetry={unit.retryRead}
+      />
+      <div className="grid gap-2">
+        <SoundSearch
+          query={filters.query}
+          onQuery={(query) => set({ query })}
         />
-        <Button
-          variant="outline"
-          className="oxidal-filters-toggle"
-          aria-expanded={filtersOpen}
-          onClick={() => setFiltersOpen((open) => !open)}
-        >
-          Filters{active ? ` ${active}` : ''}
-        </Button>
-        <div className="oxidal-filter-set" data-open={filtersOpen || undefined}>
+        <div className="flex flex-wrap items-center gap-2">
           <FilterSelect
             label="Genre"
             value={filters.genre}
             options={factoryGenres.map((g) => [g, g])}
-            onChange={(genre) => set({ genre })}
+            onValue={(genre) => set({ genre })}
           />
           <FilterSelect
             label="Engine"
             value={filters.engine}
             options={Object.entries(factoryEngineLabels)}
-            onChange={(engine) => set({ engine })}
+            onValue={(engine) => set({ engine })}
           />
           <FilterSelect
             label="Effect"
             value={filters.effect ?? 'all'}
             options={effects.map((effect) => [effect, effect])}
-            onChange={(effect) => set({ effect })}
+            onValue={(effect) => set({ effect })}
           />
           <FilterSelect
             label="Complexity"
             value={filters.complexity}
             options={Object.entries(complexityLabels)}
-            onChange={(complexity) => set({ complexity })}
+            onValue={(complexity) => set({ complexity })}
+          />
+          <ReadySoundsFilter
+            checked={!!filters.readyOnly}
+            onChange={(readyOnly) => set({ readyOnly })}
           />
         </div>
       </div>
       <div className="oxidal-summary">
-        <p role="status">{summaryLine(shown.length, [...states.values()])}</p>
+        <p role="status">
+          {offline
+            ? shown.length === unit.items.length
+              ? `${unit.items.length} sounds`
+              : `${shown.length} of ${unit.items.length} sounds`
+            : summaryLine(shown.length, [...states.values()])}
+        </p>
         <div className="oxidal-summary-actions">
           <SegmentedControl
             value={filters.groupBy}
@@ -209,7 +210,7 @@ export function OxidalSounds({
             <Segment value="genre">Genre</Segment>
             <Segment value="engine">Engine</Segment>
           </SegmentedControl>
-          {(active > 0 || filters.query) && (
+          {(active > 0 || filters.query || filters.readyOnly) && (
             <Button
               variant="ghost"
               onClick={() =>
@@ -230,43 +231,35 @@ export function OxidalSounds({
       )}
       {unit.notice && <p role="status">{unit.notice}</p>}
       {unit.error && <p role="alert">{unit.error}</p>}
-      {unit.loadError && (
-        <StateNotice kind="error" title="Oxidal sounds unavailable">
-          Oxidal could not read the installed effects and library. You can still
-          browse these sounds, but they cannot be played from here.{' '}
-          {unit.loadError}
-        </StateNotice>
-      )}
-      {!unit.facts.ready && !unit.loadError && (
-        <Loading label="Checking this unit…" />
-      )}
       {shown.length === 0 && (
         <p role="status" className="py-4 text-muted-foreground">
           No Oxidal sounds match these filters.
         </p>
       )}
-      {groups.map((group) => (
-        <section
-          key={group.label}
-          aria-label={group.label}
-          className="oxidal-group"
-        >
-          <div className="oxidal-group-head">
-            <h3>{group.label}</h3>
-            <span className="caption">{group.items.length}</span>
-          </div>
-          <div className="grid gap-2">{group.items.map(card)}</div>
-        </section>
-      ))}
-      {detailItem && (
-        <DetailsSheet
-          item={detailItem}
-          state={states.get(detailItem.key)!}
-          unit={unit}
-          handlers={handlers}
-          onClose={() => setDetails(null)}
-        />
-      )}
+      <div
+        className={
+          wide && detail
+            ? 'grid grid-cols-[minmax(0,1fr)_minmax(0,24rem)] items-start gap-4'
+            : 'grid gap-4'
+        }
+      >
+        <div className="grid min-w-0 gap-3">
+          {groups.map((group) => (
+            <section
+              key={group.label}
+              aria-label={group.label}
+              className="oxidal-group"
+            >
+              <div className="oxidal-group-head">
+                <h3>{group.label}</h3>
+                <span className="caption">{group.items.length}</span>
+              </div>
+              <div className="grid gap-2">{group.items.map(card)}</div>
+            </section>
+          ))}
+        </div>
+        {detail}
+      </div>
       {tonesItem && (
         <GetTonesDialog
           item={tonesItem}

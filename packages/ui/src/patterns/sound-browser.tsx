@@ -152,7 +152,12 @@ function MiniChain({ sound }: { sound: Pick<OxidalSound, 'blocks'> }) {
   );
 }
 
-function ReadyPill({ readiness }: { readiness: SoundReadiness }) {
+/** @see SoundBrowser */
+export function SoundReadinessPill({
+  readiness,
+}: {
+  readiness: SoundReadiness;
+}) {
   const base =
     'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-2xs font-semibold small-caps';
   if (readiness.state === 'checking')
@@ -185,6 +190,18 @@ function ReadyPill({ readiness }: { readiness: SoundReadiness }) {
   );
 }
 
+/** @see SoundBrowser */
+export function SoundCheckingAction() {
+  return (
+    <span
+      aria-hidden="true"
+      className="grid size-11 place-items-center rounded-full border border-dashed border-border text-muted-foreground"
+    >
+      <CircleNotch className="size-4 animate-spin" />
+    </span>
+  );
+}
+
 function SoundRow({
   sound: s,
   active,
@@ -201,10 +218,11 @@ function SoundRow({
   return (
     <SoundRecipeRow
       sound={s}
+      selectLabel={`Details: ${s.name}`}
       active={active}
       onSelect={onSelect}
       summary={`${ENGINE[s.engine]} · ${s.scenes.length} scenes`}
-      badge={<ReadyPill readiness={s.readiness} />}
+      badge={<SoundReadinessPill readiness={s.readiness} />}
       action={
         s.readiness.state === 'ready' ? (
           <button
@@ -226,12 +244,7 @@ function SoundRow({
             Get…
           </Button>
         ) : (
-          <span
-            aria-hidden="true"
-            className="grid size-11 place-items-center rounded-full border border-dashed border-border text-muted-foreground"
-          >
-            <CircleNotch className="size-4 animate-spin" />
-          </span>
+          <SoundCheckingAction />
         )
       }
     />
@@ -278,17 +291,17 @@ export function SoundRecipeRow({
       )}
     >
       <VoiceTile sound={s} />
-      <button
-        type="button"
-        aria-label={selectLabel}
-        aria-pressed={active}
-        onClick={onSelect}
-        className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-ring"
-      >
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1">
         <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="font-display text-lg leading-tight font-semibold">
+          <button
+            type="button"
+            aria-label={selectLabel}
+            aria-pressed={active}
+            onClick={onSelect}
+            className="text-left font-display text-lg leading-tight font-semibold outline-none after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-ring"
+          >
             {s.name}
-          </span>
+          </button>
           {s.era && (
             <span className="rounded border border-border px-1 small-caps text-2xs text-muted-foreground">
               {s.era}
@@ -308,12 +321,108 @@ export function SoundRecipeRow({
           </span>
           {badge}
         </span>
-      </button>
+      </div>
       <span className="relative z-10">{action}</span>
       {feedback && (
         <div className="col-span-full grid gap-1 text-sm">{feedback}</div>
       )}
     </Row>
+  );
+}
+
+/** Readiness feedback for the collection, while the recipe list remains usable. */
+/** @see SoundBrowser */
+export function SoundBrowserStatus({
+  status,
+  total,
+  onRetry,
+}: {
+  status: SoundsStatus;
+  total: number;
+  onRetry: () => void;
+}) {
+  return (
+    <>
+      {status.state === 'checking' && (
+        <p
+          role="status"
+          className="m-0 flex items-center gap-2 text-sm text-muted-foreground"
+        >
+          <CircleNotch aria-hidden="true" className="size-4 animate-spin" />
+          Checking which sounds play on this device… {status.checked} of {total}
+        </p>
+      )}
+      {status.state === 'offline' && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-foreground bg-card px-3 py-2"
+        >
+          <span className="grid gap-0.5">
+            <span className="text-sm font-semibold">
+              Oxidal is not reachable
+            </span>
+            <Caption as="span" className="text-xs">
+              You can browse every sound. Trying one, and checking what it
+              needs, waits for the device.
+            </Caption>
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-auto"
+            onClick={onRetry}
+          >
+            <ArrowClockwise /> Try again
+          </Button>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** @see SoundBrowser */
+export function SoundSearch({
+  query,
+  onQuery,
+}: {
+  query: string;
+  onQuery: (query: string) => void;
+}) {
+  return (
+    <label className="relative">
+      <span className="sr-only">Search Oxidal sounds</span>
+      <MagnifyingGlass
+        aria-hidden="true"
+        className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+      />
+      <input
+        type="search"
+        value={query}
+        onChange={(event) => onQuery(event.target.value)}
+        placeholder="Search by name, style or era"
+        className="h-10 w-full rounded-md border border-input bg-background pr-3 pl-9 text-sm focus-visible:outline-2 focus-visible:outline-ring"
+      />
+    </label>
+  );
+}
+
+/** @see SoundBrowser */
+export function ReadySoundsFilter({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  const id = React.useId();
+  return (
+    <label
+      htmlFor={id}
+      className="ml-auto inline-flex min-h-touch items-center gap-2 text-sm"
+    >
+      Ready to play only
+      <Switch id={id} checked={checked} onCheckedChange={onChange} />
+    </label>
   );
 }
 
@@ -353,7 +462,6 @@ export function SoundBrowser({
   const [complexity, setComplexity] = React.useState('all');
   const [readyOnly, setReadyOnly] = React.useState(false);
   const [selected, setSelected] = React.useState<string | null>(null);
-  const readyId = React.useId();
 
   const genres = [...new Set(sounds.flatMap((s) => s.genres))].sort();
   const shown = sounds.filter(
@@ -392,56 +500,15 @@ export function SoundBrowser({
 
   return (
     <div data-slot="sound-browser" className="grid gap-3">
-      {status.state === 'checking' && (
-        <p
-          role="status"
-          className="m-0 flex items-center gap-2 text-sm text-muted-foreground"
-        >
-          <CircleNotch aria-hidden="true" className="size-4 animate-spin" />
-          Checking which sounds play on this device… {status.checked} of{' '}
-          {sounds.length}
-        </p>
-      )}
-      {status.state === 'offline' && (
-        <div
-          role="alert"
-          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-foreground bg-card px-3 py-2"
-        >
-          <span className="grid gap-0.5">
-            <span className="text-sm font-semibold">
-              Oxidal is not reachable
-            </span>
-            <Caption as="span" className="text-xs">
-              You can browse every sound. Trying one, and checking what it
-              needs, waits for the device.
-            </Caption>
-          </span>
-          <Button
-            size="sm"
-            variant="outline"
-            className="ml-auto"
-            onClick={onRetry}
-          >
-            <ArrowClockwise /> Try again
-          </Button>
-        </div>
-      )}
+      <SoundBrowserStatus
+        status={status}
+        total={sounds.length}
+        onRetry={onRetry}
+      />
 
       <div className="grid gap-2">
-        <label className="relative">
-          <span className="sr-only">Search Oxidal sounds</span>
-          <MagnifyingGlass
-            aria-hidden="true"
-            className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-          />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name, style or era"
-            className="h-10 w-full rounded-md border border-input bg-background pr-3 pl-9 text-sm focus-visible:outline-2 focus-visible:outline-ring"
-          />
-        </label>
+        <SoundSearch query={query} onQuery={setQuery} />
+
         <div className="flex flex-wrap items-center gap-2">
           <FilterSelect
             label="Genre"
@@ -461,17 +528,7 @@ export function SoundBrowser({
             onValue={setComplexity}
             options={Object.entries(COMPLEXITY)}
           />
-          <label
-            htmlFor={readyId}
-            className="ml-auto inline-flex min-h-touch items-center gap-2 text-sm"
-          >
-            Ready to play only
-            <Switch
-              id={readyId}
-              checked={readyOnly}
-              onCheckedChange={setReadyOnly}
-            />
-          </label>
+          <ReadySoundsFilter checked={readyOnly} onChange={setReadyOnly} />
         </div>
         <div className="flex flex-wrap items-baseline gap-x-3 text-sm">
           <span>

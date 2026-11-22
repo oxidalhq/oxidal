@@ -2,6 +2,8 @@ import { Button } from '@oxidal/design-system/components/button';
 import { glyphFor, glyphs } from '@oxidal/design-system/lib/block-glyphs';
 import {
   type OxidalSound,
+  SoundCheckingAction,
+  SoundReadinessPill,
   SoundRecipeRow,
 } from '@oxidal/design-system/patterns/sound-browser';
 
@@ -10,19 +12,16 @@ import { recipeEffects } from '../../../factoryRecipes';
 import { type CardHandlers, cardLine, primaryFor } from './cardActions';
 import {
   type CardState,
-  complexityLabel,
   engineLabel,
   roleLabel,
   type SoundItem,
 } from './oxidalSounds.model';
 import type { OxidalSounds } from './useOxidalSounds';
 
-const chip = (state: CardState): string => {
+const chip = (
+  state: Exclude<CardState, { kind: 'ready' | 'build' | 'loading' }>,
+): string => {
   switch (state.kind) {
-    case 'ready':
-      return '● Ready';
-    case 'build':
-      return '● Ready';
     case 'tone':
       return `${state.missing.length} ${state.missing.length === 1 ? 'tone' : 'tones'} needed`;
     case 'signed-out':
@@ -35,8 +34,6 @@ const chip = (state: CardState): string => {
         : '⚠ Too heavy';
     case 'unavailable':
       return 'Update needed';
-    case 'loading':
-      return 'Checking…';
   }
 };
 
@@ -46,18 +43,21 @@ function heavyReason(state: Extract<CardState, { kind: 'heavy' }>) {
     : 'Too heavy for this unit at any buffer it offers.';
 }
 
+/** @see docs/factory-collection.md */
 export function SoundCard({
   item,
   state,
   unit,
   handlers,
   onDetails,
+  active,
 }: {
   item: SoundItem;
   state: CardState;
   unit: OxidalSounds;
   handlers: CardHandlers;
   onDetails: () => void;
+  active: boolean;
 }) {
   const primary = primaryFor(item, state, unit, handlers);
   const reason = state.kind === 'heavy' ? heavyReason(state) : primary?.reason;
@@ -72,6 +72,7 @@ export function SoundCard({
   return (
     <SoundRecipeRow
       as="article"
+      active={active}
       rowLabel={item.name}
       state={state.kind}
       sound={{
@@ -83,32 +84,46 @@ export function SoundCard({
       }}
       onSelect={onDetails}
       selectLabel={`Details: ${item.name}`}
-      summary={`${engineLabel(item.meta.engine)} · ${complexityLabel(item.meta.complexity)}`}
+      summary={`${engineLabel(item.meta.engine)} · ${item.sceneNames.length} scenes`}
       badge={
-        <span className="rounded-full border px-2 py-0.5 text-xs">
-          {chip(state)}
-        </span>
+        state.kind === 'loading' ? (
+          <SoundReadinessPill readiness={{ state: 'checking' }} />
+        ) : state.kind === 'ready' || state.kind === 'build' ? (
+          <SoundReadinessPill readiness={{ state: 'ready' }} />
+        ) : (
+          <span className="rounded-full border px-2 py-0.5 text-xs">
+            {chip(state)}
+          </span>
+        )
       }
       action={
-        primary && (
-          <Button
-            size="sm"
-            disabled={primary.disabled}
-            aria-label={`${primary.label}: ${item.name}`}
-            onClick={primary.run}
-          >
-            {primary.label}
-          </Button>
+        state.kind === 'loading' ? (
+          <SoundCheckingAction />
+        ) : (
+          primary && (
+            <Button
+              size="sm"
+              disabled={primary.disabled}
+              aria-label={`${primary.label}: ${item.name}`}
+              onClick={primary.run}
+            >
+              {primary.label}
+            </Button>
+          )
         )
       }
       feedback={
-        <>
-          <span>{cardLine(item, state, unit)}</span>
-          {reason && <span>{reason}</span>}
-          {unit.failures[item.key] && (
-            <p role="alert">{unit.failures[item.key]}</p>
-          )}
-        </>
+        (state.kind !== 'loading' || unit.failures[item.key]) && (
+          <>
+            {state.kind !== 'loading' && (
+              <span>{cardLine(item, state, unit)}</span>
+            )}
+            {reason && <span>{reason}</span>}
+            {unit.failures[item.key] && (
+              <p role="alert">{unit.failures[item.key]}</p>
+            )}
+          </>
+        )
       }
     />
   );

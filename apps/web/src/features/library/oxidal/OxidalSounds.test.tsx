@@ -627,12 +627,25 @@ it('says so when no sound matches', async () => {
 });
 
 it('explains an unreadable unit and keeps browsing available', async () => {
-  vi.mocked(installedLv2).mockRejectedValue(
+  vi.mocked(installedLv2).mockRejectedValueOnce(
     new Error('LV2 discovery is unavailable'),
   );
+  const user = userEvent.setup();
   render(<OxidalSounds connected onChanged={() => {}} />);
-  expect(await screen.findByText('Oxidal sounds unavailable')).toBeVisible();
-  expect(screen.getAllByRole('article').length).toBeGreaterThan(0);
+  const readError = await screen.findByText('Oxidal is not reachable');
+  expect(readError).toBeVisible();
+  const search = screen.getByRole('searchbox', {
+    name: 'Search Oxidal sounds',
+  });
+  await user.type(search, BROWN);
+  const card = screen.getByRole('article', { name: BROWN });
+  expect(card).toHaveAttribute('data-state', 'loading');
+  await user.click(screen.getByRole('button', { name: 'Try again' }));
+  await waitFor(() =>
+    expect(card).not.toHaveAttribute('data-state', 'loading'),
+  );
+  expect(readError).not.toBeInTheDocument();
+  expect(search).toHaveValue(BROWN);
 });
 
 it('an effect no pack provides makes the card Update needed, with no action but Details', async () => {

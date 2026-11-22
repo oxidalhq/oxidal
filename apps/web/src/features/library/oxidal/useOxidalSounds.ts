@@ -203,7 +203,10 @@ export function useOxidalSounds({
       setExtra(found);
       setReady(lv2.status === 'fulfilled' && lib.status === 'fulfilled');
     })().catch((cause) => {
-      if (alive) setLoadError(friendlyError(cause, 'read the collection'));
+      if (alive) {
+        setReady(false);
+        setLoadError(friendlyError(cause, 'read the collection'));
+      }
     });
     return () => {
       alive = false;
@@ -525,6 +528,11 @@ export function useOxidalSounds({
     sourceFor,
     bind: (role: FactoryRole, source: RigNativeSource) =>
       setBindings((b) => ({ ...b, [role]: source })),
+    retryRead: () => {
+      setLoadError('');
+      setReady(false);
+      reload();
+    },
     reload,
     build,
     finishReady,

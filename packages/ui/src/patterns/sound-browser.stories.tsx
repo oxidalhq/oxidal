@@ -34,15 +34,20 @@ export const Browse: StoryObj = {
   render: () => browser({ state: 'ready' }),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: /^Power Stack/ }));
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Details: Power Stack' }),
+    );
+    const details = within(canvasElement.ownerDocument.body);
     await expect(
-      canvas.getAllByRole('button', { name: 'Try Power Stack' })[0],
+      details.getByRole('button', { name: 'Try Power Stack' }),
     ).toBeDisabled();
+    if (details.queryByRole('dialog', { name: 'Power Stack' }))
+      await userEvent.keyboard('{Escape}');
     await userEvent.click(
       canvas.getByRole('switch', { name: 'Ready to play only' }),
     );
     await expect(
-      canvas.queryByRole('button', { name: /^Power Stack/ }),
+      canvas.queryByRole('button', { name: 'Details: Power Stack' }),
     ).toBeNull();
     await expect(
       canvas.getAllByRole('button', { name: 'Try Cold Steel' })[0],
