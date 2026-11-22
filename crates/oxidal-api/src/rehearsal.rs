@@ -138,19 +138,12 @@ pub(super) async fn read(State(shared): State<Arc<Shared>>) -> Response {
                 sheet: settings.sheet.clone(),
                 ..Default::default()
             });
-            let policy = if kind == LibraryKind::Rig {
-                midi_recall::rig_recall_policy(&worker, &row.content).map(|p| match p {
-                    midi_recall::RigRecallPolicy::Current
-                    | midi_recall::RigRecallPolicy::Prepared => Status::Prepared,
-                    midi_recall::RigRecallPolicy::Loads => Status::LoadsOnRecall,
-                })
-            } else if stream.is_none() {
-                Err("Choose an audio interface before recall".to_owned())
-            } else if worker.protect.on() {
-                Err("Protect allows only prepared switches".to_owned())
-            } else {
-                Ok(Status::LoadsOnRecall)
-            };
+            let policy = midi_recall::recall_policy(&worker, kind, &row.content).map(|p| match p {
+                midi_recall::RecallPolicy::Current | midi_recall::RecallPolicy::Prepared => {
+                    Status::Prepared
+                }
+                midi_recall::RecallPolicy::Loads => Status::LoadsOnRecall,
+            });
             let status = policy.unwrap_or_else(|reason| {
                 sound.push(reason);
                 Status::Blocked

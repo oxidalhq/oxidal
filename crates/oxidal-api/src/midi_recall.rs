@@ -531,17 +531,33 @@ async fn recall_slot(
 
 const PROTECTED: &str = "Protect is on: MIDI can only switch to presets that are ready. Prepare it or turn Protect off.";
 
-pub(super) enum RigRecallPolicy {
+pub(super) enum RecallPolicy {
     Current,
     Prepared,
     Loads,
 }
 
 /// The same read-only live admission used by recall and the rehearsal check.
-pub(super) fn rig_recall_policy(shared: &Shared, target: &str) -> Result<RigRecallPolicy, String> {
-    use RigRecallPolicy::*;
+pub(super) fn recall_policy(
+    shared: &Shared,
+    kind: LibraryKind,
+    target: &str,
+) -> Result<RecallPolicy, String> {
+    use RecallPolicy::*;
+    if shared.captures.reamping() {
+        return Err(crate::capture::REAMP_LOCKED.to_owned());
+    }
     if shared.audio_change.active() {
         return Err("Finish the audio settings trial before recall".into());
+    }
+    if kind == LibraryKind::Owned {
+        if stream(shared).is_none() {
+            return Err("Choose an audio interface before MIDI recall".into());
+        }
+        if shared.protect.on() {
+            return Err(PROTECTED.into());
+        }
+        return Ok(Loads);
     }
     let state = shared.rig_playback.snapshot();
     if matches!(state.phase, AudioPhase::Starting | AudioPhase::Stopping) {
@@ -591,15 +607,11 @@ async fn recall_target(
     scene: Option<&str>,
     expected_order: &str,
 ) -> Result<(), String> {
-    if shared.audio_change.active() {
-        return Err("Finish the audio settings trial before recall".into());
-    }
-    let stream = stream(shared).ok_or("Choose an audio interface before MIDI recall")?;
+    let audio_stream = || stream(shared).ok_or("Choose an audio interface before MIDI recall");
     match target.kind {
         LibraryKind::Owned => {
-            if shared.protect.on() {
-                return Err(PROTECTED.into());
-            }
+            recall_policy(shared, target.kind, &target.id)?;
+            let stream = audio_stream()?;
             stop_mixed(shared).await?;
             stop_graph(shared).await?;
             let state = shared.playback.snapshot();
@@ -631,8 +643,8 @@ async fn recall_target(
         }
         LibraryKind::Rig => {
             let state = shared.rig_playback.snapshot();
-            match rig_recall_policy(shared, &target.id)? {
-                RigRecallPolicy::Current => {
+            match recall_policy(shared, target.kind, &target.id)? {
+                RecallPolicy::Current => {
                     if let Some(scene) = scene {
                         let control = state.control.ok_or("Starting scene is unavailable")?;
                         // A new effect endpoint can accept its control write and
@@ -691,7 +703,7 @@ async fn recall_target(
                             .await?;
                     }
                 }
-                RigRecallPolicy::Prepared => {
+                RecallPolicy::Prepared => {
                     let control = state.control.ok_or("Prepared preset is unavailable")?;
                     let configured = state.configured.ok_or("Missing mixed configuration")?;
                     let action = RigAudioCommand {
@@ -715,10 +727,10 @@ async fn recall_target(
                         shared.rig_playback.dispatch(action).await?;
                     }
                 }
-                RigRecallPolicy::Loads => {
+                RecallPolicy::Loads => {
                     let settings = StartRig {
                         revision: target.id.clone(),
-                        stream,
+                        stream: audio_stream()?,
                         recall: None,
                         prepared: vec![],
                         midi: None,
@@ -739,8 +751,8 @@ async fn recall_target(
                             return Err("Set list changed during starting scene preparation".into());
                         }
                         if !matches!(
-                            rig_recall_policy(shared, &target.id)?,
-                            RigRecallPolicy::Loads
+                            recall_policy(shared, target.kind, &target.id)?,
+                            RecallPolicy::Loads
                         ) {
                             return Err(
                                 "Playing rig changed during starting scene preparation".into()

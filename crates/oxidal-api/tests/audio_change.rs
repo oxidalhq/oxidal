@@ -390,6 +390,22 @@ async fn audio_change_keep_revert_timeout_and_resume_use_real_workers() {
         let id = started["id"].as_str().unwrap();
         let proving = phase(&app, "audio/change", "proving").await;
         assert!(proving["remaining_ms"].as_u64().unwrap() <= 15_000);
+        if owner == "native" {
+            let report = get(&app, "presets/set-list/rehearsal").await;
+            let entry = report["entries"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|entry| entry["name"] == "Audio change working fixture")
+                .expect("the owned fixture is in the set list");
+            assert_eq!(entry["status"], "blocked");
+            assert!(entry["sound"].as_array().unwrap().iter().any(|reason| {
+                reason
+                    .as_str()
+                    .is_some_and(|s| s.contains("audio settings trial"))
+            }));
+            assert_eq!(get(&app, "audio/change").await["id"], started["id"]);
+        }
         assert_eq!(proving["previous"]["input"]["period_frames"], 128);
         assert_eq!(proving["candidate"]["input"]["period_frames"], 96);
         assert_eq!(
