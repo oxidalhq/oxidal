@@ -211,7 +211,7 @@ export function SlotTile({
     <Button
       variant="outline"
       type="button"
-      className="relative min-h-touch shrink-0 gap-1 border-dashed bg-background px-3 text-muted-foreground data-drop-before:border-solid data-drop-before:outline-2 data-drop-before:outline-brand"
+      className="relative min-h-touch shrink-0 gap-1 border-dashed bg-background px-3 text-muted-foreground group-data-[orientation=vertical]/chain:self-start group-data-[orientation=vertical]/route:self-start data-drop-before:border-solid data-drop-before:outline-2 data-drop-before:outline-brand"
       data-tile={id}
       data-drop-before={dropBefore || undefined}
       aria-label="Add a block here"
@@ -258,7 +258,7 @@ export function RigTile({
       selected={selected}
       tint={block.tint}
       lifted={!!drag?.style}
-      className="group-data-[orientation=vertical]/chain:w-full data-drop-before:outline-2 data-drop-before:outline-brand data-lifted:pointer-events-none data-movable:select-none"
+      className="group-data-[orientation=vertical]/chain:w-full data-drop-before:outline-2 data-drop-before:outline-brand data-lifted:pointer-events-none data-movable:select-none max-lg:group-data-[orientation=horizontal]/chain:w-36 max-lg:group-data-[orientation=horizontal]/route:w-36"
       data-tile={block.id}
       data-flip={block.id}
       data-movable={drag ? true : undefined}

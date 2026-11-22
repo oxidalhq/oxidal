@@ -110,7 +110,7 @@ export function MasterLevel({
     ) : null;
   const db = levels.output_level_db;
   return (
-    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 border-b border-border py-1 sm:auto-cols-auto sm:grid-flow-col">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 border-b border-border py-1 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
       <Slider
         label="Level"
         readout={formatLevel(db)}
@@ -155,7 +155,7 @@ export function MasterLevel({
         Mono
       </Button>
       {extra && (
-        <div className="col-span-full grid auto-cols-fr grid-flow-col items-center gap-2 sm:col-span-1 sm:flex">
+        <div className="col-span-full flex min-w-0 flex-wrap items-center gap-2 sm:col-span-1">
           {extra}
         </div>
       )}

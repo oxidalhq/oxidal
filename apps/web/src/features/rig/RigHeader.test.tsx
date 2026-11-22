@@ -30,6 +30,7 @@ function props(
   const view = {
     rig: {
       actionsOpen: false,
+      setActionsOpen: vi.fn(),
       busy: false,
       connected: true,
       copyOnEdit: null,
@@ -62,7 +63,13 @@ function props(
 
 it('shows Undo and Redo, enabled only when there is a step to take', () => {
   const { view, stepHistory } = props({ undo: 'r1' });
-  render(<RigHeader {...view} />);
+  const header = render(<RigHeader {...view} />);
+  expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'More preset actions' }));
+  expect(view.rig.setActionsOpen).toHaveBeenCalledWith(true);
+  header.rerender(
+    <RigHeader {...view} rig={{ ...view.rig, actionsOpen: true }} />,
+  );
   const undo = screen.getByRole('button', { name: 'Undo' });
   const redo = screen.getByRole('button', { name: 'Redo' });
   expect(undo).toBeEnabled();
@@ -73,7 +80,7 @@ it('shows Undo and Redo, enabled only when there is a step to take', () => {
 
 it('waits for scene updates to be saved or discarded first', () => {
   const { view } = props({ undo: 'r1', redo: 'r3', drafts: 1 });
-  render(<RigHeader {...view} />);
+  render(<RigHeader {...view} rig={{ ...view.rig, actionsOpen: true }} />);
   const undo = screen.getByRole('button', { name: 'Undo' });
   expect(undo).toBeDisabled();
   expect(undo).toHaveAttribute(

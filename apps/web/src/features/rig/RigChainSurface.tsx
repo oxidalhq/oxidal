@@ -84,7 +84,7 @@ export function RigChainSurface({ rig, vm }: RigViewProps) {
   );
   return (
     <>
-      <div className="space-y-2">
+      <div className="min-w-0 space-y-2">
         <RouteTree
           route={canvasRoute}
           // E-paper edits a chain as a list with buttons; a drawing that

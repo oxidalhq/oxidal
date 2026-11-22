@@ -2,11 +2,9 @@ import {
   ArrowClockwise,
   ArrowCounterClockwise,
   ArrowsClockwise,
-  DotsThree,
   FloppyDisk,
   Lightning,
   Play,
-  Stop,
 } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -127,146 +125,174 @@ export function RigHeader({ rig, vm }: RigViewProps) {
           />
         }
       >
-        <StageControls connected={connected} compact />
-        <Button
-          aria-label="Perform view"
-          title="Scene pads and effect switches for playing live"
-          disabled={waiting}
-          onClick={() => setPerforming(true)}
+        <StageControls connected={connected} compact grouped />
+        <div
+          role="group"
+          aria-label="Playing and saving"
+          className="flex items-center gap-1"
         >
-          <Lightning aria-hidden="true" />
-          <span className="phone-hidden">Perform</span>
-        </Button>
-        <Button
-          variant="outline"
-          aria-label="Save copy"
-          title={
-            draftCount ? 'Save or discard your scene updates first' : undefined
-          }
-          disabled={
-            disabled ||
-            !matching ||
-            !!edit ||
-            !!picker ||
-            !!state.save?.running ||
-            draftCount > 0
-          }
-          onClick={() => {
-            setName(matching!.manifest.name);
-            setSaveOpening(state);
-            setError('');
-          }}
-        >
-          <FloppyDisk aria-hidden="true" />
-          <span className="phone-hidden">
-            {state.save?.running ? 'Saving…' : 'Save'}
-          </span>
-        </Button>
-        <RigHeaderDuplicate
-          entry={revision ? { kind: 'rig', id: revision } : null}
-          connected={connected}
-          disabled={waiting}
-          changed={!!changed}
-        />
-        <Button
-          variant="outline"
-          aria-label="Undo"
-          aria-keyshortcuts="Control+Z Meta+Z"
-          title={historyTitle('Undo', '⌘Z or Ctrl+Z')}
-          disabled={!canUndo}
-          onClick={() => void stepHistory(-1)}
-        >
-          <ArrowCounterClockwise aria-hidden="true" />
-          <span className="phone-hidden">Undo</span>
-        </Button>
-        <Button
-          variant="outline"
-          aria-label="Redo"
-          aria-keyshortcuts="Shift+Control+Z Shift+Meta+Z Control+Y"
-          title={historyTitle('Redo', '⇧⌘Z or Ctrl+Shift+Z')}
-          disabled={!canRedo}
-          onClick={() => void stepHistory(1)}
-        >
-          <ArrowClockwise aria-hidden="true" />
-          <span className="phone-hidden">Redo</span>
-        </Button>
-        <TunerButton disabled={!running} />
-        <Button
-          variant="outline"
-          aria-label="Preset actions"
-          aria-haspopup="dialog"
-          title="MIDI assignments"
-          disabled={waiting}
-          onClick={() => setActionsOpen(true)}
-        >
-          <DotsThree aria-hidden="true" weight="bold" />
-        </Button>
-        {actionsOpen && (
-          <AdjustmentDialog
-            title="Preset actions"
-            onCancel={() => setActionsOpen(false)}
+          <Button
+            size="sm"
+            className="max-sm:w-touch max-sm:px-0"
+            aria-label="Perform view"
+            title="Scene pads and effect switches for playing live"
+            disabled={waiting}
+            onClick={() => setPerforming(true)}
           >
-            <div className="grid divide-y divide-border [&>button]:h-auto [&>button]:justify-start [&>button]:rounded-none [&>button]:py-2.5 [&>button]:text-left [&>button]:whitespace-normal">
-              <Button
-                variant="ghost"
-                type="button"
-                disabled={
-                  !changed ||
-                  disabled ||
-                  waiting ||
-                  !!draftCount ||
-                  !!copyOnEdit ||
-                  !!state.save?.running ||
-                  !!state.control?.scene_transitioning
-                }
-                onClick={() => {
-                  setActionsOpen(false);
-                  setDiscardOpening(state);
-                }}
-              >
-                Discard live edits…
-                <Caption as="span">Reload this saved preset version</Caption>
-              </Button>
-              <Button
-                variant="ghost"
-                type="button"
-                onClick={() => {
-                  setActionsOpen(false);
-                  requestMidiAssignments();
-                }}
-              >
-                MIDI assignments…
-                <Caption as="span">
-                  Assign this preset&apos;s scenes, switches and controls
-                </Caption>
-              </Button>
-            </div>
-          </AdjustmentDialog>
-        )}
-        {state.device_owned ? (
+            <Lightning aria-hidden="true" />
+            <span className="max-sm:sr-only">Perform</span>
+          </Button>
           <Button
             variant="outline"
-            aria-label={
-              state.phase === 'starting' ? 'Cancel loading' : 'Stop audio'
+            size="sm"
+            className="max-sm:w-touch max-sm:px-0"
+            aria-label="Save copy"
+            title={
+              draftCount
+                ? 'Save or discard your scene updates first'
+                : undefined
             }
-            disabled={!connected || busy || eqBusy || !!edit || !!picker}
-            onClick={() => void command({ kind: 'stop' })}
+            disabled={
+              disabled ||
+              !matching ||
+              !!edit ||
+              !!picker ||
+              !!state.save?.running ||
+              draftCount > 0
+            }
+            onClick={() => {
+              setName(matching!.manifest.name);
+              setSaveOpening(state);
+              setError('');
+            }}
           >
-            <Stop aria-hidden="true" />
-            <span className="phone-hidden">
-              {state.phase === 'starting' ? 'Cancel' : 'Stop'}
+            <FloppyDisk aria-hidden="true" />
+            <span className="max-sm:sr-only">
+              {state.save?.running ? 'Saving…' : 'Save'}
             </span>
           </Button>
-        ) : (
+        </div>
+        <div role="group" aria-label="Rig tools" className="flex items-center">
+          <TunerButton disabled={!running} compact />
           <Button
-            aria-label="Resume audio"
-            disabled={!connected || busy}
-            onClick={() => void command({ kind: 'restart' })}
+            variant="ghost"
+            size="icon"
+            aria-label="More preset actions"
+            aria-haspopup="dialog"
+            title="More preset actions"
+            disabled={waiting}
+            onClick={() => setActionsOpen(true)}
           >
-            <Play aria-hidden="true" />
-            <span>Resume</span>
+            More
           </Button>
-        )}
+          {actionsOpen && (
+            <AdjustmentDialog
+              title="Preset actions"
+              onCancel={() => setActionsOpen(false)}
+            >
+              <div className="grid divide-y divide-border [&>button]:h-auto [&>button]:justify-start [&>button]:rounded-none [&>button]:py-2.5 [&>button]:text-left [&>button]:whitespace-normal">
+                <RigHeaderDuplicate
+                  entry={revision ? { kind: 'rig', id: revision } : null}
+                  connected={connected}
+                  disabled={waiting}
+                  changed={!!changed}
+                />
+                <Button
+                  variant="ghost"
+                  aria-label="Undo"
+                  aria-keyshortcuts="Control+Z Meta+Z"
+                  title={historyTitle('Undo', '⌘Z or Ctrl+Z')}
+                  disabled={!canUndo}
+                  onClick={() => {
+                    setActionsOpen(false);
+                    void stepHistory(-1);
+                  }}
+                >
+                  <ArrowCounterClockwise aria-hidden="true" />
+                  Undo
+                </Button>
+                <Button
+                  variant="ghost"
+                  aria-label="Redo"
+                  aria-keyshortcuts="Shift+Control+Z Shift+Meta+Z Control+Y"
+                  title={historyTitle('Redo', '⇧⌘Z or Ctrl+Shift+Z')}
+                  disabled={!canRedo}
+                  onClick={() => {
+                    setActionsOpen(false);
+                    void stepHistory(1);
+                  }}
+                >
+                  <ArrowClockwise aria-hidden="true" />
+                  Redo
+                </Button>
+                <Button
+                  variant="ghost"
+                  type="button"
+                  disabled={
+                    !changed ||
+                    disabled ||
+                    waiting ||
+                    !!draftCount ||
+                    !!copyOnEdit ||
+                    !!state.save?.running ||
+                    !!state.control?.scene_transitioning
+                  }
+                  onClick={() => {
+                    setActionsOpen(false);
+                    setDiscardOpening(state);
+                  }}
+                >
+                  <span className="grid gap-0.5">
+                    Discard live edits…
+                    <Caption as="span" className="font-normal">
+                      Reload this saved preset version
+                    </Caption>
+                  </span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  type="button"
+                  onClick={() => {
+                    setActionsOpen(false);
+                    requestMidiAssignments();
+                  }}
+                >
+                  <span className="grid gap-0.5">
+                    MIDI assignments…
+                    <Caption as="span" className="font-normal">
+                      Assign this preset&apos;s scenes, switches and controls
+                    </Caption>
+                  </span>
+                </Button>
+              </div>
+            </AdjustmentDialog>
+          )}
+          {state.device_owned ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              title={
+                state.phase === 'starting' ? 'Cancel loading' : 'Stop audio'
+              }
+              aria-label={
+                state.phase === 'starting' ? 'Cancel loading' : 'Stop audio'
+              }
+              disabled={!connected || busy || eqBusy || !!edit || !!picker}
+              onClick={() => void command({ kind: 'stop' })}
+            >
+              {state.phase === 'starting' ? 'Cancel' : 'Stop'}
+            </Button>
+          ) : (
+            <Button
+              aria-label="Resume audio"
+              disabled={!connected || busy}
+              onClick={() => void command({ kind: 'restart' })}
+            >
+              <Play aria-hidden="true" />
+              <span>Resume</span>
+            </Button>
+          )}
+        </div>
       </RigHeading>
       {performSwitching && (
         <div

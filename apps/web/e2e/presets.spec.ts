@@ -3396,7 +3396,7 @@ for (const layout of ['serial', 'scenes'] as const) {
         }),
       );
       await rig
-        .getByRole('button', { name: 'Preset actions', exact: true })
+        .getByRole('button', { name: 'More preset actions', exact: true })
         .click();
       await page.getByRole('button', { name: /^MIDI assignments/ }).click();
       await rig.getByLabel('MIDI input', { exact: true }).click();
@@ -3500,7 +3500,7 @@ for (const layout of ['serial', 'scenes'] as const) {
         .click();
       await expect.poll(async () => (await state()).configured.midi).toBeNull();
       await rig
-        .getByRole('button', { name: 'Preset actions', exact: true })
+        .getByRole('button', { name: 'More preset actions', exact: true })
         .click();
       await page.getByRole('button', { name: /^MIDI assignments/ }).click();
       for (const viewport of [
@@ -6318,4 +6318,112 @@ test('mixed rig authoring moves blocks across paths by keys, buttons and drag', 
     await expect.poll(() => unit.published.length).toBe(4);
     expect(unit.route()![0]).toBe('verb');
   }
+});
+
+test('unfolded Rig keeps its signal chain, output controls and block panel inside the editor', async ({
+  page,
+  request,
+}, info) => {
+  test.skip(
+    info.project.name !== 'chromium',
+    'Checks three Fold viewport widths',
+  );
+  const route: Route = ['Echo', 'Hall', 'Verb', 'Echo', 'Hall', 'Verb'].map(
+    (name, i) => ({ ...canvasEffect(name), id: `effect-${i}` }),
+  );
+  await mockCanvasUnit(
+    page,
+    request,
+    JSON.parse(
+      buildRoute('canvas', 'Six effects', route, 'prof').manifest_json,
+    ),
+  );
+  const check = async (rig: Locator, chain: Locator, native = false) => {
+    await expect(chain).toBeVisible();
+    const tile = chain.locator('[data-slot=chain-block]').first();
+    await tile.click();
+    const panel = rig.getByRole('region', {
+      name: native ? 'Native block 1 controls' : 'Block controls',
+      exact: true,
+    });
+    await expect(panel).toBeVisible();
+    for (const [width, height] of [
+      [690, 829],
+      [882, 1104],
+      [1104, 882],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await expect
+        .poll(async () => {
+          const parent = await rig.boundingBox();
+          if (!parent) return ['Missing editor'];
+          const children = [
+            chain,
+            ...(!native
+              ? [
+                  panel,
+                  panel.getByRole('button', { name: 'Close block panel' }),
+                ]
+              : width >= 768
+                ? [panel]
+                : []),
+            rig.getByRole('button', { name: 'Mono', exact: true }),
+            rig.getByRole('slider', { name: 'Level', exact: true }),
+          ];
+          const failures = [];
+          for (const child of children) {
+            const bounds = await child.boundingBox();
+            if (
+              !bounds ||
+              bounds.x < parent.x - 1 ||
+              bounds.x + bounds.width > parent.x + parent.width + 1
+            )
+              failures.push(
+                (await child.getAttribute('aria-label')) ?? 'Rig control',
+              );
+          }
+          return failures;
+        })
+        .toEqual([]);
+    }
+  };
+  await page.goto('/#rig');
+  const mixed = page.getByRole('region', { name: 'Sounding mixed rig' });
+  await check(mixed, mixed.locator('.route-canvas'));
+  const native = await (await request.get('/api/v1/audio')).json();
+  const stopped = await (await request.get('/api/v1/rig-audio')).json();
+  await page.route('**/api/v1/rig-audio', (r) =>
+    r.fulfill({
+      json: {
+        ...stopped,
+        phase: 'stopped',
+        control: null,
+        configured: null,
+        device_owned: false,
+      },
+    }),
+  );
+  await page.route('**/api/v1/audio', (r) =>
+    r.fulfill({
+      json: {
+        ...native,
+        phase: 'running',
+        device_owned: true,
+        preset_name: 'Six native blocks',
+        controls: route.map((_, i) => ({
+          target: `block:native-${i}:enabled`,
+          label: `Native block ${i + 1} · enabled`,
+          display: 'On',
+          value: 1,
+          toggle: true,
+        })),
+      },
+    }),
+  );
+  await page.reload();
+  const sounding = page.getByRole('region', {
+    name: 'Sounding rig',
+    exact: true,
+  });
+  await check(sounding, sounding.locator('.native-signal-route'), true);
 });

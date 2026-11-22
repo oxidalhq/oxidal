@@ -58,7 +58,7 @@ export function RigHeaderDuplicate({
   return (
     <>
       <Button
-        variant="outline"
+        variant="ghost"
         aria-label="Duplicate preset"
         title={
           changed
@@ -69,7 +69,7 @@ export function RigHeaderDuplicate({
         onClick={() => void duplicate()}
       >
         <Copy aria-hidden="true" />
-        <span className="phone-hidden">Duplicate</span>
+        Duplicate preset
       </Button>
       {message && (
         <Caption className="basis-full" role="status">

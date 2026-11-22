@@ -23,13 +23,15 @@ import { setOutputMute } from './outputMute';
 export function StageControls({
   connected,
   compact = false,
+  grouped = false,
 }: {
   connected: boolean;
   /** Inside a Rig header (7.28): labels hide on phones like its other buttons. */
   compact?: boolean;
+  grouped?: boolean;
 }) {
   const label = (text: string) =>
-    compact ? <span className="phone-hidden">{text}</span> : text;
+    compact && !grouped ? <span className="phone-hidden">{text}</span> : text;
   const [protect, setProtectOn] = useState<boolean | null>(null);
   const [muted, setMuted] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
@@ -69,13 +71,18 @@ export function StageControls({
   }
   return (
     <div
-      className="mb-2 flex flex-wrap items-center justify-end gap-2 data-[compact]:m-0 data-[compact]:flex-none data-[compact]:flex-nowrap"
+      className="mb-2 flex flex-wrap items-center justify-end gap-2 data-[compact]:m-0 data-[compact]:flex-none data-[compact]:flex-nowrap data-[grouped]:gap-0 data-[grouped]:rounded-lg data-[grouped]:bg-secondary"
+      data-grouped={grouped || undefined}
       data-compact={compact || undefined}
       role="group"
       aria-label="Stage controls"
     >
       <Button
-        variant={muted ? 'destructive' : 'outline'}
+        variant={muted ? 'destructive' : grouped ? 'ghost' : 'outline'}
+        size={grouped ? 'sm' : 'md'}
+        className={grouped ? 'min-w-touch px-2' : undefined}
+        aria-label={muted ? 'Muted' : 'Mute'}
+        title={muted ? 'Unmute output' : 'Mute output'}
         aria-pressed={!!muted}
         disabled={!connected || busy || muted === null}
         onClick={() =>
@@ -88,11 +95,14 @@ export function StageControls({
           )
         }
       >
-        <SpeakerSlash aria-hidden="true" />
+        {!grouped && <SpeakerSlash aria-hidden="true" />}
         {label(muted ? 'Muted' : 'Mute')}
       </Button>
       <Button
-        variant={protect ? 'default' : 'outline'}
+        variant={protect ? 'default' : grouped ? 'ghost' : 'outline'}
+        size={grouped ? 'sm' : 'md'}
+        className={grouped ? 'min-w-touch px-2' : undefined}
+        aria-label={protect ? 'Protected' : 'Protect'}
         aria-pressed={!!protect}
         disabled={!connected || busy || protect === null}
         title={
@@ -108,11 +118,12 @@ export function StageControls({
               }, 'turn on Protect')
         }
       >
-        {protect ? (
-          <LockSimple aria-hidden="true" weight="fill" />
-        ) : (
-          <LockSimpleOpen aria-hidden="true" />
-        )}
+        {!grouped &&
+          (protect ? (
+            <LockSimple aria-hidden="true" weight="fill" />
+          ) : (
+            <LockSimpleOpen aria-hidden="true" />
+          ))}
         {label(protect ? 'Protected' : 'Protect')}
       </Button>
       {error && (

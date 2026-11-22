@@ -1472,7 +1472,9 @@ it('keeps live edits after saving an independent copy and reloads only on explic
     saved_revision: 'c'.repeat(64),
     error: null,
   };
-  const menu = await screen.findByRole('button', { name: 'Preset actions' });
+  const menu = await screen.findByRole('button', {
+    name: 'More preset actions',
+  });
   await waitFor(() => expect(menu).toBeEnabled());
   const open = async () => {
     fireEvent.click(menu);

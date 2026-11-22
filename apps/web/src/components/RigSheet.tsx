@@ -42,7 +42,7 @@ export function RigSheet({
       }}
       renderSheet={(placement) => (
         <section
-          className="rig-sheet group/sheet shadow-lg -mx-1 flex min-w-0 flex-col rounded-t-xl border border-b-0 border-border bg-background max-sm:data-closable:data-open:max-h-[60dvh] max-sm:data-closable:data-open:overflow-y-auto max-sm:data-closable:data-open:overscroll-contain max-sm:data-closable:data-open:pb-[env(safe-area-inset-bottom)] [[data-display=epaper]_&]:border-2 [[data-display=epaper]_&]:border-foreground [[data-display=epaper]_&]:shadow-none"
+          className="rig-sheet group/sheet shadow-lg flex min-w-0 flex-col rounded-t-xl border border-b-0 border-border bg-raised max-sm:data-closable:data-open:max-h-[60dvh] max-sm:data-closable:data-open:overflow-y-auto max-sm:data-closable:data-open:overscroll-contain max-sm:data-closable:data-open:pb-[env(safe-area-inset-bottom)] sm:rounded-lg sm:border-b [[data-display=epaper]_&]:border-2 [[data-display=epaper]_&]:border-foreground [[data-display=epaper]_&]:shadow-none"
           data-open={open || undefined}
           data-closable={onClose ? true : undefined}
           aria-label="Block controls"
@@ -61,11 +61,16 @@ export function RigSheet({
         >
           <header className="relative flex min-h-touch items-center gap-2 px-3 pt-3 pb-2 group-data-open/sheet:border-b group-data-open/sheet:border-border">
             <span
-              className="absolute top-1 left-1/2 h-1 w-10 -translate-x-1/2 rounded-full bg-border"
+              className="absolute top-1 left-1/2 h-1 w-10 -translate-x-1/2 rounded-full bg-border sm:hidden"
               aria-hidden="true"
             />
             <div className="rig-sheet-title grid min-w-0 flex-1 [&>strong]:truncate">
-              <strong title={title}>{title}</strong>
+              <strong
+                className="font-display text-xl leading-tight"
+                title={title}
+              >
+                {title}
+              </strong>
               {detail && <Caption as="span">{detail}</Caption>}
             </div>
             {open && actions}
@@ -99,7 +104,7 @@ export function RigSheet({
             )}
           </header>
           {open && placement}
-          <div className="space-y-3 p-3" hidden={!open}>
+          <div className="min-w-0 space-y-3 p-3" hidden={!open}>
             {children}
           </div>
         </section>

@@ -343,7 +343,7 @@ function Block(props: Props & { drag: Drag; id: string }) {
   // A run of empty slots shows as one + (7.28); it adds at the first.
   return (
     <div
-      className="flex shrink-0 gap-1 group-data-[orientation=vertical]/route:w-full group-data-[orientation=vertical]/route:min-w-0 group-data-[orientation=vertical]/route:flex-col group-data-[orientation=vertical]/route:items-stretch data-lifted:relative data-lifted:z-2 data-lifted:opacity-70"
+      className="relative isolate flex shrink-0 gap-1 group-data-[orientation=vertical]/route:w-full group-data-[orientation=vertical]/route:min-w-0 group-data-[orientation=vertical]/route:flex-col group-data-[orientation=vertical]/route:items-stretch group-data-[orientation=vertical]/route:gap-3 group-data-[orientation=vertical]/route:before:absolute group-data-[orientation=vertical]/route:before:inset-y-0 group-data-[orientation=vertical]/route:before:left-6 group-data-[orientation=vertical]/route:before:-z-1 group-data-[orientation=vertical]/route:before:border-l group-data-[orientation=vertical]/route:before:border-wire data-lifted:relative data-lifted:z-2 data-lifted:opacity-70"
       data-node={id}
       data-flip={id}
       data-lifted={drag.moving === id || undefined}

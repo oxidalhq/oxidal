@@ -210,7 +210,7 @@ export function MixedRig(props: {
     );
   return (
     <Card
-      className="rig-editor space-y-3 max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:shadow-none data-loading:[&>:not([data-slot=rig-heading]):not([data-rig-switching])]:hidden"
+      className="rig-editor min-w-0 grid-cols-[minmax(0,1fr)] space-y-3 max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:shadow-none data-loading:[&>:not([data-slot=rig-heading]):not([data-rig-switching])]:hidden"
       aria-label="Sounding mixed rig"
       data-loading={performSwitching || undefined}
     >

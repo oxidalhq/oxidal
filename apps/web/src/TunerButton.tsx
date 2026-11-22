@@ -5,17 +5,24 @@ import { Button } from '@oxidal/design-system/components/button';
 import { requestTuner } from './tunerNavigation';
 
 /** The Rig screen's way into the tuner; its label hides on phone headers. */
-export function TunerButton({ disabled }: { disabled?: boolean }) {
+export function TunerButton({
+  disabled,
+  compact = false,
+}: {
+  disabled?: boolean;
+  compact?: boolean;
+}) {
   return (
     <Button
-      variant="outline"
+      variant={compact ? 'ghost' : 'outline'}
+      size={compact ? 'icon' : 'md'}
       aria-label="Open tuner"
       title="Tuner"
       disabled={disabled}
       onClick={requestTuner}
     >
-      <MusicNotes aria-hidden="true" />
-      <span className="phone-hidden">Tuner</span>
+      {!compact && <MusicNotes aria-hidden="true" />}
+      <span className={compact ? undefined : 'phone-hidden'}>Tuner</span>
     </Button>
   );
 }
