@@ -453,6 +453,22 @@ export function Songbook({ connected }: { connected: boolean }) {
         >
           <div className="grid gap-3">
             {book.error && <p role="alert">{book.error}</p>}
+            {!!book.deleting.set_entries?.length && (
+              <div className="grid gap-1">
+                <p>
+                  Remove the sheet from these entries in Library → Set list
+                  before deleting it.
+                </p>
+                <ul>
+                  {book.deleting.set_entries.map((entry) => (
+                    <li key={entry.id}>
+                      {entry.position && `Song ${entry.position} · `}
+                      {entry.name ?? entry.id}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {book.deleting.links.length ? (
               <>
                 <p>
@@ -476,10 +492,12 @@ export function Songbook({ connected }: { connected: boolean }) {
                 ))}
               </>
             ) : (
-              <p>
-                No references use this sheet. Its words and chords will be
-                removed.
-              </p>
+              !book.deleting.set_entries?.length && (
+                <p>
+                  No references use this sheet. Its words and chords will be
+                  removed.
+                </p>
+              )
             )}
             <div className="flex flex-wrap gap-2">
               <Button
@@ -492,7 +510,10 @@ export function Songbook({ connected }: { connected: boolean }) {
               <Button
                 variant="destructive"
                 disabled={
-                  book.busy || !connected || !!book.deleting.links.length
+                  book.busy ||
+                  !connected ||
+                  !!book.deleting.links.length ||
+                  !!book.deleting.set_entries?.length
                 }
                 onClick={() => void book.confirmDelete()}
               >

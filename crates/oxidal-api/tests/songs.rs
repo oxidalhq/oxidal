@@ -401,9 +401,18 @@ async fn prepared_song_mixes_save_reopen_cue_and_export_both_stem_counts() {
         .iter()
         .find(|m| m["id"] != old["id"])
         .unwrap();
+    let (status, sheet) = json_request(
+        &app,
+        "POST",
+        "/media/sheets",
+        json!({"expected":"","title":"Encore chords","format":"text","source":"Intro"}),
+    )
+    .await;
+    assert_eq!(status, 201, "{sheet}");
+    let sheet_id = sheet["sheet"]["id"].as_str().unwrap();
     let (status,independent)=json_request(&app,"POST",order_path,json!({
         "expected_revision":repeated["revision"],"entry":"encore",
-        "action":{"kind":"change","settings":{"own_media":true,"track":source,"mix":alternate["id"]}}
+        "action":{"kind":"change","settings":{"own_media":true,"track":source,"mix":alternate["id"],"sheet":sheet_id}}
     })).await;
     assert_eq!(status, 200, "{independent}");
     assert_eq!(
@@ -414,6 +423,29 @@ async fn prepared_song_mixes_save_reopen_cue_and_export_both_stem_counts() {
         independent["entries"][1]["entry"]["settings"]["mix"],
         alternate["id"]
     );
+    let sheet_path = format!("/media/sheets/{sheet_id}");
+    let (status, refs) = json_request(
+        &app,
+        "GET",
+        &format!("{sheet_path}/references"),
+        Value::Null,
+    )
+    .await;
+    assert_eq!(status, 200, "{refs}");
+    assert_eq!(
+        refs["set_entries"],
+        json!([{"id":"encore","name":independent["entries"][1]["name"],"position":2}])
+    );
+    let (status, _) = json_request(
+        &app,
+        "DELETE",
+        &sheet_path,
+        json!({
+            "expected":refs["sheet_revision"], "registry_revision":refs["registry_revision"]
+        }),
+    )
+    .await;
+    assert_eq!(status, 409);
     let (_, position) = json_request(&app, "GET", "/midi/position", Value::Null).await;
     assert_eq!(position["length"], 2);
     let (_, before) = json_request(&app, "GET", "/rig-audio", Value::Null).await;

@@ -13807,6 +13807,31 @@
         "sheet"
       ]
     },
+    "SheetOccurrence": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "position": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
     "SheetPage": {
       "type": "object",
       "properties": {
@@ -13842,6 +13867,12 @@
         },
         "registry_revision": {
           "type": "string"
+        },
+        "set_entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SheetOccurrence"
+          }
         },
         "sheet_revision": {
           "type": "string"

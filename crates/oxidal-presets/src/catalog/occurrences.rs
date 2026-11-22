@@ -85,11 +85,11 @@ impl SetOccurrence {
 
 impl CatalogStore {
     pub fn entry_settings(&self) -> impl Iterator<Item = &EntrySettings> {
-        self.preferences
-            .occurrences
-            .iter()
-            .flatten()
-            .map(|row| &row.settings)
+        self.saved_occurrences().map(|row| &row.settings)
+    }
+
+    pub fn saved_occurrences(&self) -> impl Iterator<Item = &SetOccurrence> {
+        self.preferences.occurrences.iter().flatten()
     }
 
     fn occurrence_rows(

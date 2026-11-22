@@ -4228,7 +4228,13 @@ export interface SheetSummary {
 export interface SheetReferences {
   links: ResolvedSheetLink[];
   registry_revision: string;
+  set_entries?: SheetOccurrence[];
   sheet_revision: string;
+}
+export interface SheetOccurrence {
+  id: string;
+  name?: string | null;
+  position?: number | null;
 }
 export interface SheetRestore {
   archive: SheetArchive;

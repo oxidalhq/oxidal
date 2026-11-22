@@ -231,7 +231,13 @@ export function useSongbook(connected: boolean) {
     });
   const confirmDelete = () =>
     run(async () => {
-      if (!shown || !deleting || deleting.links.length) return;
+      if (
+        !shown ||
+        !deleting ||
+        deleting.links.length ||
+        deleting.set_entries?.length
+      )
+        return;
       const receipt = await deleteChordSheet(shown.id, {
         expected: deleting.sheet_revision,
         registry_revision: deleting.registry_revision,

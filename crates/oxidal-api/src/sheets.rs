@@ -20,7 +20,10 @@ use axum::{
 use oxidal_presets::{CatalogStore, LibraryReference};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeSet, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 use store::{Registry, Save, SheetError};
 
 const MAX_SOURCE: usize = 64 * 1024;
@@ -133,7 +136,16 @@ pub struct ResolvedSheetLink {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
+pub struct SheetOccurrence {
+    pub id: String,
+    pub position: Option<usize>,
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
 pub struct SheetReferences {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub set_entries: Vec<SheetOccurrence>,
     pub registry_revision: String,
     pub sheet_revision: String,
     pub links: Vec<ResolvedSheetLink>,
@@ -498,7 +510,36 @@ async fn references(State(shared): State<Arc<Shared>>, Path(id): Path<String>) -
     read_with(shared, move |store, shared| {
         let registry = Registry::load(store)?;
         let sheet_revision = registry.document(&id)?.revision.clone();
+        let root = &shared.config.preset_dir;
+        let catalog = CatalogStore::open(root.clone()).map_err(|_| SheetError::Unavailable)?;
+        let mut set_entries: Vec<_> = catalog
+            .saved_occurrences()
+            .filter(|entry| entry.settings.sheet.as_deref() == Some(&id))
+            .map(|entry| SheetOccurrence {
+                id: entry.id.clone(),
+                position: None,
+                name: None,
+            })
+            .collect();
+        if !set_entries.is_empty() {
+            let order = crate::presets::catalog_items(root)
+                .and_then(|items| catalog.set_order(items))
+                .map_err(|_| SheetError::Unavailable)?;
+            let positions: BTreeMap<_, _> = order
+                .entries
+                .into_iter()
+                .enumerate()
+                .map(|(index, row)| (row.entry.id, (index + 1, row.name)))
+                .collect();
+            for reference in &mut set_entries {
+                if let Some((position, name)) = positions.get(&reference.id) {
+                    reference.position = Some(*position);
+                    reference.name = Some(name.clone());
+                }
+            }
+        }
         Ok(response(SheetReferences {
+            set_entries,
             registry_revision: registry.revision,
             sheet_revision,
             links: resolve(

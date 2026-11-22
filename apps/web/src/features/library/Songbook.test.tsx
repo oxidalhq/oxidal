@@ -204,6 +204,28 @@ it('shows a missing reference, unlinks it explicitly and deletes against the new
   );
 });
 
+it('names a repeated set entry and refreshes its dependency before deleting', async () => {
+  const user = userEvent.setup();
+  vi.mocked(chordSheetReferences).mockResolvedValueOnce({
+    registry_revision: revision,
+    sheet_revision: saved.revision,
+    links: [],
+    set_entries: [{ id: 'encore', name: 'Harbour', position: 2 }],
+  });
+  await openSaved();
+  await user.click(screen.getByRole('button', { name: 'Delete…' }));
+  expect(await screen.findByText('Song 2 · Harbour')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Delete sheet' })).toBeDisabled();
+  expect(screen.queryByText(/No references use this sheet/)).toBeNull();
+  await user.click(
+    screen.getByRole('button', { name: 'Check references again' }),
+  );
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Delete sheet' })).toBeEnabled(),
+  );
+  expect(deleteChordSheet).not.toHaveBeenCalled();
+});
+
 it('reports a confirmed save when only its following list refresh fails, without replaying the write', async () => {
   const user = userEvent.setup();
   await openSaved();
