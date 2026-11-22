@@ -822,18 +822,14 @@ impl Owner {
                 return Err(error);
             }
         };
-        let hear = telemetry
-            .monitoring
-            .ok_or("Missing input monitor state")?
-            .hear_yourself;
+        let monitor = telemetry.monitoring.ok_or("Missing input monitor state")?;
         if let Some(settings) = &mut self.state.configured {
-            settings.stream.hear_yourself = hear;
+            settings.stream.hear_yourself = monitor.hear_yourself;
         }
-        if let oxidal_audio::tools::HostUtility::Levels { levels } = command {
-            self.levels.save(levels)?;
-            if let Some(settings) = &mut self.state.configured {
-                settings.stream.levels = levels;
-            }
+        if let Some(levels) = self.levels.confirm(command, monitor.levels)?
+            && let Some(configured) = self.state.configured.as_mut()
+        {
+            configured.stream.levels = levels;
         }
         self.meters
             .send_replace(Some((telemetry, std::time::Instant::now())));

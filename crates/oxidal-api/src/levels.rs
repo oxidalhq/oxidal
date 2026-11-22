@@ -48,6 +48,28 @@ impl Levels {
     pub(crate) fn current(&self) -> HostLevels {
         self.value.read().map(|v| *v).unwrap_or_default()
     }
+    /// A MIDI master move persists the worker's confirmed gain fields. Other
+    /// level updates retain their existing full-state save behavior.
+    pub(crate) fn confirm(
+        &self,
+        command: oxidal_audio::tools::HostUtility,
+        confirmed: HostLevels,
+    ) -> Result<Option<HostLevels>, String> {
+        use oxidal_audio::tools::HostUtility;
+        let levels = match command {
+            HostUtility::Levels { levels } => levels,
+            HostUtility::OutputLevel { value } => {
+                if confirmed.output_level_db != HostLevels::midi_output_db(value) {
+                    return Err("The audio worker did not confirm the master level".into());
+                }
+                confirmed
+            }
+            _ => return Ok(None),
+        };
+        self.save(levels)?;
+        Ok(Some(levels))
+    }
+
     pub(crate) fn save(&self, levels: HostLevels) -> Result<(), String> {
         levels.validate()?;
         let mut value = self.value.write().map_err(|_| "Levels store unavailable")?;
@@ -66,6 +88,23 @@ impl Levels {
         *value = levels;
         Ok(())
     }
+}
+
+/// Apply the controller to the currently sounding master. An unchanged step
+/// needs neither a worker command nor a write to the unit's level file.
+pub(crate) async fn midi_output(shared: &Shared, value: u8) -> Result<(), String> {
+    if let Some(reason) = shared.protect.refuse(false) {
+        return Err(reason.to_owned());
+    }
+    if shared.levels.current().output_level_db == HostLevels::midi_output_db(value) {
+        return Ok(());
+    }
+    crate::player::send_utility(
+        shared,
+        oxidal_audio::tools::HostUtility::OutputLevel { value },
+    )
+    .await
+    .map_err(|(_, reason)| reason)
 }
 
 pub(super) async fn state(State(shared): State<Arc<Shared>>) -> Response {
@@ -145,5 +184,34 @@ pub(super) async fn update(
         Ok(Ok(levels)) => ([(header::CACHE_CONTROL, "no-store")], Json(levels)).into_response(),
         Ok(Err(e)) => failure(StatusCode::CONFLICT, &e),
         Err(_) => failure(StatusCode::INTERNAL_SERVER_ERROR, "Levels task failed"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oxidal_audio::tools::HostUtility;
+
+    #[test]
+    fn repeated_midi_master_readback_keeps_the_same_level_file() {
+        use std::os::unix::fs::MetadataExt;
+        let root = std::env::temp_dir().join(format!("oxidal-midi-level-{}", std::process::id()));
+        let path = root.join("levels.json");
+        let store = Levels::load(path.clone());
+        let command = HostUtility::OutputLevel { value: 0 };
+        let confirmed = HostLevels {
+            output_level_db: -60.0,
+            input_trim_db: 4.0,
+            mono: true,
+            ..Default::default()
+        };
+        assert!(store.confirm(command, HostLevels::default()).is_err());
+        assert!(!path.exists());
+        assert_eq!(store.confirm(command, confirmed).unwrap(), Some(confirmed));
+        let saved = std::fs::metadata(&path).unwrap();
+        store.confirm(command, confirmed).unwrap();
+        assert_eq!(saved.ino(), std::fs::metadata(&path).unwrap().ino());
+        assert_eq!(Levels::load(path).current(), confirmed);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

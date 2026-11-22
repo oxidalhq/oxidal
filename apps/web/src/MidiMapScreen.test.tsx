@@ -518,6 +518,7 @@ it.each([
   ['Tap tempo', 'tap'],
   ['Temporary boost', 'boost'],
   ['Protect', 'protect'],
+  ['Output level', 'output_level'],
 ])('learns a global %s trigger', async (label, key) => {
   arrange();
   const view = render(
@@ -539,16 +540,20 @@ it.each([
         kind: 'control',
         channel: 2,
         controller: 23,
-        value: 127,
+        value: key === 'output_level' ? 4 : 127,
       })}
       onMapApplied={vi.fn(async () => undefined)}
     />,
   );
   await waitFor(() => expect(updateMidiMap).toHaveBeenCalled());
   expect(vi.mocked(updateMidiMap).mock.calls[0]![0].navigation).toEqual({
-    [key]: { program: null, controller: 23 },
+    [key]: key === 'output_level' ? 23 : { program: null, controller: 23 },
   });
-  expect(await screen.findByText('CC 23 · press')).toBeVisible();
+  expect(
+    await screen.findByText(
+      key === 'output_level' ? 'CC 23 · continuous' : 'CC 23 · press',
+    ),
+  ).toBeVisible();
 });
 
 it('disables an assignment without losing it and enables it again', async () => {
@@ -842,6 +847,7 @@ it('reviews and explicitly resets supported defaults without replacing preset ma
         tap: trigger(27),
         boost: trigger(28),
         protect: trigger(29),
+        output_level: 7,
         mute: { controller: 40 },
         backing: {
           play_pause: trigger(80),

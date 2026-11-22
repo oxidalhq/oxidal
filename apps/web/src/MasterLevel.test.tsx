@@ -9,6 +9,8 @@ import { afterEach, expect, it, vi } from 'vitest';
 
 import { unitLevels } from './api';
 import { formatLevel, levelToPosition, positionToLevel } from './levelTaper';
+const monitor = vi.hoisted(() => ({ reading: vi.fn() }));
+vi.mock('./monitorFeed', () => ({ useMonitorReadings: monitor.reading }));
 vi.unmock('./MasterLevel');
 vi.mock('./api', () => ({ unitLevels: vi.fn() }));
 const { MasterLevel } = await import('./MasterLevel');
@@ -78,4 +80,27 @@ it('switches mono output without touching the level', async () => {
     output_level_db: -6,
     mono: true,
   });
+});
+
+it('follows a confirmed master move from the worker', async () => {
+  vi.mocked(unitLevels).mockResolvedValue({
+    input_trim_db: 0,
+    output_level_db: 0,
+    mono: false,
+  });
+  render(<MasterLevel />);
+  await screen.findByRole('slider');
+  await act(async () => {
+    monitor.reading.mock.lastCall?.[1]({
+      disconnected: false,
+      snapshot: {
+        audio: {
+          monitoring: {
+            levels: { input_trim_db: 4, output_level_db: -30, mono: true },
+          },
+        },
+      },
+    });
+  });
+  expect(screen.getByRole('slider')).toHaveValue('250');
 });

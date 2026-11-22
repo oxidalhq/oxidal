@@ -387,6 +387,10 @@ impl Duplex {
             crate::tools::HostUtility::HearYourself { enabled } => {
                 self.config.hear_yourself = enabled;
             }
+            crate::tools::HostUtility::OutputLevel { value } => {
+                self.config.levels.output_level_db =
+                    crate::tools::HostLevels::midi_output_db(value);
+            }
             crate::tools::HostUtility::Levels { levels } if levels.validate().is_ok() => {
                 self.config.levels = levels;
             }

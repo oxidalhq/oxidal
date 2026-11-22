@@ -11,7 +11,8 @@ export type NavigationKey =
   | 'guitar'
   | 'tap'
   | 'boost'
-  | 'protect';
+  | 'protect'
+  | 'output_level';
 type Trigger = NonNullable<Navigation['previous']>;
 
 const rows: [NavigationKey, string][] = [
@@ -23,10 +24,12 @@ const rows: [NavigationKey, string][] = [
   ['tap', 'Tap tempo'],
   ['boost', 'Temporary boost'],
   ['protect', 'Protect'],
+  ['output_level', 'Output level'],
 ];
 
 /** Shows both the friendly and the raw MIDI number so neither is guessed. */
-function triggerText(trigger: Trigger | null | undefined): string {
+function triggerText(trigger: Trigger | number | null | undefined): string {
+  if (typeof trigger === 'number') return `CC ${trigger} · continuous`;
   if (!trigger) return 'Not assigned';
   return trigger.program != null
     ? `Program ${trigger.program + 1} · raw ${trigger.program}`
@@ -75,7 +78,11 @@ export function PresetNavigation({
             <li key={key} className="midi-row">
               <span className="midi-row-label">{label}</span>
               <code className="midi-address">
-                {active ? 'Press the switch…' : triggerText(assigned)}
+                {active
+                  ? key === 'output_level'
+                    ? 'Move the control…'
+                    : 'Press the switch…'
+                  : triggerText(assigned)}
               </code>
               <div className="midi-actions">
                 <Button

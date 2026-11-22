@@ -171,6 +171,22 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
         .expect("effects worker confirms the Stage switch");
         assert_eq!(s["control"], host_controls);
     }
+    let previous_levels = get(&c, &url, "levels").await;
+    for (value, db) in [(32, -30.0), (100, 0.0)] {
+        apply(
+            &c,
+            &url,
+            &mut s,
+            json!({"kind":"host_utility","command":{"kind":"output_level","value":value}}),
+        )
+        .await;
+        let levels = get(&c, &url, "levels").await;
+        assert_eq!(levels["output_level_db"], db);
+        assert_eq!(s["telemetry"]["monitoring"]["levels"], levels);
+        for field in ["input_trim_db", "boost_db", "gate_db", "mono"] {
+            assert_eq!(levels[field], previous_levels[field]);
+        }
+    }
     for command in [
         json!({"kind":"hear_yourself","enabled":false}),
         json!({"kind":"test_tone"}),

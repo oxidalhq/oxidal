@@ -1454,11 +1454,10 @@ impl Owner {
                     Ok(reply) => reply,
                     Err(error) => return Err(self.fault(error).await),
                 };
-                let hear = reply
+                let monitor = reply
                     .telemetry
                     .monitoring
-                    .ok_or("Missing input monitoring readback")?
-                    .hear_yourself;
+                    .ok_or("Missing input monitoring readback")?;
                 let error = reply.error.clone();
                 if let Err(error) = self.readback(reply) {
                     return Err(self.fault(error).await);
@@ -1471,12 +1470,11 @@ impl Owner {
                     .as_mut()
                     .ok_or("Missing mixed configuration")?
                     .stream
-                    .hear_yourself = hear;
-                if let oxidal_audio::tools::HostUtility::Levels { levels } = command {
-                    self.levels.save(levels)?;
-                    if let Some(configured) = self.state.configured.as_mut() {
-                        configured.stream.levels = levels;
-                    }
+                    .hear_yourself = monitor.hear_yourself;
+                if let Some(levels) = self.levels.confirm(command, monitor.levels)?
+                    && let Some(configured) = self.state.configured.as_mut()
+                {
+                    configured.stream.levels = levels;
                 }
                 self.confirmed = self.state.configured.clone();
                 if matches!(

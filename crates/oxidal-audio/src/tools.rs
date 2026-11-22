@@ -131,6 +131,10 @@ pub enum HostUtility {
     OutputMuteToggle,
     /// Toggle a temporary 3 dB instrument lift for this audio stream.
     BoostToggle,
+    /// Continuous MIDI fader position (0–127), using the unit master taper.
+    OutputLevel {
+        value: u8,
+    },
     /// Oxidal's input tuner: listens to the raw input under any preset.
     Tuner {
         enabled: bool,
@@ -205,6 +209,16 @@ impl HostLevels {
         } else {
             Err("Levels must be finite: input trim −24 to +24 dB, output −60 to +12 dB, gate −96 to −20 dBFS, offset −24 to +24 dB".into())
         }
+    }
+    /// Same 0.5 dB steps and quarter-position knee as the on-screen master fader.
+    pub fn midi_output_db(value: u8) -> f32 {
+        let position = f32::from(value.min(127)) / 127.0;
+        let db = if position <= 0.25 {
+            -60.0 + position * 120.0
+        } else {
+            -30.0 + (position - 0.25) * 56.0
+        };
+        (db * 2.0).round() / 2.0
     }
     fn input_gain(&self) -> f32 {
         10f32.powf(self.input_trim_db / 20.0)
@@ -556,6 +570,10 @@ impl HostSignal {
                 if let Some(backing) = &mut self.backing {
                     backing.command(command);
                 }
+            }
+            HostUtility::OutputLevel { value } => {
+                self.levels.output_level_db = HostLevels::midi_output_db(value);
+                self.master_gain.target = self.levels.master_gain();
             }
             HostUtility::Levels { levels } => {
                 // Invalid levels never reach the audio path; the caller validates first.
@@ -1274,6 +1292,36 @@ mod host_tests {
         // Once settled the split is the same product, to float rounding.
         assert!(settled < 1e-6, "{settled}");
     }
+    #[test]
+    fn midi_master_moves_only_the_existing_output_gain() {
+        let levels = HostLevels {
+            input_trim_db: 5.0,
+            gate_db: Some(-45.0),
+            boost_db: 6.0,
+            mono: true,
+            ..HostLevels::default()
+        };
+        let mut signal = HostSignal::new(48000, true, levels);
+        for (value, expected) in [
+            (0, -60.0),
+            (32, -30.0),
+            (64, -16.0),
+            (100, 0.0),
+            (127, 12.0),
+        ] {
+            signal.command(HostUtility::OutputLevel { value });
+            let current = signal.state().levels;
+            assert_eq!(
+                current,
+                HostLevels {
+                    output_level_db: expected,
+                    ..levels
+                }
+            );
+            assert_eq!(signal.master_gain.target, current.master_gain());
+        }
+    }
+
     #[test]
     fn temporary_boost_follows_saved_levels_without_changing_them() {
         let mut signal = HostSignal::new(48000, true, HostLevels::default());

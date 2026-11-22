@@ -10,6 +10,7 @@ import {
   positionToLevel,
 } from './levelTaper';
 import { friendlyError } from './lib/friendlyError';
+import { useMonitorReadings } from './monitorFeed';
 
 const STEPS = 1000;
 
@@ -34,6 +35,14 @@ export function MasterLevel({
   const waiting = useRef<UnitLevels | null>(null);
   // Key repeats can arrive before React re-renders; step from the newest value.
   const latest = useRef<UnitLevels | null>(null);
+
+  useMonitorReadings(supported ? 1000 : null, ({ snapshot, disconnected }) => {
+    const confirmed = snapshot?.audio?.monitoring?.levels;
+    if (!confirmed || disconnected || sending.current || latest.current == null)
+      return;
+    latest.current = confirmed;
+    setLevels(confirmed);
+  });
 
   useEffect(() => {
     const abort = new AbortController();

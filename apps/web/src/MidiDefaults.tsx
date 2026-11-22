@@ -82,7 +82,15 @@ export function MidiDefaults({
     backing,
     defaults.navigation.backing,
   );
-  const rows = [...deviceRows, ...playerRows];
+  const rows = [
+    {
+      target: 'stage:level',
+      before: { program: null, controller: nav?.output_level ?? null },
+      after: { program: null, controller: defaults.navigation.output_level },
+    },
+    ...deviceRows,
+    ...playerRows,
+  ];
   const conflicts = presetTriggerConflicts(
     map,
     rows.map((row) => row.after),
@@ -124,9 +132,8 @@ export function MidiDefaults({
         ))}
       </ul>
       <p>
-        Output level, expression, and sheet scroll and speed have no device-wide
-        MIDI default. Block bypass and branch switches need a target in each
-        preset.
+        Expression and sheet scroll and speed have no device-wide MIDI default.
+        Block bypass and branch switches need a target in each preset.
       </p>
       {conflicts.length > 0 && (
         <p role="alert">
@@ -137,7 +144,11 @@ export function MidiDefaults({
       <Button
         disabled={disabled || conflicts.length > 0}
         onClick={async () => {
-          const navigation = { ...nav, backing: { ...backing } };
+          const navigation = {
+            ...nav,
+            output_level: defaults.navigation.output_level,
+            backing: { ...backing },
+          };
           for (const row of deviceRows) navigation[row.key] = row.after;
           for (const row of playerRows) navigation.backing[row.key] = row.after;
           try {

@@ -288,6 +288,9 @@ pub struct Navigation {
     /// Toggle the device performance lock.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub protect: Option<Trigger>,
+    /// Continuous CC for the unit master output level.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_level: Option<u8>,
     /// Backing-track player switches and level knob.
     #[serde(default, skip_serializing_if = "BackingTriggers::is_empty")]
     pub backing: BackingTriggers,
@@ -352,6 +355,9 @@ pub enum DeviceAction {
     TapTempo,
     BoostToggle,
     ProtectToggle,
+    OutputLevel {
+        value: u8,
+    },
     BackingPlayPause,
     BackingStop,
     BackingNext,
@@ -376,6 +382,7 @@ impl Navigation {
             && self.tap.is_none()
             && self.boost.is_none()
             && self.protect.is_none()
+            && self.output_level.is_none()
             && self.backing.is_empty()
     }
 
@@ -398,7 +405,14 @@ impl Navigation {
         } else if self.protect.is_some_and(|t| t.matches(message)) {
             Some(DeviceAction::ProtectToggle)
         } else {
-            self.backing_action(message)
+            match message {
+                Message::Control {
+                    controller, value, ..
+                } if self.output_level == Some(controller) => {
+                    Some(DeviceAction::OutputLevel { value })
+                }
+                _ => self.backing_action(message),
+            }
         }
     }
 
@@ -452,20 +466,19 @@ impl Navigation {
         {
             return Err(Error::Invalid("Invalid MIDI navigation control"));
         }
-        if let Some(level) = self.backing.level
-            && (level > 127
-                || matches!(level, 0 | 32)
-                || all.iter().any(|t| t.controller == Some(level)))
+        let knobs = [self.output_level, self.backing.level];
+        if (self.output_level.is_some() && self.output_level == self.backing.level)
+            || knobs.into_iter().flatten().any(|cc| {
+                cc > 127 || matches!(cc, 0 | 32) || all.iter().any(|t| t.controller == Some(cc))
+            })
         {
-            return Err(Error::Invalid(
-                "The backing level CC must be its own controller",
-            ));
+            return Err(Error::Invalid("Each level CC must be its own controller"));
         }
         let taken = |program: Option<u8>, controller: Option<u8>| {
             self.triggers().any(|t| {
                 (program.is_some() && t.program == program)
                     || (controller.is_some() && t.controller == controller)
-            }) || (controller.is_some() && controller == self.backing.level)
+            }) || (controller.is_some() && knobs.contains(&controller))
         };
         for mapping in entries.values() {
             if mapping
@@ -1607,6 +1620,7 @@ mod tests {
             tap: None,
             boost: None,
             protect: None,
+            output_level: None,
         };
         let saved = store
             .replace(update(nav, vec![], &initial.revision))
@@ -1625,6 +1639,7 @@ mod tests {
                 tap: None,
                 boost: None,
                 protect: None,
+                output_level: None,
             },
             // Mute may not reuse Previous either.
             Navigation {
@@ -1637,6 +1652,7 @@ mod tests {
                 tap: None,
                 boost: None,
                 protect: None,
+                output_level: None,
             },
             Navigation {
                 previous: Some(Trigger {
@@ -1651,6 +1667,7 @@ mod tests {
                 tap: None,
                 boost: None,
                 protect: None,
+                output_level: None,
             },
             Navigation {
                 previous: Some(Trigger {
@@ -1665,6 +1682,7 @@ mod tests {
                 tap: None,
                 boost: None,
                 protect: None,
+                output_level: None,
             },
         ] {
             assert!(matches!(
@@ -1815,6 +1833,7 @@ mod tests {
                 tap: None,
                 boost: None,
                 protect: None,
+                output_level: None,
             },
         };
         let update = |layouts: Vec<SavedLayout>, revision: &str| MidiMapUpdate {
@@ -2123,6 +2142,14 @@ mod tests {
         let initial = store.snapshot().unwrap();
         assert_eq!(initial.channel, 1);
         assert!(initial.input.is_none());
+        assert_eq!(
+            initial.navigation.action(Message::Control {
+                channel: 1,
+                controller: 7,
+                value: 0
+            }),
+            Some(DeviceAction::OutputLevel { value: 0 })
+        );
         let template = initial.template.unwrap();
         assert_eq!((template.first_controller, template.scene_buttons), (16, 8));
         for (cc, action) in [
@@ -2239,5 +2266,41 @@ mod tests {
                 .is_err()
             );
         }
+    }
+    #[test]
+    fn master_cc_uses_all_values_and_cannot_overlap_another_assignment() {
+        let nav = Navigation {
+            output_level: Some(7),
+            ..Navigation::default()
+        };
+        for value in [0, 32, 64, 127] {
+            assert_eq!(
+                nav.action(Message::Control {
+                    channel: 1,
+                    controller: 7,
+                    value
+                }),
+                Some(DeviceAction::OutputLevel { value })
+            );
+        }
+        assert!(
+            Navigation {
+                backing: BackingTriggers {
+                    level: Some(7),
+                    ..Default::default()
+                },
+                ..nav
+            }
+            .validate(&BTreeMap::new())
+            .is_err()
+        );
+        assert!(
+            Navigation {
+                output_level: Some(32),
+                ..nav
+            }
+            .validate(&BTreeMap::new())
+            .is_err()
+        );
     }
 }

@@ -6719,6 +6719,27 @@
           ]
         },
         {
+          "description": "Continuous MIDI fader position (0–127), using the unit master taper.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "output_level"
+            },
+            "value": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
           "description": "Oxidal's input tuner: listens to the raw input under any preset.",
           "type": "object",
           "properties": {
@@ -9476,6 +9497,16 @@
               "type": "null"
             }
           ]
+        },
+        "output_level": {
+          "description": "Continuous CC for the unit master output level.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
         },
         "previous": {
           "anyOf": [

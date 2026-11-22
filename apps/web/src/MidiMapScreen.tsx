@@ -632,15 +632,24 @@ export function MidiMapScreen({
   }, [eventCount, lastMessage, learning]);
 
   const navMessage = navLearning
-    ? firstAfter<Message>(status, navLearning.after, learnSource, isSwitchPress)
+    ? firstAfter<Message>(
+        status,
+        navLearning.after,
+        learnSource,
+        navLearning.key === 'output_level'
+          ? (message) => message.kind === 'control'
+          : isSwitchPress,
+      )
     : undefined;
   useEffect(() => {
     if (!navLearning || !navMessage || !map) return;
     const key = navLearning.key;
     const trigger =
-      navMessage.kind === 'program'
-        ? { program: navMessage.program, controller: null }
-        : { program: null, controller: navMessage.controller };
+      key === 'output_level' && navMessage.kind === 'control'
+        ? navMessage.controller
+        : navMessage.kind === 'program'
+          ? { program: navMessage.program, controller: null }
+          : { program: null, controller: navMessage.controller };
     const timer = window.setTimeout(() => {
       setNavLearning(null);
       void replaceMap({

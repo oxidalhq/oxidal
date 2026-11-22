@@ -157,6 +157,10 @@ export type HostUtility =
       kind: "boost_toggle";
     }
   | {
+      kind: "output_level";
+      value: number;
+    }
+  | {
       enabled: boolean;
       kind: "tuner";
     }
@@ -3037,6 +3041,10 @@ export interface Navigation {
    */
   mute?: Trigger | null;
   next?: Trigger | null;
+  /**
+   * Continuous CC for the unit master output level.
+   */
+  output_level?: number | null;
   previous?: Trigger | null;
   /**
    * Toggle the device performance lock.

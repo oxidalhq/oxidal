@@ -120,6 +120,13 @@ pub(crate) fn start(shared: Weak<Shared>, mut events: mpsc::Receiver<Event>) {
                 match action {
                     DeviceAction::Previous => navigate_recorded(&shared, -1).await.ok(),
                     DeviceAction::Next => navigate_recorded(&shared, 1).await.ok(),
+                    DeviceAction::OutputLevel { value } => {
+                        let result = crate::levels::midi_output(&shared, value).await;
+                        if let Err(reason) = result {
+                            record(&shared, &Err(reason));
+                        }
+                        None
+                    }
                     DeviceAction::MuteToggle => toggle_mute(&shared).await.ok(),
                     DeviceAction::ProtectToggle => {
                         let result = crate::protect::change(&shared, None).await.map(|state| {
