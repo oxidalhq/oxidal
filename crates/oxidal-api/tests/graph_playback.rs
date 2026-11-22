@@ -150,6 +150,22 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
     s = wait(&c, &url, "running").await;
     assert_eq!(s["device_owned"], true);
     let host_controls = s["control"].clone();
+    for muted in [true, false] {
+        let response = c.post(format!("{url}/midi/mute")).send().await.unwrap();
+        assert_eq!(response.status(), 204);
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                s = get(&c, &url, "graph-audio").await;
+                if s["telemetry"]["monitoring"]["output_muted"].as_bool() == Some(muted) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("effects worker confirms Stage mute");
+        assert_eq!(s["control"], host_controls);
+    }
     for command in [
         json!({"kind":"hear_yourself","enabled":false}),
         json!({"kind":"test_tone"}),

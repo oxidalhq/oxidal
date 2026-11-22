@@ -306,31 +306,10 @@ pub(crate) async fn position(shared: &Arc<Shared>) -> Result<MidiPosition, Strin
 /// The worker owns the state, so this never guesses what the screen shows.
 pub(crate) async fn toggle_mute(shared: &Arc<Shared>) -> Result<String, String> {
     let command = oxidal_audio::tools::HostUtility::OutputMuteToggle;
-    let rig = shared.rig_playback.snapshot();
-    let native = shared.playback.snapshot();
-    let result = if rig.phase == AudioPhase::Running {
-        shared
-            .rig_playback
-            .dispatch(RigAudioCommand {
-                session: rig.session,
-                expected_revision: rig.revision,
-                action: RigAudioAction::HostUtility { command },
-            })
-            .await
-            .map(|_| "Output mute toggled".to_owned())
-    } else if native.phase == AudioPhase::Running {
-        shared
-            .playback
-            .dispatch(AudioCommand {
-                session: native.session,
-                expected_revision: native.revision,
-                action: AudioAction::HostUtility { command },
-            })
-            .await
-            .map(|_| "Output mute toggled".to_owned())
-    } else {
-        Err("Play a preset before using Mute".to_owned())
-    };
+    let result = crate::player::send_utility(shared, command)
+        .await
+        .map(|()| "Output mute toggled".to_owned())
+        .map_err(|(_, reason)| reason);
     record(shared, &result);
     result
 }

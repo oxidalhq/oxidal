@@ -664,7 +664,12 @@ pub(crate) async fn send_utility(shared: &Shared, utility: HostUtility) -> Resul
     let unavailable = || {
         (
             StatusCode::CONFLICT,
-            "Start the audio to play the track".to_owned(),
+            match utility {
+                HostUtility::OutputMuteToggle => "Play a preset before using Mute",
+                HostUtility::Backing { .. } => "Start the audio to play the track",
+                _ => "Start audio before using this control",
+            }
+            .to_owned(),
         )
     };
     let native = shared.playback.snapshot();
