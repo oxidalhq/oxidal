@@ -578,6 +578,13 @@ export function Library({
                   setCreating(false);
                   setComposer(kind);
                 }}
+                onPlayingCopied={(name) => {
+                  setCreating(false);
+                  setRefresh((v) => v + 1);
+                  setCopyMessage(
+                    `Created ${name} in Mine from the playing sound.`,
+                  );
+                }}
                 onCreated={(created) => {
                   setCreating(false);
                   setRefresh((v) => v + 1);

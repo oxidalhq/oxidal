@@ -510,6 +510,12 @@ impl StartRig {
         Ok(())
     }
 }
+pub fn valid_copy_id(id: &str) -> bool {
+    id.len() == 32
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
 pub fn valid_revision(s: &str) -> bool {
     s.len() == 64
         && s.bytes()
@@ -623,6 +629,8 @@ pub struct SaveRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SaveState {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copy_id: Option<String>,
     pub source_session: String,
     pub source_control_revision: u64,
     pub running: bool,
@@ -705,6 +713,10 @@ pub enum RigAudioAction {
     },
     Model {
         command: ModelCommand,
+    },
+    CopyPlaying {
+        name: String,
+        copy_id: String,
     },
     Save {
         name: String,

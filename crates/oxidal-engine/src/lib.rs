@@ -33,7 +33,7 @@ pub mod render;
 mod saving;
 #[cfg(feature = "native")]
 pub use saving::{
-    prepare_native_edit, save_named_version, save_revision, save_revision_with_models,
+    copy_playing, prepare_native_edit, save_named_version, save_revision, save_revision_with_models,
 };
 
 /// Codec baseline for the pinned adapter sources. It is not a binary signature

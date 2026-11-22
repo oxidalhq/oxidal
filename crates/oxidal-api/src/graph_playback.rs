@@ -867,9 +867,14 @@ impl Owner {
                     return Err(e);
                 }
             }
-            action @ (GraphAudioAction::SaveCopy { .. } | GraphAudioAction::SaveVersion { .. }) => {
+            action @ (GraphAudioAction::CopyPlaying { .. }
+            | GraphAudioAction::SaveCopy { .. }
+            | GraphAudioAction::SaveVersion { .. }) => {
+                let copying_playing = matches!(action, GraphAudioAction::CopyPlaying { .. });
+                let saving_copy = matches!(action, GraphAudioAction::SaveCopy { .. });
                 let (name, target) = match action {
-                    GraphAudioAction::SaveCopy { name } => (name, None),
+                    GraphAudioAction::CopyPlaying { name }
+                    | GraphAudioAction::SaveCopy { name } => (name, None),
                     GraphAudioAction::SaveVersion { name, target } => (name, Some(target)),
                     _ => unreachable!(),
                 };
@@ -896,9 +901,24 @@ impl Owner {
                 };
                 preset.validate().map_err(|e| e.to_string())?;
                 let root = self.preset_root.clone();
-                let saving_copy = target.is_none();
                 let source = settings.library_id.clone();
                 let saved = tokio::task::spawn_blocking(move || {
+                    if copying_playing {
+                        let store = oxidal_presets::GraphStore::new(root.clone());
+                        match store.read(&preset.revision()?) {
+                            Ok(_) => {
+                                return Err(oxidal_presets::Error::Conflict(
+                                    "An identical effects preset already has this name in Mine",
+                                ));
+                            }
+                            Err(oxidal_presets::Error::Io(e))
+                                if e.kind() == std::io::ErrorKind::NotFound =>
+                            {
+                                ()
+                            }
+                            Err(e) => return Err(e),
+                        }
+                    }
                     if let Some(target) = target {
                         let source = source.as_ref().ok_or(oxidal_presets::Error::Invalid(
                             "Choose a saved effects preset",

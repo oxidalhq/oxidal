@@ -25,6 +25,7 @@ import type {
   RigPublish,
 } from '../../generated/contract';
 import { useFailure } from '../../lib/useFailure';
+import { copyPlaying, playingCopySource } from './copyPlaying';
 import {
   emptyPreset,
   presetCopy,
@@ -32,7 +33,7 @@ import {
   presetNameError,
 } from './newPreset';
 
-type Start = 'empty' | 'copy' | 'oxidal' | 'tone3000';
+type Start = 'playing' | 'empty' | 'copy' | 'oxidal' | 'tone3000';
 
 /**
  * Creates an empty preset or starts from a saved preset, a prepared Oxidal
@@ -43,15 +44,36 @@ type Start = 'empty' | 'copy' | 'oxidal' | 'tone3000';
 export function NewPresetDialog({
   connected,
   onCreated,
+  onPlayingCopied,
   onCancel,
   onAdvanced,
 }: {
   connected: boolean;
   onCreated: (created: RigDocument) => void;
+  onPlayingCopied: (name: string) => void;
   onCancel: () => void;
   /** Opens the effects-only or TONE3000 chain composer kept for parity. */
   onAdvanced: (composer: 'effects' | 'tone3000') => void;
 }) {
+  const [playing, setPlaying] =
+    useState<Awaited<ReturnType<typeof playingCopySource>>>(null);
+  const copyRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => copyRequest.current?.abort(), []);
+  useEffect(() => {
+    let alive = true;
+    setPlaying(null);
+    if (connected)
+      void playingCopySource()
+        .then((owner) => {
+          if (alive) setPlaying(owner);
+        })
+        .catch(() => {
+          if (alive) setPlaying(null);
+        });
+    return () => {
+      alive = false;
+    };
+  }, [connected]);
   const [name, setName] = useState('');
   const [start, setStart] = useState<Start>('empty');
   const [source, setSource] = useState('');
@@ -101,6 +123,13 @@ export function NewPresetDialog({
     value: `rig:${r.revision}`,
     label: r.name,
   }));
+  const playingName =
+    playing?.owner === 'native'
+      ? playing.state.preset_name
+      : playing?.owner === 'mixed'
+        ? rigs.find((r) => r.revision === playing.state.configured?.revision)
+            ?.name
+        : playing?.state.configured?.name;
   const examples = rigs
     .filter((r) => r.origin === 'oxidal_example')
     .map((r) => ({ value: `rig:${r.revision}`, label: r.name }));
@@ -109,6 +138,7 @@ export function NewPresetDialog({
     label: t.preset.name,
   }));
   const sources = {
+    playing: [],
     empty: [],
     copy: saved,
     oxidal: examples,
@@ -122,14 +152,39 @@ export function NewPresetDialog({
   }
   async function create() {
     setTouched(true);
-    if (nameError || busy || !profile) return;
-    if (start !== 'empty' && !source) {
+    if (nameError || busy || !connected || (start !== 'playing' && !profile))
+      return;
+    if (start !== 'empty' && start !== 'playing' && !source) {
       setError('Choose the preset to copy.');
       return;
     }
     setBusy(true);
     setError('');
     clear();
+    if (start === 'playing') {
+      if (!playing || copyRequest.current) {
+        setBusy(false);
+        return;
+      }
+      const controller = new AbortController();
+      copyRequest.current = controller;
+      try {
+        await copyPlaying(playing, name.trim(), controller.signal);
+        if (!controller.signal.aborted) onPlayingCopied(name.trim());
+      } catch (cause) {
+        if (!controller.signal.aborted) {
+          setError(
+            (cause instanceof Error ? cause.message + ' ' : '') +
+              'Check Mine before making another copy. Reopen New preset to review the current sound.',
+          );
+          setPlaying(null);
+        }
+      } finally {
+        copyRequest.current = null;
+        if (!controller.signal.aborted) setBusy(false);
+      }
+      return;
+    }
     // The same choices reuse the same request, so trying again after a lost
     // reply publishes the same revision instead of a second preset (7.24).
     const key = JSON.stringify([name.trim(), start, source, profile]);
@@ -189,6 +244,14 @@ export function NewPresetDialog({
               caption: 'Input straight to output. Add blocks in Rig.',
             },
             {
+              id: 'playing',
+              title: 'A copy of what is playing',
+              caption: playing
+                ? `Include the confirmed edits from ${playingName ?? 'the current rig'}.`
+                : 'Start a sound in Rig to copy it here.',
+              disabled: !connected || !playing,
+            },
+            {
               id: 'copy',
               title: 'Copy of a saved preset',
               caption: saved.length
@@ -214,7 +277,7 @@ export function NewPresetDialog({
             },
           ]}
         />
-        {start !== 'empty' && (
+        {start !== 'empty' && start !== 'playing' && (
           <label className="field">
             <span>Preset to copy</span>
             <Select value={source} onValueChange={setSource}>
@@ -264,7 +327,11 @@ export function NewPresetDialog({
           </Button>
           <Button
             type="submit"
-            disabled={!connected || busy || loading || !profile}
+            disabled={
+              !connected ||
+              busy ||
+              (start === 'playing' ? !playing : loading || !profile)
+            }
           >
             {busy ? 'Creating…' : 'Create preset'}
           </Button>

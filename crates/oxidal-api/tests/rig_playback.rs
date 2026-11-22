@@ -261,6 +261,40 @@ async fn scene_bypass_survives_mixed_worker_restart_and_independent_save() {
         json!([]),
         "an independent Save copy keeps the portable group and starts without a device mapping"
     );
+    let copy_id = "0123456789abcdef0123456789abcdef";
+    apply(
+        &client,
+        &url,
+        json!({"kind":"copy_playing","name":"Independent encore","copy_id":copy_id}),
+    )
+    .await;
+    let copy = tokio::time::timeout(Duration::from_secs(20), async {
+        loop {
+            let snapshot = get(&client, &url, "rig-audio").await;
+            let receipt = &snapshot["save"];
+            assert_eq!(receipt["copy_id"], copy_id);
+            assert_eq!(
+                snapshot["control"]["session"],
+                reopened["control"]["session"]
+            );
+            if receipt["running"] == false {
+                assert_eq!(receipt["error"], Value::Null, "{receipt}");
+                break receipt["saved_revision"].as_str().unwrap().to_owned();
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .unwrap();
+    let copied = store.read(&copy).unwrap();
+    assert_ne!(
+        copied.manifest().id,
+        store.read(&saved).unwrap().manifest().id
+    );
+    assert_eq!(
+        copied.manifest().scenes().unwrap(),
+        bundle.manifest().scenes().unwrap()
+    );
     let versions = format!("presets/catalog/rig/{saved}/versions");
     let family = get(&client, &url, &versions).await;
     apply(&client,&url,json!({"kind":"save_version","name":"Sounding scene revision","target":{

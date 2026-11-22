@@ -12,14 +12,14 @@ use oxidal_presets::{
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
-fn make_owned(manifest: &mut Manifest, seed: &[u8]) -> Result<(), String> {
+fn make_owned(manifest: &mut Manifest, seed: &[u8], new_copy: bool) -> Result<(), String> {
     let source_origin = LibraryOrigin::from_manifest(manifest).map_err(|e| e.to_string())?;
     let authoring = manifest
         .extensions
         .entry("urn:oxidal:authoring".into())
         .or_default();
     authoring.remove("draft");
-    if source_origin == LibraryOrigin::Mine {
+    if source_origin == LibraryOrigin::Mine && !new_copy {
         return Ok(());
     }
     let mut digest = Sha256::new();
@@ -58,7 +58,7 @@ pub fn save_revision(
     world: &World,
     request: SaveRequest,
 ) -> Result<String, String> {
-    save_with_assets(store, world, request, None, None)
+    save_with_assets(store, world, request, None, None, None)
 }
 pub fn save_revision_with_models(
     store: &BundleStore,
@@ -66,7 +66,7 @@ pub fn save_revision_with_models(
     request: SaveRequest,
     root: &std::path::Path,
 ) -> Result<String, String> {
-    save_with_assets(store, world, request, Some(root), None)
+    save_with_assets(store, world, request, Some(root), None, None)
 }
 pub fn save_named_version(
     store: &BundleStore,
@@ -75,7 +75,21 @@ pub fn save_named_version(
     root: &std::path::Path,
     target: oxidal_audio::lifecycle::VersionTarget,
 ) -> Result<String, String> {
-    save_with_assets(store, world, request, Some(root), Some(target))
+    save_with_assets(store, world, request, Some(root), Some(target), None)
+}
+/// Exports the sounding recall into a separate Library preset, including when
+/// the original already belongs to Mine. Repeating the same request is stable.
+pub fn copy_playing(
+    store: &BundleStore,
+    world: &World,
+    request: SaveRequest,
+    root: &std::path::Path,
+    copy_id: &str,
+) -> Result<String, String> {
+    if !valid_copy_id(copy_id) {
+        return Err("Invalid new preset copy ID".into());
+    }
+    save_with_assets(store, world, request, Some(root), None, Some(copy_id))
 }
 fn save_with_assets(
     store: &BundleStore,
@@ -83,6 +97,7 @@ fn save_with_assets(
     request: SaveRequest,
     model_root: Option<&std::path::Path>,
     target: Option<oxidal_audio::lifecycle::VersionTarget>,
+    copy_id: Option<&str>,
 ) -> Result<String, String> {
     let input_hash = target
         .as_ref()
@@ -134,7 +149,11 @@ fn save_with_assets(
     }
     let mut identity_seed = request.settings.revision.as_bytes().to_vec();
     identity_seed.extend(serde_json::to_vec(&request.recall).map_err(|e| e.to_string())?);
-    make_owned(&mut manifest, &identity_seed)?;
+    if let Some(id) = copy_id {
+        identity_seed.extend_from_slice(b"new-preset:");
+        identity_seed.extend_from_slice(id.as_bytes());
+    }
+    make_owned(&mut manifest, &identity_seed, copy_id.is_some())?;
     let mut resources: BTreeMap<String, Vec<u8>> = manifest
         .resources
         .iter()
@@ -579,7 +598,7 @@ mod tests {
             serde_json::json!({"origin":"oxidal_example", "draft":true});
         let mut manifest = Manifest::parse(&serde_json::to_vec(&value).unwrap()).unwrap();
         let source_id = manifest.id.clone();
-        make_owned(&mut manifest, b"confirmed sound").unwrap();
+        make_owned(&mut manifest, b"confirmed sound", false).unwrap();
         assert_ne!(manifest.id, source_id);
         assert_eq!(
             LibraryOrigin::from_manifest(&manifest).unwrap(),
@@ -592,7 +611,7 @@ mod tests {
         );
 
         let mine_id = manifest.id.clone();
-        make_owned(&mut manifest, b"later edit").unwrap();
+        make_owned(&mut manifest, b"later edit", false).unwrap();
         assert_eq!(manifest.id, mine_id);
     }
 }

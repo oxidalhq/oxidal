@@ -5940,6 +5940,23 @@
           "properties": {
             "kind": {
               "type": "string",
+              "const": "copy_playing"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "name"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
               "const": "save_copy"
             },
             "name": {
@@ -12541,6 +12558,27 @@
         {
           "type": "object",
           "properties": {
+            "copy_id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "copy_playing"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "name",
+            "copy_id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "kind": {
               "type": "string",
               "const": "save"
@@ -12955,6 +12993,12 @@
     "SaveState": {
       "type": "object",
       "properties": {
+        "copy_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "error": {
           "type": [
             "string",

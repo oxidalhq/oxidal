@@ -784,7 +784,14 @@ impl Owner {
         &mut self,
         name: String,
         target: Option<oxidal_audio::lifecycle::VersionTarget>,
+        copy_id: Option<String>,
     ) -> Result<(), String> {
+        if copy_id
+            .as_deref()
+            .is_some_and(|id| !oxidal_engine::protocol::valid_copy_id(id))
+        {
+            return Err("Invalid new preset copy ID".into());
+        }
         if self.model_pending() {
             return Err("Finish model preparation before saving".into());
         }
@@ -817,25 +824,30 @@ impl Owner {
         let bytes = encode(&input)?;
         let runtime = self.runtime.join("export");
         std::fs::create_dir_all(&runtime).map_err(|e| e.to_string())?;
-        let mut child = tokio::process::Command::new(
+        let mut exporter = tokio::process::Command::new(
             self.executable.as_ref().ok_or("Mixed worker unavailable")?,
-        )
-        .arg("--save-revision")
-        .env("OXIDAL_BUNDLE_STORE", &self.root)
-        .env(
-            "OXIDAL_PRESET_DIR",
-            std::fs::canonicalize(&self.root)
-                .map_err(|e| e.to_string())?
-                .parent()
-                .ok_or("Missing model store parent")?,
-        )
-        .env("OXIDAL_QUALIFICATION_DATA", runtime)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .kill_on_drop(true)
-        .spawn()
-        .map_err(|e| e.to_string())?;
+        );
+        if let Some(id) = &copy_id {
+            exporter.arg("--copy-playing").arg(id);
+        } else {
+            exporter.arg("--save-revision");
+        }
+        let mut child = exporter
+            .env("OXIDAL_BUNDLE_STORE", &self.root)
+            .env(
+                "OXIDAL_PRESET_DIR",
+                std::fs::canonicalize(&self.root)
+                    .map_err(|e| e.to_string())?
+                    .parent()
+                    .ok_or("Missing model store parent")?,
+            )
+            .env("OXIDAL_QUALIFICATION_DATA", runtime)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .kill_on_drop(true)
+            .spawn()
+            .map_err(|e| e.to_string())?;
         let mut input = child.stdin.take().ok_or("Export stdin unavailable")?;
         self.export = Some(Export {
             child,
@@ -844,6 +856,7 @@ impl Owner {
             source,
         });
         self.state.save = Some(SaveState {
+            copy_id,
             source_session: control.session.clone(),
             source_control_revision: control.revision,
             running: true,
@@ -1703,8 +1716,13 @@ impl Owner {
                     return Err(error);
                 }
             }
-            RigAudioAction::Save { name } => self.save(name, None).await?,
-            RigAudioAction::SaveVersion { name, target } => self.save(name, Some(target)).await?,
+            RigAudioAction::CopyPlaying { name, copy_id } => {
+                self.save(name, None, Some(copy_id)).await?
+            }
+            RigAudioAction::Save { name } => self.save(name, None, None).await?,
+            RigAudioAction::SaveVersion { name, target } => {
+                self.save(name, Some(target), None).await?
+            }
             RigAudioAction::SetBoot { enabled } => {
                 if enabled {
                     if self.model_pending() {

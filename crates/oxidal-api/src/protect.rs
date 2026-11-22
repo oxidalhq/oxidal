@@ -123,6 +123,7 @@ pub fn rig(action: &RigAudioAction, phase: AudioPhase) -> bool {
         RigAudioAction::Switch { .. }
         | RigAudioAction::Branch { .. }
         | RigAudioAction::StompGroup { .. }
+        | RigAudioAction::CopyPlaying { .. }
         | RigAudioAction::Save { .. } => true,
         RigAudioAction::Control { command } => matches!(command.target, Target::Bypass { .. }),
         RigAudioAction::Restart => phase == AudioPhase::Failed,
@@ -143,7 +144,7 @@ pub fn native(action: &AudioAction, phase: AudioPhase) -> bool {
 pub fn graph(action: &GraphAudioAction, phase: AudioPhase) -> bool {
     match action {
         GraphAudioAction::HostUtility { command } => utility(command),
-        GraphAudioAction::SaveCopy { .. } => true,
+        GraphAudioAction::CopyPlaying { .. } | GraphAudioAction::SaveCopy { .. } => true,
         GraphAudioAction::Restart => phase == AudioPhase::Failed,
         _ => false,
     }

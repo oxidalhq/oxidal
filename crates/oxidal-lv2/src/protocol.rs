@@ -237,6 +237,9 @@ pub enum GraphAudioAction {
     },
     Stop,
     Restart,
+    CopyPlaying {
+        name: String,
+    },
     SaveCopy {
         name: String,
     },

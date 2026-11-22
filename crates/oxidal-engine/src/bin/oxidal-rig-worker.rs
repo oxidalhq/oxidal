@@ -136,6 +136,22 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             std::io::stdout().flush()?;
             return Ok(());
         }
+        if let [mode, id] = args.as_slice()
+            && mode == "--copy-playing"
+        {
+            let request: SaveRequest =
+                serde_json::from_slice(&frame(&mut std::io::stdin().lock())?)?;
+            let revision = oxidal_engine::copy_playing(
+                &store,
+                &World::discover()?,
+                request,
+                model_root.as_deref().ok_or("Model store unavailable")?,
+                id,
+            )?;
+            serde_json::to_writer(std::io::stdout().lock(), &revision)?;
+            std::io::stdout().flush()?;
+            return Ok(());
+        }
         if args != ["--save-revision"] {
             return Err("Unknown rig worker mode".into());
         }

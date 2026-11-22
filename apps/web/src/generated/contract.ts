@@ -615,6 +615,10 @@ export type GraphAudioAction =
       kind: "restart";
     }
   | {
+      kind: "copy_playing";
+      name: string;
+    }
+  | {
       kind: "save_copy";
       name: string;
     }
@@ -1064,6 +1068,11 @@ export type RigAudioAction =
   | {
       command: ModelCommand;
       kind: "model";
+    }
+  | {
+      copy_id: string;
+      kind: "copy_playing";
+      name: string;
     }
   | {
       kind: "save";
@@ -3904,6 +3913,7 @@ export interface StompGroupState {
   partial: boolean;
 }
 export interface SaveState {
+  copy_id?: string | null;
   error?: string | null;
   running: boolean;
   saved_revision?: string | null;
