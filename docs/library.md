@@ -4,13 +4,13 @@ Open **Library** to find, play and organize sounds, tones and media. Importing
 a file leaves the current sound alone. To try a capture on a playing rig,
 choose a block and audition it explicitly.
 
-Library has two groups. Each section has its own link, such as
+Each Library section has its own link, such as
 `#library/tones`.
 
-| Group  | Sections                                                      |
-| ------ | ------------------------------------------------------------- |
-| Sounds | Mine, Oxidal sounds, TONE3000, Set list, Tones and IRs        |
-| Media  | Backing tracks, DI and reamps (see [session media](media.md)) |
+| Group  | Sections                                                                       |
+| ------ | ------------------------------------------------------------------------------ |
+| Sounds | Mine, Oxidal sounds, TONE3000, Set list, Tones and IRs                         |
+| Media  | Backing tracks, Stems, DI and reamps, Songbook (see [session media](media.md)) |
 
 Links from before this layout still work: `#library/presets` opens Mine,
 `#library/sounds` opens Tones and IRs and `#library/discover` opens Oxidal
@@ -19,7 +19,7 @@ sounds.
 ## Mine
 
 **Mine** is one list of your presets, including saved TONE3000 chains. It is
-searchable, and the search survives a reload. Each row shows its topology,
+searchable. Your search and category survive a reload. Clear returns focus to the search field. Each row shows its topology,
 scenes and whether it is ready, with **In set list #N** or **Not in set list**.
 **Play** starts the preset, **Details** shows its description and the **More**
 menu holds the occasional actions:
@@ -68,6 +68,10 @@ picker and MIDI program changes follow. Membership is explicit:
   but are not saved yet; choosing one saves it and plays it.
 - In Perform a preset change discards unsaved edits without asking, as on a
   modeller; the Rig editor still asks first.
+
+## Create a preset from the playing sound
+
+In **New preset**, choose **A copy of what is playing** to start with the confirmed playing sound and its scenes. Give the copy a name to keep it in Mine. To start from a saved revision instead, choose the saved preset in the same dialog.
 
 ## Duplicate
 
@@ -130,4 +134,4 @@ IRs, set-list order and MIDI mappings as a tar archive. Backups include a
 `chord-sheets.json` member when a sheet registry exists. TONE3000 account tokens,
 control-audit records and monitor history are excluded. Sign in again when
 setting up another device. The Library tar is a download. Use the separate
-[chord-sheet JSON restore](media.md#chord-sheets) to restore sheets and their links.
+[chord-sheet JSON restore](media.md#chord-sheets) to restore sheets and their links. **Settings → Maintenance → Open Songbook** also opens that workflow.

@@ -28,11 +28,7 @@ export function playingPresetCaption(name: string) {
 const starts = (playing: string) =>
   [
     ['empty', 'Empty', 'Input straight to output; add blocks from there'],
-    [
-      'copy',
-      'A copy of what is playing',
-      playingPresetCaption(playing),
-    ],
+    ['copy', 'A copy of what is playing', playingPresetCaption(playing)],
     ['oxidal', 'An Oxidal sound', 'Finished presets that come with Oxidal'],
     ['tone3000', 'A TONE3000 tone', 'A capture you have, with a cab after it'],
   ] as const;
