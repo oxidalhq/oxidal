@@ -423,6 +423,19 @@ async fn prepared_song_mixes_save_reopen_cue_and_export_both_stem_counts() {
         independent["entries"][1]["entry"]["settings"]["mix"],
         alternate["id"]
     );
+    let (status, reordered) = json_request(
+        &app,
+        "POST",
+        order_path,
+        json!({
+            "expected_revision":independent["revision"],"entry":"encore",
+            "action":{"kind":"place","before":slot["id"]}
+        }),
+    )
+    .await;
+    assert_eq!(status, 200, "{reordered}");
+    assert_eq!(reordered["entries"][0], independent["entries"][1]);
+    assert_eq!(reordered["entries"][1], independent["entries"][0]);
     let sheet_path = format!("/media/sheets/{sheet_id}");
     let (status, refs) = json_request(
         &app,
@@ -434,7 +447,7 @@ async fn prepared_song_mixes_save_reopen_cue_and_export_both_stem_counts() {
     assert_eq!(status, 200, "{refs}");
     assert_eq!(
         refs["set_entries"],
-        json!([{"id":"encore","name":independent["entries"][1]["name"],"position":2}])
+        json!([{"id":"encore","name":reordered["entries"][0]["name"],"position":1}])
     );
     let (status, _) = json_request(
         &app,
@@ -452,10 +465,10 @@ async fn prepared_song_mixes_save_reopen_cue_and_export_both_stem_counts() {
     let (status, report) =
         json_request(&app, "GET", "/presets/set-list/rehearsal", Value::Null).await;
     assert_eq!(status, 200, "{report}");
-    assert_eq!(report["revision"], independent["revision"]);
+    assert_eq!(report["revision"], reordered["revision"]);
     assert_eq!(report["entries"].as_array().unwrap().len(), 2);
     for (index, entry) in report["entries"].as_array().unwrap().iter().enumerate() {
-        assert_eq!(entry["id"], independent["entries"][index]["entry"]["id"]);
+        assert_eq!(entry["id"], reordered["entries"][index]["entry"]["id"]);
         assert_eq!(entry["status"], "blocked"); // No interface has been configured.
         assert_eq!(entry["accompaniment"], json!([]));
     }
@@ -464,7 +477,7 @@ async fn prepared_song_mixes_save_reopen_cue_and_export_both_stem_counts() {
         json_request(&app, "GET", "/rig-audio", Value::Null).await.1
     );
     assert_eq!(
-        independent,
+        reordered,
         json_request(&app, "GET", order_path, Value::Null).await.1
     );
     body["replace"] = json!({"id":old["id"],"revision":old["revision"]});
@@ -625,7 +638,7 @@ async fn prepared_song_mixes_save_reopen_cue_and_export_both_stem_counts() {
     drop(app);
     app = router(config.clone()).unwrap();
     let (_, restored_order) = json_request(&app, "GET", order_path, Value::Null).await;
-    assert_eq!(restored_order["entries"], independent["entries"]);
+    assert_eq!(restored_order, reordered);
     let (_, restored) = json_request(&app, "GET", "/player", Value::Null).await;
     assert_eq!(restored["track"]["id"], asset);
     assert_eq!(restored["stems"]["split"], "01JD2W8T3N8M4K6V0P7Q9R1S2V");

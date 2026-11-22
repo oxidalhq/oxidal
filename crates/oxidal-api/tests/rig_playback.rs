@@ -1636,25 +1636,29 @@ async fn repeated_set_entry_confirms_its_scene_before_replacing_the_playing_rig(
     );
     let cold_bad = save("68448a6d-0168-4fc8-b337-c12959165274", "Cold refusal", 2);
     let cold_ok = save("68448a6d-0168-4fc8-b337-c12959165275", "Cold success", 1);
-    let (shutdown, signal) = tokio::sync::watch::channel(false);
-    let (app, stopped) = router_with_shutdown(Config {
-        debug_socket: None,
-        device_socket: None,
-        simulator: false,
-        native_worker: None,
-        audio_worker: None,
-        graph_worker: None,
-        rig_worker: Some(executable.clone()),
-        mapping_path: root.join("mapping.json"),
-        preset_dir: root.join("presets"),
-        media_dir: None,
-        ui_dir: root.join("ui"),
-        shutdown: Some(signal),
-    })
-    .unwrap();
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
-    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let boot = || async {
+        let (shutdown, signal) = tokio::sync::watch::channel(false);
+        let (app, stopped) = router_with_shutdown(Config {
+            debug_socket: None,
+            device_socket: None,
+            simulator: false,
+            native_worker: None,
+            audio_worker: None,
+            graph_worker: None,
+            rig_worker: Some(executable.clone()),
+            mapping_path: root.join("mapping.json"),
+            preset_dir: root.join("presets"),
+            media_dir: None,
+            ui_dir: root.join("ui"),
+            shutdown: Some(signal),
+        })
+        .unwrap();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        (url, shutdown, stopped, server)
+    };
+    let (url, shutdown, stopped, server) = boot().await;
     let c = Client::builder()
         .timeout(Duration::from_secs(35))
         .build()
@@ -1703,8 +1707,8 @@ async fn repeated_set_entry_confirms_its_scene_before_replacing_the_playing_rig(
     );
     order = response.json().await.unwrap();
     for (id, scene) in [
-        (&*first, "b"),
-        ("repeat", "a"),
+        (&*first, "a"),
+        ("repeat", "b"),
         (&*bad_id, "b"),
         (&*cold_bad_id, "b"),
         (&*cold_ok_id, "b"),
@@ -1719,15 +1723,20 @@ async fn repeated_set_entry_confirms_its_scene_before_replacing_the_playing_rig(
         );
         order = response.json().await.unwrap();
     }
-    // Membership order is independent of fixture publication. Put the
-    // deliberately failing entry right after the repeated occurrence.
+    // Move the encore before its original occurrence, retaining each scene.
+    let response = write("presets/set-list".into(), json!({
+        "expected_revision":order["revision"],"entry":"repeat","action":{"kind":"place","before":first}
+    })).await.unwrap().error_for_status().unwrap();
+    order = response.json().await.unwrap();
+    // Put the deliberately failing entry immediately after the original.
     let entries = order["entries"].as_array().unwrap();
-    let repeat_index = entries
+    let original_index = entries
         .iter()
-        .position(|row| row["entry"]["id"] == "repeat")
+        .position(|row| row["entry"]["id"] == first)
         .unwrap();
+    assert_eq!(entries[original_index - 1]["entry"]["id"], "repeat");
     let successor = entries
-        .get(repeat_index + 1)
+        .get(original_index + 1)
         .and_then(|row| row["entry"]["id"].as_str());
     if successor != Some(bad_id.as_str()) {
         let response = write(
@@ -1746,6 +1755,13 @@ async fn repeated_set_entry_confirms_its_scene_before_replacing_the_playing_rig(
         );
         order = response.json().await.unwrap();
     }
+    shutdown.send_replace(true);
+    stopped.wait().await.unwrap();
+    server.abort();
+    let _ = server.await;
+    let (url, shutdown, stopped, server) = boot().await;
+    assert_eq!(get(&c, &url, "presets/set-list").await, order);
+    let write = |path: String, body: Value| c.post(format!("{url}/{path}")).json(&body).send();
     apply(
         &c,
         &url,
@@ -1776,7 +1792,7 @@ async fn repeated_set_entry_confirms_its_scene_before_replacing_the_playing_rig(
             json!({"expected_revision":order["revision"]}),
         )
     };
-    let response = jump(&first).await.unwrap();
+    let response = jump("repeat").await.unwrap();
     assert_eq!(response.status(), 204, "{}", response.text().await.unwrap());
     let first_state = get(&c, &url, "rig-audio").await;
     assert_eq!(first_state["configured"]["revision"], prepared);
@@ -1846,7 +1862,7 @@ async fn repeated_set_entry_confirms_its_scene_before_replacing_the_playing_rig(
         assert_eq!(pids(&executable), previous_pid);
         assert_eq!(
             get(&c, &url, "midi/position").await["occurrence"]["entry"]["id"],
-            "repeat"
+            first
         );
     }
     let response = write("midi/navigate".into(), json!({"direction":"next"}))
@@ -1855,7 +1871,7 @@ async fn repeated_set_entry_confirms_its_scene_before_replacing_the_playing_rig(
     assert_eq!(response.status(), 409, "{}", response.text().await.unwrap());
     assert_eq!(
         get(&c, &url, "midi/position").await["occurrence"]["entry"]["id"],
-        "repeat"
+        first
     );
     let response = jump(&cold_ok_id).await.unwrap();
     assert_eq!(response.status(), 204, "{}", response.text().await.unwrap());
