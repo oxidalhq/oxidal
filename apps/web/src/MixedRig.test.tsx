@@ -427,23 +427,23 @@ it('hides the old Rig chain behind a loader while a preset prepares', async () =
 });
 it('groups native controls in hybrid rigs and toggles booleans without a slider', async () => {
   const state = setup();
-  await screen.findByRole('button', { name: 'Adjust Output' });
+  await screen.findByRole('button', { name: /^Adjust\s*Output/ });
   expect(
-    screen.queryByRole('button', { name: 'Adjust Pitch' }),
+    screen.queryByRole('button', { name: /^Adjust\s*Pitch/ }),
   ).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Pitch' }));
   expect(
-    screen.getByRole('button', { name: 'Adjust Pitch' }),
+    screen.getByRole('button', { name: /^Adjust\s*Pitch/ }),
   ).toHaveTextContent('-12 st');
   expect(
-    screen.queryByRole('button', { name: 'Adjust Output' }),
+    screen.queryByRole('button', { name: /^Adjust\s*Output/ }),
   ).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Stereo' }));
   expect(
-    screen.getByRole('button', { name: 'Adjust Alignment offset' }),
+    screen.getByRole('button', { name: /^Adjust\s*Alignment offset/ }),
   ).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Gate' }));
-  const toggle = screen.getByRole('button', { name: 'Adjust Gate enabled' });
+  const toggle = screen.getByRole('button', { name: /^Adjust\s*Gate enabled/ });
   expect(toggle).toHaveAttribute('aria-pressed', 'false');
   fireEvent.click(toggle);
   await waitFor(() =>
@@ -876,7 +876,9 @@ it('copies a read-only example on its first confirmed control edit', async () =>
     copied as Awaited<ReturnType<typeof rigAudioState>>,
   );
   fireEvent.click(await screen.findByRole('button', { name: 'Gate' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Adjust Gate enabled' }));
+  fireEvent.click(
+    screen.getByRole('button', { name: /^Adjust\s*Gate enabled/ }),
+  );
   expect(await screen.findByText('Editing a copy of Test rig')).toBeVisible();
   expect(rigAudioCommand).toHaveBeenNthCalledWith(2, edited, {
     kind: 'save',
