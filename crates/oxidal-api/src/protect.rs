@@ -168,45 +168,9 @@ pub(super) async fn update(
     };
     // Finish even if the browser loses its reply. Exclusive access drains existing
     // owner commands and prevents a start/configuration race with worker acknowledgement.
-    let result = tokio::spawn(async move {
-        let _access = shared.library_access.clone().write_owned().await;
-        if [
-            shared.playback.snapshot().phase,
-            shared.rig_playback.snapshot().phase,
-        ]
-        .contains(&AudioPhase::Starting)
-        {
-            return Err("Wait for audio preparation before changing Protect".to_owned());
-        }
-        let previous = shared.protect.on();
-        if request.on {
-            // Lock the daemon before workers; an acknowledgement failure stays locked.
-            shared.protect.set(true)?;
-        }
-        let acknowledged = async {
-            shared.playback.set_protect(request.on).await?;
-            shared.rig_playback.set_protect(request.on).await
-        }
-        .await;
-        if let Err(error) = acknowledged {
-            if !request.on {
-                let _ = shared.playback.set_protect(previous).await;
-                let _ = shared.rig_playback.set_protect(previous).await;
-            }
-            return Err(error);
-        }
-        if !request.on
-            && let Err(error) = shared.protect.set(false)
-        {
-            // A failed unlock must restore the still-persisted lock at MIDI ingress.
-            let _ = shared.playback.set_protect(previous).await;
-            let _ = shared.rig_playback.set_protect(previous).await;
-            return Err(error);
-        }
-        Ok(shared.protect.state())
-    })
-    .await
-    .unwrap_or_else(|_| Err("Protect update interrupted; refresh its state".into()));
+    let result = tokio::spawn(async move { change(&shared, Some(request.on)).await })
+        .await
+        .unwrap_or_else(|_| Err("Protect update interrupted; refresh its state".into()));
     match result {
         Ok(state) => Json(state).into_response(),
         Err(e) => failure(
@@ -214,6 +178,44 @@ pub(super) async fn update(
             &format!("Protect could not be saved: {e}"),
         ),
     }
+}
+
+/// A MIDI toggle reads the old value while holding the same exclusive lock as the web control.
+pub(crate) async fn change(shared: &Shared, desired: Option<bool>) -> Result<ProtectState, String> {
+    let _access = shared.library_access.clone().write_owned().await;
+    if [
+        shared.playback.snapshot().phase,
+        shared.rig_playback.snapshot().phase,
+    ]
+    .contains(&AudioPhase::Starting)
+    {
+        return Err("Wait for audio preparation before changing Protect".to_owned());
+    }
+    let previous = shared.protect.on();
+    let on = desired.unwrap_or(!previous);
+    if on {
+        // Lock the daemon before workers; an acknowledgement failure stays locked.
+        shared.protect.set(true)?;
+    }
+    let acknowledged = async {
+        shared.playback.set_protect(on).await?;
+        shared.rig_playback.set_protect(on).await
+    }
+    .await;
+    if let Err(error) = acknowledged {
+        if !on {
+            let _ = shared.playback.set_protect(previous).await;
+            let _ = shared.rig_playback.set_protect(previous).await;
+        }
+        return Err(error);
+    }
+    if !on && let Err(error) = shared.protect.set(false) {
+        // A failed unlock must restore the still-persisted lock at MIDI ingress.
+        let _ = shared.playback.set_protect(previous).await;
+        let _ = shared.rig_playback.set_protect(previous).await;
+        return Err(error);
+    }
+    Ok(shared.protect.state())
 }
 
 #[cfg(test)]

@@ -25,6 +25,7 @@ export type Layout = {
     mute?: Trigger | null;
     tuner?: Trigger | null;
     boost?: Trigger | null;
+    protect?: Trigger | null;
   } | null;
   switches: SwitchRow[];
   /** A message to press and expect, used by the passive message check. */
@@ -274,6 +275,7 @@ export function savedToLayout(saved: SavedLayout): Layout {
       mute: saved.navigation?.mute ?? null,
       tuner: saved.navigation?.tuner ?? null,
       boost: saved.navigation?.boost ?? null,
+      protect: saved.navigation?.protect ?? null,
     },
     switches: [],
     check: { press: '' },
@@ -294,6 +296,7 @@ export function describeSaved(saved: SavedLayout): string {
     ['Next', nav?.next],
     ['Mute', nav?.mute],
     ['Boost', nav?.boost],
+    ['Protect', nav?.protect],
   ] as const)
     if (trigger) parts.push(`${label} ${numberOf(trigger)}`);
   return parts.join(' · ') || 'No template or triggers';

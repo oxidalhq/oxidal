@@ -4,7 +4,14 @@ import type { MidiMap } from './api';
 
 type Navigation = NonNullable<MidiMap['navigation']>;
 export type NavigationKey =
-  'previous' | 'next' | 'mute' | 'tuner' | 'guitar' | 'tap' | 'boost';
+  | 'previous'
+  | 'next'
+  | 'mute'
+  | 'tuner'
+  | 'guitar'
+  | 'tap'
+  | 'boost'
+  | 'protect';
 type Trigger = NonNullable<Navigation['previous']>;
 
 const rows: [NavigationKey, string][] = [
@@ -15,6 +22,7 @@ const rows: [NavigationKey, string][] = [
   ['guitar', 'Next guitar'],
   ['tap', 'Tap tempo'],
   ['boost', 'Temporary boost'],
+  ['protect', 'Protect'],
 ];
 
 /** Shows both the friendly and the raw MIDI number so neither is guessed. */

@@ -9467,6 +9467,17 @@
             }
           ]
         },
+        "protect": {
+          "description": "Toggle the device performance lock.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Trigger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tap": {
           "description": "A device-stamped performance tempo tap.",
           "anyOf": [

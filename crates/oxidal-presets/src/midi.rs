@@ -285,6 +285,9 @@ pub struct Navigation {
     /// Toggle the temporary instrument boost.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub boost: Option<Trigger>,
+    /// Toggle the device performance lock.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub protect: Option<Trigger>,
     /// Backing-track player switches and level knob.
     #[serde(default, skip_serializing_if = "BackingTriggers::is_empty")]
     pub backing: BackingTriggers,
@@ -342,6 +345,7 @@ pub enum DeviceAction {
     GuitarNext,
     TapTempo,
     BoostToggle,
+    ProtectToggle,
     BackingPlayPause,
     BackingStop,
     BackingNext,
@@ -363,6 +367,7 @@ impl Navigation {
             && self.guitar.is_none()
             && self.tap.is_none()
             && self.boost.is_none()
+            && self.protect.is_none()
             && self.backing.is_empty()
     }
 
@@ -382,6 +387,8 @@ impl Navigation {
             Some(DeviceAction::TapTempo)
         } else if self.boost.is_some_and(|t| t.matches(message)) {
             Some(DeviceAction::BoostToggle)
+        } else if self.protect.is_some_and(|t| t.matches(message)) {
+            Some(DeviceAction::ProtectToggle)
         } else {
             self.backing_action(message)
         }
@@ -421,6 +428,7 @@ impl Navigation {
             self.guitar,
             self.tap,
             self.boost,
+            self.protect,
         ]
         .into_iter()
         .chain(self.backing.triggers())
@@ -1588,6 +1596,7 @@ mod tests {
             guitar: None,
             tap: None,
             boost: None,
+            protect: None,
         };
         let saved = store
             .replace(update(nav, vec![], &initial.revision))
@@ -1605,6 +1614,7 @@ mod tests {
                 guitar: None,
                 tap: None,
                 boost: None,
+                protect: None,
             },
             // Mute may not reuse Previous either.
             Navigation {
@@ -1616,6 +1626,7 @@ mod tests {
                 guitar: None,
                 tap: None,
                 boost: None,
+                protect: None,
             },
             Navigation {
                 previous: Some(Trigger {
@@ -1629,6 +1640,7 @@ mod tests {
                 guitar: None,
                 tap: None,
                 boost: None,
+                protect: None,
             },
             Navigation {
                 previous: Some(Trigger {
@@ -1642,6 +1654,7 @@ mod tests {
                 guitar: None,
                 tap: None,
                 boost: None,
+                protect: None,
             },
         ] {
             assert!(matches!(
@@ -1791,6 +1804,7 @@ mod tests {
                 guitar: None,
                 tap: None,
                 boost: None,
+                protect: None,
             },
         };
         let update = |layouts: Vec<SavedLayout>, revision: &str| MidiMapUpdate {
@@ -2107,6 +2121,7 @@ mod tests {
             (26, DeviceAction::TunerOpen),
             (27, DeviceAction::TapTempo),
             (28, DeviceAction::BoostToggle),
+            (29, DeviceAction::ProtectToggle),
             (80, DeviceAction::BackingPlayPause),
             (81, DeviceAction::BackingStop),
             (82, DeviceAction::BackingPrevious),

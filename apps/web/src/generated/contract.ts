@@ -3033,6 +3033,10 @@ export interface Navigation {
   next?: Trigger | null;
   previous?: Trigger | null;
   /**
+   * Toggle the device performance lock.
+   */
+  protect?: Trigger | null;
+  /**
    * A device-stamped performance tempo tap.
    */
   tap?: Trigger | null;

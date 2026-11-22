@@ -16,6 +16,7 @@ const device = {
   tuner: 'stage:tuner',
   tap: 'stage:tap',
   boost: 'stage:boost',
+  protect: 'stage:protect',
 } as const;
 const player = {
   play_pause: 'player:play',
@@ -121,9 +122,9 @@ export function MidiDefaults({
         ))}
       </ul>
       <p>
-        Output level, expression, Protect, player loop and click, and sheet
-        scroll and speed have no device-wide MIDI default. Block bypass and
-        branch switches need a target in each preset.
+        Output level, expression, player loop and click, and sheet scroll and
+        speed have no device-wide MIDI default. Block bypass and branch switches
+        need a target in each preset.
       </p>
       {conflicts.length > 0 && (
         <p role="alert">

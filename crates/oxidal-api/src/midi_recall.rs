@@ -121,6 +121,18 @@ pub(crate) fn start(shared: Weak<Shared>, mut events: mpsc::Receiver<Event>) {
                     DeviceAction::Previous => navigate_recorded(&shared, -1).await.ok(),
                     DeviceAction::Next => navigate_recorded(&shared, 1).await.ok(),
                     DeviceAction::MuteToggle => toggle_mute(&shared).await.ok(),
+                    DeviceAction::ProtectToggle => {
+                        let result = crate::protect::change(&shared, None).await.map(|state| {
+                            if state.on {
+                                "Protect on"
+                            } else {
+                                "Protect off"
+                            }
+                            .to_owned()
+                        });
+                        record(&shared, &result);
+                        result.ok()
+                    }
                     DeviceAction::BoostToggle => toggle_boost(&shared).await.ok(),
                     DeviceAction::TunerOpen => {
                         let result = Ok("Tuner requested".to_owned());

@@ -24,6 +24,10 @@
       "program": null,
       "controller": 28
     },
+    "protect": {
+      "program": null,
+      "controller": 29
+    },
     "backing": {
       "play_pause": {
         "program": null,

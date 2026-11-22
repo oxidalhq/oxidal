@@ -517,6 +517,7 @@ it.each([
   ['Tuner', 'tuner'],
   ['Tap tempo', 'tap'],
   ['Temporary boost', 'boost'],
+  ['Protect', 'protect'],
 ])('learns a global %s trigger', async (label, key) => {
   arrange();
   const view = render(
@@ -838,6 +839,7 @@ it('reviews and explicitly resets supported defaults without replacing preset ma
         tuner: trigger(26),
         tap: trigger(27),
         boost: trigger(28),
+        protect: trigger(29),
         mute: { controller: 40 },
         backing: {
           play_pause: trigger(80),

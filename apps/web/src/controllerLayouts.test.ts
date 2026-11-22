@@ -104,6 +104,7 @@ it('saves the current template and triggers under a unique readable id', async (
     next: { program: 3, controller: null },
     mute: null,
     boost: null,
+    protect: null,
     tuner: null,
   });
 });
