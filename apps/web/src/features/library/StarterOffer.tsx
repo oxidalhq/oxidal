@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import {
+  Card,
+  CardFooter,
+  CardTitle,
+} from '@oxidal/design-system/components/card';
 
-import './StarterOffer.css';
 import { libraryCatalog } from '../../api';
 import { friendlyError } from '../../lib/friendlyError';
 import { effectsOnlyNeeds } from './oxidal/finish';
@@ -82,9 +86,12 @@ export function StarterOffer({
       </p>
     ) : null;
   return (
-    <div className="starter-offer" role="region" aria-label="Starter set list">
+    <Card
+      className="my-3 flex flex-wrap items-center gap-3"
+      aria-label="Starter set list"
+    >
       <div className="min-w-0 grow basis-72">
-        <strong>Start with a set list?</strong>
+        <CardTitle>Start with a set list?</CardTitle>
         <p className="caption">
           Nine Oxidal sounds, one per core genre, in a playable order.{' '}
           {packs.length
@@ -93,7 +100,7 @@ export function StarterOffer({
         </p>
         {blocked && <p className="caption">{blocked}</p>}
       </div>
-      <div className="action-row flex-wrap">
+      <CardFooter>
         <Button
           disabled={busy || !connected || !!blocked}
           onClick={() => void answer(true)}
@@ -109,12 +116,12 @@ export function StarterOffer({
         >
           Not now
         </Button>
-      </div>
+      </CardFooter>
       {message && (
         <p className="caption" role="status">
           {message}
         </p>
       )}
-    </div>
+    </Card>
   );
 }

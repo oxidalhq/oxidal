@@ -10,19 +10,18 @@ import {
   CardTitle,
 } from '@oxidal/design-system/components/card';
 import { DialogFooter } from '@oxidal/design-system/components/dialog';
+import { ListRow } from '@oxidal/design-system/components/list-row';
 import { NumberField } from '@oxidal/design-system/components/number-field';
 import { StateNotice } from '@oxidal/design-system/components/states';
 import { GuitarWorkspace } from '@oxidal/design-system/patterns/guitar-workspace';
 import { Meter } from '@oxidal/design-system/widgets/meter';
 
 import './MasterLevel.css';
-import './GuitarSettings.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { boosts, type GuitarProfiles } from './api';
 import { CaptureListening } from './CaptureListening';
 import { guitarVerificationDetail } from './guitarVerification';
 import { useMonitorReadings } from './monitorFeed';
-import { ToolRow, ToolSection } from './ToolRow';
 import { gateFor, useGuitars } from './useGuitars';
 
 type Guitar = GuitarProfiles['guitars'][number];
@@ -262,12 +261,13 @@ export function GuitarSettings() {
           </CardFooter>
         )}
       </Card>
-      <ToolSection
-        title="Calibration"
-        scope="This unit · kept across presets, not saved in them"
-        label="Guitar profiles"
-        className="guitar-profiles"
-      >
+      <Card aria-label="Guitar profiles">
+        <CardHeader>
+          <CardTitle>Calibration</CardTitle>
+          <span className="text-sm text-muted-foreground">
+            This unit · kept across presets, not saved in them
+          </span>
+        </CardHeader>
         <p className="caption">
           Choose the guitar you are holding. Its trim and gate apply immediately
           to every rig, and Levels follows the selected profile automatically —
@@ -288,52 +288,51 @@ export function GuitarSettings() {
                 ? `Noise ${dbfs(g.noise_dbfs)} · gate off.`
                 : `Noise ${dbfs(g.noise_dbfs)} · gate opens at ${dbfs(gate)}.`;
           return (
-            <ToolRow
-              key={g.id}
-              title={g.name}
-              value={
-                <span className="guitar-profile-value">
-                  {active && <Badge data-state="playing">Playing</Badge>}
-                  {profiles.reference === g.id && (
-                    <Badge>Level reference</Badge>
-                  )}
-                  <span>Trim {db(g.trim_db ?? 0)}</span>
+            <ListRow key={g.id} title={g.name} className="gap-y-2">
+              <div className="col-span-full flex flex-wrap items-center gap-2">
+                {active && <Badge tone="live">Playing</Badge>}
+                {profiles.reference === g.id && <Badge>Level reference</Badge>}
+                <span className="font-mono text-sm whitespace-nowrap tabular-nums">
+                  Trim {db(g.trim_db ?? 0)}
                 </span>
-              }
-              detail={`${strum} ${noise} ${guitarVerificationDetail(g)}`}
-            >
-              {!active && (
+              </div>
+              <p className="col-span-full text-sm text-muted-foreground">
+                {strum} {noise} {guitarVerificationDetail(g)}
+              </p>
+              <div className="col-span-full flex flex-wrap items-center gap-2">
+                {!active && (
+                  <Button
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => edit({ active: g.id })}
+                  >
+                    Use guitar
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   disabled={busy}
-                  onClick={() => edit({ active: g.id })}
+                  onClick={() => setEditing({ id: g.id, kind: 'trim' })}
                 >
-                  Use guitar
+                  Trim
                 </Button>
-              )}
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={() => setEditing({ id: g.id, kind: 'trim' })}
-              >
-                Trim
-              </Button>
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={() => setEditing({ id: g.id, kind: 'gate' })}
-              >
-                Gate
-              </Button>
-              <Button
-                variant="outline"
-                disabled={busy}
-                aria-label={`Manage ${g.name}`}
-                onClick={() => setManaging(g.id)}
-              >
-                Manage
-              </Button>
-            </ToolRow>
+                <Button
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => setEditing({ id: g.id, kind: 'gate' })}
+                >
+                  Gate
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={busy}
+                  aria-label={`Manage ${g.name}`}
+                  onClick={() => setManaging(g.id)}
+                >
+                  Manage
+                </Button>
+              </div>
+            </ListRow>
           );
         })}
         {note && !editing && <p role="status">{note}</p>}
@@ -609,7 +608,7 @@ export function GuitarSettings() {
               </AdjustmentDialog>
             );
           })()}
-      </ToolSection>
+      </Card>
       <CaptureListening
         appliedTrim={
           profiles.guitars.find((guitar) => guitar.id === profiles.active)
