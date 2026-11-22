@@ -55,7 +55,9 @@ export function StemMixer({
 }) {
   return (
     <ul
-      className={slow ? 'stem-mixer' : 'flex gap-3 overflow-x-auto px-1 pb-1'}
+      className={
+        slow ? 'grid min-w-0 gap-3' : 'flex gap-3 overflow-x-auto px-1 pb-1'
+      }
       aria-label="Stem controls"
       data-slot={slow ? undefined : 'stem-mixer'}
     >
@@ -107,18 +109,24 @@ function StemRow({
     });
   return (
     <li
-      className={slow ? 'stem-row' : 'grid shrink-0 justify-items-center gap-1'}
+      className={
+        slow
+          ? 'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-t border-border py-2 first:border-0 data-[silent]:text-muted-foreground sm:grid-cols-[minmax(4.5rem,1fr)_auto_minmax(6rem,1fr)_auto]'
+          : 'grid shrink-0 justify-items-center gap-1'
+      }
       data-silent={!heard || undefined}
       data-download={download ? '' : undefined}
     >
       {slow ? (
         <>
-          <span className="stem-row-name">{label}</span>
-          <div className="stem-row-toggles">
+          <span className="min-w-0 text-sm font-semibold break-words">
+            {label}
+          </span>
+          <div className="flex min-w-0 flex-wrap items-center gap-1">
             <Button
               variant="outline"
               size="icon"
-              className="stem-toggle"
+              className="min-h-touch"
               aria-label={`Mute ${label}`}
               aria-pressed={settings.muted}
               title={`Mute ${label}`}
@@ -130,7 +138,7 @@ function StemRow({
             <Button
               variant="outline"
               size="icon"
-              className="stem-toggle"
+              className="min-h-touch"
               aria-label={`Solo ${label}`}
               aria-pressed={settings.solo}
               title={`Solo ${label}`}
@@ -140,7 +148,7 @@ function StemRow({
               S
             </Button>
           </div>
-          <div className="stem-row-steps">
+          <div className="flex min-w-0 flex-wrap items-center gap-1">
             <Button
               variant="outline"
               size="icon"
@@ -185,7 +193,7 @@ function StemRow({
       )}
       <button
         type="button"
-        className="stem-row-gain media-mono"
+        className="inline-flex min-h-touch items-center justify-center rounded-md px-2 font-mono text-sm whitespace-nowrap tabular-nums focus-visible:outline-2 disabled:opacity-50"
         aria-label={`${label} ${formatGain(gain)}. Reset to 0 dB`}
         title="Reset to 0 dB"
         disabled={disabled || gain === 0}
@@ -285,8 +293,11 @@ function LiveStemsBody({
   }
 
   return (
-    <section className="practice" aria-labelledby="live-stems-title">
-      <div className="stem-section-head">
+    <section
+      className="grid min-w-0 content-start gap-3"
+      aria-labelledby="live-stems-title"
+    >
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 [&>h2]:m-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold">
         <h3 id="live-stems-title">
           <Faders aria-hidden="true" /> Stems
         </h3>
@@ -300,7 +311,7 @@ function LiveStemsBody({
         onChange={(next) => change(next)}
         onCommit={() => {}}
       />
-      <div className="stem-save">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         <Button
           variant="ghost"
           disabled={!changed}
@@ -308,7 +319,7 @@ function LiveStemsBody({
         >
           Reset
         </Button>
-        <span className="stem-save-spacer" role="status">
+        <span className="flex-1" role="status">
           {state || (changed ? 'Not saved' : '')}
         </span>
         <Button

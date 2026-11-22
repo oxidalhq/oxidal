@@ -162,6 +162,11 @@ test('backing tracks import an MP3 through the device and play needs running aud
 test('backing mini-player stays on every page and opens the full player', async ({
   page,
 }, testInfo) => {
+  const duplicateKeys: string[] = [];
+  page.on('console', (entry) => {
+    if (entry.type() === 'error' && entry.text().includes('same key'))
+      duplicateKeys.push(entry.text());
+  });
   const list = await importFixture(page);
   await list
     .getByRole('listitem', { name: title })
@@ -213,6 +218,28 @@ test('backing mini-player stays on every page and opens the full player', async 
     .click();
   const sheet = page.getByRole('dialog', { name: 'Backing player' });
   await expect(sheet).toBeVisible();
+  for (const viewport of [
+    original,
+    { width: original.height, height: original.width },
+  ]) {
+    await page.setViewportSize(viewport);
+    if (viewport.width < 600 || viewport.width >= 1024) {
+      await expect
+        .poll(async () => {
+          const box = await sheet.boundingBox();
+          return (
+            !!box &&
+            Math.abs(box.y) < 2 &&
+            Math.abs(box.height - viewport.height) < 2 &&
+            Math.abs(box.x + box.width - viewport.width) < 2
+          );
+        })
+        .toBe(true);
+    }
+  }
+  await page.setViewportSize(original);
+  expect(duplicateKeys).toEqual([]);
+
   const note = sheet.getByRole('combobox', { name: 'Echo repeats per tap' });
   await expect(note).toHaveText('Preset division');
   await note.click();

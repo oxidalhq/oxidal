@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 
-import { type MenuItem,RowMenu } from '../RowMenu';
+import { ListRow } from '@oxidal/design-system/components/list-row';
+
+import { type MenuItem, RowMenu } from '../RowMenu';
 
 /**
  * One session-media file in a list: number, name with its state, a detail
@@ -26,19 +28,28 @@ export function MediaRow({
   menu?: MenuItem[];
 }) {
   return (
-    <li className="media-row" data-cued={cued || undefined} aria-label={name}>
-      <span className="media-row-num">{num}</span>
-      <div className="media-row-main">
-        <span className="media-row-name">
-          {name}
-          {state}
-        </span>
-        <span className="media-row-sub">{sub}</span>
-      </div>
-      <div className="media-row-actions">
-        {actions}
-        {menu && <RowMenu name={name} items={menu} variant="outline" />}
-      </div>
+    <li aria-label={name}>
+      <ListRow
+        data-cued={cued || undefined}
+        className="gap-y-1 data-[cued]:bg-secondary max-[599px]:grid-cols-[auto_minmax(0,1fr)] max-[599px]:[&>span:last-child]:col-start-2 max-[599px]:[&>span:last-child]:flex-wrap"
+        leading={
+          <span className="font-mono text-xs text-muted-foreground tabular-nums">
+            {num}
+          </span>
+        }
+        title={
+          <>
+            {name} {state}
+          </>
+        }
+        caption={sub}
+        trailing={
+          <>
+            {actions}
+            {menu && <RowMenu name={name} items={menu} variant="outline" />}
+          </>
+        }
+      />
     </li>
   );
 }

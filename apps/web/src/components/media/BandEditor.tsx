@@ -35,9 +35,13 @@ function StepField({
   onStep: (direction: -1 | 1) => void;
 }) {
   return (
-    <div className="venue-field">
+    <div className="grid min-w-0 gap-1 [&>span]:text-sm [&>span]:font-semibold">
       <span>{label}</span>
-      <div className="venue-step" role="group" aria-label={label}>
+      <div
+        className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center rounded-md border border-border bg-card [&>output]:min-w-0 [&>output]:overflow-hidden [&>output]:text-center [&>output]:font-mono [&>output]:tabular-nums"
+        role="group"
+        aria-label={label}
+      >
         <Button
           variant="ghost"
           size="icon"
@@ -94,7 +98,11 @@ export function BandEditor({
   const pass = isPass(selected);
   return (
     <>
-      <div className="venue-bands" role="group" aria-label="Bands">
+      <div
+        className="grid min-w-0 grid-cols-7 gap-1 [&_small]:text-[0.625rem] [&_small]:whitespace-nowrap [&>button]:flex-col [&>button]:gap-0 [&>button]:px-0 [&>button]:py-1 [&>button[aria-pressed=true]]:bg-primary [&>button[aria-pressed=true]]:text-primary-foreground [&>button[data-off]]:border-dashed"
+        role="group"
+        aria-label="Bands"
+      >
         {eq.bands.map((item, index) => (
           <Button
             key={BANDS[index]!.short}
@@ -106,8 +114,10 @@ export function BandEditor({
             {BANDS[index]!.short}
             {item.enabled ? (
               <small>
-                <span className="venue-hz-long">{formatHz(item.freqHz)}</span>
-                <span className="venue-hz-short">
+                <span className="max-[599px]:hidden">
+                  {formatHz(item.freqHz)}
+                </span>
+                <span className="min-[600px]:hidden">
                   {formatHzShort(item.freqHz)}
                 </span>
               </small>
@@ -119,11 +129,11 @@ export function BandEditor({
         ))}
       </div>
       <div
-        className="venue-fields"
+        className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,10.5rem),1fr))] items-end gap-3"
         aria-label={`${info.name} settings`}
         role="group"
       >
-        <div className="venue-field">
+        <div className="grid min-w-0 gap-1 [&>span]:text-sm [&>span]:font-semibold">
           <span>{info.name}</span>
           <Button
             variant={band.enabled ? 'default' : 'outline'}
@@ -147,9 +157,13 @@ export function BandEditor({
           }
         />
         {pass ? (
-          <div className="venue-field">
+          <div className="grid min-w-0 gap-1 [&>span]:text-sm [&>span]:font-semibold">
             <span>Slope</span>
-            <div className="venue-slope" role="group" aria-label="Slope">
+            <div
+              className="flex flex-wrap [&>button]:flex-1 [&>button[aria-pressed=true]]:bg-primary [&>button[aria-pressed=true]]:text-primary-foreground"
+              role="group"
+              aria-label="Slope"
+            >
               {[false, true].map((steep) => (
                 <Button
                   key={String(steep)}
@@ -213,7 +227,7 @@ export function BandEditor({
           />
         )}
       </div>
-      <div className="venue-fields">
+      <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,10.5rem),1fr))] items-end gap-3">
         <StepField
           label="Output trim"
           value={formatDb(eq.trimDb)}

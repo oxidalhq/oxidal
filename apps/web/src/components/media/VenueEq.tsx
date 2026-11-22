@@ -11,6 +11,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 
+import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
 import {
   Select,
@@ -22,8 +23,6 @@ import {
   SelectValue,
 } from '@oxidal/design-system/components/select';
 
-import './media.css';
-import './venue.css';
 import {
   keepVenuePreview,
   type VenueCommand,
@@ -430,14 +429,20 @@ function VenueView({ owner }: { owner: Owner }) {
   } = owner;
   if (loadError && !venue)
     return (
-      <section className="panel control-stack venue" aria-labelledby={titleId}>
+      <section
+        className="panel control-stack grid min-w-0 gap-4"
+        aria-labelledby={titleId}
+      >
         <h2 id={titleId}>Venue EQ</h2>
         <p role="alert">{loadError}</p>
       </section>
     );
   if (!venue || !active || !work)
     return (
-      <section className="panel control-stack venue" aria-labelledby={titleId}>
+      <section
+        className="panel control-stack grid min-w-0 gap-4"
+        aria-labelledby={titleId}
+      >
         <h2 id={titleId}>Venue EQ</h2>
         <p role="status">Reading the venue EQ…</p>
       </section>
@@ -449,7 +454,7 @@ function VenueView({ owner }: { owner: Owner }) {
   const notice = venue.notice && venue.notice !== dismissed ? venue.notice : '';
   return (
     <section
-      className="panel control-stack venue"
+      className="panel control-stack grid min-w-0 gap-4"
       aria-labelledby={titleId}
       data-locked={locked || undefined}
     >
@@ -462,7 +467,10 @@ function VenueView({ owner }: { owner: Owner }) {
         </p>
       </div>
       {notice && (
-        <div className="venue-note" role="status">
+        <div
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-card px-3 py-2 [&>p]:m-0 [&>p]:flex-[1_1_12rem] [&>svg]:size-4 [&>svg]:shrink-0"
+          role="status"
+        >
           <p>
             {notice.replace(/\.?$/, '.')}
             {!edited && ` You're hearing the saved "${active.name}".`}
@@ -476,13 +484,21 @@ function VenueView({ owner }: { owner: Owner }) {
         </div>
       )}
       {locked && (
-        <div className="venue-note" role="status" data-kind="locked">
+        <div
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-card px-3 py-2 [&>p]:m-0 [&>p]:flex-[1_1_12rem] [&>svg]:size-4 [&>svg]:shrink-0"
+          role="status"
+          data-kind="locked"
+        >
           <Lock aria-hidden="true" weight="bold" />
           <p>{VENUE_LOCKED}</p>
         </div>
       )}
       {conflict && (
-        <div className="venue-note" role="alert" data-kind="conflict">
+        <div
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-card px-3 py-2 [&>p]:m-0 [&>p]:flex-[1_1_12rem] [&>svg]:size-4 [&>svg]:shrink-0"
+          role="alert"
+          data-kind="conflict"
+        >
           <Warning aria-hidden="true" weight="bold" />
           <p>{conflict}</p>
           <Button variant="outline" onClick={() => setConflict('')}>
@@ -490,8 +506,8 @@ function VenueView({ owner }: { owner: Owner }) {
           </Button>
         </div>
       )}
-      <div className="venue-head">
-        <label className="venue-profile">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="grid min-w-0 flex-[1_1_14rem]">
           <span className="sr-only">Venue profile</span>
           <Select
             value={venue.active}
@@ -523,12 +539,8 @@ function VenueView({ owner }: { owner: Owner }) {
             </SelectContent>
           </Select>
         </label>
-        {edited && (
-          <span className="media-chip" data-state="edited">
-            Edited · unsaved
-          </span>
-        )}
-        <div className="venue-actions">
+        {edited && <Badge data-state="edited">Edited · unsaved</Badge>}
+        <div className="flex flex-wrap items-center gap-1.5">
           <Button
             variant={edited ? 'default' : 'outline'}
             disabled={disabled || !edited}
@@ -604,8 +616,8 @@ function VenueView({ owner }: { owner: Owner }) {
         onChange={(index, change) => editBand(index, change, true)}
         onTrim={(trimDb) => edit({ ...work, trimDb }, true)}
       />
-      <div className="venue-foot">
-        <div className="venue-actions">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           <Button
             variant={venue.bypass ? 'default' : 'outline'}
             aria-pressed={venue.bypass}
@@ -626,7 +638,11 @@ function VenueView({ owner }: { owner: Owner }) {
           </Button>
         </div>
         {check.risky ? (
-          <div className="venue-note" data-kind="headroom" role="status">
+          <div
+            className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-card px-3 py-2 [&>p]:m-0 [&>p]:flex-[1_1_12rem] [&>svg]:size-4 [&>svg]:shrink-0"
+            data-kind="headroom"
+            role="status"
+          >
             <Warning aria-hidden="true" weight="bold" />
             <p>Adds up to {formatDb(check.peak)}; risk of clipping.</p>
             <Button
@@ -638,7 +654,10 @@ function VenueView({ owner }: { owner: Owner }) {
             </Button>
           </div>
         ) : (
-          <p className="venue-peak" role="status">
+          <p
+            className="m-0 inline-flex items-center gap-1.5 font-mono text-xs tabular-nums data-[warn]:font-semibold"
+            role="status"
+          >
             Peak boost {formatDb(check.peak)}
             <CheckCircle aria-label="within +6 dB" weight="bold" />
           </p>

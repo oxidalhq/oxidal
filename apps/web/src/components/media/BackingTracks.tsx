@@ -1,6 +1,7 @@
 import { Faders, Pause, Play, UploadSimple } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 
+import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
 
 import {
@@ -104,15 +105,15 @@ export function BackingTracks({ connected }: { connected: boolean }) {
   }
   const locked = protect || !connected;
   return (
-    <section className="media-backing" aria-label="Backing tracks">
-      <div className="media-section-head">
+    <section className="grid min-w-0 gap-3" aria-label="Backing tracks">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 [&>h2]:m-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold">
         <div>
           <h2>Backing tracks</h2>
           <p className="caption">
             Plays from the device over your guitar, even with this page closed.
           </p>
         </div>
-        <div className="media-section-meta">
+        <div className="min-w-0 text-xs break-words text-muted-foreground">
           {free !== null && (
             <span className="caption">Free space: {gigabytes(free)}</span>
           )}
@@ -138,7 +139,10 @@ export function BackingTracks({ connected }: { connected: boolean }) {
       {protect && <p className="caption">{PROTECT_REASON}</p>}
       <UploadQueue />
       {(error || media.refusal) && (
-        <p role="alert" className="media-note">
+        <p
+          role="alert"
+          className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
+        >
           {error || media.refusal}
         </p>
       )}
@@ -149,7 +153,10 @@ export function BackingTracks({ connected }: { connected: boolean }) {
           guitar.
         </p>
       ) : (
-        <ol className="media-rows" aria-label="Backing list">
+        <ol
+          className="m-0 grid min-w-0 list-none divide-y divide-border border-y border-border p-0"
+          aria-label="Backing list"
+        >
           {tracks.map((track, index) => {
             const imported = isStemSong(track);
             const mixOf = mixSourceOf(track);
@@ -234,20 +241,12 @@ export function BackingTracks({ connected }: { connected: boolean }) {
                 cued={cued}
                 state={
                   <>
-                    {mixOf && (
-                      <span className="media-chip" data-kind="mix">
-                        Mix
-                      </span>
-                    )}
+                    {mixOf && <Badge data-kind="mix">Mix</Badge>}
                     {splitting !== null ? (
-                      <span className="media-chip" data-kind="stems">
-                        Splitting {splitting}%
-                      </span>
+                      <Badge data-kind="stems">Splitting {splitting}%</Badge>
                     ) : (
                       hasStems && (
-                        <span className="media-chip" data-kind="stems">
-                          {stemKind ?? 'Stems'}
-                        </span>
+                        <Badge data-kind="stems">{stemKind ?? 'Stems'}</Badge>
                       )
                     )}
                     {cued && <StateChip state={playing ? 'playing' : 'cued'} />}
@@ -278,7 +277,7 @@ export function BackingTracks({ connected }: { connected: boolean }) {
                         onClick={openStems}
                       >
                         <Faders aria-hidden="true" />
-                        <span className="media-stems-label">
+                        <span className="max-[599px]:sr-only">
                           {song ? 'Edit' : 'Stems'}
                         </span>
                       </Button>

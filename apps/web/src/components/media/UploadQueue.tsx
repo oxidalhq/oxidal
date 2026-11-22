@@ -35,9 +35,9 @@ export function UploadQueue() {
   const { uploads, queue } = useSessionMedia();
   if (!uploads.length || !queue) return null;
   return (
-    <section className="media-uploads" aria-label="Importing">
+    <section className="grid min-w-0 gap-3" aria-label="Importing">
       <span className="eyebrow">Importing</span>
-      <ul className="media-rows">
+      <ul className="m-0 grid min-w-0 list-none divide-y divide-border border-y border-border p-0">
         {uploads.map((item) => {
           const fraction =
             item.stage === 'preparing'
@@ -52,32 +52,40 @@ export function UploadQueue() {
           return (
             <li
               key={item.key}
-              className="media-row"
+              className="group relative grid min-w-0 grid-cols-[1.5rem_minmax(0,1fr)] items-center gap-x-2 gap-y-1 px-2 py-3 data-[cued]:bg-secondary min-[600px]:grid-cols-[2rem_minmax(0,1fr)_auto] [&>:last-child]:max-[599px]:col-start-2"
               data-stage={item.stage}
               aria-label={item.name}
             >
-              <span className="media-row-num" aria-hidden="true">
+              <span
+                className="self-start pt-0.5 text-center font-mono text-xs text-muted-foreground tabular-nums"
+                aria-hidden="true"
+              >
                 {item.stage === 'failed' ? (
                   <Warning weight="bold" />
                 ) : (
                   <UploadSimple />
                 )}
               </span>
-              <div className="media-row-main">
-                <span className="media-row-name">{item.name}</span>
+              <div className="grid min-w-0 gap-0.5">
+                <span className="text-sm font-semibold break-words">
+                  {item.name}
+                </span>
                 <span
-                  className="media-row-sub"
+                  className="min-w-0 text-xs break-words text-muted-foreground"
                   role={item.stage === 'failed' ? 'alert' : undefined}
                 >
                   {line(item)}
                 </span>
                 {bar && (
-                  <span className="media-bar" aria-hidden="true">
+                  <span
+                    className="block h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-muted [&>i]:block [&>i]:h-full [&>i]:bg-foreground"
+                    aria-hidden="true"
+                  >
                     <i style={{ width: `${percent(fraction)}%` }} />
                   </span>
                 )}
               </div>
-              <div className="media-row-actions">
+              <div className="flex min-w-0 flex-wrap items-center gap-1 min-[600px]:justify-end">
                 {item.stage === 'paused' && (
                   <Button
                     variant="outline"

@@ -96,7 +96,7 @@ export function CompactTransport({
   if (!withNext.length) return null;
   return (
     <div
-      className={`media-transport ${className}`}
+      className={`flex shrink-0 items-center gap-1 [&>button]:px-2 ${className}`}
       role="group"
       aria-label="Backing track transport"
     >
@@ -122,7 +122,7 @@ export function FullTransport() {
   ) => (
     <Button
       variant={extra.main ? 'default' : 'outline'}
-      className={extra.main ? 'media-main' : undefined}
+      className={extra.main ? 'min-h-touch font-semibold' : undefined}
       aria-busy={busy}
       aria-label={!slow && icon ? (extra.aria ?? label) : undefined}
       disabled={extra.disabled}
@@ -133,7 +133,7 @@ export function FullTransport() {
   );
   return (
     <div
-      className="media-full-transport"
+      className="flex min-w-0 flex-wrap items-center justify-center gap-1.5"
       role="group"
       aria-label="Transport"
       data-slow={slow || undefined}

@@ -1,5 +1,7 @@
 import { Warning } from '@phosphor-icons/react';
 
+import { Badge } from '@oxidal/design-system/components/badge';
+
 import type { ShownState } from './sessionMedia';
 
 const chipText: Record<ShownState, string> = {
@@ -36,13 +38,13 @@ export function StateChip({
         ? 'Output muted'
         : chipText[state]);
   return (
-    <span
-      className="media-chip"
+    <Badge
+      tone={warn ? 'warning' : state === 'playing' ? 'live' : 'neutral'}
       data-state={state}
       data-warn={warn || undefined}
     >
       {warn && <Warning aria-hidden="true" weight="bold" />}
       {text}
-    </span>
+    </Badge>
   );
 }

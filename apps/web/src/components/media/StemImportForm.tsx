@@ -8,8 +8,8 @@ import { FilePlus, Warning, X } from '@phosphor-icons/react';
 import { useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Progress } from '@oxidal/design-system/components/states';
 
-import './media.css';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
   cancelUpload,
@@ -148,7 +148,8 @@ export function StemImportForm({
     <AdjustmentDialog
       title="Import stems"
       description="One song from separate stem files"
-      className="media-sheet stem-sheet"
+      sideSheet
+      className="lg:w-[min(42rem,100vw)]"
       onCancel={() => {
         if (progress) return;
         roles.forEach(discard);
@@ -156,7 +157,7 @@ export function StemImportForm({
       }}
     >
       <form
-        className="media-sheet-body"
+        className="grid min-w-0 content-start gap-3"
         aria-label="Import stems"
         onSubmit={(event) => {
           event.preventDefault();
@@ -168,7 +169,7 @@ export function StemImportForm({
           the same point. Files are matched to parts by name; change any match
           below. Leave unused parts empty.
         </p>
-        <div className="media-actions">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Button
             type="button"
             variant="outline"
@@ -192,14 +193,17 @@ export function StemImportForm({
           />
         </div>
         {!!unmatched.length && (
-          <p className="media-note" role="status">
+          <p
+            className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
+            role="status"
+          >
             <Warning aria-hidden="true" weight="bold" />
             <span>
               Not used, every part already has a file: {unmatched.join(', ')}
             </span>
           </p>
         )}
-        <label className="stem-name">
+        <label className="grid min-w-0 gap-1 text-sm font-medium [&>input]:min-h-touch [&>input]:min-w-0 [&>input]:rounded-md [&>input]:border [&>input]:border-input [&>input]:bg-background [&>input]:px-2">
           <span>Song name</span>
           <input
             required
@@ -209,7 +213,7 @@ export function StemImportForm({
             onChange={(event) => setTitle(event.target.value)}
           />
         </label>
-        <ul className="stem-mixer" aria-label="Stem files">
+        <ul className="grid min-w-0 gap-3" aria-label="Stem files">
           {roles.map((role) => (
             <StemFileRow
               key={role}
@@ -221,28 +225,25 @@ export function StemImportForm({
           ))}
         </ul>
         {progress && (
-          <div className="stem-section" role="status">
-            <div
-              className="stem-bar"
-              role="progressbar"
-              aria-label="Import progress"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={progress.percent}
-            >
-              <i style={{ width: `${progress.percent}%` }} />
-            </div>
+          <div
+            className="grid min-w-0 gap-2 border-t border-border pt-3 first:border-0 first:pt-0"
+            role="status"
+          >
+            <Progress label="Import progress" value={progress.percent} />
             <p className="caption">{progress.text}</p>
           </div>
         )}
         {error && (
-          <p className="media-note" role="alert">
+          <p
+            className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
+            role="alert"
+          >
             <Warning aria-hidden="true" weight="bold" />
             <span>{error}</span>
           </p>
         )}
-        <div className="stem-save">
-          <span className="stem-save-spacer" />
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="flex-1" />
           <Button
             type="button"
             variant="outline"
@@ -278,9 +279,12 @@ function StemFileRow({
   const input = useRef<HTMLInputElement>(null);
   const label = roleLabel(role);
   return (
-    <li className="stem-file-row">
-      <span className="stem-row-name">{label}</span>
-      <span className="stem-file-name" data-empty={!file || undefined}>
+    <li className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-t border-border py-2">
+      <span className="min-w-0 text-sm font-semibold break-words">{label}</span>
+      <span
+        className="min-w-0 truncate text-xs data-[empty]:text-muted-foreground"
+        data-empty={!file || undefined}
+      >
         {file ? `${file.name} · ${fileSize(file.size)}` : 'No file'}
       </span>
       <Button

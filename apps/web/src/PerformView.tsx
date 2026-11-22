@@ -463,6 +463,7 @@ export function PerformView({
   return (
     <section
       className="grid min-w-0 gap-3"
+      data-slot="stage"
       aria-label="Perform"
       data-mode={mode}
     >

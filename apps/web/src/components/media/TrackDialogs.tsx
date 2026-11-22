@@ -38,7 +38,7 @@ export function RenameDialog({
   return (
     <AdjustmentDialog title="Rename track" onCancel={onClose}>
       <form
-        className="media-dialog-form"
+        className="grid min-w-0 gap-3"
         onSubmit={(event) => {
           event.preventDefault();
           if (next && next !== asset.title) void save();

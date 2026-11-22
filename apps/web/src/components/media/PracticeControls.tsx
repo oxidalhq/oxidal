@@ -15,7 +15,6 @@ import {
 import { Slider } from '@oxidal/design-system/components/slider';
 import { Switch } from '@oxidal/design-system/components/switch';
 
-import './media.css';
 import { type PracticeTiming, practiceTiming, sendTempo } from '../../api';
 import type { PlayerCommand } from '../../generated/contract';
 import { deviceSentence } from '../../lib/friendlyError';
@@ -217,11 +216,14 @@ export function PracticeControls() {
   const region = preview ?? (shown && shown.b !== null ? shown : null);
 
   return (
-    <section className="practice" aria-labelledby="practice-title">
-      <div className="stem-section-head">
+    <section
+      className="grid min-w-0 content-start gap-3"
+      aria-labelledby="practice-title"
+    >
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 [&>h2]:m-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold">
         <h3 id="practice-title">Practice</h3>
         {timing && (
-          <span className="practice-tempo">
+          <span className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="caption">
               {timing.bpm == null
                 ? 'Tempo uncertain'
@@ -231,7 +233,7 @@ export function PracticeControls() {
               <>
                 <Button
                   variant="ghost"
-                  className="practice-octave"
+                  className="min-w-10"
                   aria-label={`Use half: ${Math.round(timing.bpm / 2)} BPM`}
                   title="The song feels half as fast"
                   onClick={() => retempo(0.5)}
@@ -240,7 +242,7 @@ export function PracticeControls() {
                 </Button>
                 <Button
                   variant="ghost"
-                  className="practice-octave"
+                  className="min-w-10"
                   aria-label={`Use double: ${Math.round(timing.bpm * 2)} BPM`}
                   title="The song feels twice as fast"
                   onClick={() => retempo(2)}
@@ -255,7 +257,7 @@ export function PracticeControls() {
 
       {timing?.peaks.length ? (
         <svg
-          className="practice-wave"
+          className="block h-[4.5rem] w-full cursor-pointer touch-pan-y rounded-md border border-border bg-card"
           viewBox={`0 0 ${WIDTH} 32`}
           preserveAspectRatio="none"
           role="img"
@@ -292,7 +294,7 @@ export function PracticeControls() {
         >
           {region && region.b !== null && (
             <rect
-              className="practice-region"
+              className="fill-foreground opacity-15 data-[active]:fill-brand"
               data-active={active ? '' : undefined}
               x={x(region.a)}
               y={0}
@@ -303,7 +305,7 @@ export function PracticeControls() {
           {timing.peaks.map((peak, index) => (
             <line
               key={index}
-              className="practice-peak"
+              className="stroke-muted-foreground stroke-1"
               x1={index + 0.5}
               x2={index + 0.5}
               y1={16 - peak * 15}
@@ -314,7 +316,7 @@ export function PracticeControls() {
             timing.beats.map((beat) => (
               <line
                 key={beat}
-                className="practice-beat"
+                className="stroke-foreground stroke-1"
                 x1={(beat / timing.frames) * WIDTH}
                 x2={(beat / timing.frames) * WIDTH}
                 y1={30}
@@ -322,7 +324,7 @@ export function PracticeControls() {
               />
             ))}
           <line
-            className="practice-head"
+            className="stroke-brand stroke-2"
             x1={x(atFrame)}
             x2={x(atFrame)}
             y1={0}
@@ -340,16 +342,20 @@ export function PracticeControls() {
         </Button>
       )}
 
-      <div className="practice-row" role="group" aria-label="A–B loop">
+      <div
+        className="flex min-w-0 flex-wrap items-center gap-2"
+        role="group"
+        aria-label="A–B loop"
+      >
         <Button variant="outline" disabled={pending} onClick={setA}>
           Set A
-          <span className="media-mono caption">
+          <span className="caption font-mono text-sm whitespace-nowrap tabular-nums">
             {shown ? clock(shown.a / rate) : '–'}
           </span>
         </Button>
         <Button variant="outline" disabled={pending} onClick={setB}>
           Set B
-          <span className="media-mono caption">
+          <span className="caption font-mono text-sm whitespace-nowrap tabular-nums">
             {shown?.b != null ? clock(shown.b / rate) : '–'}
           </span>
         </Button>
@@ -369,8 +375,8 @@ export function PracticeControls() {
         )}
       </div>
 
-      <div className="practice-row">
-        <span className="practice-label">Speed</span>
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <span className="min-w-[4.5rem] text-sm font-semibold">Speed</span>
         <SegmentedControl
           aria-label="Playback speed"
           value={String(speed)}
@@ -391,10 +397,14 @@ export function PracticeControls() {
         </SegmentedControl>
       </div>
 
-      <div className="practice-click" role="group" aria-label="Click">
-        <label className="practice-row">
+      <div
+        className="grid min-w-0 content-start gap-3"
+        role="group"
+        aria-label="Click"
+      >
+        <label className="flex min-w-0 flex-wrap items-center gap-2">
           <Metronome aria-hidden="true" />
-          <span className="practice-label">Click</span>
+          <span className="min-w-[4.5rem] text-sm font-semibold">Click</span>
           <Switch
             aria-label="Click"
             checked={!!click}
@@ -422,9 +432,9 @@ export function PracticeControls() {
           </SegmentedControl>
         )}
         {!usesBeats && (
-          <div className="practice-row">
-            <label className="practice-bpm">
-              <span className="practice-label">BPM</span>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 [&>input]:min-h-touch [&>input]:max-w-20 [&>input]:rounded-md [&>input]:border [&>input]:border-input [&>input]:px-2">
+              <span className="min-w-[4.5rem] text-sm font-semibold">BPM</span>
               <input
                 type="number"
                 inputMode="decimal"
@@ -457,12 +467,16 @@ export function PracticeControls() {
               }}
             >
               Beat 1 here
-              <span className="media-mono caption">{clock(first / rate)}</span>
+              <span className="caption font-mono text-sm whitespace-nowrap tabular-nums">
+                {clock(first / rate)}
+              </span>
             </Button>
           </div>
         )}
-        <div className="practice-row">
-          <span className="practice-label">Click level</span>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="min-w-[4.5rem] text-sm font-semibold">
+            Click level
+          </span>
           {slow ? (
             <>
               <Button
@@ -490,7 +504,7 @@ export function PracticeControls() {
             </>
           ) : (
             <Slider
-              className="practice-level"
+              className="max-w-56 min-w-0 flex-[1_1_8rem]"
               label="Click level"
               min={-60}
               max={0}
@@ -500,7 +514,9 @@ export function PracticeControls() {
               onValueCommit={([value]) => changeClickLevel(value ?? -12)}
             />
           )}
-          <output className="media-mono">{level} dB</output>
+          <output className="font-mono text-sm whitespace-nowrap tabular-nums">
+            {level} dB
+          </output>
         </div>
         {!timing && !working && (
           <p className="caption">

@@ -29,17 +29,21 @@ export function SplitStatus() {
   return (
     <button
       type="button"
-      className="split-status"
+      className="relative inline-flex min-h-touch max-w-72 min-w-0 items-center gap-1.5 overflow-hidden rounded-md border border-border px-2 text-xs font-semibold whitespace-nowrap focus-visible:outline-2 data-[phase=failed]:border-foreground data-[phase=interrupted]:border-foreground"
       data-phase={split.phase}
       aria-label={`${text}${running ? `, ${split.percent}%` : ''}. Open stems`}
       onClick={() => setSheet({ kind: 'stems', source: split.source })}
     >
       <Scissors aria-hidden="true" weight="bold" />
-      <span className="split-status-text">{text}</span>
-      {running && <span className="media-mono">{split.percent}%</span>}
+      <span className="min-w-0 truncate max-[899px]:sr-only">{text}</span>
+      {running && (
+        <span className="font-mono text-sm whitespace-nowrap tabular-nums">
+          {split.percent}%
+        </span>
+      )}
       {running && (
         <i
-          className="split-status-bar"
+          className="absolute bottom-0 left-0 h-0.5 bg-current"
           style={{ width: `${split.percent}%` }}
         />
       )}
@@ -61,31 +65,43 @@ export function NowPlaying() {
   const chip = shown !== 'playing' || slow;
   return (
     <div
-      className="now-playing"
+      data-slot="now-playing"
+      className="flex min-h-14 min-w-0 items-center gap-2 border-t border-border bg-card py-1.5 pr-[max(0.75rem,env(safe-area-inset-right))] pl-[max(0.75rem,env(safe-area-inset-left))] [[data-slot=app-shell]:has([data-slot=stage])_&]:hidden!"
       data-placement="bottom"
       role="region"
       aria-label="Now playing"
     >
-      <div className="now-playing-item" data-state={shown}>
+      <div
+        className="flex min-w-0 flex-1 items-center gap-2"
+        data-state={shown}
+      >
         <button
           type="button"
-          className="now-playing-open"
+          className="flex min-h-touch min-w-0 flex-1 cursor-pointer flex-col items-start justify-center rounded-md px-1 text-left focus-visible:outline-2"
           onClick={() => media.setSheet({ kind: 'player' })}
         >
           <span className="sr-only">Open backing player:</span>{' '}
-          <span className="now-playing-title">{title}</span>{' '}
-          <span className="now-playing-line">
+          <span className="max-w-full truncate text-sm font-semibold">
+            {title}
+          </span>{' '}
+          <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-px text-xs">
             {chip ? (
               <StateChip state={shown} />
             ) : (
               <span className="sr-only">{stateWord[shown]}</span>
             )}{' '}
-            <span className="now-playing-time">{time}</span>{' '}
+            <span className="font-mono text-sm whitespace-nowrap tabular-nums">
+              {time}
+            </span>{' '}
             {muted && <strong>Output muted</strong>}{' '}
-            {notice && <span className="now-playing-notice">{notice}</span>}
+            {notice && (
+              <span className="min-w-0 text-xs break-words text-muted-foreground">
+                {notice}
+              </span>
+            )}
           </span>
         </button>
-        <CompactTransport className="now-playing-actions" />
+        <CompactTransport className="shrink-0" />
       </div>
     </div>
   );

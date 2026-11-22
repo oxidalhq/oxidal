@@ -31,6 +31,11 @@ it('a meter reports its level and says when it is stopped or unavailable', () =>
   expect(meter).toHaveAttribute('aria-valuetext', 'Stopped');
   rerender(<Meter label="Output" value={null} state="unavailable" />);
   expect(meter).toHaveAttribute('aria-valuetext', '—');
+  rerender(<Meter label="Output" value={-6} rms={-18} peak={-6} />);
+  expect(meter).toHaveAttribute('aria-valuenow', '-6');
+  expect(meter.querySelector('[aria-hidden=true] > div')).toHaveStyle({
+    width: '70%',
+  });
 });
 
 it('scene pads select on tap and open the menu on a long press', async () => {

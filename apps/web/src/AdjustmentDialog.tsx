@@ -21,6 +21,7 @@ export function AdjustmentDialog({
   onCancel,
   children,
   className = '',
+  sideSheet = false,
   returnFocus,
 }: {
   title: string;
@@ -29,6 +30,8 @@ export function AdjustmentDialog({
   onCancel: () => void;
   children: ReactNode;
   className?: string;
+  /** A full-height phone sheet, centered on tablets and right-aligned on desktop. */
+  sideSheet?: boolean;
   /** Where focus goes on close, when not back to what opened the dialog. */
   returnFocus?: () => HTMLElement | null;
 }) {
@@ -53,6 +56,8 @@ export function AdjustmentDialog({
         0,
         Math.min(viewport?.offsetTop ?? 0, window.innerHeight - height),
       );
+      dialog.style.setProperty('--adjustment-offset', `${offset}px`);
+      dialog.style.setProperty('--adjustment-sheet-height', `${height}px`);
       dialog.style.setProperty(
         '--adjustment-height',
         `${Math.max(80, height - 16)}px`,
@@ -82,7 +87,7 @@ export function AdjustmentDialog({
     >
       <DialogContent
         ref={setDialog}
-        className={`bottom-auto max-h-[min(calc(100dvh-1rem),var(--adjustment-height,100dvh))] transform-none ${className}`}
+        className={`bottom-auto max-h-[min(calc(100dvh-1rem),var(--adjustment-height,100dvh))] transform-none ${sideSheet ? 'max-[599px]:top-[var(--adjustment-offset,0px)]! max-[599px]:left-0 max-[599px]:h-[var(--adjustment-sheet-height,100dvh)] max-[599px]:max-h-[var(--adjustment-sheet-height,100dvh)]! max-[599px]:w-full max-[599px]:max-w-none max-[599px]:translate-none max-[599px]:rounded-none max-[599px]:border-0 max-[599px]:pt-[env(safe-area-inset-top)] max-[599px]:pb-[env(safe-area-inset-bottom)] min-[600px]:max-w-xl lg:top-0! lg:right-0 lg:left-auto lg:h-dvh lg:max-h-dvh! lg:w-[26rem] lg:translate-none lg:rounded-none' : ''} ${className}`}
         style={{
           top: 'min(var(--adjustment-top, 50dvh), calc(100dvh - min(var(--adjustment-height, 100dvh), calc(100dvh - 1rem)) / 2 - 0.5rem))',
         }}

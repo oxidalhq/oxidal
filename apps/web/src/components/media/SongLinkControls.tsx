@@ -115,7 +115,7 @@ export function MixLinks({ mix }: { mix: Mix }) {
   }
 
   return (
-    <div className="stem-links">
+    <div className="grid min-w-0 content-start gap-3">
       <h4>
         <LinkSimple aria-hidden="true" />
         Plays with
@@ -127,7 +127,7 @@ export function MixLinks({ mix }: { mix: Mix }) {
         </p>
       )}
       {!!mine.length && (
-        <ul className="stem-link-list">
+        <ul className="m-0 grid list-none gap-1 p-0 [&>li]:flex [&>li]:min-w-0 [&>li]:flex-wrap [&>li]:items-center [&>li]:gap-2">
           {mine.map((entry) => (
             <li key={`${entry.target.scope}:${targetKey(entry.target.preset)}`}>
               <span>
@@ -152,7 +152,7 @@ export function MixLinks({ mix }: { mix: Mix }) {
         </ul>
       )}
       {catalog && (
-        <div className="stem-link-form">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <SegmentedControl
             aria-label="Link to"
             value={scope}
@@ -346,9 +346,12 @@ function CueBackingButton({
     }
   }
   return (
-    <div className="stem-cue" data-missing={!available || undefined}>
+    <div
+      className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
+      data-missing={!available || undefined}
+    >
       <MusicNotes aria-hidden="true" />
-      <span className="stem-cue-title">
+      <span className="min-w-0 flex-1 font-semibold break-words">
         <span className="caption">Backing </span>
         {title}
       </span>

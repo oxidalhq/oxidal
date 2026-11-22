@@ -172,7 +172,11 @@ export function EqGraph({
         : '';
   const labels = width < 560 ? NARROW_LABELS : GRID;
   return (
-    <div className="venue-graph" ref={host} data-locked={locked || undefined}>
+    <div
+      className="relative min-h-44 w-full min-w-0 touch-none rounded-lg border border-border bg-card select-none [&_svg]:block"
+      ref={host}
+      data-locked={locked || undefined}
+    >
       <svg
         width={width}
         height={height}
@@ -195,7 +199,7 @@ export function EqGraph({
             x2={x(hz)}
             y1={TOP}
             y2={height - BOTTOM}
-            className="venue-grid"
+            className="stroke-border stroke-1"
           />
         ))}
         {[12, 6, 0, -6, -12].map((db) => (
@@ -205,13 +209,17 @@ export function EqGraph({
               x2={width - RIGHT}
               y1={y(db)}
               y2={y(db)}
-              className={db === 0 ? 'venue-grid venue-zero' : 'venue-grid'}
+              className={
+                db === 0
+                  ? 'stroke-border stroke-wire stroke-1'
+                  : 'stroke-border stroke-1'
+              }
             />
             <text
               x={LEFT - 6}
               y={y(db) + 4}
               textAnchor="end"
-              className="venue-axis"
+              className="fill-muted-foreground font-mono text-[10px]"
             >
               {db > 0 ? `+${db}` : db < 0 ? `−${-db}` : '0'}
             </text>
@@ -223,12 +231,17 @@ export function EqGraph({
             x={x(hz)}
             y={height - 6}
             textAnchor="middle"
-            className="venue-axis"
+            className="fill-muted-foreground font-mono text-[10px]"
           >
             {gridLabel(hz)}
           </text>
         ))}
-        {ghost && <path d={path(ghost)} className="venue-curve-ghost" />}
+        {ghost && (
+          <path
+            d={path(ghost)}
+            className="fill-none stroke-wire stroke-[1.5] [stroke-dasharray:4_4]"
+          />
+        )}
         {bypass ? (
           <>
             <line
@@ -236,14 +249,17 @@ export function EqGraph({
               x2={width - RIGHT}
               y1={y(0)}
               y2={y(0)}
-              className="venue-curve"
+              className="fill-none stroke-foreground stroke-[2.5]"
             />
-            <path d={path(main)} className="venue-curve-bypassed" />
+            <path
+              d={path(main)}
+              className="fill-none stroke-wire stroke-[1.5] [stroke-dasharray:2_3]"
+            />
           </>
         ) : (
           <path
             d={path(main)}
-            className="venue-curve"
+            className="fill-none stroke-foreground stroke-[2.5]"
             data-testid="venue-curve"
           />
         )}
@@ -267,7 +283,7 @@ export function EqGraph({
               aria-valuenow={band.freqHz}
               aria-valuetext={value}
               aria-disabled={locked || undefined}
-              className="venue-handle"
+              className="group cursor-grab outline-none [[data-locked]_&]:cursor-not-allowed"
               data-selected={chosen || undefined}
               data-off={!band.enabled || undefined}
               onKeyDown={(event) => key(event, index)}
@@ -286,28 +302,33 @@ export function EqGraph({
                 };
               }}
             >
-              <circle cx={hx} cy={hy} r={18} className="venue-hit" />
+              <circle
+                cx={hx}
+                cy={hy}
+                r={18}
+                className="fill-transparent group-focus-visible:stroke-ring group-focus-visible:stroke-2"
+              />
               {pass ? (
                 <rect
                   x={hx - 6}
                   y={hy - 6}
                   width={12}
                   height={12}
-                  className="venue-dot"
+                  className="fill-foreground stroke-foreground stroke-[1.5] group-data-[off]:fill-card group-data-[selected]:fill-brand"
                 />
               ) : (
                 <circle
                   cx={hx}
                   cy={hy}
                   r={chosen ? 7 : 6}
-                  className="venue-dot"
+                  className="fill-foreground stroke-foreground stroke-[1.5] group-data-[off]:fill-card group-data-[selected]:fill-brand"
                 />
               )}
               <text
                 x={hx}
                 y={pass ? hy + 20 : hy - 11}
                 textAnchor="middle"
-                className="venue-handle-label"
+                className="fill-foreground text-[10px] font-bold"
                 aria-hidden="true"
               >
                 {info.short}
@@ -316,7 +337,11 @@ export function EqGraph({
           );
         })}
       </svg>
-      {caption && <span className="venue-graph-caption">{caption}</span>}
+      {caption && (
+        <span className="pointer-events-none absolute top-1.5 left-10 text-xs font-semibold">
+          {caption}
+        </span>
+      )}
     </div>
   );
 }

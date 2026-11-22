@@ -30,7 +30,7 @@ export function ProfileDialog({
   return (
     <AdjustmentDialog title={title} onCancel={onCancel}>
       <form
-        className="media-dialog-form"
+        className="grid min-w-0 gap-3"
         onSubmit={(event) => {
           event.preventDefault();
           if (!next || saving) return;

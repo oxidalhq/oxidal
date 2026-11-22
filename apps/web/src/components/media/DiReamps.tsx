@@ -123,8 +123,8 @@ export function DiReamps({ connected }: { connected: boolean }) {
   }
 
   return (
-    <section className="media-backing" aria-label="DI and reamps">
-      <div className="media-section-head">
+    <section className="grid min-w-0 gap-3" aria-label="DI and reamps">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 [&>h2]:m-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold">
         <div>
           <p className="caption">
             Record the raw guitar, then reamp it through any sound later.
@@ -132,7 +132,10 @@ export function DiReamps({ connected }: { connected: boolean }) {
         </div>
       </div>
       {protect && <p className="caption">{PROTECT_REASON}</p>}
-      <div className="media-card" aria-label="Record DI">
+      <div
+        className="grid min-w-0 gap-3 rounded-lg border border-border bg-card p-3"
+        aria-label="Record DI"
+      >
         {(!running || job?.kind === 'di') && (
           <RecordDiToggle
             recording={running}
@@ -171,14 +174,20 @@ export function DiReamps({ connected }: { connected: boolean }) {
         {job && !running && <JobResult job={job} />}
       </div>
       {error && (
-        <p role="alert" className="media-note">
+        <p
+          role="alert"
+          className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
+        >
           {error}
         </p>
       )}
       {library && !assets.length ? (
         <p className="caption">No DI recordings or reamps yet.</p>
       ) : (
-        <ol className="media-rows" aria-label="DI and reamps">
+        <ol
+          className="m-0 grid min-w-0 list-none divide-y divide-border border-y border-border p-0"
+          aria-label="DI and reamps"
+        >
           {assets.map((asset, index) => {
             const cued = player?.track?.id === asset.id;
             const playing = cued && player?.state === 'playing';
@@ -276,7 +285,10 @@ function JobRunning({
   const elapsed = formatTime(job.frames / job.rate);
   if (job.kind === 'di')
     return (
-      <div className="media-job" role="status">
+      <div
+        className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
+        role="status"
+      >
         <span>
           ● Recording {elapsed} · input peak {Math.round(job.peakDbfs)} dBFS
         </span>
@@ -284,7 +296,10 @@ function JobRunning({
     );
   const total = formatTime((job.totalFrames ?? job.frames) / job.rate);
   return (
-    <div className="media-job" role="status">
+    <div
+      className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
+      role="status"
+    >
       <span>
         Reamping {elapsed} / {total}
         {job.monitoring ? '' : ' · outputs muted'}
@@ -303,7 +318,10 @@ function JobResult({ job }: { job: CaptureJob }) {
     return <p className="caption">Cancelled. Nothing was saved.</p>;
   if (job.phase === 'failed')
     return (
-      <p role="alert" className="media-note">
+      <p
+        role="alert"
+        className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
+      >
         {job.reason ?? 'The job failed.'}
         {job.asset ? ' Partial result kept.' : ''}
       </p>
@@ -365,7 +383,7 @@ export function ReampDialog({
   return (
     <AdjustmentDialog title={`Reamp “${asset.title}”`} onCancel={onClose}>
       <form
-        className="media-dialog-form"
+        className="grid min-w-0 gap-3"
         onSubmit={(event) => {
           event.preventDefault();
           if (ready) void start();

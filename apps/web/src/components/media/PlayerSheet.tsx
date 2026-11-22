@@ -54,13 +54,19 @@ function Banner() {
   return (
     <>
       {lines.map((line) => (
-        <p key={line} className="media-note">
+        <p
+          key={line}
+          className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
+        >
           {shown !== 'ready' && <Warning aria-hidden="true" weight="bold" />}
           <span>{line}</span>
         </p>
       ))}
       {refusal && (
-        <p className="media-note" role="alert">
+        <p
+          className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
+          role="alert"
+        >
           <Warning aria-hidden="true" weight="bold" />
           <span>{refusal}</span>
         </p>
@@ -99,7 +105,11 @@ function PlayerLevel() {
   }
   if (slow)
     return (
-      <div className="media-level" role="group" aria-label="Level">
+      <div
+        className="flex min-w-0 flex-wrap items-center gap-2 [&>output]:min-w-14 [&>output]:font-mono [&>output]:text-sm"
+        role="group"
+        aria-label="Level"
+      >
         <strong>Level</strong>
         <output>{formatDb(db)}</output>
         <Button
@@ -144,23 +154,24 @@ function FullPlayer({ onClose }: { onClose: () => void }) {
   const asset = tracks.find((t) => t.id === track?.id);
   const upNext = nextUp(player, tracks);
   return (
-    <AdjustmentDialog
-      title="Backing player"
-      onCancel={onClose}
-      className="media-sheet"
-    >
+    <AdjustmentDialog title="Backing player" onCancel={onClose} sideSheet>
       <PerformanceTempo />
       {!track || shown === 'empty' ? (
-        <div className="media-sheet-body">
+        <div className="grid min-w-0 content-start gap-3">
           <p>No track cued.</p>
           <Button onClick={() => media.setSheet({ kind: 'list' })}>
             Choose track
           </Button>
         </div>
       ) : (
-        <div className="media-sheet-body" data-slow={slow || undefined}>
+        <div
+          className="grid min-w-0 content-start gap-3"
+          data-slow={slow || undefined}
+        >
           <div>
-            <p className="media-sheet-title">{track.title}</p>
+            <p className="m-0 text-lg font-semibold break-words">
+              {track.title}
+            </p>
             <p className="caption">
               {[
                 channelsLabel(track.channels),
@@ -182,17 +193,22 @@ function FullPlayer({ onClose }: { onClose: () => void }) {
           {slow ? (
             <p className="media-slow-position">
               <strong>{stateWord[shown].toUpperCase()}</strong> · Position{' '}
-              <span className="media-mono">{formatTime(at)}</span> of{' '}
-              {formatTime(length)}{' '}
+              <span className="font-mono text-sm whitespace-nowrap tabular-nums">
+                {formatTime(at)}
+              </span>{' '}
+              of {formatTime(length)}{' '}
               <span className="caption">(updates every second)</span>
             </p>
           ) : (
-            <PositionBar key={track.id} disabled={shown === 'unavailable'} />
+            <PositionBar
+              key={`position-${track.id}`}
+              disabled={shown === 'unavailable'}
+            />
           )}
           <FullTransport />
           <Button
             variant="outline"
-            className="media-wide"
+            className="w-full"
             aria-busy={pending || undefined}
             disabled={shown === 'ready'}
             onClick={() => void send({ kind: 'stop' })}
@@ -202,8 +218,12 @@ function FullPlayer({ onClose }: { onClose: () => void }) {
           </Button>
           <PlayerLevel />
           <LiveStemsPanel />
-          <PracticeControls key={track.id} />
-          <div className="media-repeat" role="group" aria-label="Repeat">
+          <PracticeControls key={`practice-${track.id}`} />
+          <div
+            className="flex min-w-0 flex-wrap items-center gap-1"
+            role="group"
+            aria-label="Repeat"
+          >
             <strong aria-hidden="true">Repeat</strong>
             <div className="segmented">
               {(
@@ -230,7 +250,7 @@ function FullPlayer({ onClose }: { onClose: () => void }) {
               {upNext ? upNext.title : 'none, this is the last track'}
             </strong>
           </p>
-          <div className="media-actions">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Button
               variant="outline"
               onClick={() => media.setSheet({ kind: 'list' })}
@@ -261,30 +281,33 @@ function BackingList({ onClose }: { onClose: () => void }) {
   const media = useSessionMedia();
   const { player, tracks, send } = media;
   return (
-    <AdjustmentDialog
-      title="Backing list"
-      onCancel={onClose}
-      className="media-sheet media-list-sheet"
-    >
-      <div className="media-sheet-body">
+    <AdjustmentDialog title="Backing list" onCancel={onClose} sideSheet>
+      <div className="grid min-w-0 content-start gap-3">
         {tracks.length ? (
-          <ol className="media-rows" aria-label="Backing list">
+          <ol
+            className="m-0 grid min-w-0 list-none divide-y divide-border border-y border-border p-0"
+            aria-label="Backing list"
+          >
             {tracks.map((track, index) => {
               const cued = player?.track?.id === track.id;
               return (
                 <li
                   key={track.id}
-                  className="media-row"
+                  className="group relative grid min-w-0 grid-cols-[1.5rem_minmax(0,1fr)] items-center gap-x-2 gap-y-1 px-2 py-3 data-[cued]:bg-secondary min-[600px]:grid-cols-[2rem_minmax(0,1fr)_auto] [&>:last-child]:max-[599px]:col-start-2"
                   data-cued={cued || undefined}
                 >
-                  <span className="media-row-num">{index + 1}</span>
-                  <div className="media-row-main">
-                    <span className="media-row-name">{track.title}</span>
-                    <span className="media-row-sub">
+                  <span className="self-start pt-0.5 text-center font-mono text-xs text-muted-foreground tabular-nums">
+                    {index + 1}
+                  </span>
+                  <div className="grid min-w-0 gap-0.5">
+                    <span className="text-sm font-semibold break-words">
+                      {track.title}
+                    </span>
+                    <span className="min-w-0 text-xs break-words text-muted-foreground">
                       {formatTime(durationOf(track))}
                     </span>
                   </div>
-                  <div className="media-row-actions">
+                  <div className="flex min-w-0 flex-wrap items-center gap-1 min-[600px]:justify-end">
                     {cued ? (
                       <StateChip state="cued" />
                     ) : (
@@ -366,10 +389,10 @@ function TrackDetails({
     <AdjustmentDialog
       title={`${asset.title} · Details`}
       onCancel={onClose}
-      className="media-sheet"
+      sideSheet
     >
-      <div className="media-sheet-body">
-        <dl className="media-facts">
+      <div className="grid min-w-0 content-start gap-3">
+        <dl className="m-0 grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm [&>dd]:m-0 [&>dd]:break-words [&>dt]:text-muted-foreground">
           {source && (
             <>
               <dt>File</dt>
@@ -414,7 +437,7 @@ function TrackDetails({
             Underruns this session: {cued ? (media.player?.underruns ?? 0) : 0}
           </dd>
         </dl>
-        <div className="media-trim">
+        <div className="grid min-w-0 grid-cols-[minmax(0,9rem)_auto] items-end gap-2 [&_.caption]:col-span-full">
           <label className="field">
             Track trim (dB)
             <input
@@ -442,7 +465,7 @@ function TrackDetails({
         </div>
         {protect && <p className="caption">{PROTECT_REASON}</p>}
         {error && <p role="alert">{error}</p>}
-        <div className="media-actions">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Button
             variant="outline"
             disabled={protect}

@@ -8,7 +8,6 @@ import {
   useSyncExternalStore,
 } from 'react';
 
-import './media.css';
 import {
   currentSplit,
   type MediaLibrary,

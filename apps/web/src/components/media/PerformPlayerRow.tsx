@@ -19,8 +19,12 @@ export function PerformPlayerRow() {
   if (!media.ready) return null;
   if (!player?.track || shown === 'empty')
     return (
-      <div className="media-perform" role="region" aria-label="Backing track">
-        <span className="media-perform-main">
+      <div
+        className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
+        role="region"
+        aria-label="Backing track"
+      >
+        <span className="flex min-w-0 flex-[1_1_12rem] items-center gap-2">
           <MusicNote aria-hidden="true" weight="bold" />
           <span className="caption">No track cued</span>
         </span>
@@ -51,18 +55,26 @@ export function PerformPlayerRow() {
         ? formatTime(length)
         : formatTime(at);
   return (
-    <div className="media-perform" role="region" aria-label="Backing track">
-      <span className="media-perform-main">
+    <div
+      className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
+      role="region"
+      aria-label="Backing track"
+    >
+      <span className="flex min-w-0 flex-[1_1_12rem] items-center gap-2">
         <button
           type="button"
-          className="media-perform-open"
+          className="grid min-h-touch min-w-0 flex-1 cursor-pointer justify-start rounded-md px-2 text-left focus-visible:outline-2"
           aria-label={`Open backing player: ${player.track.title}`}
           onClick={() => media.setSheet({ kind: 'player' })}
         >
           <MusicNote aria-hidden="true" weight="bold" />
-          <span className="media-perform-title">{player.track.title}</span>
+          <span className="text-sm font-semibold break-words">
+            {player.track.title}
+          </span>
         </button>
-        <span className="media-mono">{time}</span>
+        <span className="font-mono text-sm whitespace-nowrap tabular-nums">
+          {time}
+        </span>
         {state}
         {muted && <strong>Output muted</strong>}
       </span>
@@ -78,7 +90,7 @@ export function PerformPlayerRow() {
         </Button>
       )}
       {refusal && (
-        <p role="alert" className="media-perform-refusal">
+        <p role="alert" className="m-0 basis-full text-sm">
           {refusal}
         </p>
       )}

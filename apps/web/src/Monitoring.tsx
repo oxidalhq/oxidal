@@ -13,8 +13,8 @@ import {
 
 import { Button } from '@oxidal/design-system/components/button';
 import { ChartContainer } from '@oxidal/design-system/components/chart';
+import { Meter } from '@oxidal/design-system/widgets/meter';
 
-import './Monitoring.css';
 import type { Monitoring as Readings } from './api';
 import { ControlAudit } from './ControlAudit';
 import {
@@ -54,7 +54,7 @@ const ms = (us: number | null | undefined) =>
   us == null ? '—' : (us / 1000).toFixed(2);
 const number = (value: number | null | undefined, suffix = '') =>
   value == null ? 'Unavailable' : `${value.toFixed(1)}${suffix}`;
-function Meter({
+function ChannelMeter({
   label,
   channel,
   clips,
@@ -65,40 +65,25 @@ function Meter({
   clips: number;
   stale: boolean;
 }) {
-  const level =
-    channel && !stale
-      ? Math.max(0, Math.min(100, ((channel.peak_dbfs + 60) / 60) * 100))
-      : 0;
-  const rms =
-    channel && !stale
-      ? Math.max(0, Math.min(100, ((channel.rms_dbfs + 60) / 60) * 100))
-      : 0;
-  const reading =
-    channel && !stale ? Math.max(-60, Math.min(0, channel.peak_dbfs)) : null;
+  const live = !stale && channel !== undefined;
+  const peakLabel = `${label} peak`;
   return (
-    <div className="meter-row" data-clip={clips > 0 || undefined}>
-      <span className="meter-label">{label}</span>
+    <div className="min-w-0 border-b border-border py-2">
       <div
-        role={reading == null ? 'img' : 'meter'}
-        aria-label={
-          reading == null ? `${label} peak: No live reading` : `${label} peak`
-        }
-        aria-valuemin={reading == null ? undefined : -60}
-        aria-valuemax={reading == null ? undefined : 0}
-        aria-valuenow={reading ?? undefined}
-        aria-valuetext={
-          reading == null ? undefined : number(channel?.peak_dbfs, ' dBFS')
-        }
-        className="meter-track"
+        role={live ? undefined : 'img'}
+        aria-label={live ? undefined : peakLabel + ': No live reading'}
       >
-        <i style={{ width: `${rms}%` }} />
-        <b style={{ left: `${level}%` }} />
+        <div aria-hidden={live ? undefined : true}>
+          <Meter
+            label={peakLabel}
+            value={live ? channel.peak_dbfs : null}
+            rms={live ? channel.rms_dbfs : undefined}
+            peak={live ? channel.peak_dbfs : undefined}
+            state={live ? 'live' : 'unavailable'}
+          />
+        </div>
       </div>
-      <span className="meter-read">
-        {stale || !channel ? '—' : channel.peak_dbfs.toFixed(1)}
-        <small> pk</small>
-      </span>
-      <span className="meter-sub">
+      <span className="font-mono text-xs text-muted-foreground tabular-nums">
         {clips > 0
           ? `Clip · ${clips}`
           : stale
@@ -189,11 +174,11 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
       className="instrument-surface grid gap-4"
       aria-label="Audio and system monitoring"
     >
-      <div className="monitor-bar">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p
           role="status"
           aria-label="Monitoring state"
-          className="monitor-state"
+          className="m-0 inline-flex items-center gap-2 font-semibold before:size-2 before:rounded-full before:border before:border-muted-foreground data-[live]:before:border-brand data-[live]:before:bg-brand"
           data-live={
             (!frozen && !error && !!state?.source && !stale) || undefined
           }
@@ -205,7 +190,7 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
                 ? `${sourceLabel(state.source)} · ${stale ? 'waiting for live readings' : 'live'}`
                 : 'Audio stopped')}
         </p>
-        <div className="monitor-actions">
+        <div className="flex flex-wrap items-center gap-1 [&_button[aria-pressed=true]]:bg-secondary">
           <Button
             variant="ghost"
             aria-label={frozen ? 'Resume readings' : 'Freeze readings'}
@@ -241,9 +226,12 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
           </Button>
         </div>
       </div>
-      <div className="meter-list" aria-label="Levels">
+      <div
+        className="grid min-w-0 gap-x-4 border-t border-border sm:grid-cols-2"
+        aria-label="Levels"
+      >
         {['Input L', 'Input R', 'Output L', 'Output R'].map((label, i) => (
-          <Meter
+          <ChannelMeter
             key={label}
             label={label}
             channel={channels[i]}
@@ -405,7 +393,7 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
           </LineChart>
         </ChartContainer>
       </div>
-      <dl className="health-list">
+      <dl className="m-0 grid grid-cols-2 border-t border-border sm:grid-cols-3 [&_dd]:m-0 [&_dd]:font-mono [&_dd]:break-words [&_dd]:tabular-nums [&_dt]:text-xs [&_dt]:text-muted-foreground [&>div]:grid [&>div]:min-w-0 [&>div]:gap-0.5 [&>div]:border-b [&>div]:border-border [&>div]:py-2 [&>div]:pr-2">
         <div>
           <dt className="text-muted-foreground">
             Recent block time p50 / p95 / max

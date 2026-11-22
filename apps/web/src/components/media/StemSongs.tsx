@@ -7,10 +7,11 @@
 import { Faders, FilePlus, Pause, Play, Scissors } from '@phosphor-icons/react';
 import { useCallback, useEffect, useState } from 'react';
 
+import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
 import { useConfirm } from '@oxidal/design-system/components/confirm';
+import { Progress } from '@oxidal/design-system/components/states';
 
-import './media.css';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { type MediaAsset, type SongList, songList } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
@@ -85,8 +86,8 @@ export function StemSongs({ connected }: { connected: boolean }) {
   }
 
   return (
-    <section className="media-backing" aria-label="Stems">
-      <div className="media-section-head">
+    <section className="grid min-w-0 gap-3" aria-label="Stems">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 [&>h2]:m-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold">
         <div>
           <h2>Stems</h2>
           <p className="caption">
@@ -94,7 +95,7 @@ export function StemSongs({ connected }: { connected: boolean }) {
             save mixes for the Set list and your rigs.
           </p>
         </div>
-        <div className="media-section-meta">
+        <div className="min-w-0 text-xs break-words text-muted-foreground">
           <Button disabled={locked} onClick={() => setPicking(true)}>
             <Scissors aria-hidden="true" />
             Split a track…
@@ -111,14 +112,20 @@ export function StemSongs({ connected }: { connected: boolean }) {
       </div>
       {protect && <p className="caption">{PROTECT_REASON}</p>}
       {(error || media.refusal) && (
-        <p role="alert" className="media-note">
+        <p
+          role="alert"
+          className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
+        >
           {error || media.refusal}
         </p>
       )}
       {running && !songs.some(({ asset }) => asset.id === running.source) && (
-        <div className="stem-song" role="status">
-          <div className="stem-song-head">
-            <div className="stem-song-title">
+        <div
+          className="grid min-w-0 gap-2 rounded-lg border border-border bg-card p-3"
+          role="status"
+        >
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 [&>h2]:m-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold">
+            <div className="grid min-w-0 gap-0.5">
               <strong>
                 {tracks.find((track) => track.id === running.source)?.title ??
                   'Song'}
@@ -138,9 +145,7 @@ export function StemSongs({ connected }: { connected: boolean }) {
               Open
             </Button>
           </div>
-          <div className="stem-bar" aria-hidden="true">
-            <i style={{ width: `${running.percent}%` }} />
-          </div>
+          <Progress label="Stem split progress" value={running.percent} />
         </div>
       )}
       {list && !songs.length && !running && (
@@ -149,17 +154,23 @@ export function StemSongs({ connected }: { connected: boolean }) {
           stems exported from another app.
         </p>
       )}
-      <ul className="stem-songs" aria-label="Songs with stems">
+      <ul
+        className="m-0 grid min-w-0 list-none gap-3 p-0"
+        aria-label="Songs with stems"
+      >
         {songs.map(({ song, asset }) => (
-          <li key={asset.id} className="stem-song">
-            <div className="stem-song-head">
-              <div className="stem-song-title">
+          <li
+            key={asset.id}
+            className="grid min-w-0 gap-2 rounded-lg border border-border bg-card p-3"
+          >
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 [&>h2]:m-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold">
+              <div className="grid min-w-0 gap-0.5">
                 <strong>
                   {asset.title}{' '}
                   {running?.source === asset.id && (
-                    <span className="media-chip" data-kind="stems">
+                    <Badge data-kind="stems">
                       Splitting {running.percent}%
-                    </span>
+                    </Badge>
                   )}
                 </strong>
                 <span className="caption">
@@ -182,7 +193,7 @@ export function StemSongs({ connected }: { connected: boolean }) {
             </div>
             {song.mixes.length ? (
               <ul
-                className="stem-song-mixes"
+                className="m-0 grid list-none gap-1 p-0 [&>li]:flex [&>li]:min-w-0 [&>li]:flex-wrap [&>li]:items-center [&>li]:gap-2"
                 aria-label={`${asset.title} mixes`}
               >
                 {song.mixes.map((mix) => {
@@ -208,7 +219,7 @@ export function StemSongs({ connected }: { connected: boolean }) {
                           <Play aria-hidden="true" weight="fill" />
                         )}
                       </Button>
-                      <span className="stem-song-mix">
+                      <span className="grid min-w-0 flex-1 gap-0.5 [&>.caption]:truncate">
                         <strong>{name}</strong>
                         <span className="caption">
                           {split
@@ -245,9 +256,12 @@ export function StemSongs({ connected }: { connected: boolean }) {
           description="Choose a backing track to separate"
           onCancel={() => setPicking(false)}
         >
-          <div className="media-dialog-form">
+          <div className="grid min-w-0 gap-3">
             {splittable.length ? (
-              <ul className="stem-pick" aria-label="Backing tracks to split">
+              <ul
+                className="flex flex-wrap items-center gap-1"
+                aria-label="Backing tracks to split"
+              >
                 {splittable.map((track) => (
                   <li key={track.id}>
                     <Button

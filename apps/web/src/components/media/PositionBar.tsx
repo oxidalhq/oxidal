@@ -34,7 +34,7 @@ export function PositionBar({ disabled = false }: { disabled?: boolean }) {
     if (!disabled && rate) seek(to);
   };
   return (
-    <div className="media-position">
+    <div className="grid min-w-0 gap-1">
       <Slider
         label="Position"
         min={0}
@@ -69,7 +69,10 @@ export function PositionBar({ disabled = false }: { disabled?: boolean }) {
           seek(Number.isFinite(step) ? at + step : step < 0 ? 0 : max);
         }}
       />
-      <div className="media-times" aria-hidden="true">
+      <div
+        className="flex items-center justify-between gap-2 font-mono text-xs tabular-nums"
+        aria-hidden="true"
+      >
         <span>{formatTime(shown)}</span>
         <span>−{formatTime(length - shown)}</span>
       </div>

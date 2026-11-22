@@ -18,6 +18,7 @@ function fraction(db: number) {
 export function Meter({
   value,
   peak,
+  rms,
   clipped = false,
   state = 'live',
   orientation = 'horizontal',
@@ -28,6 +29,8 @@ export function Meter({
 }: {
   /** Current level in dBFS. */
   value: number | null;
+  /** Optional RMS fill when the readout reports the channel peak. */
+  rms?: number;
   /** Held peak in dBFS. */
   peak?: number | null;
   clipped?: boolean;
@@ -40,7 +43,7 @@ export function Meter({
 }) {
   const vertical = orientation === 'vertical';
   const live = state === 'live' && value !== null;
-  const level = live ? fraction(value) : 0;
+  const level = live ? fraction(rms ?? value) : 0;
   const hot = fraction(-6);
   const held =
     peak !== null && peak !== undefined && live ? fraction(peak) : null;

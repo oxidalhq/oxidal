@@ -23,8 +23,8 @@ import {
   Segment,
   SegmentedControl,
 } from '@oxidal/design-system/components/segmented';
+import { Progress } from '@oxidal/design-system/components/states';
 
-import './media.css';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
   cancelSongSplit,
@@ -457,14 +457,15 @@ export function StemMixEditor({
     <AdjustmentDialog
       title={source.title}
       description="Stems and mixes"
-      className="media-sheet stem-sheet"
+      sideSheet
+      className="lg:w-[min(42rem,100vw)]"
       onCancel={() => {
         void mayDiscard().then((ok) => ok && onClose());
       }}
     >
-      <div className="media-sheet-body">
+      <div className="grid min-w-0 content-start gap-3">
         {locked && (
-          <p className="media-note">
+          <p className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm [&>svg]:size-4 [&>svg]:shrink-0">
             <Warning aria-hidden="true" weight="bold" />
             <span>
               Protect is on. You can play, mix live and download; turn it off to
@@ -473,7 +474,10 @@ export function StemMixEditor({
           </p>
         )}
         {(error || refusal) && (
-          <p className="media-note" role="alert">
+          <p
+            className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
+            role="alert"
+          >
             <Warning aria-hidden="true" weight="bold" />
             <span>{error || refusal}</span>
           </p>
@@ -484,7 +488,10 @@ export function StemMixEditor({
           <SplitProgressCard job={job} onCancel={() => void cancelSplit()} />
         )}
         {!running && job && job.phase !== 'ready' && (
-          <p className="media-note" role="status">
+          <p
+            className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
+            role="status"
+          >
             <Warning aria-hidden="true" weight="bold" />
             <span>
               {job.phase === 'failed'
@@ -516,10 +523,13 @@ export function StemMixEditor({
 
         {song && split && draft && history && (
           <>
-            <section className="stem-section" aria-labelledby="stem-mixes">
-              <div className="stem-transport">
+            <section
+              className="grid min-w-0 gap-2 border-t border-border pt-3 first:border-0 first:pt-0"
+              aria-labelledby="stem-mixes"
+            >
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <Button
-                  className="media-main"
+                  className="min-h-touch font-semibold"
                   aria-label={
                     playing ? 'Pause' : live ? 'Play' : 'Play the stems'
                   }
@@ -533,7 +543,7 @@ export function StemMixEditor({
                   )}
                   {playing ? 'Pause' : 'Play'}
                 </Button>
-                <div className="stem-transport-text">
+                <div className="grid min-w-0 gap-0.5">
                   <strong id="stem-mixes">
                     {playing
                       ? 'Playing the stems live'
@@ -551,7 +561,7 @@ export function StemMixEditor({
 
               {splitMixes.length > 0 && (
                 <div
-                  className="stem-chips"
+                  className="flex min-w-0 flex-wrap items-center gap-2"
                   role="group"
                   aria-label="Saved mixes"
                 >
@@ -633,7 +643,7 @@ export function StemMixEditor({
                 onCommit={endDrag}
               />
 
-              <label className="stem-name">
+              <label className="grid min-w-0 gap-1 text-sm font-medium [&>input]:min-h-touch [&>input]:min-w-0 [&>input]:rounded-md [&>input]:border [&>input]:border-input [&>input]:bg-background [&>input]:px-2">
                 <span>Mix name</span>
                 <input
                   maxLength={120}
@@ -665,7 +675,7 @@ export function StemMixEditor({
                 />
               </label>
 
-              <div className="stem-save">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
                   size="icon"
@@ -695,7 +705,7 @@ export function StemMixEditor({
                     Revert
                   </Button>
                 )}
-                <span className="stem-save-spacer" role="status">
+                <span className="flex-1" role="status">
                   {busy === 'save'
                     ? 'Saving…'
                     : dirty
@@ -730,8 +740,11 @@ export function StemMixEditor({
             </section>
 
             {saved && (
-              <section className="stem-section" aria-labelledby="stem-saved">
-                <div className="stem-section-head">
+              <section
+                className="grid min-w-0 gap-2 border-t border-border pt-3 first:border-0 first:pt-0"
+                aria-labelledby="stem-saved"
+              >
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 [&>h2]:m-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold">
                   <h3 id="stem-saved">“{saved.title}”</h3>
                 </div>
                 <p className="caption">
@@ -739,7 +752,7 @@ export function StemMixEditor({
                   Backing tracks, the Set list and linked rigs, and can still be
                   changed live in the player.
                 </p>
-                <div className="media-actions">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <Button variant="outline" asChild>
                     <a href={wavPath(saved.asset)} download>
                       <DownloadSimple aria-hidden="true" />
@@ -764,8 +777,11 @@ export function StemMixEditor({
               </section>
             )}
 
-            <section className="stem-section" aria-labelledby="stem-files">
-              <div className="stem-section-head">
+            <section
+              className="grid min-w-0 gap-2 border-t border-border pt-3 first:border-0 first:pt-0"
+              aria-labelledby="stem-files"
+            >
+              <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 [&>h2]:m-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold">
                 <h3 id="stem-files">Stems</h3>
                 {song.splits.length > 1 && (
                   <SegmentedControl
@@ -799,7 +815,7 @@ export function StemMixEditor({
                   ? `Uploaded stems: ${roles.map(roleLabel).join(', ')}.`
                   : `${MODE_INFO[split.mode].label} separated on this device: ${roles.map(roleLabel).join(', ')}.`}
               </p>
-              <div className="media-actions">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <Button variant="outline" asChild>
                   <a href={stemArchivePath(source.id, split.id)} download>
                     <DownloadSimple aria-hidden="true" />
@@ -858,15 +874,22 @@ function SplitChooser({
     modes.includes('six') ? 'six' : 'four',
   );
   return (
-    <section className="stem-section" aria-labelledby="stem-split">
-      <div className="stem-section-head">
+    <section
+      className="grid min-w-0 gap-2 border-t border-border pt-3 first:border-0 first:pt-0"
+      aria-labelledby="stem-split"
+    >
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 [&>h2]:m-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold">
         <h3 id="stem-split">{first ? 'Split into stems' : 'Split again'}</h3>
       </div>
-      <div className="stem-modes" role="radiogroup" aria-label="Stems">
+      <div
+        className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] gap-2"
+        role="radiogroup"
+        aria-label="Stems"
+      >
         {(['four', 'six'] as const).map((value) => (
           <label
             key={value}
-            className="stem-mode"
+            className="relative grid min-h-touch min-w-0 cursor-pointer gap-1 rounded-md border border-border p-3 text-sm has-[:focus-visible]:outline-2 data-[checked]:border-foreground data-[checked]:bg-secondary data-[disabled]:cursor-not-allowed data-[disabled]:opacity-60 [&>input]:sr-only [&>span]:text-xs [&>span]:text-muted-foreground"
             data-checked={mode === value || undefined}
             data-disabled={!modes.includes(value) || undefined}
           >
@@ -891,7 +914,7 @@ function SplitChooser({
         Runs on this device in the background at low priority, so you can keep
         playing. A full song takes a few minutes; close this any time.
       </p>
-      <div className="media-actions">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         <Button disabled={disabled} onClick={() => onStart(mode)}>
           <Scissors aria-hidden="true" />
           Split song
@@ -921,26 +944,22 @@ function SplitProgressCard({
 }) {
   const percent = job.progress?.percent ?? 0;
   return (
-    <section className="stem-section" aria-label="Split progress">
-      <div className="stem-section-head">
+    <section
+      className="grid min-w-0 gap-2 border-t border-border pt-3 first:border-0 first:pt-0"
+      aria-label="Split progress"
+    >
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 [&>h2]:m-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold">
         <h3>Splitting into {MODE_INFO[job.mode].label}</h3>
-        <span className="media-mono">{percent}%</span>
+        <span className="font-mono text-sm whitespace-nowrap tabular-nums">
+          {percent}%
+        </span>
       </div>
-      <div
-        className="stem-bar"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={percent}
-        aria-label="Split progress"
-      >
-        <i style={{ width: `${percent}%` }} />
-      </div>
+      <Progress label="Split progress" value={percent} />
       <p className="caption" role="status">
         {job.progress ? STAGE_WORD[job.progress.stage] : 'Starting'}… You can
         keep playing or close this sheet; the split carries on.
       </p>
-      <div className="media-actions">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         <Button variant="outline" onClick={onCancel}>
           Cancel split
         </Button>

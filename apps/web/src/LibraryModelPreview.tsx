@@ -46,7 +46,7 @@ function ModelLevels({ id }: { id: string }) {
     const label = (value: number | null | undefined) =>
       value == null ? 'Unknown' : value + ' dBu';
     return (
-      <dl className="media-facts">
+      <dl className="m-0 grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm [&>dd]:m-0 [&>dd]:break-words [&>dt]:text-muted-foreground">
         <dt>Capture input reference</dt>
         <dd>{label(levels.input_dbu)}</dd>
         <dt>Capture output reference</dt>
