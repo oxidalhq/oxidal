@@ -1,4 +1,5 @@
 import { Checkbox } from '@oxidal/design-system/components/checkbox';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import type { useNativeSceneSettings } from './SceneNativeSettingsState';
 
@@ -19,10 +20,10 @@ export function NativeSceneSettings({
       {warning}
       <fieldset className="my-2 grid gap-1.5">
         <legend className="font-semibold">Capture settings in scenes</legend>
-        <p className="caption">
+        <Caption>
           Tick a changed setting to keep it per scene. Capture gain and mix
           glide over 50 ms.
-        </p>
+        </Caption>
         <ul className="grid gap-1">
           {settings.offered.map((s) => (
             <li key={s.key}>
@@ -34,10 +35,10 @@ export function NativeSceneSettings({
                 />
                 <span>
                   {s.label} {s.display}
-                  <span className="caption">
+                  <Caption as="span">
                     {s.inScenes ? ' · in every scene' : ''}
                     {s.changed ? ' · changed' : ''}
-                  </span>
+                  </Caption>
                 </span>
               </label>
             </li>

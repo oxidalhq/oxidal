@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { Card } from '@oxidal/design-system/components/card';
+import { Caption, Title } from '@oxidal/design-system/components/text';
+
 import {
   type AudioState,
-  graphAudioState,
   type GraphAudioState,
+  graphAudioState,
   type MidiMap,
   playbackCommand,
   playbackState,
@@ -126,13 +129,15 @@ export function MidiSettings({ connected }: { connected: boolean }) {
     }
   }
   return (
-    <section className="panel space-y-4" aria-label="MIDI device settings">
+    <Card className="space-y-4" aria-label="MIDI device settings">
       <div className="space-y-1">
-        <h2>MIDI map</h2>
-        <p className="caption">
+        <Title as="h2" size="sm">
+          MIDI map
+        </Title>
+        <Caption>
           Preset recall follows the Mine set-list. Scene and control mappings
           stay with each saved preset.
-        </p>
+        </Caption>
       </div>
       {(applyError || error) && <p role="alert">{applyError || error}</p>}
       {(applyError || error) && <RecoveryAction failure={recoverFailure} />}
@@ -226,18 +231,18 @@ export function MidiSettings({ connected }: { connected: boolean }) {
             }}
           />
         ) : (
-          <p className="caption">
+          <Caption>
             {!native || !mixed
               ? 'Reading the playing preset…'
               : graph?.phase === 'running' && graph.midi
                 ? 'This effects rig receives device-wide MIDI controls.'
                 : 'Play a preset to add or edit its scene and control mappings.'}
-          </p>
+          </Caption>
         )}
         {(activeNative || activeMixed) && (
-          <span className="caption">Edit the playing preset’s assignments</span>
+          <Caption as="span">Edit the playing preset’s assignments</Caption>
         )}
       </div>
-    </section>
+    </Card>
   );
 }

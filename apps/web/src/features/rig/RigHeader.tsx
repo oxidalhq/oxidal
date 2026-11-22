@@ -11,6 +11,8 @@ import {
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { ActionRow } from '@oxidal/design-system/components/form-layout';
+import { Caption } from '@oxidal/design-system/components/text';
 import { RigHeading } from '@oxidal/design-system/patterns/rig-heading';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
@@ -223,9 +225,7 @@ export function RigHeader({ rig, vm }: RigViewProps) {
                 }}
               >
                 Discard live edits…
-                <span className="caption">
-                  Reload this saved preset version
-                </span>
+                <Caption as="span">Reload this saved preset version</Caption>
               </Button>
               <Button
                 variant="ghost"
@@ -236,9 +236,9 @@ export function RigHeader({ rig, vm }: RigViewProps) {
                 }}
               >
                 MIDI assignments…
-                <span className="caption">
+                <Caption as="span">
                   Assign this preset&apos;s scenes, switches and controls
-                </span>
+                </Caption>
               </Button>
             </div>
           </AdjustmentDialog>
@@ -288,11 +288,11 @@ export function RigHeader({ rig, vm }: RigViewProps) {
           role="status"
         >
           <strong>Editing a copy of {copyOnEdit.sourceName}</strong>
-          <p className="caption">
+          <Caption>
             Your first change created this preset in Mine. The original is
             unchanged.
-          </p>
-          <div className="action-row">
+          </Caption>
+          <ActionRow>
             <Button disabled={busy} onClick={() => void resolveMixedCopy(true)}>
               Keep copy
             </Button>
@@ -303,7 +303,7 @@ export function RigHeader({ rig, vm }: RigViewProps) {
             >
               Discard copy
             </Button>
-          </div>
+          </ActionRow>
         </div>
       )}
       {unsaved && (
@@ -316,7 +316,7 @@ export function RigHeader({ rig, vm }: RigViewProps) {
             it. Edits you made to the blocks inside its TONE3000 chains and have
             not saved are not carried over. Save a copy first to keep them.
           </p>
-          <div className="action-row">
+          <ActionRow>
             <Button variant="outline" onClick={() => setUnsaved(null)}>
               Cancel
             </Button>
@@ -329,7 +329,7 @@ export function RigHeader({ rig, vm }: RigViewProps) {
             >
               Continue
             </Button>
-          </div>
+          </ActionRow>
         </AdjustmentDialog>
       )}
       {stepping && (
@@ -343,14 +343,14 @@ export function RigHeader({ rig, vm }: RigViewProps) {
             {stepping < 0 ? 'before your last edit' : 'after that edit'}, so
             those changes are not kept. Save a copy first to keep them.
           </p>
-          <div className="action-row">
+          <ActionRow>
             <Button variant="outline" onClick={() => setStepping(null)}>
               Cancel
             </Button>
             <Button onClick={() => void stepHistory(stepping, true)}>
               {stepping < 0 ? 'Undo' : 'Redo'}
             </Button>
-          </div>
+          </ActionRow>
         </AdjustmentDialog>
       )}
       {discardOpening && (
@@ -363,7 +363,7 @@ export function RigHeader({ rig, vm }: RigViewProps) {
             {matching?.manifest.name ?? 'this preset'}. Audio will restart and
             release any caught loop.
           </p>
-          <div className="action-row">
+          <ActionRow>
             <Button variant="outline" onClick={() => setDiscardOpening(null)}>
               Keep editing
             </Button>
@@ -387,7 +387,7 @@ export function RigHeader({ rig, vm }: RigViewProps) {
             >
               Discard edits and reload
             </Button>
-          </div>
+          </ActionRow>
           {(state.session !== discardOpening.session ||
             state.revision !== discardOpening.revision) && (
             <p role="status">
@@ -407,18 +407,18 @@ export function RigHeader({ rig, vm }: RigViewProps) {
             with scenes keeps its edits at a time. Keep both ready to switch
             without losing either.
           </p>
-          <div className="action-row">
+          <ActionRow>
             <Button variant="outline" onClick={() => setDiscarding(null)}>
               Keep editing
             </Button>
             <Button onClick={() => void choose(discarding, true)}>
               Discard and open
             </Button>
-          </div>
+          </ActionRow>
         </AdjustmentDialog>
       )}
       {(state.phase !== 'running' || switching) && (
-        <p role="status" className="caption">
+        <Caption role="status">
           {switching
             ? 'Changing preset…'
             : state.waiting_for_device
@@ -428,7 +428,7 @@ export function RigHeader({ rig, vm }: RigViewProps) {
                 : state.phase === 'failed'
                   ? 'Audio needs attention'
                   : 'Audio stopped'}
-        </p>
+        </Caption>
       )}
     </>
   );

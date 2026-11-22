@@ -2,6 +2,7 @@ import { CaretDown, CaretUp, X } from '@phosphor-icons/react';
 import { type ReactNode, useRef } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Caption } from '@oxidal/design-system/components/text';
 import { DockableSheet } from '@oxidal/design-system/patterns/tool-dock';
 
 import { useSessionState } from '../lib/sessionState';
@@ -11,7 +12,7 @@ import { useSessionState } from '../lib/sessionState';
  * flow so it never covers the chain. Hide collapses it to a one-line bar with
  * the block name; Esc inside it does the same. The choice is kept for this
  * browser tab. With `onClose` it has a Close button that clears the selected
- * block, and on a phone it is a bottom sheet over the page.
+ * block, and on a phone its controls scroll inside the sheet.
  * @see docs/interface.md
  */
 export function RigSheet({
@@ -41,7 +42,7 @@ export function RigSheet({
       }}
       renderSheet={(placement) => (
         <section
-          className="rig-sheet group/sheet shadow-lg -mx-1 flex min-w-0 flex-col rounded-t-xl border border-b-0 border-border bg-background max-sm:data-closable:data-open:sticky max-sm:data-closable:data-open:bottom-0 max-sm:data-closable:data-open:z-5 max-sm:data-closable:data-open:max-h-[60dvh] max-sm:data-closable:data-open:overflow-y-auto max-sm:data-closable:data-open:overscroll-contain max-sm:data-closable:data-open:pb-[env(safe-area-inset-bottom)] [[data-display=epaper]_&]:border-2 [[data-display=epaper]_&]:border-foreground [[data-display=epaper]_&]:shadow-none"
+          className="rig-sheet group/sheet shadow-lg -mx-1 flex min-w-0 flex-col rounded-t-xl border border-b-0 border-border bg-background max-sm:data-closable:data-open:max-h-[60dvh] max-sm:data-closable:data-open:overflow-y-auto max-sm:data-closable:data-open:overscroll-contain max-sm:data-closable:data-open:pb-[env(safe-area-inset-bottom)] [[data-display=epaper]_&]:border-2 [[data-display=epaper]_&]:border-foreground [[data-display=epaper]_&]:shadow-none"
           data-open={open || undefined}
           data-closable={onClose ? true : undefined}
           aria-label="Block controls"
@@ -65,7 +66,7 @@ export function RigSheet({
             />
             <div className="rig-sheet-title grid min-w-0 flex-1 [&>strong]:truncate">
               <strong title={title}>{title}</strong>
-              {detail && <span className="caption">{detail}</span>}
+              {detail && <Caption as="span">{detail}</Caption>}
             </div>
             {open && actions}
             <Button
@@ -104,7 +105,7 @@ export function RigSheet({
         </section>
       )}
     >
-      {detail && <p className="caption">{detail}</p>}
+      {detail && <Caption>{detail}</Caption>}
       {actions}
       {children}
     </DockableSheet>

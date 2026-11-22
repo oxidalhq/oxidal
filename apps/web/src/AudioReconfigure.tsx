@@ -2,12 +2,17 @@ import { useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import {
+  ActionRow,
+  FormField,
+} from '@oxidal/design-system/components/form-layout';
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import type { AudioProbe, StartAudio } from './api';
 import { useAudioChange } from './audioChangeFeed';
@@ -95,13 +100,16 @@ function StoppedAudioReconfigure({
     );
   const changed = JSON.stringify(initial) !== JSON.stringify(draft);
   return (
-    <fieldset className="control-stack" disabled={disabled}>
+    <fieldset
+      className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
+      disabled={disabled}
+    >
       <legend>Adjust current session</legend>
-      <p className="caption">
+      <Caption>
         Applying restarts audio. Your tone and live adjustments are kept.
-      </p>
+      </Caption>
       <div className="grid min-w-0 gap-3 sm:grid-cols-2 [&>label]:my-0">
-        <label className="field col-span-full">
+        <FormField className="col-span-full">
           Sample rate (Hz)
           <Select
             value={String(draft.input.sample_rate)}
@@ -128,8 +136,8 @@ function StoppedAudioReconfigure({
                 ))}
             </SelectContent>
           </Select>
-        </label>
-        <label className="field">
+        </FormField>
+        <FormField>
           Buffer (samples)
           <Select
             value={String(draft.input.period_frames)}
@@ -151,8 +159,8 @@ function StoppedAudioReconfigure({
                 ))}
             </SelectContent>
           </Select>
-        </label>
-        <label className="field">
+        </FormField>
+        <FormField>
           Buffer periods
           <Select
             value={String(draft.input.periods)}
@@ -169,10 +177,10 @@ function StoppedAudioReconfigure({
               ))}
             </SelectContent>
           </Select>
-        </label>
+        </FormField>
         {(['input_map', 'output_map'] as const).flatMap((key) =>
           ([0, 1] as const).map((index) => (
-            <label className="field" key={`${key}:${index}`}>
+            <FormField key={`${key}:${index}`}>
               {key === 'input_map' ? 'Input' : 'Output'}{' '}
               {index === 0 ? 'left' : 'right'}
               <input
@@ -191,16 +199,16 @@ function StoppedAudioReconfigure({
                   setDraft({ ...draft, [key]: next });
                 }}
               />
-            </label>
+            </FormField>
           )),
         )}
       </div>
       {valid && (
-        <p className="caption">
+        <Caption>
           {`Buffer: ${draft.input.period_frames} × ${draft.input.periods} = ${bufferMs(draft.input).toFixed(1)} ms · one period ${((1000 * draft.input.period_frames) / draft.input.sample_rate).toFixed(2)} ms.`}{' '}
           Total input-to-output delay also includes the converters and USB, so
           it is a little higher.
-        </p>
+        </Caption>
       )}
       {checkedInput && checkedOutput && (
         <Button
@@ -222,18 +230,18 @@ function StoppedAudioReconfigure({
           Use checked interface
         </Button>
       )}
-      <p className="caption">
+      <Caption>
         Proposed interface: {draft.input.endpoint} · {draft.input.channels} in /{' '}
         {draft.output.channels} out · {draft.input.format} /{' '}
         {draft.output.format}
-      </p>
+      </Caption>
       {changed && !valid && (
         <p role="alert">
           Use matching devices, a buffer of 16–2048 samples, and valid rate and
           channel numbers.
         </p>
       )}
-      <div className="action-row">
+      <ActionRow>
         <Button disabled={!changed || !valid} onClick={() => onApply(draft)}>
           {running ? 'Apply & restart audio' : 'Apply & resume audio'}
         </Button>
@@ -244,7 +252,7 @@ function StoppedAudioReconfigure({
         >
           Reset changes
         </Button>
-      </div>
+      </ActionRow>
     </fieldset>
   );
 }

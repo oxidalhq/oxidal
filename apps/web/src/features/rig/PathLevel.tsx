@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { FormField } from '@oxidal/design-system/components/form-layout';
 
 import { panLabel } from '../../lib/panLabel';
 import { mixGains, type PathMix, pathMix } from '../../rigRoute';
@@ -70,7 +71,7 @@ export function PathLevel({
       role="group"
       aria-label={`Path ${path} mix`}
     >
-      <label className="field">
+      <FormField>
         <span>
           Path {path} level · {Math.round(draft.level * 100)}%
         </span>
@@ -109,8 +110,8 @@ export function PathLevel({
             +
           </Button>
         </span>
-      </label>
-      <label className="field">
+      </FormField>
+      <FormField>
         <span>
           Path {path} pan · {panLabel(draft.pan)}
         </span>
@@ -149,7 +150,7 @@ export function PathLevel({
             R
           </Button>
         </span>
-      </label>
+      </FormField>
       <label className="flex min-h-11 items-center gap-2">
         <input
           type="checkbox"

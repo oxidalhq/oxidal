@@ -1,3 +1,4 @@
+import { Caption } from '@oxidal/design-system/components/text';
 import {
   SourceCard,
   SourceLine,
@@ -47,11 +48,11 @@ function ToneCard({
   const { source, error } = useToneSource(toneId, initialTone);
   if (!source)
     return (
-      <p className="caption" role={error ? 'alert' : 'status'}>
+      <Caption role={error ? 'alert' : 'status'}>
         {error
           ? 'Tone details need a TONE3000 connection.'
           : 'Reading tone details…'}
-      </p>
+      </Caption>
     );
   if (!compact) return <SourceCard source={source} />;
   return (

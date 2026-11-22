@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { Card } from '@oxidal/design-system/components/card';
 import { Loading } from '@oxidal/design-system/components/states';
-import { Description } from '@oxidal/design-system/components/text';
+import { Caption, Description } from '@oxidal/design-system/components/text';
 import { PluginPacks } from '@oxidal/design-system/patterns/engine-settings';
 
 import {
@@ -141,17 +141,15 @@ export function EffectPacks({
       {error && <p role="alert">{error}</p>}
       {error && <RecoveryAction failure={recoverFailure} />}
       {state?.message && !state.job && (
-        <p className="caption" role="status">
-          {state.message}
-        </p>
+        <Caption role="status">{state.message}</Caption>
       )}
 
       {!state && !error && <Loading label="Reading installed effects…" />}
       {state && !state.available && (
-        <p role="status" className="caption">
+        <Caption role="status">
           This device cannot install packages, so effect packs are shown for
           reference only.
-        </p>
+        </Caption>
       )}
       {state && (
         <PluginPacks

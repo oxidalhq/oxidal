@@ -2,7 +2,12 @@ import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import {
+  ActionRow,
+  FormField,
+} from '@oxidal/design-system/components/form-layout';
 import { Loading } from '@oxidal/design-system/components/states';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
@@ -131,7 +136,7 @@ export function PresetDetailsDialog({
               void save();
             }}
           >
-            <label className="field">
+            <FormField>
               Description
               <textarea
                 className="min-h-32 w-full resize-y rounded-md border border-input bg-card p-3"
@@ -140,8 +145,8 @@ export function PresetDetailsDialog({
                 disabled={busy}
                 onChange={(e) => setDescription(e.target.value)}
               />
-            </label>
-            <label className="field">
+            </FormField>
+            <FormField>
               Categories
               <input
                 value={categories}
@@ -150,11 +155,11 @@ export function PresetDetailsDialog({
                 onChange={(e) => setCategories(e.target.value)}
                 placeholder="Clean, Ambient, Lead"
               />
-            </label>
-            <p className="caption">
+            </FormField>
+            <Caption>
               Separate categories with commas. Up to 16 categories, 48
               characters each.
-            </p>
+            </Caption>
             <div className="flex flex-wrap gap-2">
               <Button type="submit" disabled={busy || !catalog}>
                 {busy ? 'Saving…' : 'Save details'}
@@ -195,13 +200,13 @@ export function PresetDetailsDialog({
                     ))}
                   </div>
                 ) : (
-                  <p className="caption">No categories yet.</p>
+                  <Caption>No categories yet.</Caption>
                 )}
               </div>
               {details.copied_from && (
-                <p className="caption wrap-anywhere">
+                <Caption className="wrap-anywhere">
                   Copied from {details.copied_from.name}
-                </p>
+                </Caption>
               )}
               {editable && (
                 <Button variant="outline" onClick={() => setEditing(true)}>
@@ -221,7 +226,7 @@ export function PresetDetailsDialog({
             onChanged={onChanged}
           />
         )}
-        {children && <div className="action-row">{children}</div>}
+        {children && <ActionRow>{children}</ActionRow>}
       </div>
     </AdjustmentDialog>
   );

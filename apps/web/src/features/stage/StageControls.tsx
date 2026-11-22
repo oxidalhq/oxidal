@@ -6,6 +6,7 @@ import {
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { ActionRow } from '@oxidal/design-system/components/form-layout';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { protectState, setProtect } from '../../api';
@@ -68,7 +69,7 @@ export function StageControls({
   }
   return (
     <div
-      className="stage-controls"
+      className="mb-2 flex flex-wrap items-center justify-end gap-2 data-[compact]:m-0 data-[compact]:flex-none data-[compact]:flex-nowrap"
       data-compact={compact || undefined}
       role="group"
       aria-label="Stage controls"
@@ -115,7 +116,7 @@ export function StageControls({
         {label(protect ? 'Protected' : 'Protect')}
       </Button>
       {error && (
-        <p role="alert" className="stage-controls-error">
+        <p role="alert" className="m-0 basis-full text-right text-destructive">
           {error}
         </p>
       )}
@@ -128,7 +129,7 @@ export function StageControls({
             Edits, audio setup and presets that are not ready will work again,
             from every browser and MIDI.
           </p>
-          <div className="action-row">
+          <ActionRow>
             <Button variant="outline" onClick={() => setConfirmOff(false)}>
               Keep Protect on
             </Button>
@@ -142,7 +143,7 @@ export function StageControls({
             >
               Turn off
             </Button>
-          </div>
+          </ActionRow>
         </AdjustmentDialog>
       )}
     </div>

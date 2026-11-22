@@ -2,6 +2,7 @@ import { ArrowClockwise } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Caption } from '@oxidal/design-system/components/text';
 import {
   DevicePower as DevicePowerView,
   PowerReceipt,
@@ -76,9 +77,7 @@ export function DevicePower({ connected }: { connected: boolean }) {
         notice={
           <>
             {!state && !readError && (
-              <p role="status" className="caption">
-                Reading device controls…
-              </p>
+              <Caption role="status">Reading device controls…</Caption>
             )}
             {readError && (
               <div className="space-y-2">

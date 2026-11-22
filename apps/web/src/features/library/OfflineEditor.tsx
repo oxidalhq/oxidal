@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import {
+  ActionRow,
+  FormField,
+} from '@oxidal/design-system/components/form-layout';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -9,6 +13,7 @@ import {
   SelectValue,
 } from '@oxidal/design-system/components/select';
 import { Loading } from '@oxidal/design-system/components/states';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
@@ -344,13 +349,13 @@ export function OfflineEditor({
       <li key={block.id} className="offline-block">
         <div className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-1">
           <strong>{block.name}</strong>
-          <span className="caption">
+          <Caption as="span">
             {block.kind === 'native'
               ? block.stage
                 ? `TONE3000 ${block.stage.role} stage`
                 : 'TONE3000'
               : 'Effect'}
-          </span>
+          </Caption>
           <span className="flex-1" />
           <Button
             type="button"
@@ -391,10 +396,10 @@ export function OfflineEditor({
         </div>
         {block.kind === 'native' &&
           (block.stage ? (
-            <p className="caption">
+            <Caption>
               Settings of an extracted amp or cab stage are changed with its
               whole tone in Rig.
-            </p>
+            </Caption>
           ) : (
             <Button
               type="button"
@@ -409,7 +414,7 @@ export function OfflineEditor({
         {!!ports.length && block.kind === 'lv2' && (
           <details>
             <summary>Settings</summary>
-            <div className="control-stack">
+            <div className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start">
               {supportsNamedSettings(block.plugin.uri) && (
                 <NamedSettings
                   block={block}
@@ -422,7 +427,7 @@ export function OfflineEditor({
                 />
               )}
               {ports.map((p) => (
-                <label key={p.symbol} className="field">
+                <FormField key={p.symbol}>
                   <span>
                     {p.symbol} · {block.controls[p.symbol] ?? p.default}
                   </span>
@@ -449,7 +454,7 @@ export function OfflineEditor({
                       )
                     }
                   />
-                </label>
+                </FormField>
               ))}
             </div>
           </details>
@@ -463,15 +468,13 @@ export function OfflineEditor({
         key={step.split}
         className="[&>ol]:border-l-2 [&>ol]:border-border [&>ol]:pl-3"
       >
-        <span className="caption">Split · {step.branches.length} paths</span>
+        <Caption as="span">Split · {step.branches.length} paths</Caption>
         <ol className="m-0 grid list-none gap-1 p-0 [&>li]:border-l-2 [&>li]:border-border [&>li]:pl-3">
           {step.branches.map((branch, path) => (
             <li key={path} aria-label={`Path ${path + 1}`}>
               <div className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-1">
                 <span>Path {path + 1}</span>
-                {!branch.length && (
-                  <span className="caption">Dry · no blocks</span>
-                )}
+                {!branch.length && <Caption as="span">Dry · no blocks</Caption>}
                 <span className="flex-1" />
                 {addEffect({ split: step.split, path })}
                 <Button
@@ -508,7 +511,7 @@ export function OfflineEditor({
                   );
                 return (
                   <div className="grid gap-1 min-[641px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] min-[641px]:items-end min-[641px]:gap-3 [[data-display=epaper]_&_input[type=range]]:hidden">
-                    <label className="field">
+                    <FormField>
                       <span>
                         Path {path + 1} level · {Math.round(mix.level * 100)}%
                       </span>
@@ -524,8 +527,8 @@ export function OfflineEditor({
                           set({ level: Number(event.target.value) })
                         }
                       />
-                    </label>
-                    <label className="field">
+                    </FormField>
+                    <FormField>
                       <span>
                         Path {path + 1} pan · {panLabel(mix.pan)}
                       </span>
@@ -541,7 +544,7 @@ export function OfflineEditor({
                           set({ pan: Number(event.target.value) })
                         }
                       />
-                    </label>
+                    </FormField>
                     <label className="flex min-h-11 items-center gap-2">
                       <input
                         type="checkbox"
@@ -585,21 +588,21 @@ export function OfflineEditor({
       {blocked ? (
         <>
           <p role="alert">{blocked}</p>
-          <div className="action-row">
+          <ActionRow>
             <Button onClick={onCancel}>Close</Button>
-          </div>
+          </ActionRow>
         </>
       ) : !opened ? (
         <Loading label="Opening the preset" />
       ) : (
         <form
-          className="control-stack"
+          className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
           onSubmit={(event) => {
             event.preventDefault();
             void save();
           }}
         >
-          <label className="field">
+          <FormField>
             <span>Name</span>
             <input
               className="h-11 w-full rounded-md border border-input bg-card px-3"
@@ -610,33 +613,31 @@ export function OfflineEditor({
                 setDirty(true);
               }}
             />
-          </label>
-          <p className="caption">
+          </FormField>
+          <Caption>
             Nothing plays while you edit. Save keeps the changes
             {opened.mine ? '.' : ' as your own copy in Mine.'}
-          </p>
+          </Caption>
           {opened.chains ? (
             <div aria-label="Scene chains" role="group">
-              <p className="caption">
+              <Caption>
                 Each scene of this preset is its own TONE3000 chain. Change each
                 block&apos;s settings here; its routing and scenes are edited in
                 Rig.
-              </p>
+              </Caption>
               <ul className="offline-blocks">
                 {opened.chains.map(({ instance, block }) => (
                   <li key={block.id} className="offline-block">
                     <div className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-1">
                       <strong>{block.name}</strong>
-                      <span className="caption">
+                      <Caption as="span">
                         {chainEdits[instance]
                           ? 'Edited · not saved'
                           : 'TONE3000'}
-                      </span>
+                      </Caption>
                       <span className="flex-1" />
                       {block.stage ? (
-                        <span className="caption">
-                          Edited with its tone in Rig
-                        </span>
+                        <Caption as="span">Edited with its tone in Rig</Caption>
                       ) : (
                         <Button
                           type="button"
@@ -656,15 +657,15 @@ export function OfflineEditor({
           ) : (
             <div aria-label="Routing" role="group">
               <div className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="caption">Input</span>
+                <Caption as="span">Input</Caption>
               </div>
               {route.length ? (
                 steps(route)
               ) : (
-                <p className="caption">Input straight to output.</p>
+                <Caption>Input straight to output.</Caption>
               )}
               <div className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="caption">Output</span>
+                <Caption as="span">Output</Caption>
                 <span className="flex-1" />
                 {addEffect()}
               </div>
@@ -703,7 +704,7 @@ export function OfflineEditor({
               Close and show the latest version
             </Button>
           )}
-          <div className="action-row">
+          <ActionRow>
             <span className="flex-1" />
             <Button
               type="button"
@@ -716,7 +717,7 @@ export function OfflineEditor({
             <Button type="submit" disabled={!connected || busy || !dirty}>
               {busy ? 'Saving…' : 'Save'}
             </Button>
-          </div>
+          </ActionRow>
         </form>
       )}
       {tuning && (
@@ -773,12 +774,12 @@ export function OfflineEditor({
           onCancel={() => setDiscarding(false)}
         >
           <p>The saved preset stays as it was.</p>
-          <div className="action-row">
+          <ActionRow>
             <Button variant="outline" onClick={() => setDiscarding(false)}>
               Keep editing
             </Button>
             <Button onClick={onCancel}>Discard</Button>
-          </div>
+          </ActionRow>
         </AdjustmentDialog>
       )}
     </AdjustmentDialog>

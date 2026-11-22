@@ -2,6 +2,7 @@ import { ArrowSquareOut } from '@phosphor-icons/react';
 import { useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { captureLevels, type LocalModel, toneImage } from './api';
@@ -117,11 +118,11 @@ export function LibraryModelPreview({
                   Trained with {model.nam.trainer}
                 </p>
               )}
-              <p className="caption">
+              <Caption>
                 Uploaded NAM
                 {!modelSourceLink(model) &&
                   ' · No TONE3000 reference in this file'}
-              </p>
+              </Caption>
               {modelSourceLink(model) && (
                 <a
                   className="inline-flex min-h-touch w-fit items-center gap-1 font-semibold underline"

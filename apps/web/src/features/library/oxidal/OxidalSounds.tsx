@@ -8,6 +8,7 @@ import {
   SegmentedControl,
 } from '@oxidal/design-system/components/segmented';
 import { StepProgress } from '@oxidal/design-system/components/states';
+import { Caption } from '@oxidal/design-system/components/text';
 import { useMedia } from '@oxidal/design-system/lib/use-media';
 import {
   ReadySoundsFilter,
@@ -251,7 +252,7 @@ export function OxidalSounds({
             >
               <div className="flex items-baseline justify-between border-b border-border pb-1">
                 <h3>{group.label}</h3>
-                <span className="caption">{group.items.length}</span>
+                <Caption as="span">{group.items.length}</Caption>
               </div>
               <div className="grid gap-2">{group.items.map(card)}</div>
             </section>

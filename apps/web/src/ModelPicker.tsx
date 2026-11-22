@@ -11,6 +11,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@oxidal/design-system/components/button';
 import { DialogFooter } from '@oxidal/design-system/components/dialog';
 import {
+  ActionRow,
+  FormField,
+} from '@oxidal/design-system/components/form-layout';
+import {
   Segment,
   SegmentedControl,
 } from '@oxidal/design-system/components/segmented';
@@ -22,6 +26,7 @@ import {
   SelectValue,
 } from '@oxidal/design-system/components/select';
 import { Loading } from '@oxidal/design-system/components/states';
+import { Caption } from '@oxidal/design-system/components/text';
 import { CatalogueNotice } from '@oxidal/design-system/patterns/model-browser';
 import { DockableSheet } from '@oxidal/design-system/patterns/tool-dock';
 
@@ -116,8 +121,10 @@ export function ModelPicker({
   comparison,
   inline = false,
   onSignIn,
+  returnFocus,
 }: {
   name: string;
+  returnFocus?: () => HTMLElement | null;
   /** Shown in a page (Library) instead of a dialog; keeps its browsing for this tab. */
   inline?: boolean;
   /** Opens Accounts when browsing needs a TONE3000 sign-in. */
@@ -360,7 +367,7 @@ export function ModelPicker({
       : 'Choose model';
   const body = (
     <>
-      <div className="control-stack">
+      <div className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start">
         {intent !== 'download' && (
           <p className="truncate text-sm text-muted-foreground">
             {intent === 'add' ? 'Add to' : 'Replace'} {name}
@@ -413,10 +420,10 @@ export function ModelPicker({
                 </Button>
               </div>
             </details>
-            <p className="caption">
+            <Caption>
               Everything already on this unit: models you downloaded from
               TONE3000 and files you added. No internet needed.
-            </p>
+            </Caption>
             <div
               aria-label="Local model files"
               className="space-y-2"
@@ -465,7 +472,7 @@ export function ModelPicker({
               )}
             </div>
             {(localAfter || local?.next) && (
-              <div className="action-row">
+              <ActionRow>
                 <Button
                   variant="outline"
                   disabled={!localAfter || localLoading || locked}
@@ -480,7 +487,7 @@ export function ModelPicker({
                 >
                   More files
                 </Button>
-              </div>
+              </ActionRow>
             )}
             {localError && <p role="alert">{localError}</p>}
           </section>
@@ -490,7 +497,7 @@ export function ModelPicker({
             {!tone ? (
               <>
                 {!(intent === 'download' && allowedFormat) && (
-                  <div className="action-row" aria-label="Model type">
+                  <ActionRow aria-label="Model type">
                     {(allowedFormat
                       ? [allowedFormat]
                       : (['nam', 'ir'] as const)
@@ -508,9 +515,9 @@ export function ModelPicker({
                         {kind === 'nam' ? 'NAM' : 'Cab / IR'}
                       </Button>
                     ))}
-                  </div>
+                  </ActionRow>
                 )}
-                <label className="field">
+                <FormField>
                   TONE3000 library
                   <Select
                     value={query.collection}
@@ -534,7 +541,7 @@ export function ModelPicker({
                       <SelectItem value="trending">Trending</SelectItem>
                     </SelectContent>
                   </Select>
-                </label>
+                </FormField>
                 <div className="flex flex-wrap justify-between gap-x-4 gap-y-1">
                   <SegmentedControl
                     value={query.gear ?? 'all'}
@@ -583,14 +590,14 @@ export function ModelPicker({
                       setQuery({ ...query, query: search.trim(), page: 1 });
                     }}
                   >
-                    <label className="field min-w-0 flex-1">
+                    <FormField className="min-w-0 flex-1">
                       Search
                       <input
                         value={search}
                         maxLength={200}
                         onChange={(e) => setSearch(e.target.value)}
                       />
-                    </label>
+                    </FormField>
                     <Button type="submit" variant="outline" disabled={locked}>
                       <MagnifyingGlass aria-hidden="true" /> Search
                     </Button>
@@ -764,11 +771,11 @@ export function ModelPicker({
             )}
           </>
         )}
-        <p className="caption">
+        <Caption>
           {intent === 'download'
             ? 'Downloads stay in your library for future presets. Downloading does not change the playing sound.'
             : 'Audition changes live sound; closing keeps it. Save a copy in Rig for offline use.'}
-        </p>
+        </Caption>
         {comparison?.pending && (
           <p role="status">
             Preparing comparison… Close leaves this request running.
@@ -852,6 +859,7 @@ export function ModelPicker({
       id="change"
       title={title}
       closeLabel="Close dialog"
+      returnFocus={returnFocus}
       open
       onOpenChange={(open) => {
         if (!open) close();

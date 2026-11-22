@@ -13,6 +13,7 @@ import {
 
 import { Button } from '@oxidal/design-system/components/button';
 import { ChartContainer } from '@oxidal/design-system/components/chart';
+import { Caption } from '@oxidal/design-system/components/text';
 import { Meter } from '@oxidal/design-system/widgets/meter';
 
 import type { Monitoring as Readings } from './api';
@@ -175,7 +176,7 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
   const stream = state?.stream;
   return (
     <section
-      className="instrument-surface grid gap-4"
+      className="grid min-w-0 gap-4 py-1"
       aria-label="Audio and system monitoring"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -475,7 +476,10 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
         </div>
       </dl>
       {state?.error && (
-        <p role="alert" className="error">
+        <p
+          role="alert"
+          className="mb-4 min-w-0 rounded-lg border border-destructive px-3 py-2.5 wrap-anywhere text-destructive"
+        >
           {state.error}
         </p>
       )}
@@ -483,14 +487,14 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
       <ControlAudit />
       <details>
         <summary>Measurement details</summary>
-        <p className="caption break-words">
+        <Caption className="break-words">
           TONE3000 audio: {state?.audio_phase || 'reading'} · Effects audio:{' '}
           {state?.graph_phase || 'reading'} · Portable rigs:{' '}
           {state?.rig_phase || 'reading'}
           {stream && ` · ${stream.input.endpoint} → ${stream.output.endpoint}`}
-        </p>
+        </Caption>
 
-        <p className="caption">
+        <Caption>
           Levels measure the mapped DSP input/output, before physical output
           mixing. −120 dBFS is the display floor. Clip counts are full-scale
           samples; Reset view clears only this browser’s history and clip hold.
@@ -500,7 +504,7 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
           Recovered xruns are counted since audio last started. Throttling flags
           remain unavailable. Charts retain at most 120 samples in this browser;
           sampling slows on e-paper and pauses while the page is hidden.
-        </p>
+        </Caption>
       </details>
     </section>
   );

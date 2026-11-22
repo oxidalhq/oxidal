@@ -11,6 +11,7 @@ import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
 import { useConfirm } from '@oxidal/design-system/components/confirm';
 import { Progress } from '@oxidal/design-system/components/states';
+import { Caption, Title } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { type MediaAsset, type SongList, songList } from '../../api';
@@ -89,11 +90,13 @@ export function StemSongs({ connected }: { connected: boolean }) {
     <section className="grid min-w-0 gap-3" aria-label="Stems">
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 [&>h2]:m-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold">
         <div>
-          <h2>Stems</h2>
-          <p className="caption">
+          <Title as="h2" size="sm">
+            Stems
+          </Title>
+          <Caption>
             Split a song into its parts, mute or level each one as it plays, and
             save mixes for the Set list and your rigs.
-          </p>
+          </Caption>
         </div>
         <div className="min-w-0 text-xs break-words text-muted-foreground">
           <Button disabled={locked} onClick={() => setPicking(true)}>
@@ -110,7 +113,7 @@ export function StemSongs({ connected }: { connected: boolean }) {
           </Button>
         </div>
       </div>
-      {protect && <p className="caption">{PROTECT_REASON}</p>}
+      {protect && <Caption>{PROTECT_REASON}</Caption>}
       {(error || media.refusal) && (
         <p
           role="alert"
@@ -130,10 +133,10 @@ export function StemSongs({ connected }: { connected: boolean }) {
                 {tracks.find((track) => track.id === running.source)?.title ??
                   'Song'}
               </strong>
-              <span className="caption">
+              <Caption as="span">
                 Splitting into {running.mode === 'six' ? 6 : 4} stems ·{' '}
                 {running.percent}%
-              </span>
+              </Caption>
             </div>
             <Button
               variant="outline"
@@ -149,10 +152,10 @@ export function StemSongs({ connected }: { connected: boolean }) {
         </div>
       )}
       {list && !songs.length && !running && (
-        <p className="caption">
+        <Caption>
           No songs with stems yet. Split one of your backing tracks, or import
           stems exported from another app.
-        </p>
+        </Caption>
       )}
       <ul
         className="m-0 grid min-w-0 list-none gap-3 p-0"
@@ -173,14 +176,14 @@ export function StemSongs({ connected }: { connected: boolean }) {
                     </Badge>
                   )}
                 </strong>
-                <span className="caption">
+                <Caption as="span">
                   {[
                     formatTime(durationOf(asset)),
                     ...song.splits.map((split) =>
                       splitLabel(split, song.splits),
                     ),
                   ].join(' · ')}
-                </span>
+                </Caption>
               </div>
               <Button
                 variant="outline"
@@ -219,13 +222,13 @@ export function StemSongs({ connected }: { connected: boolean }) {
                           <Play aria-hidden="true" weight="fill" />
                         )}
                       </Button>
-                      <span className="grid min-w-0 flex-1 gap-0.5 [&>.caption]:truncate">
+                      <span className="grid min-w-0 flex-1 gap-0.5 [&>[data-slot=caption]]:truncate">
                         <strong>{name}</strong>
-                        <span className="caption">
+                        <Caption as="span">
                           {split
                             ? describeRecipe(mix.recipe, splitRoles(split))
                             : ''}
-                        </span>
+                        </Caption>
                       </span>
                       {cued && (
                         <StateChip state={playing ? 'playing' : 'cued'} />
@@ -242,9 +245,9 @@ export function StemSongs({ connected }: { connected: boolean }) {
                 })}
               </ul>
             ) : (
-              <p className="caption">
+              <Caption>
                 No saved mixes yet. Open it to play the stems and make one.
-              </p>
+              </Caption>
             )}
           </li>
         ))}
@@ -272,18 +275,18 @@ export function StemSongs({ connected }: { connected: boolean }) {
                       }}
                     >
                       <span>{track.title}</span>
-                      <span className="caption">
+                      <Caption as="span">
                         {formatTime(durationOf(track))}
-                      </span>
+                      </Caption>
                     </Button>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="caption">
+              <Caption>
                 Every WAV and MP3 already has stems. Import a new one in Backing
                 tracks first.
-              </p>
+              </Caption>
             )}
           </div>
         </AdjustmentDialog>

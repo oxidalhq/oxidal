@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { FormField } from '@oxidal/design-system/components/form-layout';
 
 import { presetVersions, type VersionView } from '../../api';
 import type { LibraryKind, VersionTarget } from '../../generated/contract';
@@ -81,7 +82,7 @@ export function SaveSoundVersion({
         </Button>
       ) : (
         <>
-          <label className="field">
+          <FormField>
             Version to update
             <select
               value={selected}
@@ -97,7 +98,7 @@ export function SaveSoundVersion({
                   </option>
                 ))}
             </select>
-          </label>
+          </FormField>
           {!selected && <p>No version currently uses this saved sound.</p>}
           <Button
             disabled={disabled || busy || !selected || !name.trim()}

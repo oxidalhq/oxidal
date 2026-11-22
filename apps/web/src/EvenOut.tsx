@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { ActionRow } from '@oxidal/design-system/components/form-layout';
 import { Progress } from '@oxidal/design-system/components/states';
+import { Caption, Title } from '@oxidal/design-system/components/text';
 import { PresetLoudnessChart } from '@oxidal/design-system/patterns/guitar-tools';
 
 import {
@@ -83,8 +85,10 @@ export function EvenOut({ connected }: { connected: boolean }) {
         : `${entries.length} presets and scenes evened out to ${target_lufs.toFixed(1)} LUFS.`;
   return (
     <section className="grid gap-3" aria-label="Even out all">
-      <div className="section-heading">
-        <h2>Even out all</h2>
+      <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
+        <Title as="h2" size="sm">
+          Even out all
+        </Title>
         {!running && (
           <Button
             variant="outline"
@@ -117,28 +121,26 @@ export function EvenOut({ connected }: { connected: boolean }) {
         </>
       ) : (
         <>
-          <p className="caption">{summary}</p>
+          <Caption>{summary}</Caption>
           {spread != null && (
             <>
               <p>Loudest to quietest: {spread.toFixed(1)} dB</p>
               <PresetLoudnessChart presets={presets} target={target_lufs} />
-              <p className="caption">
-                Estimated LUFS after stored level corrections.
-              </p>
+              <Caption>Estimated LUFS after stored level corrections.</Caption>
             </>
           )}
           <details className="grid gap-1 text-sm [&>summary]:min-h-touch">
             <summary>How it works</summary>
-            <p className="caption">
+            <Caption>
               Plays a built-in riff through each new or changed preset and scene
               at Oxidal's fixed factory level for about four seconds, silently,
               then puts back what you were playing. Your guitar profile does not
               change the result. Oxidal chooses a reachable common level within
               its correction range. Boost remains a separate control.
-            </p>
+            </Caption>
           </details>
           {entries.length > 0 && (
-            <div className="action-row">
+            <ActionRow>
               <Button variant="outline" onClick={() => setDetails((v) => !v)}>
                 {details ? 'Hide levels' : 'Levels'}
               </Button>
@@ -156,7 +158,7 @@ export function EvenOut({ connected }: { connected: boolean }) {
               >
                 Reset
               </Button>
-            </div>
+            </ActionRow>
           )}
           {progress.total > 0 &&
             !progress.error &&
@@ -176,11 +178,11 @@ export function EvenOut({ connected }: { connected: boolean }) {
               ? 'One could not be measured:'
               : `${progress.failed.length} could not be measured:`}
           </p>
-          <ul className="caption">
+          <Caption as="ul">
             {progress.failed.map((line) => (
               <li key={line}>{line}</li>
             ))}
-          </ul>
+          </Caption>
         </div>
       )}
       {progress.error && <p role="alert">{progress.error}</p>}

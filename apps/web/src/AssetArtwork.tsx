@@ -151,7 +151,7 @@ function ArtworkContent({
         <div className="flex flex-wrap gap-2">{pictured.map(entry)}</div>
       )}
       {missing.length > 0 && !compact && (
-        <details className="control-help">
+        <details className="border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']">
           <summary>
             {missing.length} {missing.length === 1 ? 'asset' : 'assets'} without
             artwork

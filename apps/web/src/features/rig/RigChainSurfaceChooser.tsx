@@ -1,4 +1,5 @@
 import { Button } from '@oxidal/design-system/components/button';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { lv2Effect, terminalEffect } from '../../rigDraft';
@@ -41,10 +42,10 @@ export function RigChainSurfaceChooser({ rig, vm }: RigViewProps) {
             Split here
           </Button>
         </div>
-        <p className="caption">
+        <Caption>
           Split here makes two paths: the effect you choose on Path 1, Path 2
           empty for another effect.
-        </p>
+        </Caption>
       </AdjustmentDialog>
     );
   return (

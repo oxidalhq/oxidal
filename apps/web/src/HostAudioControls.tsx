@@ -1,4 +1,5 @@
 import { Button } from '@oxidal/design-system/components/button';
+import { ActionRow } from '@oxidal/design-system/components/form-layout';
 
 import type { AudioAction } from './api';
 type Command = Extract<AudioAction, { kind: 'host_utility' }>['command'];
@@ -16,10 +17,10 @@ export function HostAudioControls({
 }) {
   return (
     <section
-      className="control-stack"
+      className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
       aria-label="Audio monitoring and output test"
     >
-      <div className="action-row">
+      <ActionRow>
         <Button
           variant="outline"
           disabled={disabled}
@@ -36,7 +37,7 @@ export function HostAudioControls({
         >
           Output test · quiet
         </Button>
-      </div>
+      </ActionRow>
       {error && <p role="alert">{error}</p>}
     </section>
   );

@@ -1,4 +1,5 @@
 import { Button } from '@oxidal/design-system/components/button';
+import { FormField } from '@oxidal/design-system/components/form-layout';
 import {
   Select,
   SelectContent,
@@ -6,6 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import type { MidiDevices, MidiMap } from './api';
 
@@ -43,16 +45,22 @@ export function ExtraControllers({
     devices?.inputs.find((device) => device.id === id)?.name ?? id;
   if (!map.input) return null;
   return (
-    <section className="midi-extra" aria-label="Additional controllers">
+    <section
+      className="grid gap-2.5 border-t border-border/70 pt-3"
+      aria-label="Additional controllers"
+    >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <strong>Additional controllers</strong>
-        <span className="caption">
+        <Caption as="span">
           Each one is listened to only after you add it.
-        </span>
+        </Caption>
       </div>
       {extras.map((extra, index) => (
-        <div key={extra.input} className="midi-extra-row">
-          <label className="field min-w-0">
+        <div
+          key={extra.input}
+          className="grid items-end gap-x-3 gap-y-2 sm:grid-cols-[minmax(0,1fr)_8rem_auto_auto]"
+        >
+          <FormField className="min-w-0">
             Controller {index + 2}
             <Select
               value={extra.input}
@@ -83,8 +91,8 @@ export function ExtraControllers({
                   ))}
               </SelectContent>
             </Select>
-          </label>
-          <label className="field">
+          </FormField>
+          <FormField>
             Channel
             <Select
               value={String(extra.channel)}
@@ -109,13 +117,13 @@ export function ExtraControllers({
                 ))}
               </SelectContent>
             </Select>
-          </label>
-          <span className="caption midi-extra-state">
+          </FormField>
+          <Caption as="span" className="self-center">
             {sources[index]?.connected ? 'Connected' : 'Not connected'}
-          </span>
+          </Caption>
           <Button
             variant="outline"
-            className="midi-tool"
+            className="px-2"
             disabled={busy}
             onClick={() => {
               if (learnSource === index + 1) onLearnSource(0);
@@ -126,7 +134,7 @@ export function ExtraControllers({
           </Button>
         </div>
       ))}
-      <div className="midi-extra-actions">
+      <div className="flex flex-wrap items-end gap-3">
         <Button
           variant="outline"
           disabled={busy || !free || extras.length >= MAX_EXTRA}
@@ -137,7 +145,7 @@ export function ExtraControllers({
           Add controller
         </Button>
         {extras.length > 0 && (
-          <label className="field midi-extra-learn">
+          <FormField className="min-w-0 sm:min-w-56">
             Learn from
             <Select
               value={String(learnSource)}
@@ -157,7 +165,7 @@ export function ExtraControllers({
                 ))}
               </SelectContent>
             </Select>
-          </label>
+          </FormField>
         )}
       </div>
     </section>

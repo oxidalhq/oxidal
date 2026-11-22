@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import {
+  ActionRow,
+  FormField,
+  FormGrid,
+} from '@oxidal/design-system/components/form-layout';
 import { RelativeAdjustment as TouchAdjust } from '@oxidal/design-system/components/number-field';
 import {
   Select,
@@ -11,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
@@ -314,11 +320,17 @@ export function NativeEditor({
     state?.owned.find((p) => p.id === state.loaded)?.preset.name ??
     presets.find((p) => p.sha256 === state?.loaded)?.name;
   return (
-    <section className="control-stack" aria-label="Native preset editor">
+    <section
+      className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
+      aria-label="Native preset editor"
+    >
       <h3>{loadedName ?? 'Native preset editor'}</h3>
-      <p className="caption">Silent draft · hear live adjustments on Rig.</p>
+      <Caption>Silent draft · hear live adjustments on Rig.</Caption>
       {error && !ours && (
-        <p role="alert" className="error">
+        <p
+          role="alert"
+          className="mb-4 min-w-0 rounded-lg border border-destructive px-3 py-2.5 wrap-anywhere text-destructive"
+        >
           {error}
         </p>
       )}
@@ -326,12 +338,12 @@ export function NativeEditor({
         ref={loader}
         key={`loader:${state?.loaded ?? 'empty'}`}
         open={!state?.loaded}
-        className="control-help"
+        className="border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']"
         data-testid="native-preset-loader"
       >
         <summary>{state?.loaded ? 'Change preset' : 'Choose a preset'}</summary>
-        <div className="form-grid">
-          <label className="field">
+        <FormGrid>
+          <FormField>
             Preset to load
             <Select
               value={selection || '__choose__'}
@@ -363,7 +375,7 @@ export function NativeEditor({
                 </SelectGroup>
               </SelectContent>
             </Select>
-          </label>
+          </FormField>
           <Button
             disabled={blocked || !selection || !!state?.edit}
             onClick={() => {
@@ -373,21 +385,17 @@ export function NativeEditor({
           >
             Load draft
           </Button>
-        </div>
+        </FormGrid>
       </details>
-      <p role="status" className="caption">
+      <Caption role="status">
         {busy
           ? 'Applying native operation…'
           : state?.loaded
             ? `Native preset ready${state.dirty ? ' · Unsaved tone changes' : ''}`
             : 'No native preset loaded'}
-      </p>
+      </Caption>
       {state?.loaded && (
-        <div
-          className="action-row"
-          role="group"
-          aria-label="Draft control groups"
-        >
+        <ActionRow role="group" aria-label="Draft control groups">
           {['Tone', 'Gate', 'Stereo', 'Pitch'].map((group) => (
             <Button
               key={group}
@@ -399,7 +407,7 @@ export function NativeEditor({
               {group}
             </Button>
           ))}
-        </div>
+        </ActionRow>
       )}
       {state?.loaded && (
         <div
@@ -446,10 +454,13 @@ export function NativeEditor({
           owned={state.owned.some((p) => p.id === state.loaded)}
         />
       )}
-      <details className="control-help" data-testid="native-control-browser">
+      <details
+        className="border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']"
+        data-testid="native-control-browser"
+      >
         <summary>All controls &amp; block selection</summary>
-        <div className="form-grid">
-          <label className="field">
+        <FormGrid>
+          <FormField>
             Native control
             <Select
               value={target}
@@ -490,7 +501,7 @@ export function NativeEditor({
                 </SelectGroup>
               </SelectContent>
             </Select>
-          </label>
+          </FormField>
           <button
             type="button"
             className="flex h-auto flex-col items-start gap-1 rounded-md border border-border bg-card p-2.5 text-left text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-45 [&>*]:max-w-full [&>*]:wrap-anywhere"
@@ -518,7 +529,7 @@ export function NativeEditor({
               · normalized {blockControl?.value ?? parameter?.normalized ?? '—'}
             </span>
           </button>
-        </div>
+        </FormGrid>
       </details>
       {ours && (
         <AdjustmentDialog
@@ -531,13 +542,16 @@ export function NativeEditor({
             if (!blocked) void finish(true);
           }}
         >
-          <p className="caption">
+          <Caption>
             {staged
               ? 'Applied on Done · no preview during adjustment.'
               : 'Previewing this draft · Done keeps the change.'}
-          </p>
+          </Caption>
           {error && (
-            <p role="alert" className="error">
+            <p
+              role="alert"
+              className="mb-4 min-w-0 rounded-lg border border-destructive px-3 py-2.5 wrap-anywhere text-destructive"
+            >
               {error}
             </p>
           )}
@@ -564,9 +578,9 @@ export function NativeEditor({
               }}
             />
           </div>
-          <details className="[&_.field]:mb-2 [&>summary]:flex [&>summary]:items-center [&>summary]:text-base">
-            <summary>Enter value</summary>
-            <label className="field">
+          <details className="[&_[data-slot=form-field]]:mb-2 [&>summary]:flex [&>summary]:items-center [&>summary]:text-base">
+            <summary className="min-h-touch">Enter value</summary>
+            <FormField>
               Normalized value (0–1)
               <input
                 type="number"
@@ -591,7 +605,7 @@ export function NativeEditor({
                     queue.current?.preview(Number(next));
                 }}
               />
-            </label>
+            </FormField>
           </details>
           <div className="mt-2 flex flex-wrap gap-2 [&>button]:min-h-[48px] [&>button]:min-w-[48px]">
             <Button
@@ -732,7 +746,7 @@ export function NativeEditor({
           Abandoned edits roll back after 30 seconds.
         </p>
       )}
-      <details className="control-help">
+      <details className="border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']">
         <summary>Draft &amp; processing help</summary>
         <p>
           This editor is silent. Save a copy and start it to hear structural
@@ -744,8 +758,8 @@ export function NativeEditor({
           tones.
         </p>
       </details>
-      <div className="form-grid">
-        <label className="field">
+      <FormGrid>
+        <FormField>
           Owned preset name
           <input
             maxLength={100}
@@ -753,15 +767,15 @@ export function NativeEditor({
             onChange={(e) => setName(e.target.value)}
             disabled={blocked || !!state?.edit}
           />
-        </label>
+        </FormField>
         <Button
           disabled={blocked || !state?.loaded || !!state.edit || !name.trim()}
           onClick={() => void send({ kind: 'save', name })}
         >
           Save owned copy
         </Button>
-      </div>
-      <p className="caption">Originals stay unchanged.</p>
+      </FormGrid>
+      <Caption>Originals stay unchanged.</Caption>
     </section>
   );
 }

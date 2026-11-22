@@ -1,6 +1,10 @@
 import { useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import {
+  ActionRow,
+  FormField,
+} from '@oxidal/design-system/components/form-layout';
 
 import { blockSettings } from '../../api';
 import type { Contract } from '../../generated/contract';
@@ -128,15 +132,15 @@ export function NamedSettings({
       }}
     >
       <summary>Named settings</summary>
-      <div className="control-stack">
-        <label className="field">
+      <div className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start">
+        <FormField>
           New settings name
           <input
             value={name}
             maxLength={120}
             onChange={(e) => setName(e.target.value)}
           />
-        </label>
+        </FormField>
         <Button
           type="button"
           disabled={locked || !library || !name.trim()}
@@ -144,7 +148,7 @@ export function NamedSettings({
         >
           Save as new settings
         </Button>
-        <label className="field">
+        <FormField>
           Saved settings for {block.name}
           <select
             value={entry?.id ?? ''}
@@ -161,8 +165,8 @@ export function NamedSettings({
               </option>
             ))}
           </select>
-        </label>
-        <div className="action-row">
+        </FormField>
+        <ActionRow>
           <Button
             type="button"
             disabled={locked || !entry}
@@ -209,7 +213,7 @@ export function NamedSettings({
                 Undo recall
               </Button>
             )}
-        </div>
+        </ActionRow>
         {message && <p role="status">{message}</p>}
       </div>
     </details>

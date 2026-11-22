@@ -2,6 +2,8 @@ import { useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { Card } from '@oxidal/design-system/components/card';
+import { ActionRow } from '@oxidal/design-system/components/form-layout';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import {
   type AudioProbe,
@@ -78,14 +80,17 @@ export function EffectsPlaybackSettings({
     await command({ kind: 'restart' });
   }
   return (
-    <section className="control-stack" aria-label="Playback controls">
-      <div className="section-heading">
+    <section
+      className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
+      aria-label="Playback controls"
+    >
+      <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
         <h3>Effects audio</h3>
         <span role="status">
           {state.phase === 'starting' ? 'Preparing…' : state.phase}
         </span>
       </div>
-      <div className="action-row">
+      <ActionRow>
         {state.device_owned && (
           <Button
             variant="outline"
@@ -102,16 +107,16 @@ export function EffectsPlaybackSettings({
         >
           {state.device_owned ? 'Restart audio' : 'Resume audio'}
         </Button>
-      </div>
+      </ActionRow>
       {!state.device_owned && !resumeReady && (
-        <p className="caption">{resumeUnavailable}</p>
+        <Caption>{resumeUnavailable}</Caption>
       )}
       {(error || state.error) && <p role="alert">{error || state.error}</p>}
       {error && <RecoveryAction failure={recoverFailure} />}
-      <p className="caption">
+      <Caption>
         {stream.input.sample_rate} Hz · {stream.input.period_frames} samples ×{' '}
         {stream.input.periods} periods
-      </p>
+      </Caption>
       <Card
         className="min-w-0 gap-3"
         aria-label="Playback session configuration"

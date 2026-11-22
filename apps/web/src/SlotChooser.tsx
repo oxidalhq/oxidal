@@ -2,6 +2,7 @@ import { ArrowLeft, MagnifyingGlass } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { ActionRow } from '@oxidal/design-system/components/form-layout';
 import {
   Sheet,
   SheetBody,
@@ -9,6 +10,7 @@ import {
   SheetHeader,
 } from '@oxidal/design-system/components/sheet';
 import { Loading } from '@oxidal/design-system/components/states';
+import { Caption } from '@oxidal/design-system/components/text';
 import {
   EffectChoices,
   type EffectOption,
@@ -178,7 +180,7 @@ export function SlotChooser({
   ) {
     return (
       options.length > 1 && (
-        <div className="action-row" role="group" aria-label={label}>
+        <ActionRow role="group" aria-label={label}>
           {[null, ...options].map((option) => (
             <Button
               key={option ?? 'all'}
@@ -189,7 +191,7 @@ export function SlotChooser({
               {option ?? 'All'}
             </Button>
           ))}
-        </div>
+        </ActionRow>
       )
     );
   }
@@ -280,7 +282,7 @@ export function SlotChooser({
             </div>
           )}
           {step === 'effect' && (
-            <div className="control-stack">
+            <div className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start">
               <label className="flex h-10 items-center gap-2 rounded-md border border-input bg-background px-3 focus-within:outline-2 focus-within:outline-ring">
                 <MagnifyingGlass
                   aria-hidden="true"
@@ -309,7 +311,7 @@ export function SlotChooser({
                 }}
               />
               {plugins && !options.length && (
-                <p className="caption">No effects match.</p>
+                <Caption>No effects match.</Caption>
               )}
             </div>
           )}

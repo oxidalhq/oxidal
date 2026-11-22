@@ -3,12 +3,18 @@ import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { Button } from '@oxidal/design-system/components/button';
 import { Card } from '@oxidal/design-system/components/card';
 import {
+  ActionRow,
+  FormField,
+  FormGrid,
+} from '@oxidal/design-system/components/form-layout';
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import {
   type AudioAction,
@@ -306,7 +312,7 @@ export function PlaybackSettings({
   if (!state || !mixed || !effects)
     return (
       <section
-        className="control-stack"
+        className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
         aria-label="Playback controls"
         aria-busy={!readError}
       >
@@ -373,7 +379,10 @@ export function PlaybackSettings({
       </>
     );
   return (
-    <section className="control-stack" aria-label="Playback controls">
+    <section
+      className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
+      aria-label="Playback controls"
+    >
       <h3>Now playing</h3>
       <RecoveryNotice message={mixed?.recovery_error} />
 
@@ -390,7 +399,7 @@ export function PlaybackSettings({
       </p>
       {unavailable ? (
         <>
-          <p className="muted">
+          <p className="text-sm text-muted-foreground">
             Audio playback is unavailable on this device. Saved tones can still
             be edited.
           </p>
@@ -400,7 +409,7 @@ export function PlaybackSettings({
         </>
       ) : (
         <>
-          <div className="action-row">
+          <ActionRow>
             {state?.device_owned ? (
               <>
                 <Button
@@ -428,9 +437,9 @@ export function PlaybackSettings({
                 Resume audio
               </Button>
             ) : null}
-          </div>
+          </ActionRow>
           {state?.configured && !state.device_owned && !nativeResumeReady && (
-            <p className="caption">{resumeUnavailable}</p>
+            <Caption>{resumeUnavailable}</Caption>
           )}
           {state?.configured && (
             <Card
@@ -463,7 +472,7 @@ export function PlaybackSettings({
           {interfaceCard}
           {test}
           {input && output && (
-            <div className="action-row">
+            <ActionRow>
               <Button
                 variant="outline"
                 disabled={!connected || busy}
@@ -495,13 +504,16 @@ export function PlaybackSettings({
                 Use for new rigs
               </Button>
               {graphMessage && <p role="status">{graphMessage}</p>}
-            </div>
+            </ActionRow>
           )}
           {boot}
-          <details className="control-help" open={!state?.configured}>
+          <details
+            className="border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']"
+            open={!state?.configured}
+          >
             <summary>Start audio with…</summary>
             <fieldset
-              className="control-stack"
+              className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
               disabled={
                 !connected || busy || transitioning || state?.device_owned
               }
@@ -518,8 +530,8 @@ export function PlaybackSettings({
               <Button variant="outline" onClick={() => void loadPresets()}>
                 Refresh presets
               </Button>
-              <div className="form-grid">
-                <label className="field">
+              <FormGrid>
+                <FormField>
                   Playback preset
                   <Select
                     value={selected || undefined}
@@ -539,10 +551,10 @@ export function PlaybackSettings({
                       ))}
                     </SelectContent>
                   </Select>
-                </label>
-                <details className="control-help col-span-full w-full">
+                </FormField>
+                <details className="col-span-full w-full border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']">
                   <summary>Channel routing</summary>
-                  <div className="form-grid">
+                  <FormGrid>
                     {(
                       [
                         'Input left',
@@ -555,7 +567,7 @@ export function PlaybackSettings({
                       const index = (i % 2) as 0 | 1;
                       const values = capture ? routedInputMap : routedOutputMap;
                       return (
-                        <label key={label} className="field">
+                        <FormField key={label}>
                           {label} channel (1-based)
                           <input
                             type="number"
@@ -569,16 +581,16 @@ export function PlaybackSettings({
                               else setOutputMap(next);
                             }}
                           />
-                        </label>
+                        </FormField>
                       );
                     })}
-                  </div>
+                  </FormGrid>
                   <p>
                     Repeat an input channel for mono. Repeat an output channel
                     to mix stereo to mono.
                   </p>
                 </details>
-              </div>
+              </FormGrid>
               <Button
                 disabled={!settings}
                 onClick={() =>
@@ -589,7 +601,7 @@ export function PlaybackSettings({
               </Button>
             </fieldset>{' '}
           </details>
-          <details className="control-help">
+          <details className="border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']">
             <summary>Playback help</summary>
             <p>
               Stop releases the interface and keeps Oxidal open. Resume and

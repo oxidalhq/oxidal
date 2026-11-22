@@ -11,6 +11,7 @@ import {
 } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Caption } from '@oxidal/design-system/components/text';
 import { useFlip } from '@oxidal/design-system/lib/use-flip';
 import { useVerticalRig } from '@oxidal/design-system/lib/use-media';
 import { ChainPort } from '@oxidal/design-system/widgets/chain';
@@ -465,7 +466,7 @@ function ListSplit(props: Props & { split: Split }) {
                   ? `${path + 1} ${scene.names[path] ?? ''}`
                   : `Path ${path + 1}`}
               </strong>{' '}
-              <span className="caption">
+              <Caption as="span">
                 {scene
                   ? soundingAt(scene, path)
                     ? '(sounding)'
@@ -473,7 +474,7 @@ function ListSplit(props: Props & { split: Split }) {
                   : props.plain
                     ? ''
                     : `(${caption(split, path).split(' · ').slice(1).join(', ')})`}
-              </span>
+              </Caption>
               {!!branch.length && (
                 <ol>
                   <ListSteps {...props} steps={branch} />

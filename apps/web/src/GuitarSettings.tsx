@@ -10,10 +10,16 @@ import {
   CardTitle,
 } from '@oxidal/design-system/components/card';
 import { DialogFooter } from '@oxidal/design-system/components/dialog';
+import {
+  ActionRow,
+  FormField,
+  FormGrid,
+} from '@oxidal/design-system/components/form-layout';
 import { ListRow } from '@oxidal/design-system/components/list-row';
 import { NumberField } from '@oxidal/design-system/components/number-field';
 import { Slider } from '@oxidal/design-system/components/slider';
 import { StateNotice } from '@oxidal/design-system/components/states';
+import { Caption } from '@oxidal/design-system/components/text';
 import { GuitarWorkspace } from '@oxidal/design-system/patterns/guitar-workspace';
 import { Meter } from '@oxidal/design-system/widgets/meter';
 
@@ -278,12 +284,12 @@ export function GuitarSettings() {
             This unit · kept across presets, not saved in them
           </span>
         </CardHeader>
-        <p className="caption">
+        <Caption>
           Choose the guitar you are holding. Its trim and gate apply immediately
           to every rig, and Levels follows the selected profile automatically —
           there is no separate Levels run. Remeasure only after changing the
           guitar&apos;s output or the interface input/gain.
-        </p>
+        </Caption>
         {profiles.guitars.map((g) => {
           const active = profiles.active === g.id;
           const gate = gateFor({ ...profiles, active: g.id });
@@ -351,7 +357,7 @@ export function GuitarSettings() {
             title={`${open.name} trim`}
             onCancel={() => setEditing(null)}
           >
-            <div className="control-stack">
+            <div className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start">
               <div className="flex items-center justify-center gap-4">
                 <Button
                   variant="outline"
@@ -398,13 +404,13 @@ export function GuitarSettings() {
                   change(open.id, { trim_db: clampTrim(trim!) })
                 }
               />
-              <p className="caption">
+              <Caption>
                 {profiles.active === open.id
                   ? 'Changes apply as you play.'
                   : 'Choose Play this to hear changes.'}{' '}
                 Quieter pickups need more trim; hotter ones less.
-              </p>
-              <div className="action-row">
+              </Caption>
+              <ActionRow>
                 <Button
                   variant="outline"
                   disabled={busy || !!listening || !input.ready}
@@ -421,12 +427,12 @@ export function GuitarSettings() {
                 >
                   Reset to 0 dB
                 </Button>
-              </div>
-              <p className="caption">
+              </ActionRow>
+              <Caption>
                 Measure strum: volume fully up, six seconds of your loudest
                 stage strum. It matches this guitar to the first one you
                 measured.
-              </p>
+              </Caption>
               {note && <p role="status">{note}</p>}
             </div>
           </AdjustmentDialog>
@@ -436,7 +442,7 @@ export function GuitarSettings() {
             title={`${open.name} gate`}
             onCancel={() => setEditing(null)}
           >
-            <div className="control-stack">
+            <div className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start">
               <p role="status">
                 {open.noise_dbfs == null
                   ? 'Not set up: measure the noise first.'
@@ -446,7 +452,7 @@ export function GuitarSettings() {
                         : 'off'
                     }`}
               </p>
-              <div className="action-row">
+              <ActionRow>
                 <Button
                   variant="outline"
                   disabled={busy || !!listening || !input.ready}
@@ -464,12 +470,12 @@ export function GuitarSettings() {
                 >
                   {open.gate ? 'Gate on' : 'Gate off'}
                 </Button>
-              </div>
-              <p className="caption">
+              </ActionRow>
+              <Caption>
                 Volume up, strings muted by your hand, on the noisiest pickup
                 (usually a single coil). The gate then opens 6 dB above that
                 hiss and stays quiet in every position.
-              </p>
+              </Caption>
               {note && <p role="status">{note}</p>}
             </div>
           </AdjustmentDialog>
@@ -479,8 +485,9 @@ export function GuitarSettings() {
             title={naming.id ? 'Rename guitar' : 'Add guitar'}
             onCancel={() => setNaming(null)}
           >
-            <form
-              className="form-grid"
+            <FormGrid
+              as="form"
+
               onSubmit={(e) => {
                 e.preventDefault();
                 const trimmed = naming.value.trim().slice(0, 40);
@@ -505,7 +512,7 @@ export function GuitarSettings() {
                 setNaming(null);
               }}
             >
-              <label className="field">
+              <FormField>
                 Name
                 <input
                   autoFocus
@@ -516,11 +523,11 @@ export function GuitarSettings() {
                     setNaming({ ...naming, value: e.target.value })
                   }
                 />
-              </label>
+              </FormField>
               <Button type="submit" disabled={busy || !naming.value.trim()}>
                 {naming.id ? 'Rename' : 'Add guitar'}
               </Button>
-            </form>
+            </FormGrid>
           </AdjustmentDialog>
         )}
         {managing &&
@@ -532,10 +539,10 @@ export function GuitarSettings() {
                 title={guitar.name}
                 onCancel={() => setManaging(null)}
               >
-                <div className="control-stack">
-                  <p className="caption">
+                <div className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start">
+                  <Caption>
                     Profile management does not change any presets.
-                  </p>
+                  </Caption>
                   <Button
                     variant="outline"
                     disabled={busy}
@@ -571,21 +578,21 @@ export function GuitarSettings() {
                 title={`Remove ${guitar.name}?`}
                 onCancel={() => setRemoving(null)}
               >
-                <div className="control-stack">
+                <div className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start">
                   <p>
                     This removes its trim, strum and noise measurements from
                     this unit. Presets and other guitar profiles are not
                     changed.
                   </p>
                   {(isActive || isReference) && (
-                    <p className="caption">
+                    <Caption>
                       {isActive
                         ? 'The next guitar will become the selected profile. '
                         : ''}
                       {isReference
                         ? 'The next measured guitar will become the level reference.'
                         : ''}
-                    </p>
+                    </Caption>
                   )}
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setRemoving(null)}>
@@ -740,7 +747,7 @@ export function GuitarPicker() {
               >
                 {g.name}
                 {profiles.active === g.id && (
-                  <span className="caption">Playing</span>
+                  <Caption as="span">Playing</Caption>
                 )}
               </Button>
             ))}
@@ -756,10 +763,10 @@ export function GuitarPicker() {
                 ),
               );
               return kept ? (
-                <div className="action-row">
-                  <p className="caption">
+                <ActionRow>
+                  <Caption>
                     This preset switches to {kept.name} when it starts.
-                  </p>
+                  </Caption>
                   <Button
                     variant="outline"
                     disabled={busy}
@@ -767,7 +774,7 @@ export function GuitarPicker() {
                   >
                     Forget
                   </Button>
-                </div>
+                </ActionRow>
               ) : (
                 <Button
                   variant="outline"

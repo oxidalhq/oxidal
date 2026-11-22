@@ -24,6 +24,7 @@ import {
   SegmentedControl,
 } from '@oxidal/design-system/components/segmented';
 import { Progress } from '@oxidal/design-system/components/states';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
@@ -503,11 +504,11 @@ export function StemMixEditor({
           </p>
         )}
         {song && !song.splits.length && !running && !modes?.length && (
-          <p className="caption">
+          <Caption>
             {canSplit
               ? 'Splitting is not installed on this device. Use Import stems in Library › Stems for parts made elsewhere.'
               : 'This track has no stems.'}
-          </p>
+          </Caption>
         )}
         {showChooser && modes && (
           <SplitChooser
@@ -551,11 +552,11 @@ export function StemMixEditor({
                         ? 'Stems cued'
                         : 'Mix'}
                   </strong>
-                  <span className="caption" role="status">
+                  <Caption as="span" role="status">
                     {live
                       ? `${formatTime(at)} / ${formatTime(length)} · changes are heard as you make them`
                       : 'Press Play to hear changes as you make them.'}
-                  </span>
+                  </Caption>
                 </div>
               </div>
 
@@ -732,11 +733,7 @@ export function StemMixEditor({
                   {saved ? 'Save' : 'Save as backing track'}
                 </Button>
               </div>
-              {notice && (
-                <p className="caption" role="status">
-                  {notice}
-                </p>
-              )}
+              {notice && <Caption role="status">{notice}</Caption>}
             </section>
 
             {saved && (
@@ -747,11 +744,11 @@ export function StemMixEditor({
                 <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 [&>h2]:m-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold">
                   <h3 id="stem-saved">“{saved.title}”</h3>
                 </div>
-                <p className="caption">
+                <Caption>
                   {describeRecipe(saved.recipe, roles)}. Saved mixes play from
                   Backing tracks, the Set list and linked rigs, and can still be
                   changed live in the player.
-                </p>
+                </Caption>
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <Button variant="outline" asChild>
                     <a href={wavPath(saved.asset)} download>
@@ -810,11 +807,11 @@ export function StemMixEditor({
                   </SegmentedControl>
                 )}
               </div>
-              <p className="caption">
+              <Caption>
                 {split.importedRoles
                   ? `Uploaded stems: ${roles.map(roleLabel).join(', ')}.`
                   : `${MODE_INFO[split.mode].label} separated on this device: ${roles.map(roleLabel).join(', ')}.`}
-              </p>
+              </Caption>
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <Button variant="outline" asChild>
                   <a href={stemArchivePath(source.id, split.id)} download>
@@ -910,10 +907,10 @@ function SplitChooser({
           </label>
         ))}
       </div>
-      <p className="caption">
+      <Caption>
         Runs on this device in the background at low priority, so you can keep
         playing. A full song takes a few minutes; close this any time.
-      </p>
+      </Caption>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <Button disabled={disabled} onClick={() => onStart(mode)}>
           <Scissors aria-hidden="true" />
@@ -955,10 +952,10 @@ function SplitProgressCard({
         </span>
       </div>
       <Progress label="Split progress" value={percent} />
-      <p className="caption" role="status">
+      <Caption role="status">
         {job.progress ? STAGE_WORD[job.progress.stage] : 'Starting'}… You can
         keep playing or close this sheet; the split carries on.
-      </p>
+      </Caption>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <Button variant="outline" onClick={onCancel}>
           Cancel split

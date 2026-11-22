@@ -6,6 +6,7 @@ import {
   CardFooter,
   CardTitle,
 } from '@oxidal/design-system/components/card';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { libraryCatalog } from '../../api';
 import { friendlyError } from '../../lib/friendlyError';
@@ -80,11 +81,7 @@ export function StarterOffer({
     }
   }
   if (!offered)
-    return message ? (
-      <p className="caption" role="status">
-        {message}
-      </p>
-    ) : null;
+    return message ? <Caption role="status">{message}</Caption> : null;
   return (
     <Card
       className="my-3 flex flex-wrap items-center gap-3"
@@ -92,13 +89,13 @@ export function StarterOffer({
     >
       <div className="min-w-0 grow basis-72">
         <CardTitle>Start with a set list?</CardTitle>
-        <p className="caption">
+        <Caption>
           Nine Oxidal sounds, one per core genre, in a playable order.{' '}
           {packs.length
             ? `They use ${packs.length === 1 ? 'one effect pack' : `${packs.length} effect packs`} this unit does not have yet (${packs.map((p) => p.name).join(', ')}; about ${packs.reduce((sum, p) => sum + p.sizeMib, 0)} MB). Oxidal downloads and installs ${packs.length === 1 ? 'it' : 'them'} for you.`
             : !blocked && 'Everything they need is on this unit.'}
-        </p>
-        {blocked && <p className="caption">{blocked}</p>}
+        </Caption>
+        {blocked && <Caption>{blocked}</Caption>}
       </div>
       <CardFooter>
         <Button
@@ -117,11 +114,7 @@ export function StarterOffer({
           Not now
         </Button>
       </CardFooter>
-      {message && (
-        <p className="caption" role="status">
-          {message}
-        </p>
-      )}
+      {message && <Caption role="status">{message}</Caption>}
     </Card>
   );
 }

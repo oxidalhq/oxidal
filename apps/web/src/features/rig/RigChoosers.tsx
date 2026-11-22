@@ -1,4 +1,5 @@
 import { Button } from '@oxidal/design-system/components/button';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AddBlockChooser } from '../../AddBlockChooser';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
@@ -166,9 +167,9 @@ export function RigChoosers({ rig, vm }: RigViewProps) {
           title={`Add ${insertion.format.toUpperCase()} · position`}
           onCancel={() => setInsertion(null)}
         >
-          <p className="caption">
+          <Caption>
             Choose an available position in the selected native chain.
-          </p>
+          </Caption>
           <div
             className="grid gap-2"
             aria-label="Available insertion positions"

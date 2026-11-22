@@ -3,6 +3,10 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import {
+  ActionRow,
+  FormField,
+} from '@oxidal/design-system/components/form-layout';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -161,7 +165,7 @@ export function NativeAuthoring({
           >
             <CaretLeft aria-hidden="true" />
           </Button>
-          <label className="field min-w-0">
+          <FormField className="min-w-0">
             Model variant · {activeVariant >= 0 ? activeVariant + 1 : '—'} /{' '}
             {variants.length}
             <Select
@@ -184,7 +188,7 @@ export function NativeAuthoring({
                 ))}
               </SelectContent>
             </Select>
-          </label>
+          </FormField>
           <Button
             variant="outline"
             aria-label="Next model variant"
@@ -325,9 +329,9 @@ export function NativeAuthoring({
         </div>
       )}
       {status.history_error && (
-        <p role="status" className="caption" title={status.history_error}>
+        <Caption role="status" title={status.history_error}>
           Undo history unavailable
-        </p>
+        </Caption>
       )}
       {layout && selectedBlock && position >= 0 && (
         <ToolSection title="This block" scope="Saved with this preset">
@@ -641,7 +645,7 @@ export function NativeAuthoring({
               ? 'The block leaves the chain now. Undo brings it back.'
               : 'Every block leaves this preset’s chain now. Undo brings them back.'}
           </p>
-          <div className="action-row">
+          <ActionRow>
             <Button
               disabled={editingDisabled}
               onClick={() => {
@@ -656,7 +660,7 @@ export function NativeAuthoring({
             <Button variant="outline" onClick={() => setConfirm(null)}>
               Keep
             </Button>
-          </div>
+          </ActionRow>
         </AdjustmentDialog>
       )}
       {settingDraft && (
@@ -693,7 +697,7 @@ function SettingsGroup({
 }) {
   if (!collapsed) return <>{children}</>;
   return (
-    <details className="control-help rig-preset-settings">
+    <details className="rig-preset-settings border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']">
       <summary>Preset settings · routing and engine</summary>
       {children}
     </details>

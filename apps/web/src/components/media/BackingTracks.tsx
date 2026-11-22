@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
+import { Caption, Title } from '@oxidal/design-system/components/text';
 
 import {
   type MediaAsset,
@@ -108,14 +109,16 @@ export function BackingTracks({ connected }: { connected: boolean }) {
     <section className="grid min-w-0 gap-3" aria-label="Backing tracks">
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 [&>h2]:m-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold">
         <div>
-          <h2>Backing tracks</h2>
-          <p className="caption">
+          <Title as="h2" size="sm">
+            Backing tracks
+          </Title>
+          <Caption>
             Plays from the device over your guitar, even with this page closed.
-          </p>
+          </Caption>
         </div>
         <div className="min-w-0 text-xs break-words text-muted-foreground">
           {free !== null && (
-            <span className="caption">Free space: {gigabytes(free)}</span>
+            <Caption as="span">Free space: {gigabytes(free)}</Caption>
           )}
           <Button disabled={locked} onClick={() => file.current?.click()}>
             <UploadSimple aria-hidden="true" />
@@ -136,7 +139,7 @@ export function BackingTracks({ connected }: { connected: boolean }) {
           />
         </div>
       </div>
-      {protect && <p className="caption">{PROTECT_REASON}</p>}
+      {protect && <Caption>{PROTECT_REASON}</Caption>}
       <UploadQueue />
       {(error || media.refusal) && (
         <p
@@ -148,10 +151,10 @@ export function BackingTracks({ connected }: { connected: boolean }) {
       )}
       {media.libraryError && <p role="alert">{media.libraryError}</p>}
       {library && !tracks.length ? (
-        <p className="caption">
+        <Caption>
           No backing tracks yet. Import a WAV or MP3 to play it over your
           guitar.
-        </p>
+        </Caption>
       ) : (
         <ol
           className="m-0 grid min-w-0 list-none divide-y divide-border border-y border-border p-0"
@@ -312,16 +315,16 @@ export function BackingTracks({ connected }: { connected: boolean }) {
         </ol>
       )}
       {!!library?.quarantined.length && (
-        <p className="caption">
+        <Caption>
           {library.quarantined.length === 1
             ? 'One file failed its check and is kept aside on the device.'
             : `${library.quarantined.length} files failed their check and are kept aside on the device.`}
-        </p>
+        </Caption>
       )}
-      <p className="caption">
+      <Caption>
         Imports are levelled to −18 LUFS and prepared for the audio rate.
         Playing, pausing and skipping work with Protect on.
-      </p>
+      </Caption>
       {dialog?.kind === 'rename' && (
         <RenameDialog asset={dialog.asset} onClose={() => setDialog(null)} />
       )}

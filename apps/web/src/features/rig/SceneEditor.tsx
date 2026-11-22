@@ -2,6 +2,11 @@ import { useState } from 'react';
 
 import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
+import {
+  ActionRow,
+  FormField,
+} from '@oxidal/design-system/components/form-layout';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { SceneChange } from '../../SceneChange';
@@ -182,16 +187,17 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
                 />
               )}
               {activeScene && (
-                <button
+                <Button
                   type="button"
-                  className="scene-change"
+                  variant="link"
+                  size="sm"
                   aria-label={`Scene menu for ${activeScene.name}`}
                   aria-haspopup="dialog"
                   disabled={waiting}
                   onClick={() => setMenu(activeScene.id)}
                 >
                   Scene ⋯
-                </button>
+                </Button>
               )}
             </>
           }
@@ -227,13 +233,13 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
         />
       )}
       {notice && (
-        <p className="caption my-1" role="status">
+        <Caption className="my-1" role="status">
           {notice}
-        </p>
+        </Caption>
       )}
       {editingScene && (
         <details
-          className="min-w-0 border-y border-border [&+details]:border-t-0 [&>.caption]:mx-1 [&>.caption]:mb-2.5 [&>summary]:min-w-0 [&>summary]:gap-2 [&>summary]:px-1 [&>summary>:first-child]:shrink-0 [&>summary>:first-child]:font-semibold"
+          className="min-w-0 border-y border-border [&+details]:border-t-0 [&>[data-slot=caption]]:mx-1 [&>[data-slot=caption]]:mb-2.5 [&>summary]:min-w-0 [&>summary]:gap-2 [&>summary]:px-1 [&>summary>:first-child]:shrink-0 [&>summary>:first-child]:font-semibold"
           open={changed || pending > 0 || undefined}
         >
           <summary>
@@ -259,13 +265,13 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
               )
             )}
           </summary>
-          <p className="caption">
+          <Caption>
             {sceneMixChanged
               ? 'Path levels changed for this scene. Update scene keeps this mix in your edits; Save keeps it in the preset.'
               : 'A scene recalls the path levels shown here.'}{' '}
             Block controls are shared by every scene; use Save to keep those
             whole-preset edits.
-          </p>
+          </Caption>
           {!!sceneMix.length && (
             <div
               className="flex flex-wrap gap-2 px-1 pb-3"
@@ -289,7 +295,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
             </p>
           )}
           {changed && (
-            <div className="flex flex-wrap items-center gap-2.5 px-1 pb-3 [&_.caption]:m-0">
+            <div className="flex flex-wrap items-center gap-2.5 px-1 pb-3 [&_[data-slot=caption]]:m-0">
               <Button
                 variant="outline"
                 disabled={waiting}
@@ -335,7 +341,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
                 The mix you hear differs from {editingScene.name}. Choose what
                 the preset keeps. Shared block settings are saved either way.
               </p>
-              <div className="control-stack">
+              <div className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start">
                 <Button
                   onClick={() =>
                     void saveScenes(
@@ -375,7 +381,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
               onCancel={() => setNamingScene(null)}
             >
               <form
-                className="control-stack"
+                className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
                 onSubmit={(event) => {
                   event.preventDefault();
                   const session = state.control?.session;
@@ -446,7 +452,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
                   nativeSettings.reset();
                 }}
               >
-                <label className="field">
+                <FormField>
                   <span>Scene name</span>
                   <input
                     className="h-11 w-full rounded-md border border-input bg-card px-3"
@@ -455,12 +461,12 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
                     autoFocus
                     onChange={(event) => setNamingScene(event.target.value)}
                   />
-                </label>
-                <p className="caption">
+                </FormField>
+                <Caption>
                   Keeps the mix you hear now as a new scene. {editingScene.name}{' '}
                   stays as it was. Save keeps it in the preset.
-                </p>
-                <div className="action-row">
+                </Caption>
+                <ActionRow>
                   <Button
                     type="button"
                     variant="outline"
@@ -471,16 +477,16 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
                   <Button type="submit" disabled={!namingScene.trim()}>
                     Add scene
                   </Button>
-                </div>
+                </ActionRow>
               </form>
             </AdjustmentDialog>
           )}
           {(pending > 0 || changed) && (
             <div
-              className="flex flex-wrap items-center gap-2.5 px-1 pb-3 [&_.caption]:m-0"
+              className="flex flex-wrap items-center gap-2.5 px-1 pb-3 [&_[data-slot=caption]]:m-0"
               aria-label="Scene edits"
             >
-              <span className="caption" role="status">
+              <Caption as="span" role="status">
                 {pending === 0
                   ? 'The mix you hear is not saved in a scene yet.'
                   : pending === 1
@@ -488,7 +494,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
                     : `${pending} scenes updated · not saved yet.`}
                 {addedScenes.length > 0 &&
                   ` New: ${addedScenes.map((scene) => scene.name).join(', ')}.`}
-              </span>
+              </Caption>
               <Button
                 variant="outline"
                 disabled={waiting}

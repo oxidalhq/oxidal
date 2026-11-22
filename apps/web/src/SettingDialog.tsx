@@ -8,6 +8,7 @@ import {
   SegmentedControl,
 } from '@oxidal/design-system/components/segmented';
 import { Switch } from '@oxidal/design-system/components/switch';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import type { AudioState } from './api';
@@ -48,8 +49,8 @@ export function SettingDialog({
         if (!busy) onCancel();
       }}
     >
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 [&>.action-row]:mt-1">
-        {detail && <p className="caption">{detail}</p>}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 [&>[data-slot=action-row]]:mt-1">
+        {detail && <Caption>{detail}</Caption>}
         {choices ? (
           <SegmentedControl
             aria-label={control.label}
@@ -97,7 +98,7 @@ export function SettingDialog({
           />
         )}
         {(control.toggle || choices) && (
-          <p className="caption">Audio restarts briefly when applied.</p>
+          <Caption>Audio restarts briefly when applied.</Caption>
         )}
         <DialogFooter>
           <Button variant="outline" disabled={busy} onClick={onCancel}>

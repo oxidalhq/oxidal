@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { FormField } from '@oxidal/design-system/components/form-layout';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
@@ -157,7 +158,7 @@ export function DuplicateScenePedal({
         </p>
       )}
       {error && <p role="alert">{error}</p>}
-      <label className="field">
+      <FormField>
         Destination scene
         <select
           value={target}
@@ -171,8 +172,8 @@ export function DuplicateScenePedal({
             </option>
           ))}
         </select>
-      </label>
-      <label className="field">
+      </FormField>
+      <FormField>
         Saved version
         <select
           value={versionId}
@@ -186,7 +187,7 @@ export function DuplicateScenePedal({
             </option>
           ))}
         </select>
-      </label>
+      </FormField>
       <div className="mt-2 flex flex-wrap gap-2 [&>button]:min-h-[48px] [&>button]:min-w-[48px]">
         <Button variant="outline" disabled={saving} onClick={onClose}>
           Cancel

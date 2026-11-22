@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { FormField } from '@oxidal/design-system/components/form-layout';
 import { RelativeAdjustment as TouchAdjust } from '@oxidal/design-system/components/number-field';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { sendCommand, type Snapshot } from './api';
@@ -159,7 +161,10 @@ export function ControlEditor({
           }}
         >
           {error && (
-            <p role="alert" className="error">
+            <p
+              role="alert"
+              className="mb-4 min-w-0 rounded-lg border border-destructive px-3 py-2.5 wrap-anywhere text-destructive"
+            >
               {error}
             </p>
           )}
@@ -178,9 +183,9 @@ export function ControlEditor({
               onChange={preview}
               format={formatValue}
             />
-            <details className="[&_.field]:mb-2 [&>summary]:flex [&>summary]:items-center [&>summary]:text-base">
-              <summary>Enter value</summary>
-              <label className="field">
+            <details className="[&_[data-slot=form-field]]:mb-2 [&>summary]:flex [&>summary]:items-center [&>summary]:text-base">
+              <summary className="min-h-touch">Enter value</summary>
+              <FormField>
                 Draft {parameter.label}
                 {scale ? '' : ' (%)'}
                 <input
@@ -206,7 +211,7 @@ export function ControlEditor({
                     )
                   }
                 />
-              </label>
+              </FormField>
             </details>
             <div className="mt-2 flex flex-wrap gap-2 [&>button]:min-h-[48px] [&>button]:min-w-[48px]">
               <Button
@@ -228,11 +233,11 @@ export function ControlEditor({
                 Cancel
               </Button>
             </div>
-            <p className="caption">
+            <Caption>
               {owned
                 ? 'Done keeps this adjustment. Cancel restores the opening value.'
                 : 'This edit ended or was superseded. Your draft is retained; close and reopen to edit again.'}
-            </p>
+            </Caption>
             {!owned && (
               <Button
                 variant="outline"
@@ -248,10 +253,13 @@ export function ControlEditor({
         </AdjustmentDialog>
       )}
       {state.edit?.target === parameter.id && !owned && (
-        <p className="caption">Preview controlled by another editor.</p>
+        <Caption>Preview controlled by another editor.</Caption>
       )}
       {error && !opened && (
-        <p role="alert" className="error">
+        <p
+          role="alert"
+          className="mb-4 min-w-0 rounded-lg border border-destructive px-3 py-2.5 wrap-anywhere text-destructive"
+        >
           {error}
         </p>
       )}

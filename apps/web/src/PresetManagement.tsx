@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { Checkbox } from '@oxidal/design-system/components/checkbox';
+import {
+  ActionRow,
+  FormField,
+} from '@oxidal/design-system/components/form-layout';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
@@ -143,7 +148,7 @@ function ManagementDialog({
             void rename();
           }}
         >
-          <label className="field">
+          <FormField>
             Name on this device
             <input
               value={name}
@@ -151,17 +156,15 @@ function ManagementDialog({
               disabled={busy || !catalog}
               onChange={(e) => setName(e.target.value)}
             />
-          </label>
-          <p className="caption">The exported preset keeps its saved name.</p>
+          </FormField>
+          <Caption>The exported preset keeps its saved name.</Caption>
           <Button type="submit" disabled={busy || !catalog || !name.trim()}>
             Rename
           </Button>
         </form>
         <div className="space-y-2 border-t border-border pt-4">
           <h3>Description and categories</h3>
-          <p className="caption">
-            Add notes and categories to find this preset again.
-          </p>
+          <Caption>Add notes and categories to find this preset again.</Caption>
           <Button
             variant="outline"
             disabled={busy}
@@ -173,9 +176,7 @@ function ManagementDialog({
         {error && <p role="alert">{error}</p>}
         <div className="space-y-2 border-t border-border pt-4">
           <h3>Permanent deletion</h3>
-          <p className="caption">
-            Review the preset and its files before deleting.
-          </p>
+          <Caption>Review the preset and its files before deleting.</Caption>
           <Button
             variant="outline"
             disabled={busy}
@@ -270,18 +271,18 @@ export function DeletePresetDialog({
                   resources.
                 </p>
                 {!!preview.remembered_files && (
-                  <p className="caption">
+                  <Caption>
                     Also removes {preview.remembered_files} remembered session
                     or checkpoint{' '}
                     {preview.remembered_files === 1 ? 'file' : 'files'} (
                     {size(preview.remembered_bytes)}).
-                  </p>
+                  </Caption>
                 )}
-                <p className="caption">
+                <Caption>
                   {preview.models.length
                     ? 'Separate NAM and IR files stay in Library unless selected below.'
                     : 'Separate NAM and IR files stay in Library.'}
-                </p>
+                </Caption>
                 {preview.models.length > 0 && (
                   <>
                     <label className="flex items-start gap-3">
@@ -312,7 +313,7 @@ export function DeletePresetDialog({
                         {preview.models.map((m) => (
                           <li key={m.id} className="break-words">
                             <strong>{m.name}</strong>
-                            <p className="caption">
+                            <Caption>
                               {m.format === 'nam' ? 'NAM' : 'IR'} ·{' '}
                               {size(m.bytes)} ·{' '}
                               {m.protected_by.length
@@ -320,7 +321,7 @@ export function DeletePresetDialog({
                                 : cleanup
                                   ? 'Will be deleted'
                                   : 'Kept in Library'}
-                            </p>
+                            </Caption>
                           </li>
                         ))}
                       </ul>
@@ -328,7 +329,7 @@ export function DeletePresetDialog({
                   </>
                 )}
                 {preview.model_cleanup_unavailable && (
-                  <p className="caption">{preview.model_cleanup_unavailable}</p>
+                  <Caption>{preview.model_cleanup_unavailable}</Caption>
                 )}
                 {preview.blocked && <p role="alert">{preview.blocked}</p>}
               </>
@@ -347,7 +348,7 @@ export function DeletePresetDialog({
                 </Button>
               </div>
             )}
-            <div className="action-row">
+            <ActionRow>
               <Button variant="outline" disabled={busy} onClick={onCancel}>
                 Cancel
               </Button>
@@ -357,7 +358,7 @@ export function DeletePresetDialog({
               >
                 {busy ? 'Deleting…' : 'Delete permanently'}
               </Button>
-            </div>
+            </ActionRow>
           </>
         )}
         {done && <Button onClick={close}>Close</Button>}

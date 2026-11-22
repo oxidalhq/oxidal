@@ -2,6 +2,8 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { Checkbox } from '@oxidal/design-system/components/checkbox';
+import { ActionRow } from '@oxidal/design-system/components/form-layout';
+import { Caption, Title } from '@oxidal/design-system/components/text';
 import { LibraryList } from '@oxidal/design-system/patterns/library-list';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
@@ -364,8 +366,12 @@ export function SavedRigs({
   const pending = prepared.some((id) => id !== playing && !ready.includes(id));
   return (
     <section className="mb-6" aria-label="Saved rigs">
-      <div className="section-heading">
-        {title && <h2>{title}</h2>}
+      <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
+        {title && (
+          <Title as="h2" size="sm">
+            {title}
+          </Title>
+        )}
         <Button
           variant="ghost"
           aria-pressed={choosing}
@@ -375,16 +381,16 @@ export function SavedRigs({
           Keep ready{prepared.length ? ` · ${prepared.length}` : ''}
         </Button>
       </div>
-      <p className="caption" role="status">
+      <Caption role="status">
         {running
           ? `${readyCount} of ${bankOrder.length}${next ? '+' : ''} presets ready`
           : 'Nothing is ready while audio is stopped.'}
-      </p>
+      </Caption>
       {choosing && running && pending && (
-        <div className="action-row">
-          <span className="caption">
+        <ActionRow>
+          <Caption as="span">
             Selected presets load when audio restarts.
-          </span>
+          </Caption>
           <Button
             variant="outline"
             disabled={busy || !connected}
@@ -392,12 +398,12 @@ export function SavedRigs({
           >
             Prepare &amp; restart audio…
           </Button>
-        </div>
+        </ActionRow>
       )}
       {choosing && !running && !!prepared.length && (
-        <p className="caption">
+        <Caption>
           Your selection is prepared the next time a preset plays.
-        </p>
+        </Caption>
       )}
       {confirming && (
         <AdjustmentDialog
@@ -410,22 +416,22 @@ export function SavedRigs({
             {modified &&
               ' Unsaved edits to the playing preset are not kept; save them first to keep them.'}
           </p>
-          <div className="action-row">
+          <ActionRow>
             <Button variant="outline" onClick={() => setConfirming(false)}>
               Cancel
             </Button>
             <Button onClick={() => void prepare()}>
               Prepare &amp; restart
             </Button>
-          </div>
+          </ActionRow>
         </AdjustmentDialog>
       )}
       {choosing && (
-        <p className="caption">
+        <Caption>
           Choose up to {GAPLESS_BANK_SIZE} more presets to keep ready. They stay
           loaded, so switching between them has no gap. Without custom choices,
           each adjacent group of {GAPLESS_BANK_SIZE} loads together.
-        </p>
+        </Caption>
       )}
       <FailureNotice
         failure={failure}
@@ -435,11 +441,7 @@ export function SavedRigs({
           setReload((n) => n + 1);
         }}
       />
-      {notice && (
-        <p className="caption" role="status">
-          {notice}
-        </p>
-      )}
+      {notice && <Caption role="status">{notice}</Caption>}
       <LibraryList
         items={rows.map((item) => {
           const id = `${item.kind}:${item.id}`;

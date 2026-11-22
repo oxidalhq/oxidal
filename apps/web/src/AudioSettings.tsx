@@ -3,6 +3,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@oxidal/design-system/components/button';
 import { Card, CardHeader } from '@oxidal/design-system/components/card';
 import {
+  ActionRow,
+  FormField,
+  FormGrid,
+} from '@oxidal/design-system/components/form-layout';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -187,20 +192,26 @@ export function AudioSettings({ connected }: { connected: boolean }) {
         <TabsTrigger value="engine">TONE3000 engine</TabsTrigger>
       </TabsList>
       <TabsContent value="output">
-        <p className="caption">
+        <Caption>
           Master level and Mono (under Audio device) apply after the mix and
           Venue EQ.
-        </p>
+        </Caption>
         <VenueEq connected={connected} />
       </TabsContent>
       <TabsContent value="engine">
-        <section className="panel control-stack" aria-label="TONE3000 engine">
+        <Card
+          className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
+          aria-label="TONE3000 engine"
+        >
           <EngineSettings connected={connected} />
           <NativeDefaults connected={connected} />
-        </section>
+        </Card>
       </TabsContent>
       <TabsContent value="device">
-        <section className="panel control-stack" aria-label="Audio devices">
+        <Card
+          className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
+          aria-label="Audio devices"
+        >
           <h2 className="sr-only">Audio device</h2>
           <PlaybackSettings
             connected={connected}
@@ -219,10 +230,10 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                     Refresh audio devices
                   </Button>
                 </CardHeader>
-                <p className="caption">
+                <Caption>
                   Connected interfaces appear automatically. Check input and
                   output before starting a new playback session.
-                </p>
+                </Caption>
                 {inventory?.backend_available && (
                   <>
                     <fieldset
@@ -232,8 +243,8 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                       <legend className="mb-2 text-md font-semibold">
                         Configuration check
                       </legend>
-                      <div className="form-grid">
-                        <label className="field">
+                      <FormGrid>
+                        <FormField>
                           Input
                           <Select
                             value={selectedInput || undefined}
@@ -265,14 +276,14 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                             </SelectContent>
                           </Select>
                           {inputEndpoints.length === 0 && (
-                            <span className="caption">
+                            <Caption as="span">
                               {outputEndpoints.length > 0
                                 ? 'HDMI and other playback-only devices cannot receive your guitar. Connect or reconnect a USB audio interface, then refresh.'
                                 : 'No audio input is connected. Connect or reconnect a USB audio interface, then refresh.'}
-                            </span>
+                            </Caption>
                           )}
-                        </label>
-                        <label className="field">
+                        </FormField>
+                        <FormField>
                           Output
                           <Select
                             value={selectedOutput || undefined}
@@ -304,12 +315,12 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                             </SelectContent>
                           </Select>
                           {outputEndpoints.length === 0 && (
-                            <span className="caption">
+                            <Caption as="span">
                               Connect an audio output, then refresh.
-                            </span>
+                            </Caption>
                           )}
-                        </label>
-                        <label className="field">
+                        </FormField>
+                        <FormField>
                           Sample rate (Hz)
                           <input
                             type="number"
@@ -321,8 +332,8 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                               update('sample_rate', Number(e.target.value))
                             }
                           />
-                        </label>
-                        <label className="field">
+                        </FormField>
+                        <FormField>
                           Input channels
                           <input
                             type="number"
@@ -333,8 +344,8 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                               update('input_channels', Number(e.target.value))
                             }
                           />
-                        </label>
-                        <label className="field">
+                        </FormField>
+                        <FormField>
                           Output channels
                           <input
                             type="number"
@@ -345,8 +356,8 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                               update('output_channels', Number(e.target.value))
                             }
                           />
-                        </label>
-                        <label className="field">
+                        </FormField>
+                        <FormField>
                           Sample format
                           <Select
                             value={request.format}
@@ -375,8 +386,8 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                               </SelectItem>
                             </SelectContent>
                           </Select>
-                        </label>
-                        <label className="field">
+                        </FormField>
+                        <FormField>
                           Buffer size (samples per period)
                           <input
                             type="number"
@@ -388,8 +399,8 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                               update('period_frames', Number(e.target.value))
                             }
                           />
-                        </label>
-                        <label className="field">
+                        </FormField>
+                        <FormField>
                           Buffer periods
                           <input
                             type="number"
@@ -400,8 +411,8 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                               update('periods', Number(e.target.value))
                             }
                           />
-                        </label>
-                      </div>
+                        </FormField>
+                      </FormGrid>
                       <datalist id="audio-sample-rates">
                         {[44100, 48000, 88200, 96000].map((rate) => (
                           <option key={rate} value={rate} />
@@ -412,7 +423,7 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                           <option key={size} value={size} />
                         ))}
                       </datalist>
-                      <p className="caption" aria-label="Queued audio">
+                      <Caption aria-label="Queued audio">
                         ≈{' '}
                         {(
                           ((request.period_frames * request.periods) /
@@ -423,8 +434,8 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                         at {(request.sample_rate / 1000).toFixed(1)} kHz).
                         Smaller buffers lower delay but need more processing
                         headroom; this is not measured round-trip latency.
-                      </p>
-                      <div className="action-row">
+                      </Caption>
+                      <ActionRow>
                         <Button
                           variant="outline"
                           disabled={!inputEndpoint || !outputEndpoint}
@@ -435,11 +446,11 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                         <Caption role="status">
                           {busy ? 'Inspecting audio…' : message}
                         </Caption>
-                      </div>
-                      <p className="caption">
+                      </ActionRow>
+                      <Caption>
                         The check opens and releases input, then output. It
                         never plays or saves the setup.
-                      </p>
+                      </Caption>
                     </fieldset>
                   </>
                 )}
@@ -447,7 +458,7 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                   <p role="status">{busy ? 'Inspecting audio…' : message}</p>
                 )}
                 {inventory && inventory.warnings.length > 0 && (
-                  <details className="control-help">
+                  <details className="border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']">
                     <summary>Technical detail</summary>
                     {inventory.warnings.map((warning, index) => (
                       <p key={index}>{warning}</p>
@@ -457,7 +468,7 @@ export function AudioSettings({ connected }: { connected: boolean }) {
               </Card>
             }
           />
-        </section>
+        </Card>
       </TabsContent>
     </Tabs>
   );

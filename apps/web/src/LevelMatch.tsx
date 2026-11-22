@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { ActionRow } from '@oxidal/design-system/components/form-layout';
 import { LevelMatch as MatchPanel } from '@oxidal/design-system/patterns/guitar-tools';
 
 import { unitLevels } from './api';
@@ -115,7 +116,10 @@ export function LevelMatch({
   const fmt = (db: number, unit = 'dB') =>
     `${db > 0 ? '+' : db < 0 ? '−' : ''}${Math.abs(db).toFixed(1)} ${unit}`;
   return (
-    <div className="control-stack" aria-label="Match preset level">
+    <div
+      className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
+      aria-label="Match preset level"
+    >
       <MatchPanel
         preset={preset}
         disabled={disabled || !output || stale}
@@ -169,11 +173,11 @@ export function LevelMatch({
       ) : (
         note && <p role="alert">{note}</p>
       )}
-      <div className="action-row">
+      <ActionRow>
         <Button variant="ghost" onClick={onClose}>
           {kept ? 'Close' : 'Cancel'}
         </Button>
-      </div>
+      </ActionRow>
     </div>
   );
 }

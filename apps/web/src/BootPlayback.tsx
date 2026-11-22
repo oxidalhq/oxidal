@@ -196,7 +196,7 @@ export function BootPlayback({
     ? 'off'
     : (startup?.policy ?? (selected ? 'pinned' : 'off'));
   return (
-    <div className="control-stack">
+    <div className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start">
       {invalid ? (
         <Button
           variant="outline"
@@ -248,13 +248,13 @@ export function BootPlayback({
         </fieldset>
       )}
       {startup?.target && (
-        <div className="caption">
+        <Caption as="div">
           Startup preset: {targetName || 'Reading name…'}
           <details>
             <summary>Saved version</summary>
             <code>{startup.target.id}</code>
           </details>
-        </div>
+        </Caption>
       )}
       {policy === 'pinned' && running && (
         <Button
@@ -266,15 +266,15 @@ export function BootPlayback({
         </Button>
       )}
       {error && <p role="alert">{error}</p>}
-      <details className="control-help">
+      <details className="border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']">
         <summary>Automatic startup</summary>
-        <p className="caption">
+        <Caption>
           Startup uses the confirmed sound and audio setup. With Last played,
           each preset you start or switch to replaces it; browsing does not.
           With Pinned saved version, later edits do not change it. Missing
           hardware or files leave audio stopped with a message; Oxidal never
           picks a different sound. Stop keeps this preference.
-        </p>
+        </Caption>
         {native?.boot_error && <p role="alert">{native.boot_error}</p>}
       </details>
     </div>

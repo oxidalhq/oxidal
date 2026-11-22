@@ -342,6 +342,7 @@ export function DockableSheet({
   title,
   description,
   closeLabel,
+  returnFocus,
   renderSheet,
   icon,
   open,
@@ -355,6 +356,8 @@ export function DockableSheet({
   title: string;
   description?: React.ReactNode;
   closeLabel?: string;
+  /** Launcher for a sheet opened by a button outside its dialog root. */
+  returnFocus?: () => HTMLElement | null;
   /** An in-page sheet can keep its own collapse and focus behavior. */
   renderSheet?: (placement: React.ReactNode) => React.ReactNode;
   icon?: React.ReactNode;
@@ -407,7 +410,17 @@ export function DockableSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent onOpenChange={onOpenChange} className={className}>
+      <SheetContent
+        onOpenChange={onOpenChange}
+        className={className}
+        onCloseAutoFocus={(event) => {
+          const launcher = returnFocus?.();
+          if (launcher?.isConnected) {
+            event.preventDefault();
+            launcher.focus({ preventScroll: true });
+          }
+        }}
+      >
         <SheetHeader
           title={title}
           description={description}

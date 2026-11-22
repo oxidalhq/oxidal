@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
 import {
   Segment,
   SegmentedControl,
 } from '@oxidal/design-system/components/segmented';
 import { Slider } from '@oxidal/design-system/components/slider';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { type SceneBlends, sceneBlends } from './api';
@@ -66,19 +68,20 @@ export function SceneChange({
   }
   return (
     <>
-      <button
+      <Button
         type="button"
-        className="scene-change"
+        variant="link"
+        size="sm"
         aria-label={`Scene change: ${blend ? `blend ${seconds(blend)}` : trails ? 'trails' : 'cut'}`}
         disabled={disabled}
         onClick={() => setOpen(true)}
       >
         Scene change ·{' '}
         {blend ? `blend ${seconds(blend)}` : trails ? 'tails ring out' : 'cut'}
-      </button>
+      </Button>
       {open && (
         <AdjustmentDialog title="Scene change" onCancel={() => setOpen(false)}>
-          <div className="control-stack">
+          <div className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start">
             <SegmentedControl
               value={blend ? 'blend' : 'trails'}
               disabled={busy}
@@ -93,7 +96,7 @@ export function SceneChange({
               <Segment value="trails">{trails ? 'Trails' : 'Cut'}</Segment>
               <Segment value="blend">Blend</Segment>
             </SegmentedControl>
-            <p className="caption">
+            <Caption>
               {blend
                 ? trails
                   ? 'The outgoing guitar feed fades while the new scene starts. Its echoes and reverb continue ringing.'
@@ -101,7 +104,7 @@ export function SceneChange({
                 : trails
                   ? 'The outgoing scene stops getting your guitar; its echoes and reverb ring out over the new scene.'
                   : 'This preset selects branch outputs, so outgoing echoes and reverb stop with the scene. Blend makes that change gradual.'}
-            </p>
+            </Caption>
             {blend > 0 && (
               <div className="slider-field">
                 <Slider

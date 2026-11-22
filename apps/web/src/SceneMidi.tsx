@@ -5,12 +5,17 @@ import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
 import { DialogFooter } from '@oxidal/design-system/components/dialog';
 import {
+  ActionRow,
+  FormField,
+} from '@oxidal/design-system/components/form-layout';
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
@@ -332,8 +337,8 @@ export function MidiControls({
             initialized.current = false;
           }}
         >
-          <div className="midi-layout">
-            <div className="midi-status" role="status">
+          <div className="grid gap-5 [&_fieldset]:grid [&_fieldset]:gap-3 [&_legend]:mb-2">
+            <div className="flex flex-wrap items-center gap-2" role="status">
               <Badge>
                 {configured
                   ? status?.connected
@@ -341,16 +346,19 @@ export function MidiControls({
                     : 'Disconnected'
                   : 'Not configured'}
               </Badge>
-              <span className="caption">
+              <Caption as="span">
                 {configured
                   ? status?.connected
                     ? `${status.events} messages received`
                     : 'Saved controller is unavailable. Mappings are kept.'
                   : 'MIDI is optional. Connect a controller to set it up.'}
-              </span>
+              </Caption>
             </div>
             {configured && status?.connected && status?.last && (
-              <output className="midi-message" aria-label="Last MIDI message">
+              <output
+                className="block border-l-3 border-foreground bg-muted px-3 py-2 font-mono text-sm wrap-anywhere"
+                aria-label="Last MIDI message"
+              >
                 Channel {status.last.channel} ·{' '}
                 {status.last.kind === 'program'
                   ? `Program ${status.last.program + 1}`
@@ -362,31 +370,29 @@ export function MidiControls({
                 <summary>
                   Preset recall · Program {currentPresetProgram + 1}
                 </summary>
-                <p className="caption">
+                <Caption>
                   {currentPresetProgram < 128
                     ? `Program ${currentPresetProgram + 1}`
                     : `Bank ${Math.floor(currentPresetProgram / 128)}, Program ${(currentPresetProgram % 128) + 1}`}{' '}
                   · Mine set-list position
-                </p>
-                <p className="caption">
+                </Caption>
+                <Caption>
                   A Program assigned to a scene below wins inside this preset.
                   CC 0 and 32 are reserved for Bank Select.
-                </p>
+                </Caption>
               </details>
             )}
             {!scenes.length && (
-              <p className="caption">
+              <Caption>
                 Map CC messages to controls below. Program changes select scenes
                 in a scene rig.
-              </p>
+              </Caption>
             )}
             {status?.error && status.connected && (
-              <p role="status" className="caption">
-                {status.error}
-              </p>
+              <Caption role="status">{status.error}</Caption>
             )}
             <div className="midi-device-row flex flex-wrap items-end gap-2">
-              <label className="field min-w-0 flex-1">
+              <FormField className="min-w-0 flex-1">
                 MIDI input
                 <Select
                   aria-label="MIDI input"
@@ -422,7 +428,7 @@ export function MidiControls({
                     ))}
                   </SelectContent>
                 </Select>
-              </label>
+              </FormField>
               <Button
                 variant="outline"
                 disabled={disabled || loading}
@@ -436,14 +442,14 @@ export function MidiControls({
               !loading &&
               !error &&
               !configured && (
-                <p className="caption">
+                <Caption>
                   No MIDI controller connected. You can use every audio feature
                   without one.
-                </p>
+                </Caption>
               )}
             {!!draft?.input && (
               <>
-                <label className="field midi-channel">
+                <FormField className="max-w-48">
                   MIDI channel
                   <Select
                     disabled={disabled}
@@ -466,9 +472,9 @@ export function MidiControls({
                       ))}
                     </SelectContent>
                   </Select>
-                </label>
+                </FormField>
                 <details
-                  className="midi-assignments"
+                  className="[&>fieldset+fieldset]:mt-5 [&>summary]:py-2 [&>summary]:font-semibold open:[&>summary]:mb-4"
                   open={showMappings}
                   onToggle={(event) =>
                     setShowMappings(event.currentTarget.open)
@@ -476,13 +482,16 @@ export function MidiControls({
                 >
                   <summary>Assignments</summary>
                   {draft?.bindings.map((binding, index) => (
-                    <div className="midi-mapping" key={binding.scene}>
+                    <div
+                      className="grid gap-3 border-t border-border py-3 first:border-t-0"
+                      key={binding.scene}
+                    >
                       <strong>
                         {scenes.find((s) => s.id === binding.scene)?.name ??
                           binding.scene}
                       </strong>
                       <div className="grid grid-cols-2 items-end gap-2">
-                        <label className="field min-w-0">
+                        <FormField className="min-w-0">
                           Message
                           <Select
                             value={
@@ -523,8 +532,8 @@ export function MidiControls({
                               <SelectItem value="control">CC press</SelectItem>
                             </SelectContent>
                           </Select>
-                        </label>
-                        <label className="field min-w-0">
+                        </FormField>
+                        <FormField className="min-w-0">
                           {binding.controller == null
                             ? 'Program (1–128)'
                             : 'CC (0–127)'}
@@ -561,9 +570,9 @@ export function MidiControls({
                               )
                             }
                           />
-                        </label>
+                        </FormField>
                       </div>
-                      <div className="action-row">
+                      <ActionRow>
                         <Button
                           variant="outline"
                           disabled={
@@ -591,11 +600,11 @@ export function MidiControls({
                         </Button>
                         {learning?.kind === 'scene' &&
                           learning.index === index && (
-                            <span role="status" className="caption">
+                            <Caption as="span" role="status">
                               Press a footswitch or send Program Change
-                            </span>
+                            </Caption>
                           )}
-                      </div>
+                      </ActionRow>
                     </div>
                   ))}
                   {!!branches.length && (
@@ -626,10 +635,13 @@ export function MidiControls({
                               },
                           );
                         return (
-                          <div key={branch.id} className="midi-mapping">
+                          <div
+                            key={branch.id}
+                            className="grid gap-3 border-t border-border py-3 first:border-t-0"
+                          >
                             <Button
                               variant="ghost"
-                              className="midi-branch-toggle"
+                              className="w-fit justify-start"
                               aria-pressed={!!binding}
                               aria-label={`Map path ${branch.name}`}
                               disabled={disabled}
@@ -659,7 +671,7 @@ export function MidiControls({
                             {binding && (
                               <>
                                 <div className="grid grid-cols-2 gap-2">
-                                  <label className="field min-w-0">
+                                  <FormField className="min-w-0">
                                     CC
                                     <input
                                       type="number"
@@ -676,8 +688,8 @@ export function MidiControls({
                                         })
                                       }
                                     />
-                                  </label>
-                                  <label className="field min-w-0">
+                                  </FormField>
+                                  <FormField className="min-w-0">
                                     Behavior
                                     <Select
                                       value={binding.mode}
@@ -702,9 +714,9 @@ export function MidiControls({
                                         </SelectItem>
                                       </SelectContent>
                                     </Select>
-                                  </label>
+                                  </FormField>
                                 </div>
-                                <div className="action-row">
+                                <ActionRow>
                                   <Button
                                     variant="outline"
                                     disabled={
@@ -732,11 +744,11 @@ export function MidiControls({
                                   </Button>
                                   {learning?.kind === 'branch' &&
                                     learning.branch === branch.id && (
-                                      <span role="status" className="caption">
+                                      <Caption as="span" role="status">
                                         Press the footswitch for this path
-                                      </span>
+                                      </Caption>
                                     )}
-                                </div>
+                                </ActionRow>
                               </>
                             )}
                           </div>
@@ -775,7 +787,7 @@ export function MidiControls({
                           key={index}
                           className="space-y-2 rounded-md border border-border p-2"
                         >
-                          <label className="field min-w-0">
+                          <FormField className="min-w-0">
                             Control
                             <Select
                               value={JSON.stringify(binding.target)}
@@ -820,9 +832,9 @@ export function MidiControls({
                                 ))}
                               </SelectContent>
                             </Select>
-                          </label>
+                          </FormField>
                           <div className="grid grid-cols-2 gap-2">
-                            <label className="field min-w-0">
+                            <FormField className="min-w-0">
                               CC
                               <input
                                 aria-label={`Parameter CC ${index + 1}`}
@@ -835,8 +847,8 @@ export function MidiControls({
                                   change({ controller: Number(e.target.value) })
                                 }
                               />
-                            </label>
-                            <label className="field min-w-0">
+                            </FormField>
+                            <FormField className="min-w-0">
                               Behavior
                               <Select
                                 value={
@@ -891,7 +903,7 @@ export function MidiControls({
                                   )}
                                 </SelectContent>
                               </Select>
-                            </label>
+                            </FormField>
                           </div>
                           {expression && (
                             <fieldset
@@ -899,11 +911,11 @@ export function MidiControls({
                               className="grid gap-2"
                             >
                               <legend>Expression pedal calibration</legend>
-                              <p className="caption">
+                              <Caption>
                                 Move the pedal to each end and enter the CC
                                 values shown under Last MIDI message. Set the
                                 target positions from 0 to 127.
-                              </p>
+                              </Caption>
                               {(
                                 [
                                   'heel_input',
@@ -912,7 +924,7 @@ export function MidiControls({
                                   'toe_output',
                                 ] as const
                               ).map((field) => (
-                                <label className="field" key={field}>
+                                <FormField key={field}>
                                   {
                                     {
                                       heel_input: 'Heel MIDI value',
@@ -942,9 +954,9 @@ export function MidiControls({
                                         });
                                     }}
                                   />
-                                </label>
+                                </FormField>
                               ))}
-                              <label className="field">
+                              <FormField>
                                 Response curve
                                 <select
                                   value={expression.curve}
@@ -962,7 +974,7 @@ export function MidiControls({
                                   <option value="slow_start">Slow start</option>
                                   <option value="fast_start">Fast start</option>
                                 </select>
-                              </label>
+                              </FormField>
                               {expression.heel_input ===
                                 expression.toe_input && (
                                 <p role="alert">
@@ -971,7 +983,7 @@ export function MidiControls({
                               )}
                             </fieldset>
                           )}
-                          <div className="action-row">
+                          <ActionRow>
                             <Button
                               variant="outline"
                               disabled={
@@ -999,17 +1011,17 @@ export function MidiControls({
                             </Button>
                             {learning?.kind === 'parameter' &&
                               learning.index === index && (
-                                <span role="status" className="caption">
+                                <Caption as="span" role="status">
                                   {stomp
                                     ? 'Press the stomp footswitch'
                                     : 'Move a controller knob'}
-                                </span>
+                                </Caption>
                               )}
-                          </div>
+                          </ActionRow>
                           {control && (
-                            <output className="caption">
+                            <Caption as="output">
                               {control.display || String(control.value)}
-                            </output>
+                            </Caption>
                           )}
                           <Button
                             variant="outline"
@@ -1122,9 +1134,7 @@ export function MidiControls({
               >
                 <strong>Resolve duplicate MIDI numbers</strong>
                 {conflicts.map((conflict) => (
-                  <p className="caption" key={conflict}>
-                    {conflict}
-                  </p>
+                  <Caption key={conflict}>{conflict}</Caption>
                 ))}
               </div>
             )}

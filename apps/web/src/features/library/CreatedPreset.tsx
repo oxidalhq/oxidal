@@ -1,6 +1,8 @@
 import { useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { ActionRow } from '@oxidal/design-system/components/form-layout';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { graphAudioState, playbackState, rigAudioState } from '../../api';
@@ -75,13 +77,16 @@ export function CreatedPreset({
     }
   }
   return (
-    <div className="control-stack" role="status">
+    <div
+      className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
+      role="status"
+    >
       <p>Created {name} in Mine. Your playing sound is unchanged.</p>
-      <p className="caption">
+      <Caption>
         Edit without playing changes it in a draft; Play to edit opens it in
         Rig.
-      </p>
-      <div className="action-row">
+      </Caption>
+      <ActionRow>
         <Button disabled={!connected || busy} onClick={() => void prepare()}>
           Play to edit…
         </Button>
@@ -93,7 +98,7 @@ export function CreatedPreset({
         <Button variant="ghost" disabled={busy} onClick={onDismiss}>
           Keep in Library
         </Button>
-      </div>
+      </ActionRow>
       {error && <p role="alert">{error}</p>}
       {review && (
         <AdjustmentDialog
@@ -107,7 +112,7 @@ export function CreatedPreset({
             Unsaved edits to that sound can be lost.
           </p>
           <p>Cancel and save your current work first if you want to keep it.</p>
-          <div className="action-row">
+          <ActionRow>
             <Button
               variant="outline"
               disabled={busy}
@@ -118,7 +123,7 @@ export function CreatedPreset({
             <Button disabled={!connected || busy} onClick={() => void play()}>
               Replace sound and play
             </Button>
-          </div>
+          </ActionRow>
           {error && <p role="alert">{error}</p>}
         </AdjustmentDialog>
       )}

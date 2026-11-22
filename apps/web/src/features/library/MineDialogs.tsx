@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import {
+  ActionRow,
+  FormField,
+} from '@oxidal/design-system/components/form-layout';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { type LibraryCatalog, libraryCatalog } from '../../api';
@@ -110,7 +115,7 @@ function RenameDialog({
           void save();
         }}
       >
-        <label className="field">
+        <FormField>
           Name on this device
           <input
             value={name}
@@ -118,17 +123,17 @@ function RenameDialog({
             disabled={busy}
             onChange={(event) => setName(event.target.value)}
           />
-        </label>
-        <p className="caption">The exported preset keeps its saved name.</p>
+        </FormField>
+        <Caption>The exported preset keeps its saved name.</Caption>
         {error && <p role="alert">{error}</p>}
-        <div className="action-row">
+        <ActionRow>
           <Button variant="outline" disabled={busy} onClick={onClose}>
             Cancel
           </Button>
           <Button type="submit" disabled={busy || !catalog || !name.trim()}>
             Rename
           </Button>
-        </div>
+        </ActionRow>
       </form>
     </AdjustmentDialog>
   );

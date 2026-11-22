@@ -1,9 +1,8 @@
 import { useEffect, useRef } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
 import { sceneColour } from '@oxidal/design-system/lib/scene-colours';
 import { ScenePad } from '@oxidal/design-system/widgets/scene-pad';
-
-import './ScenePads.css';
 
 type Scene = { id: string; name: string };
 
@@ -85,14 +84,14 @@ export function ScenePads({
     return () => window.removeEventListener('keydown', onKey);
   }, []);
   return (
-    <section className="scene-pads" aria-label="Scenes">
-      <h3>
+    <section className="grid gap-2" aria-label="Scenes">
+      <h3 className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm font-semibold">
         Scenes
-        <span className="scene-pads-meta">
+        <span className="inline-flex flex-wrap items-baseline justify-end gap-x-3 text-xs font-normal text-muted-foreground">
           {fading ? (
             'fading…'
           ) : (
-            <span className="scene-pads-hint">tap or press 1–9</span>
+            <span className="hidden sm:inline">tap or press 1–9</span>
           )}
           {extra}
         </span>
@@ -102,9 +101,6 @@ export function ScenePads({
         role="group"
         aria-label="Scenes"
         aria-busy={fading}
-        // Up to four scenes share one row, even on a phone.
-        data-few={scenes.length <= 4 || undefined}
-        style={{ '--pads': Math.min(scenes.length, 4) } as React.CSSProperties}
       >
         {scenes.map((scene, i) => {
           const pad = (
@@ -150,18 +146,19 @@ export function ScenePads({
             />
           );
           return onMenu ? (
-            <div key={scene.id} className="scene-pad-cell">
+            <div key={scene.id} className="relative grid">
               {pad}
-              <button
-                type="button"
-                className="scene-pad-more"
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`absolute inset-y-0 right-0 h-full rounded-l-none border-l-border ${scene.id === active ? 'text-background' : 'text-foreground'}`}
                 aria-label={`More for scene ${scene.name}`}
                 aria-haspopup="dialog"
                 disabled={disabled}
                 onClick={() => onMenu(scene.id)}
               >
                 ⋯
-              </button>
+              </Button>
             </div>
           ) : (
             pad

@@ -1,4 +1,6 @@
 import { Button } from '@oxidal/design-system/components/button';
+import { ActionRow } from '@oxidal/design-system/components/form-layout';
+import { Caption } from '@oxidal/design-system/components/text';
 import { sceneColour } from '@oxidal/design-system/lib/scene-colours';
 
 import { type MoveKey, RouteTree } from '../../components/RouteTree';
@@ -127,7 +129,7 @@ export function RigChainSurface({ rig, vm }: RigViewProps) {
           onKey={editing && running ? onKey : undefined}
           disabled={locked}
         />
-        <p className="caption">
+        <Caption>
           {!running
             ? 'Resume audio to hear this chain and edit its blocks.'
             : !editing
@@ -137,10 +139,10 @@ export function RigChainSurface({ rig, vm }: RigViewProps) {
                 : epaper
                   ? 'Select a block, then use Move and Path to move it.'
                   : 'Tap + to add an effect or split there. Drag a block to move it, within or across paths, or press Alt and an arrow key.'}
-        </p>
+        </Caption>
       </div>
       {running && routeSplits.length > 0 && (
-        <div className="action-row" role="group" aria-label="Splits">
+        <ActionRow role="group" aria-label="Splits">
           {routeSplits.map((split, index) => (
             <Button
               key={split.split}
@@ -165,7 +167,7 @@ export function RigChainSurface({ rig, vm }: RigViewProps) {
               ›
             </Button>
           ))}
-        </div>
+        </ActionRow>
       )}
       <RigChainSurfaceChooser rig={rig} vm={vm} />
     </>

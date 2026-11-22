@@ -1,4 +1,5 @@
 import { Button } from '@oxidal/design-system/components/button';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { GearIcon } from './GearIcon';
@@ -41,14 +42,14 @@ export function AddBlockChooser({
             <GearIcon gear={kind.gear} />
             <span>
               <strong>{kind.title}</strong>
-              <span className="caption">{kind.detail}</span>
+              <Caption as="span">{kind.detail}</Caption>
             </span>
           </Button>
         ))}
       </div>
-      <p className="caption">
+      <Caption>
         Next you choose where in the chain it goes, then the model.
-      </p>
+      </Caption>
     </AdjustmentDialog>
   );
 }

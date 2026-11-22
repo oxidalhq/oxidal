@@ -53,7 +53,9 @@ async function fits(page: Page) {
         problems.push('Navigation targets need visible separation');
     }
     // Visible separation is essential even when controls technically fit the viewport.
-    for (const group of document.querySelectorAll('.action-row, .form-grid')) {
+    for (const group of document.querySelectorAll(
+      '[data-slot="action-row"], [data-slot="form-grid"]',
+    )) {
       const controls = Array.from(group.children)
         .map((child) => ({
           name: child.textContent?.trim().slice(0, 45),
@@ -86,7 +88,7 @@ async function fits(page: Page) {
         .querySelector('.display-mode')
         ?.getBoundingClientRect();
       const actions = display
-        .querySelector('.action-row')
+        .querySelector('[data-slot="action-row"]')
         ?.getBoundingClientRect();
       if (selector && actions && selector.bottom > actions.top)
         problems.push(

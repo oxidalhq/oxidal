@@ -13,6 +13,7 @@ import {
   Segment,
   SegmentedControl,
 } from '@oxidal/design-system/components/segmented';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import {
   type LibraryCatalog,
@@ -121,10 +122,10 @@ export function MixLinks({ mix }: { mix: Mix }) {
         Plays with
       </h4>
       {links && !mine.length && (
-        <p className="caption">
+        <Caption>
           Not linked yet. Link it to a rig or Set list entry to cue it from
           there.
-        </p>
+        </Caption>
       )}
       {!!mine.length && (
         <ul className="m-0 grid list-none gap-1 p-0 [&>li]:flex [&>li]:min-w-0 [&>li]:flex-wrap [&>li]:items-center [&>li]:gap-2">
@@ -132,10 +133,7 @@ export function MixLinks({ mix }: { mix: Mix }) {
             <li key={`${entry.target.scope}:${targetKey(entry.target.preset)}`}>
               <span>
                 <strong>{name(entry.target)}</strong>
-                <span className="caption">
-                  {' '}
-                  · {SCOPE_WORD[entry.target.scope]}
-                </span>
+                <Caption as="span"> · {SCOPE_WORD[entry.target.scope]}</Caption>
               </span>
               <Button
                 variant="ghost"
@@ -201,16 +199,12 @@ export function MixLinks({ mix }: { mix: Mix }) {
         </div>
       )}
       {current && !linked && (
-        <p className="caption">
+        <Caption>
           {name(current.target)} currently plays “
           {current.title ?? 'an unavailable mix'}”. Linking replaces it.
-        </p>
+        </Caption>
       )}
-      {state && (
-        <p className="caption" role="status">
-          {state}
-        </p>
-      )}
+      {state && <Caption role="status">{state}</Caption>}
     </div>
   );
 }
@@ -352,7 +346,7 @@ function CueBackingButton({
     >
       <MusicNotes aria-hidden="true" />
       <span className="min-w-0 flex-1 font-semibold break-words">
-        <span className="caption">Backing </span>
+        <Caption as="span">Backing </Caption>
         {title}
       </span>
       <Button
@@ -363,9 +357,9 @@ function CueBackingButton({
         {cued ? 'Cued' : 'Cue backing'}
       </Button>
       {error && (
-        <span role="alert" className="caption">
+        <Caption as="span" role="alert">
           {error}
-        </span>
+        </Caption>
       )}
       {dialog}
     </div>

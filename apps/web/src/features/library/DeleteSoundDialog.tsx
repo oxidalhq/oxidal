@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { ActionRow } from '@oxidal/design-system/components/form-layout';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
@@ -105,9 +107,7 @@ export function DeleteSoundDialog({
                       </li>
                     ))}
                   </ul>
-                  <p className="caption">
-                    Remove it from those first, or keep it.
-                  </p>
+                  <Caption>Remove it from those first, or keep it.</Caption>
                 </>
               ) : preview.blocked ? (
                 <p role="alert">{preview.blocked}</p>
@@ -132,7 +132,7 @@ export function DeleteSoundDialog({
                 </Button>
               </div>
             )}
-            <div className="action-row">
+            <ActionRow>
               <Button variant="outline" disabled={busy} onClick={close}>
                 {preview?.blocked ? 'Close' : 'Cancel'}
               </Button>
@@ -145,7 +145,7 @@ export function DeleteSoundDialog({
                   {busy ? 'Deleting…' : 'Delete permanently'}
                 </Button>
               )}
-            </div>
+            </ActionRow>
           </>
         )}
       </div>

@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { DialogFooter } from '@oxidal/design-system/components/dialog';
+import { FormField } from '@oxidal/design-system/components/form-layout';
+import { Caption } from '@oxidal/design-system/components/text';
 import { RecordDiToggle } from '@oxidal/design-system/patterns/device-flows';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
@@ -126,12 +128,12 @@ export function DiReamps({ connected }: { connected: boolean }) {
     <section className="grid min-w-0 gap-3" aria-label="DI and reamps">
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 [&>h2]:m-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold">
         <div>
-          <p className="caption">
+          <Caption>
             Record the raw guitar, then reamp it through any sound later.
-          </p>
+          </Caption>
         </div>
       </div>
-      {protect && <p className="caption">{PROTECT_REASON}</p>}
+      {protect && <Caption>{PROTECT_REASON}</Caption>}
       <div
         className="grid min-w-0 gap-3 rounded-lg border border-border bg-card p-3"
         aria-label="Record DI"
@@ -163,12 +165,12 @@ export function DiReamps({ connected }: { connected: boolean }) {
           />
         ) : (
           <>
-            <p className="caption">
+            <Caption>
               Records the raw guitar before trim, gate and effects. You’ll hear
               your current rig while recording.
               {minutes !== null &&
                 ` Space for about ${Math.floor(minutes / 60)} h ${Math.floor(minutes % 60)} min.`}
-            </p>
+            </Caption>
           </>
         )}
         {job && !running && <JobResult job={job} />}
@@ -182,7 +184,7 @@ export function DiReamps({ connected }: { connected: boolean }) {
         </p>
       )}
       {library && !assets.length ? (
-        <p className="caption">No DI recordings or reamps yet.</p>
+        <Caption>No DI recordings or reamps yet.</Caption>
       ) : (
         <ol
           className="m-0 grid min-w-0 list-none divide-y divide-border border-y border-border p-0"
@@ -315,7 +317,7 @@ function JobRunning({
 function JobResult({ job }: { job: CaptureJob }) {
   const length = formatTime(job.frames / job.rate);
   if (job.phase === 'cancelled')
-    return <p className="caption">Cancelled. Nothing was saved.</p>;
+    return <Caption>Cancelled. Nothing was saved.</Caption>;
   if (job.phase === 'failed')
     return (
       <p
@@ -327,12 +329,12 @@ function JobResult({ job }: { job: CaptureJob }) {
       </p>
     );
   return (
-    <p className="caption" role="status">
+    <Caption role="status">
       “{job.title}” saved ({length}
       {job.kind === 'di' ? ', mono' : ''}){job.incomplete ? ', incomplete' : ''}
       .{job.kind === 'reamp' ? ' Your live guitar is back.' : ''}
       {job.reason ? ` ${job.reason}.` : ''}
-    </p>
+    </Caption>
   );
 }
 
@@ -389,10 +391,10 @@ export function ReampDialog({
           if (ready) void start();
         }}
       >
-        <p className="caption">
+        <Caption>
           {channelsLabel(channels)} · {formatTime(durationOf(asset))}
           {lossy && ` · ${lossy}`}
-        </p>
+        </Caption>
         {channels > 1 && (
           <fieldset>
             <legend>Channel</legend>
@@ -430,7 +432,7 @@ export function ReampDialog({
             None (already level-matched)
           </label>
         </fieldset>
-        <label className="field">
+        <FormField>
           Tail
           <select
             value={tail}
@@ -442,7 +444,7 @@ export function ReampDialog({
               </option>
             ))}
           </select>
-        </label>
+        </FormField>
         <label>
           <input
             type="checkbox"
@@ -451,10 +453,10 @@ export function ReampDialog({
           />{' '}
           Hear it while it runs
         </label>
-        <p className="caption">
+        <Caption>
           Runs through the preset and scene playing now. Live guitar is replaced
           while this runs; your rig comes back after.
-        </p>
+        </Caption>
         {error && <p role="alert">{error}</p>}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose}>

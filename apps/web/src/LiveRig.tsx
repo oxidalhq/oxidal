@@ -8,15 +8,22 @@ import {
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Card } from '@oxidal/design-system/components/card';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@oxidal/design-system/components/dropdown-menu';
+import {
+  ActionRow,
+  FormField,
+  FormGrid,
+} from '@oxidal/design-system/components/form-layout';
 import { RelativeAdjustment as TouchAdjust } from '@oxidal/design-system/components/number-field';
 import { InlineFader, Slider } from '@oxidal/design-system/components/slider';
 import { Switch } from '@oxidal/design-system/components/switch';
+import { Caption, Title } from '@oxidal/design-system/components/text';
 import { Toggle } from '@oxidal/design-system/components/toggle';
 import { glyphFor } from '@oxidal/design-system/lib/block-glyphs';
 import { shortValue } from '@oxidal/design-system/lib/preview';
@@ -698,8 +705,8 @@ export function LiveRig({
       );
     }
     return (
-      <section className="panel space-y-3" aria-label="Rig playback">
-        <h2>
+      <Card className="space-y-3" aria-label="Rig playback">
+        <Title as="h2" size="sm">
           {!state
             ? 'Checking audio…'
             : state.waiting_for_device
@@ -713,7 +720,7 @@ export function LiveRig({
                     : state.phase === 'failed'
                       ? 'Audio needs attention'
                       : 'Audio stopped'}
-        </h2>
+        </Title>
         {(error || state?.error) && <p role="alert">{error || state?.error}</p>}
         {state?.waiting_for_device ? (
           <p role="status">{WAITING_FOR_DEVICE}</p>
@@ -750,7 +757,7 @@ export function LiveRig({
               onSelect={(choice) => void recall(choice)}
             />
           )}
-        <div className="action-row">
+        <ActionRow>
           {state?.phase === 'stopped' && state.configured && (
             <Button
               disabled={!connected || busy}
@@ -785,8 +792,8 @@ export function LiveRig({
             Audio setup
           </Button>
           <TunerButton />
-        </div>
-      </section>
+        </ActionRow>
+      </Card>
     );
   }
   const control =
@@ -1465,7 +1472,7 @@ export function LiveRig({
     );
   return (
     <section
-      className="instrument-surface live-rig landscape:max-h-[500px]:p-0 space-y-2 py-0 max-[600px]:p-0 [&_.caption]:my-2 [&>[data-slot=rig-heading]]:-mx-page [&>details]:border-t [&>details]:border-border [&>details]:py-1 [&>details[open]>summary]:mb-2 [&>details[open]>summary]:text-foreground"
+      className="live-rig landscape:max-h-[500px]:p-0 min-w-0 space-y-2 py-0 py-1 max-[600px]:p-0 [&_[data-slot=caption]]:my-2 [&>[data-slot=rig-heading]]:-mx-page [&>details]:border-t [&>details]:border-border [&>details]:py-1 [&>details[open]>summary]:mb-2 [&>details[open]>summary]:text-foreground"
       aria-label="Sounding rig"
     >
       <RigHeading
@@ -1538,11 +1545,11 @@ export function LiveRig({
           role="status"
         >
           <strong>Editing a copy of {state.copy_on_edit.source_name}</strong>
-          <p className="caption">
+          <Caption>
             Your first change created this preset in Mine. The TONE3000 original
             is unchanged.
-          </p>
-          <div className="action-row">
+          </Caption>
+          <ActionRow>
             <Button
               disabled={busy}
               onClick={() => void resolveAutomaticCopy(true)}
@@ -1556,7 +1563,7 @@ export function LiveRig({
             >
               Discard copy
             </Button>
-          </div>
+          </ActionRow>
         </div>
       )}
       <span
@@ -1569,7 +1576,7 @@ export function LiveRig({
       </span>
       {error && !adjusting && (
         <div
-          className="error flex flex-wrap items-center gap-2 [&>p]:m-0 [&>p]:min-w-48 [&>p]:flex-1"
+          className="mb-4 flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-destructive px-3 py-2.5 wrap-anywhere text-destructive [&>p]:m-0 [&>p]:min-w-48 [&>p]:flex-1"
           role="alert"
         >
           <p>{error}</p>
@@ -1676,9 +1683,9 @@ export function LiveRig({
                   }}
                 >
                   MIDI assignments…
-                  <span className="caption">
+                  <Caption as="span">
                     Assign this preset&apos;s switches and controls
-                  </span>
+                  </Caption>
                 </Button>
                 <Button
                   variant="ghost"
@@ -1697,9 +1704,9 @@ export function LiveRig({
                   }}
                 >
                   Revert to saved…
-                  <span className="caption">
+                  <Caption as="span">
                     Discards edits since the last save
-                  </span>
+                  </Caption>
                 </Button>
                 <Button
                   variant="ghost"
@@ -1716,9 +1723,9 @@ export function LiveRig({
                   }}
                 >
                   Match level…
-                  <span className="caption">
+                  <Caption as="span">
                     Play for eight seconds to level this preset with the others
-                  </span>
+                  </Caption>
                 </Button>
               </div>
               <div
@@ -1762,7 +1769,7 @@ export function LiveRig({
                 This discards the live edits and reloads the saved version of{' '}
                 {restoreOpening.preset_name}. Audio will briefly restart.
               </p>
-              <div className="action-row">
+              <ActionRow>
                 <Button
                   disabled={
                     disabled ||
@@ -1778,7 +1785,7 @@ export function LiveRig({
                 <Button variant="ghost" onClick={() => setRestoreOpening(null)}>
                   Keep editing
                 </Button>
-              </div>
+              </ActionRow>
               {(state.session !== restoreOpening.session ||
                 state.revision !== restoreOpening.revision) && (
                 <p role="status">
@@ -1868,9 +1875,9 @@ export function LiveRig({
               title={`Add ${insertion.format.toUpperCase()} · position`}
               onCancel={() => setInsertion(null)}
             >
-              <p className="caption">
+              <Caption>
                 Choose an available position in the signal chain.
-              </p>
+              </Caption>
               <div
                 className="grid gap-2"
                 aria-label="Available insertion positions"
@@ -2143,7 +2150,10 @@ export function LiveRig({
           }}
         >
           {error && (
-            <p role="alert" className="error">
+            <p
+              role="alert"
+              className="mb-4 min-w-0 rounded-lg border border-destructive px-3 py-2.5 wrap-anywhere text-destructive"
+            >
               {error}
             </p>
           )}
@@ -2239,12 +2249,12 @@ export function LiveRig({
             if (!busy) setSaveOpening(null);
           }}
         >
-          <p className="caption">
+          <Caption>
             Keep this sound for offline use. The original preset stays
             unchanged.
-          </p>
-          <div className="form-grid">
-            <label className="field">
+          </Caption>
+          <FormGrid>
+            <FormField>
               Name for sounding copy
               <input
                 value={copyName}
@@ -2252,7 +2262,7 @@ export function LiveRig({
                 maxLength={100}
                 disabled={busy}
               />
-            </label>
+            </FormField>
             <Button
               disabled={
                 disabled ||
@@ -2265,7 +2275,7 @@ export function LiveRig({
             >
               {busy ? 'Saving…' : 'Save a copy'}
             </Button>
-          </div>
+          </FormGrid>
           {state.configured?.owned && !state.configured.draft && (
             <SaveSoundVersion
               key={state.configured.preset_id}
@@ -2290,9 +2300,7 @@ export function LiveRig({
         </AdjustmentDialog>
       )}
       {!!draft && (
-        <p className="caption">
-          Finish the audible adjustment before saving a copy.
-        </p>
+        <Caption>Finish the audible adjustment before saving a copy.</Caption>
       )}
       {state.saved_copy && (
         <p role="status" data-testid="live-saved">

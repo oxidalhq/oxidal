@@ -9,6 +9,11 @@ import {
 } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Card } from '@oxidal/design-system/components/card';
+import {
+  FormField,
+  FormGrid,
+} from '@oxidal/design-system/components/form-layout';
 import {
   Select,
   SelectContent,
@@ -18,6 +23,7 @@ import {
 } from '@oxidal/design-system/components/select';
 import { Loading } from '@oxidal/design-system/components/states';
 import { Switch } from '@oxidal/design-system/components/switch';
+import { Caption, Eyebrow, Title } from '@oxidal/design-system/components/text';
 import { useNotice } from '@oxidal/design-system/notices';
 import {
   AppShell,
@@ -588,7 +594,7 @@ function InstrumentApp() {
               />
             ) : (
               <div>
-                <span className="eyebrow">
+                <Eyebrow>
                   {view === 'rig'
                     ? audioRunning
                       ? 'Playing'
@@ -596,8 +602,8 @@ function InstrumentApp() {
                         ? 'Development simulator'
                         : 'Rig'
                     : 'Rig'}
-                </span>
-                <h1 data-testid="active-preset">
+                </Eyebrow>
+                <Title size="md" data-testid="active-preset">
                   {view === 'rig'
                     ? (playingName ??
                       graphName ??
@@ -613,15 +619,15 @@ function InstrumentApp() {
                               : 'Serial rig'))
                     : SETTINGS_SECTIONS.find(({ id }) => id === settingsSection)
                         ?.label}
-                </h1>
+                </Title>
               </div>
             )}
             {state &&
               view === 'rig' &&
               developmentSimulator &&
               !audioRunning && (
-                <div className="performance-actions preset-controls">
-                  <label className="field">
+                <div className="m-0 flex shrink-0 flex-nowrap items-end justify-between gap-3 text-xs max-[380px]:flex-wrap min-[761px]:justify-start min-[761px]:gap-4 [&>[data-slot=form-field]]:m-0 max-[760px]:[&>[data-slot=form-field]]:min-w-0 max-[760px]:[&>[data-slot=form-field]]:flex-1 max-[380px]:[&>[data-slot=form-field]]:basis-full min-[761px]:[&>[data-slot=form-field]]:min-w-40">
+                  <FormField>
                     Example preset
                     <Select
                       disabled={!connected}
@@ -648,10 +654,10 @@ function InstrumentApp() {
                         <SelectItem value="parallel">Parallel</SelectItem>
                       </SelectContent>
                     </Select>
-                  </label>
+                  </FormField>
                   <TunerButton />
                   <Button
-                    className="bypass-switch min-h-[max(48px,3rem)]"
+                    className="min-h-[max(48px,3rem)] min-w-[136px] max-[380px]:w-full"
                     variant="outline"
                     disabled={!connected}
                     aria-pressed={state.bypassed}
@@ -670,7 +676,7 @@ function InstrumentApp() {
               )}
           </div>
           {view === 'rig' && developmentSimulator && !audioRunning && (
-            <div className="notice mb-2 flex flex-wrap items-center gap-2 border border-border bg-transparent px-2.5 py-1 text-muted-foreground [&>button]:ml-auto">
+            <div className="mb-2 flex flex-wrap items-center gap-2 gap-2.5 border border-l-2 border-border border-muted-foreground bg-muted bg-transparent px-2.5 px-3 py-1 py-2.5 text-sm text-muted-foreground [&_svg]:shrink-0 [&>button]:ml-auto">
               <WarningCircle size={18} aria-hidden="true" />
               <span>
                 <strong>Development simulator · no audio.</strong>
@@ -780,15 +786,20 @@ function InstrumentApp() {
               </Suspense>
               {developmentSimulator && !audioRunning && (
                 <>
-                  <section
-                    className="panel chain-panel mb-0 rounded-b-none bg-background text-foreground shadow-none [&_.section-heading]:mb-3 [&_h2]:font-mono"
+                  <Card
+                    className="chain-panel mb-0 rounded-b-none bg-background text-foreground [box-shadow:none] [&_h2]:font-mono"
                     aria-label="Signal chain"
                   >
-                    <div className="section-heading">
+                    <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
                       <div>
-                        <h2>Signal chain</h2>
+                        <Title as="h2" size="sm">
+                          Signal chain
+                        </Title>
                       </div>
-                      <div className="segmented" aria-label="Routing mode">
+                      <div
+                        className="flex flex-wrap gap-1.5"
+                        aria-label="Routing mode"
+                      >
                         <Button
                           variant="outline"
                           aria-pressed={!parallel}
@@ -821,27 +832,29 @@ function InstrumentApp() {
                       }}
                     />
                     <details className="[&>summary]:justify-end [&>summary]:text-xs [&>summary]:text-muted-foreground">
-                      <summary>Routing details</summary>
-                      <p className="caption">
+                      <summary className="min-h-touch">Routing details</summary>
+                      <Caption>
                         {parallel
                           ? 'Input splits into A and B, then merges before the shared delay and reverb.'
                           : 'One NAM path feeds the shared delay and reverb.'}{' '}
                         Routing validation is active; this preview does not
                         process audio.
-                      </p>
+                      </Caption>
                     </details>
-                  </section>
-                  <section
-                    className="panel rounded-t-none border-t-0 [&_.section-heading]:mb-2"
+                  </Card>
+                  <Card
+                    className="rounded-t-none border-t-0"
                     aria-label="Rig controls"
                   >
-                    <div className="section-heading">
+                    <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
                       <div>
-                        <span className="eyebrow">Quick controls</span>
-                        <h2>
+                        <Eyebrow>Quick controls</Eyebrow>
+                        <Title as="h2" size="sm">
                           {blockNames[selectedBlock]}{' '}
-                          <span className="muted">/ selected</span>
-                        </h2>
+                          <span className="text-sm text-muted-foreground">
+                            / selected
+                          </span>
+                        </Title>
                       </div>
                       <span className="input-source" title="Last control input">
                         Input:
@@ -875,7 +888,7 @@ function InstrumentApp() {
                         </div>
                       ))}
                     </div>
-                  </section>
+                  </Card>
                 </>
               )}
             </>
@@ -950,7 +963,7 @@ function InstrumentApp() {
                   fullscreenError={screen.fullscreenError}
                   onToggleFullscreen={() => void screen.toggleFullscreen()}
                   help={
-                    <details className="control-help">
+                    <details className="border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']">
                       <summary>Display &amp; screen help</summary>
                       <p>
                         Preferences are saved on this browser. Keep-awake works
@@ -979,7 +992,7 @@ function InstrumentApp() {
               )}
               {settingsSection === 'nam' && (
                 <section
-                  className="control-stack"
+                  className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
                   aria-label="NAM engine controls"
                 >
                   <EngineSettings connected={connected} />
@@ -1046,9 +1059,11 @@ function InstrumentApp() {
                   </FeatureBoundary>
                   <DebugConsole />
                   {developmentSimulator && (
-                    <details className="panel">
-                      <summary>Rig validation inspector</summary>
-                      <label className="field">
+                    <details className="grid gap-3 rounded-lg border border-border bg-card p-4">
+                      <summary className="min-h-touch">
+                        Rig validation inspector
+                      </summary>
+                      <FormField>
                         Rig JSON
                         <textarea
                           aria-label="Rig JSON"
@@ -1057,7 +1072,7 @@ function InstrumentApp() {
                           onChange={(event) => setDraft(event.target.value)}
                           spellCheck={false}
                         />
-                      </label>
+                      </FormField>
                       <Button
                         variant="outline"
                         onClick={() => void validateDraft()}
@@ -1076,9 +1091,11 @@ function InstrumentApp() {
               )}
               {settingsSection === 'midi' && developmentSimulator && (
                 <>
-                  <section className="panel">
-                    <h2>MIDI mapping</h2>
-                    <p className="muted">
+                  <Card>
+                    <Title as="h2" size="sm">
+                      MIDI mapping
+                    </Title>
+                    <p className="text-sm text-muted-foreground">
                       Current mapping:{' '}
                       {state.mappings.mappings
                         .map(
@@ -1087,8 +1104,8 @@ function InstrumentApp() {
                         .join(', ') || 'none'}
                       . This form replaces the PoC knob mapping.
                     </p>
-                    <div className="form-grid">
-                      <label className="field">
+                    <FormGrid>
+                      <FormField>
                         Target
                         <Select value={target} onValueChange={setTarget}>
                           <SelectTrigger aria-label="Target">
@@ -1107,8 +1124,8 @@ function InstrumentApp() {
                             ))}
                           </SelectContent>
                         </Select>
-                      </label>
-                      <label className="field">
+                      </FormField>
+                      <FormField>
                         MIDI channel
                         <input
                           type="number"
@@ -1117,8 +1134,8 @@ function InstrumentApp() {
                           value={channel}
                           onChange={(e) => setChannel(Number(e.target.value))}
                         />
-                      </label>
-                      <label className="field">
+                      </FormField>
+                      <FormField>
                         CC number
                         <input
                           type="number"
@@ -1127,8 +1144,8 @@ function InstrumentApp() {
                           value={cc}
                           onChange={(e) => setCc(Number(e.target.value))}
                         />
-                      </label>
-                      <label className="field">
+                      </FormField>
+                      <FormField>
                         Knob mode
                         <Select
                           value={mode}
@@ -1146,10 +1163,10 @@ function InstrumentApp() {
                             </SelectItem>
                           </SelectContent>
                         </Select>
-                      </label>
-                    </div>
-                    <div className="form-grid">
-                      <label className="field">
+                      </FormField>
+                    </FormGrid>
+                    <FormGrid>
+                      <FormField>
                         Mapped minimum (0–1)
                         <input
                           type="number"
@@ -1159,8 +1176,8 @@ function InstrumentApp() {
                           value={minimum}
                           onChange={(e) => setMinimum(Number(e.target.value))}
                         />
-                      </label>
-                      <label className="field">
+                      </FormField>
+                      <FormField>
                         Mapped maximum (0–1)
                         <input
                           type="number"
@@ -1170,8 +1187,8 @@ function InstrumentApp() {
                           value={maximum}
                           onChange={(e) => setMaximum(Number(e.target.value))}
                         />
-                      </label>
-                      <label className="field">
+                      </FormField>
+                      <FormField>
                         Scaling curve
                         <Select
                           value={curve}
@@ -1189,9 +1206,9 @@ function InstrumentApp() {
                             </SelectItem>
                           </SelectContent>
                         </Select>
-                      </label>
-                    </div>
-                    <div className="performance-actions">
+                      </FormField>
+                    </FormGrid>
+                    <div className="flex min-w-0 flex-wrap items-center gap-3">
                       <Button
                         variant="outline"
                         disabled={!connected || !simulator}
@@ -1212,11 +1229,11 @@ function InstrumentApp() {
                             : 'No MIDI input yet'}
                       </span>
                     </div>
-                    <p className="caption">
+                    <Caption>
                       Bypass and preset targets use absolute CC, linear 0–1
                       range, and no pickup. Values below 64 select off/serial;
                       64–127 select on/parallel.
-                    </p>
+                    </Caption>
                     <div className="grid max-w-xl gap-2">
                       <label className="flex min-h-11 items-center justify-between gap-3 text-sm">
                         <span>Pickup / soft takeover</span>
@@ -1238,19 +1255,21 @@ function InstrumentApp() {
                     <Button disabled={!connected} onClick={saveMapping}>
                       Save mapping
                     </Button>
-                    <p className="caption">
+                    <Caption>
                       Feedback updates supported displays, LEDs, or motors.
                       Ordinary knobs use pickup; they cannot physically follow
                       web edits.
-                    </p>
-                  </section>
-                  <section className="panel">
-                    <h2>MIDI simulator</h2>
+                    </Caption>
+                  </Card>
+                  <Card>
+                    <Title as="h2" size="sm">
+                      MIDI simulator
+                    </Title>
                     <p>
                       Inject a CC message into the running TONE3000 rig. The
                       simulator does not require a connected controller.
                     </p>
-                    <label className="field">
+                    <FormField>
                       MIDI value
                       <input
                         aria-label="MIDI value"
@@ -1260,7 +1279,7 @@ function InstrumentApp() {
                         value={midiValue}
                         onChange={(e) => setMidiValue(Number(e.target.value))}
                       />
-                    </label>
+                    </FormField>
                     <Button
                       disabled={!connected || !simulator}
                       onClick={() =>
@@ -1277,10 +1296,13 @@ function InstrumentApp() {
                     >
                       Send MIDI CC
                     </Button>
-                    <div className="feedback" aria-label="MIDI feedback">
-                      <span className="eyebrow">
+                    <div
+                      className="mt-6 flex flex-col gap-3 rounded-lg bg-muted p-4 text-sm"
+                      aria-label="MIDI feedback"
+                    >
+                      <Eyebrow>
                         Confirmed output / isolated feedback route
-                      </span>
+                      </Eyebrow>
                       {state.feedback.length ? (
                         state.feedback.map((item) => (
                           <code key={item.mapping}>
@@ -1294,7 +1316,7 @@ function InstrumentApp() {
                         <span>No feedback yet</span>
                       )}
                     </div>
-                  </section>
+                  </Card>
                 </>
               )}
             </SettingsPage>

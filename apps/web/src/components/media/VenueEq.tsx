@@ -13,6 +13,7 @@ import {
 
 import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
+import { Card } from '@oxidal/design-system/components/card';
 import {
   Select,
   SelectContent,
@@ -22,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { Caption, Title } from '@oxidal/design-system/components/text';
 
 import {
   keepVenuePreview,
@@ -429,23 +431,27 @@ function VenueView({ owner }: { owner: Owner }) {
   } = owner;
   if (loadError && !venue)
     return (
-      <section
-        className="panel control-stack grid min-w-0 gap-4"
+      <Card
+        className="grid min-w-0 items-start gap-3 gap-4 [&>button]:max-w-full [&>button]:justify-self-start"
         aria-labelledby={titleId}
       >
-        <h2 id={titleId}>Venue EQ</h2>
+        <Title as="h2" size="sm" id={titleId}>
+          Venue EQ
+        </Title>
         <p role="alert">{loadError}</p>
-      </section>
+      </Card>
     );
   if (!venue || !active || !work)
     return (
-      <section
-        className="panel control-stack grid min-w-0 gap-4"
+      <Card
+        className="grid min-w-0 items-start gap-3 gap-4 [&>button]:max-w-full [&>button]:justify-self-start"
         aria-labelledby={titleId}
       >
-        <h2 id={titleId}>Venue EQ</h2>
+        <Title as="h2" size="sm" id={titleId}>
+          Venue EQ
+        </Title>
         <p role="status">Reading the venue EQ…</p>
-      </section>
+      </Card>
     );
 
   const users = venue.profiles.filter((profile) => !profile.builtin);
@@ -453,18 +459,24 @@ function VenueView({ owner }: { owner: Owner }) {
   const check = headroom(work);
   const notice = venue.notice && venue.notice !== dismissed ? venue.notice : '';
   return (
-    <section
-      className="panel control-stack grid min-w-0 gap-4"
+    <Card
+      className="grid min-w-0 items-start gap-3 gap-4 [&>button]:max-w-full [&>button]:justify-self-start"
       aria-labelledby={titleId}
       data-locked={locked || undefined}
     >
       <div>
-        <h2 id={titleId} data-venue-edit-heading tabIndex={-1}>
+        <Title
+          as="h2"
+          size="sm"
+          id={titleId}
+          data-venue-edit-heading
+          tabIndex={-1}
+        >
           Venue EQ
-        </h2>
-        <p className="caption">
+        </Title>
+        <Caption>
           Applies to: Main outputs (and headphones on this interface).
-        </p>
+        </Caption>
       </div>
       {notice && (
         <div
@@ -587,12 +599,12 @@ function VenueView({ owner }: { owner: Owner }) {
         </div>
       </div>
       {active.builtin ? (
-        <p className="caption">
+        <Caption>
           &ldquo;{active.name}&rdquo; is a starting point to tune by ear, not a
           measured correction. Saving makes your own copy.
-        </p>
+        </Caption>
       ) : (
-        active.notes && <p className="caption">{active.notes}</p>
+        active.notes && <Caption>{active.notes}</Caption>
       )}
       <EqGraph
         eq={work}
@@ -663,15 +675,13 @@ function VenueView({ owner }: { owner: Owner }) {
           </p>
         )}
       </div>
-      <p className="caption">
-        Doesn't change presets, recordings or reamp results.
-      </p>
+      <Caption>Doesn't change presets, recordings or reamp results.</Caption>
       {message && !locked && !dialog && <p role="alert">{message}</p>}
       {busy && (
         <p className="sr-only" role="status">
           Sending…
         </p>
       )}
-    </section>
+    </Card>
   );
 }

@@ -7,6 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { Caption } from '@oxidal/design-system/components/text';
 import { TempoSource } from '@oxidal/design-system/patterns/tempo-source';
 
 import { sendTempo } from '../../api';
@@ -51,7 +52,7 @@ export function PerformanceTempo() {
       />
       {tempo && (
         <div className="grid gap-1">
-          <span className="caption">Echo repeats per tap</span>
+          <Caption as="span">Echo repeats per tap</Caption>
           <Select
             value={tempo.tap_note ?? 'preset'}
             onValueChange={(note) => {
@@ -78,10 +79,10 @@ export function PerformanceTempo() {
               ))}
             </SelectContent>
           </Select>
-          <span className="caption">
+          <Caption as="span">
             Applies to synced Echo when Tap is the tempo source. Motion follows
             the beat.
-          </span>
+          </Caption>
         </div>
       )}
       {error && <p role="alert">{error}</p>}

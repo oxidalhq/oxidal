@@ -1,6 +1,7 @@
 import { MusicNote } from '@phosphor-icons/react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { formatTime } from '../../lib/playerClock';
 import { usePlayerPosition, useSessionMedia } from './sessionMedia';
@@ -26,7 +27,7 @@ export function PerformPlayerRow() {
       >
         <span className="flex min-w-0 flex-[1_1_12rem] items-center gap-2">
           <MusicNote aria-hidden="true" weight="bold" />
-          <span className="caption">No track cued</span>
+          <Caption as="span">No track cued</Caption>
         </span>
         <Button
           variant="outline"
@@ -42,9 +43,9 @@ export function PerformPlayerRow() {
     ) : shown === 'interrupted' ? (
       <StateChip state="interrupted" label="Stopped by audio restart" />
     ) : shown === 'unavailable' ? (
-      <span className="caption">
+      <Caption as="span">
         Not playable yet: {player.reason ?? 'the track is not ready'}
-      </span>
+      </Caption>
     ) : shown === 'playing' ? null : (
       <StateChip state={shown} />
     );

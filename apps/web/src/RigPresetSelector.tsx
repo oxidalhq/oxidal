@@ -9,7 +9,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@oxidal/design-system/components/tabs';
-import { Title } from '@oxidal/design-system/components/text';
+import { Caption, Title } from '@oxidal/design-system/components/text';
 import {
   PresetNameButton,
   PresetSteps,
@@ -326,10 +326,10 @@ export function RigPresetSelector({
         {!loading && !error && !pickerItems.length && (
           <p>No presets in the set list or Mine yet. Add one from Library.</p>
         )}
-        <p className="caption">
+        <Caption>
           Changing presets can briefly interrupt audio. Scenes switch within the
           loaded rig.
-        </p>
+        </Caption>
       </div>
     );
   }
@@ -652,10 +652,10 @@ export function RigPresetSelector({
               {found ? 'No presets match.' : 'Nothing here yet.'}
             </p>
           )}
-          <p className="caption">
+          <Caption>
             Oxidal and TONE3000 presets open as they are; editing one saves a
             copy to your set list.
-          </p>
+          </Caption>
         </AdjustmentDialog>
       )}
     </div>

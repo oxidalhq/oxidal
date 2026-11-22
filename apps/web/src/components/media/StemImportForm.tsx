@@ -9,6 +9,7 @@ import { useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { Progress } from '@oxidal/design-system/components/states';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
@@ -164,11 +165,11 @@ export function StemImportForm({
           void submit();
         }}
       >
-        <p className="caption">
+        <Caption>
           Choose WAV or MP3 stems exported from the same song, all starting at
           the same point. Files are matched to parts by name; change any match
           below. Leave unused parts empty.
-        </p>
+        </Caption>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Button
             type="button"
@@ -230,7 +231,7 @@ export function StemImportForm({
             role="status"
           >
             <Progress label="Import progress" value={progress.percent} />
-            <p className="caption">{progress.text}</p>
+            <Caption>{progress.text}</Caption>
           </div>
         )}
         {error && (

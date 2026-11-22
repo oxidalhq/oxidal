@@ -2,7 +2,9 @@ import { ArrowClockwise } from '@phosphor-icons/react';
 import { useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { ActionRow } from '@oxidal/design-system/components/form-layout';
 import { Loading } from '@oxidal/design-system/components/states';
+import { Caption } from '@oxidal/design-system/components/text';
 import { StorageLock as StorageLockView } from '@oxidal/design-system/patterns/device-flows';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
@@ -89,11 +91,7 @@ export function StorageLock({
         notice={
           <>
             {!state && <Loading label="Reading storage state…" />}
-            {state?.message && (
-              <p role="status" className="caption">
-                {state.message}
-              </p>
-            )}
+            {state?.message && <Caption role="status">{state.message}</Caption>}
           </>
         }
         restart={
@@ -146,7 +144,7 @@ export function StorageLock({
           ) : (
             error && <p role="alert">{error}</p>
           )}
-          <div className="action-row">
+          <ActionRow>
             <Button
               disabled={
                 busy ||
@@ -166,7 +164,7 @@ export function StorageLock({
             >
               Cancel
             </Button>
-          </div>
+          </ActionRow>
         </AdjustmentDialog>
       )}
     </section>

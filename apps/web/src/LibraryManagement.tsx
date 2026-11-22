@@ -10,7 +10,9 @@ import {
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { ActionRow } from '@oxidal/design-system/components/form-layout';
 import { Loading } from '@oxidal/design-system/components/states';
+import { Caption, Title } from '@oxidal/design-system/components/text';
 
 import { type LibraryCatalog, libraryCatalog, type LibraryUpdate } from './api';
 import { RowMenu } from './components/RowMenu';
@@ -207,8 +209,12 @@ export function LibraryManagement({
           />
         </div>
       )}
-      <div className="section-heading">
-        {(!orderReady || removed || managePresets) && <h2>Set list</h2>}
+      <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
+        {(!orderReady || removed || managePresets) && (
+          <Title as="h2" size="sm">
+            Set list
+          </Title>
+        )}
         <Button
           variant="outline"
           disabled={disabled || !catalog}
@@ -218,13 +224,13 @@ export function LibraryManagement({
         </Button>
       </div>
       {(!orderReady || managePresets) && (
-        <p className="caption">
+        <Caption>
           One set-list order for the preset picker, MIDI program changes and
           Perform. Hold a handle to drag, or use Move up and Move down. Removed
           entries can be restored.
-        </p>
+        </Caption>
       )}
-      <div className="action-row" aria-label="Suggested set lists">
+      <ActionRow aria-label="Suggested set lists">
         {(Object.keys(suggestedSets) as SuggestedSet[]).map((key) => (
           <Button
             key={key}
@@ -235,8 +241,8 @@ export function LibraryManagement({
             <Plus aria-hidden="true" /> Add {suggestedSets[key].name}
           </Button>
         ))}
-      </div>
-      <div className="action-row">
+      </ActionRow>
+      <ActionRow>
         <Button
           variant="outline"
           aria-pressed={removed}
@@ -249,12 +255,12 @@ export function LibraryManagement({
             <DownloadSimple aria-hidden="true" /> Download backup
           </a>
         </Button>
-      </div>
-      <p className="caption">
+      </ActionRow>
+      <Caption>
         Backup includes presets, set-list order, descriptions, MIDI maps and
         separate NAM/IR files. Account sign-in and diagnostic history stay on
         this unit.
-      </p>
+      </Caption>
       <FailureNotice
         failure={failure}
         busy={busy}
@@ -263,18 +269,14 @@ export function LibraryManagement({
           setReload((n) => n + 1);
         }}
       />
-      {notice && (
-        <p className="caption" role="status">
-          {notice}
-        </p>
-      )}
+      {notice && <Caption role="status">{notice}</Caption>}
       {!catalog && <Loading label="Loading the set list…" />}
       {catalog && !removed && !members.length && !orderReady && (
         <div className="set-list-empty">
-          <p className="caption">
+          <Caption>
             No presets in your set list yet. Add from Mine, or start with the
             starter set list.
-          </p>
+          </Caption>
         </div>
       )}
       {catalog && !removed && orderReady && (
@@ -373,11 +375,11 @@ export function LibraryManagement({
         </p>
       )}
       {catalog && removed && !archived.length && (
-        <p className="caption">No removed entries.</p>
+        <Caption>No removed entries.</Caption>
       )}
       {catalog && !removed && notMembers.length > 0 && (
         <section aria-label="Not in the set list">
-          <div className="section-heading">
+          <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
             <h3>Not in the set list ({notMembers.length})</h3>
             <Button
               variant="ghost"
@@ -487,7 +489,7 @@ function LibraryRow({
 
         <div className="min-w-0 flex-1">
           <h3 className="break-words">{item.name}</h3>
-          <p className="caption">
+          <Caption>
             {position !== undefined && (
               <span aria-label={`Set-list position ${position}`}>
                 {position} · PC {position} ·{' '}
@@ -502,10 +504,10 @@ function LibraryRow({
                   : item.kind === 'rig'
                     ? 'Mine · scenes and effects'
                     : 'Mine · effects draft · Author'}
-          </p>
+          </Caption>
         </div>
       </div>
-      <div className="action-row set-list-actions">
+      <ActionRow className="set-list-actions">
         {movable && (
           <>
             <Button
@@ -562,7 +564,7 @@ function LibraryRow({
           )}
           {item.archived ? 'Restore' : 'Remove'}
         </Button>
-      </div>
+      </ActionRow>
     </div>
   );
 }

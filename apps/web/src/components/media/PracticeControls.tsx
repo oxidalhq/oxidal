@@ -14,6 +14,7 @@ import {
 } from '@oxidal/design-system/components/segmented';
 import { Slider } from '@oxidal/design-system/components/slider';
 import { Switch } from '@oxidal/design-system/components/switch';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { type PracticeTiming, practiceTiming, sendTempo } from '../../api';
 import type { PlayerCommand } from '../../generated/contract';
@@ -224,11 +225,11 @@ export function PracticeControls() {
         <h3 id="practice-title">Practice</h3>
         {timing && (
           <span className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="caption">
+            <Caption as="span">
               {timing.bpm == null
                 ? 'Tempo uncertain'
                 : `Found about ${Math.round(timing.bpm)} BPM`}
-            </span>
+            </Caption>
             {timing.bpm != null && (
               <>
                 <Button
@@ -349,15 +350,21 @@ export function PracticeControls() {
       >
         <Button variant="outline" disabled={pending} onClick={setA}>
           Set A
-          <span className="caption font-mono text-sm whitespace-nowrap tabular-nums">
+          <Caption
+            as="span"
+            className="font-mono text-sm whitespace-nowrap tabular-nums"
+          >
             {shown ? clock(shown.a / rate) : '–'}
-          </span>
+          </Caption>
         </Button>
         <Button variant="outline" disabled={pending} onClick={setB}>
           Set B
-          <span className="caption font-mono text-sm whitespace-nowrap tabular-nums">
+          <Caption
+            as="span"
+            className="font-mono text-sm whitespace-nowrap tabular-nums"
+          >
             {shown?.b != null ? clock(shown.b / rate) : '–'}
-          </span>
+          </Caption>
         </Button>
         <Button
           variant="outline"
@@ -467,9 +474,12 @@ export function PracticeControls() {
               }}
             >
               Beat 1 here
-              <span className="caption font-mono text-sm whitespace-nowrap tabular-nums">
+              <Caption
+                as="span"
+                className="font-mono text-sm whitespace-nowrap tabular-nums"
+              >
                 {clock(first / rate)}
-              </span>
+              </Caption>
             </Button>
           </div>
         )}
@@ -519,10 +529,10 @@ export function PracticeControls() {
           </output>
         </div>
         {!timing && !working && (
-          <p className="caption">
+          <Caption>
             Find the tempo to show the waveform and let the click follow the
             song.
-          </p>
+          </Caption>
         )}
         {timing && !hasBeats && (
           <Button
@@ -534,11 +544,7 @@ export function PracticeControls() {
           </Button>
         )}
       </div>
-      {error && (
-        <p className="caption" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <Caption role="alert">{error}</Caption>}
     </section>
   );
 }

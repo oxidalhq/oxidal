@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { Caption } from '@oxidal/design-system/components/text';
 import { StageHeading } from '@oxidal/design-system/patterns/stage-heading';
 import { FootswitchPad } from '@oxidal/design-system/widgets/footswitches';
 import { Meter } from '@oxidal/design-system/widgets/meter';
@@ -627,9 +628,9 @@ export function PerformView({
                   </div>
                 ) : (
                   !scenes && (
-                    <p className="caption">
+                    <Caption>
                       Nothing to switch in this preset. Presets has the rest.
-                    </p>
+                    </Caption>
                   )
                 ))}
             </>

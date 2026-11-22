@@ -2,6 +2,12 @@ import { Eraser, FloppyDisk, Plus, Stop } from '@phosphor-icons/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import {
+  ActionRow,
+  FormField,
+  FormGrid,
+} from '@oxidal/design-system/components/form-layout';
+import { Caption, Title } from '@oxidal/design-system/components/text';
 import { PluginPanel } from '@oxidal/design-system/patterns/plugin-panel';
 import { RigHeading } from '@oxidal/design-system/patterns/rig-heading';
 import {
@@ -518,7 +524,7 @@ export function GraphAuthor({
         <RigHeading
           playing={running}
           identity={
-            <div className="effects-preset-name">
+            <div className="grid min-w-0 flex-[1_1_12rem]">
               <h2 className="sr-only">
                 {running ? playingName : 'Effects presets'}
               </h2>
@@ -554,7 +560,7 @@ export function GraphAuthor({
                   )
                 }
               />
-              <span className="caption" role="status">
+              <Caption as="span" role="status">
                 {openingName
                   ? `Opening ${openingName}…`
                   : running
@@ -568,15 +574,17 @@ export function GraphAuthor({
                         : state?.phase === 'failed'
                           ? 'Effects audio could not start'
                           : 'Effects audio stopped'}
-              </span>
+              </Caption>
             </div>
           }
         >
           <StageControls connected={connected} compact />
         </RigHeading>
       ) : (
-        <div className="section-heading">
-          <h2>{running ? 'Live controls' : 'New preset'}</h2>
+        <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
+          <Title as="h2" size="sm">
+            {running ? 'Live controls' : 'New preset'}
+          </Title>
           {running && (
             <span role="status">
               {state.saved_copy ? 'Saved copy' : 'Live session'}
@@ -596,7 +604,7 @@ export function GraphAuthor({
             Save the current effects sound first to keep these changes, or
             switch to {switchOpening.item.name} without saving.
           </p>
-          <div className="action-row">
+          <ActionRow>
             <Button variant="outline" onClick={() => setSwitchOpening(null)}>
               Keep current sound
             </Button>
@@ -610,20 +618,20 @@ export function GraphAuthor({
             >
               Switch without saving
             </Button>
-          </div>
+          </ActionRow>
         </AdjustmentDialog>
       )}
       {!liveOnly && !running && (
         <>
-          <label className="field">
+          <FormField>
             Preset name
             <input
               value={name}
               maxLength={80}
               onChange={(e) => setName(e.target.value)}
             />
-          </label>
-          <div className="action-row">
+          </FormField>
+          <ActionRow>
             <Button
               variant="outline"
               disabled={!connected || busy}
@@ -650,11 +658,11 @@ export function GraphAuthor({
             >
               <Eraser aria-hidden="true" /> Clear draft
             </Button>
-          </div>
-          <p className="caption">
+          </ActionRow>
+          <Caption>
             Add NAM, IR or installed effects. Use a saved tone to compose a
             native/LV2 chain.
-          </p>
+          </Caption>
         </>
       )}
       <ChainView
@@ -685,7 +693,7 @@ export function GraphAuthor({
       />
       {running && state.control && (
         <>
-          <div className="action-row">
+          <ActionRow>
             <LedToggle
               on={!state.control.bypassed}
               kind="lv2"
@@ -718,7 +726,7 @@ export function GraphAuthor({
             >
               <Stop aria-hidden="true" /> Stop audio
             </Button>
-          </div>
+          </ActionRow>
           {stopOpening && (
             <AdjustmentDialog
               title="Stop effects audio?"
@@ -728,7 +736,7 @@ export function GraphAuthor({
                 You can resume this session after stopping. Save a copy first if
                 you want to keep this sound after opening another preset.
               </p>
-              <div className="action-row">
+              <ActionRow>
                 <Button variant="outline" onClick={() => setStopOpening(null)}>
                   Keep playing
                 </Button>
@@ -740,7 +748,7 @@ export function GraphAuthor({
                 >
                   Stop without saving
                 </Button>
-              </div>
+              </ActionRow>
             </AdjustmentDialog>
           )}
           {effects.map((node) => {
@@ -930,15 +938,15 @@ export function GraphAuthor({
               </section>
             );
           })}
-          <div className="form-grid">
-            <label className="field">
+          <FormGrid>
+            <FormField>
               Save as
               <input
                 value={name}
                 maxLength={80}
                 onChange={(e) => setName(e.target.value)}
               />
-            </label>
+            </FormField>
             <Button
               disabled={disabled || !!state.control.edit || !name.trim()}
               onClick={() =>
@@ -959,11 +967,11 @@ export function GraphAuthor({
                 }
               />
             )}
-          </div>
+          </FormGrid>
         </>
       )}
       {!running && (
-        <div className="action-row">
+        <ActionRow>
           {!liveOnly && (
             <Button
               disabled={
@@ -1016,12 +1024,12 @@ export function GraphAuthor({
                 before recall.
               </p>
             )}
-        </div>
+        </ActionRow>
       )}
       {!liveOnly && library.length > 0 && (
         <div className="space-y-2" aria-label="Saved effects rigs">
           <h3>Saved presets</h3>
-          <div className="action-row">
+          <ActionRow>
             {library.map((item) => (
               <Button
                 key={item.id}
@@ -1041,7 +1049,7 @@ export function GraphAuthor({
                 {item.preset.name}
               </Button>
             ))}
-          </div>
+          </ActionRow>
         </div>
       )}
       {namPicker && (
@@ -1084,20 +1092,18 @@ export function GraphAuthor({
               </Button>
             ))}
             {!!draft.bindings.length && (
-              <p className="caption">
+              <Caption>
                 Use Add saved tone to combine this chain with a saved NAM or
                 TONE3000 tone.
-              </p>
+              </Caption>
             )}
             {!stream && (
-              <p className="caption">
-                Choose an audio device in Audio setup first.
-              </p>
+              <Caption>Choose an audio device in Audio setup first.</Caption>
             )}
-            <label className="field">
+            <FormField>
               Search effects
               <input value={query} onChange={(e) => setQuery(e.target.value)} />
-            </label>
+            </FormField>
             <Button
               variant="outline"
               disabled={scanning}
@@ -1130,12 +1136,12 @@ export function GraphAuthor({
                     </Button>
                     {(plugin.unsupported ||
                       plugin.ports.some((p) => p.latency || p.atom)) && (
-                      <p className="caption">
+                      <Caption>
                         {plugin.unsupported ??
                           (plugin.ports.some((p) => p.atom)
                             ? 'Message and file controls are not available yet.'
                             : 'Use “Add saved tone” to open the mixed-chain composer for this effect.')}
-                      </p>
+                      </Caption>
                     )}
                   </div>
                 ))}

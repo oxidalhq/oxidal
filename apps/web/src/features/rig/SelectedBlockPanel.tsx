@@ -2,6 +2,8 @@ import { Trash } from '@phosphor-icons/react';
 import { useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { ActionRow } from '@oxidal/design-system/components/form-layout';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { LedToggle } from '../../ChainView';
@@ -196,7 +198,7 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
         </div>
       )}
       {movable && (
-        <div className="action-row" role="group" aria-label="Arrange">
+        <ActionRow role="group" aria-label="Arrange">
           <Button
             variant="outline"
             aria-label={`Move ${label} left`}
@@ -256,7 +258,7 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
           >
             <Trash aria-hidden="true" /> Remove
           </Button>
-        </div>
+        </ActionRow>
       )}
       {inLane && (
         <div
@@ -287,7 +289,7 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
               }
             />
           )}
-          <div className="action-row">
+          <ActionRow>
             <Button
               variant="outline"
               disabled={busy || !routable}
@@ -329,11 +331,11 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
             >
               Remove path
             </Button>
-          </div>
+          </ActionRow>
           {routeWhy && (
-            <p id={why} className="caption m-0">
+            <Caption id={why} className="m-0">
               {routeWhy}
-            </p>
+            </Caption>
           )}
         </div>
       )}
@@ -343,7 +345,7 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
           onCancel={() => setRemovingBlock(false)}
         >
           <p>Remove {label} and its settings from this preset?</p>
-          <div className="action-row">
+          <ActionRow>
             <Button variant="outline" onClick={() => setRemovingBlock(false)}>
               Cancel
             </Button>
@@ -356,7 +358,7 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
             >
               Remove
             </Button>
-          </div>
+          </ActionRow>
         </AdjustmentDialog>
       )}
       {removing && (
@@ -368,7 +370,7 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
             Remove Path {removing.path} and its {removing.effects}{' '}
             {removing.effects === 1 ? 'effect' : 'effects'}?
           </p>
-          <div className="action-row">
+          <ActionRow>
             <Button variant="outline" onClick={() => setRemoving(null)}>
               Cancel
             </Button>
@@ -381,7 +383,7 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
             >
               Remove
             </Button>
-          </div>
+          </ActionRow>
         </AdjustmentDialog>
       )}
     </div>

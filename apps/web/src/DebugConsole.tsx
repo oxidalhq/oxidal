@@ -8,6 +8,11 @@ import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { Card } from '@oxidal/design-system/components/card';
+import {
+  ActionRow,
+  FormField,
+} from '@oxidal/design-system/components/form-layout';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { type DebugCommand, debugCommand, type DebugState } from './api';
 import { friendlyError } from './lib/friendlyError';
@@ -113,7 +118,7 @@ export function DebugConsole() {
         <summary className="min-h-touch cursor-pointer py-2 font-semibold">
           Debug console
         </summary>
-        <div className="action-row my-3">
+        <ActionRow className="my-3">
           <Button
             variant="outline"
             disabled={copying}
@@ -140,7 +145,7 @@ export function DebugConsole() {
               Download logs
             </a>
           </Button>
-        </div>
+        </ActionRow>
         {logMessage && <p role="status">{logMessage}</p>}
         {logText && (
           <textarea
@@ -154,25 +159,28 @@ export function DebugConsole() {
           />
         )}
 
-        <p className="caption mt-3">
+        <Caption className="mt-3">
           Commands run as a separate unprivileged user, for up to 30 seconds
           with 8 KiB of combined output. This is a command runner, not an
           interactive terminal. No command history is saved. Closing this page
           does not cancel an accepted command.
-        </p>
+        </Caption>
         <p role="status" className="my-3 text-sm">
           {state?.available
             ? `${state.identity} · ${state.directory} · ${state.enabled ? `enabled ${state.remaining_seconds}s` : 'disabled'}`
             : state?.message || 'Reading debug availability…'}
         </p>
         {error && (
-          <p role="alert" className="error">
+          <p
+            role="alert"
+            className="mb-4 min-w-0 rounded-lg border border-destructive px-3 py-2.5 wrap-anywhere text-destructive"
+          >
             {error}
           </p>
         )}
         {state?.available && (
           <>
-            <div className="action-row">
+            <ActionRow>
               <Button
                 variant="outline"
                 disabled={busy}
@@ -195,9 +203,9 @@ export function DebugConsole() {
                   Cancel command
                 </Button>
               )}
-            </div>
-            <div
-              className="action-row my-3"
+            </ActionRow>
+            <ActionRow
+              className="my-3"
               role="group"
               aria-label="Diagnostic command suggestions"
             >
@@ -219,7 +227,7 @@ export function DebugConsole() {
                   {s.name}
                 </Button>
               ))}
-            </div>
+            </ActionRow>
             <form
               className="grid gap-2"
               onSubmit={(e) => {
@@ -229,7 +237,7 @@ export function DebugConsole() {
                 void run({ type: 'run', command: text });
               }}
             >
-              <label className="field">
+              <FormField>
                 Command
                 <textarea
                   value={command}
@@ -242,7 +250,7 @@ export function DebugConsole() {
                   disabled={!state.enabled || busy || running}
                   className="w-full rounded-md border border-input bg-background p-3 font-mono text-sm"
                 />
-              </label>
+              </FormField>
               <Button
                 type="submit"
                 disabled={!state.enabled || busy || running || !command.trim()}

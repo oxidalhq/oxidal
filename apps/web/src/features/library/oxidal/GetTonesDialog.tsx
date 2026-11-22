@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { DialogFooter } from '@oxidal/design-system/components/dialog';
+import { FormField } from '@oxidal/design-system/components/form-layout';
 import {
   Select,
   SelectContent,
@@ -9,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from '../../../AdjustmentDialog';
 import { downloadVoice, tone3000Models, tone3000Tone } from '../../../api';
@@ -323,7 +325,7 @@ export function GetTonesDialog({
         if (!working && phase.name !== 'build') onClose();
       }}
     >
-      <div className="control-stack oxidal-tones">
+      <div className="oxidal-tones grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start">
         {phase.name === 'pick' && (
           <>
             <p>
@@ -347,9 +349,9 @@ export function GetTonesDialog({
                     {capture ? (
                       <>
                         <div className="grid min-w-0 gap-0.5">
-                          <span className="caption">
+                          <Caption as="span">
                             For: {roleLabel(tone.role)}
-                          </span>
+                          </Caption>
                           <span>
                             <ToneLink
                               tone={capture.tone}
@@ -361,7 +363,7 @@ export function GetTonesDialog({
                             </ToneLink>
                             {info?.state === 'ok' && ` · by ${info.creator}`}
                           </span>
-                          <span className="caption">
+                          <Caption as="span">
                             {info?.state === 'ok'
                               ? `Model: ${info.modelName} (${info.model})${info.size ? ` · ${info.size}` : ''}`
                               : kept !== undefined
@@ -369,9 +371,10 @@ export function GetTonesDialog({
                                 : capture.model !== undefined
                                   ? `Model ${capture.model}`
                                   : 'First model of the tone'}
-                          </span>
-                          <span
-                            className="caption group-data-[state=done]:font-semibold group-data-[state=failed]:text-danger-ink"
+                          </Caption>
+                          <Caption
+                            as="span"
+                            className="group-data-[state=done]:font-semibold group-data-[state=failed]:text-danger-ink"
                             role={
                               row?.state === 'failed' ||
                               (info?.state === 'error' && kept === undefined)
@@ -396,19 +399,19 @@ export function GetTonesDialog({
                                         : !info && modelOf(tone) === undefined
                                           ? 'Reading TONE3000…'
                                           : ''}
-                          </span>
+                          </Caption>
                           {row?.state === 'failed' && (
                             <details>
-                              <summary className="caption">Details</summary>
-                              <code className="caption">{row.detail}</code>
+                              <Caption as="summary">Details</Caption>
+                              <Caption as="code">{row.detail}</Caption>
                             </details>
                           )}
                           {row?.state !== 'failed' &&
                             info?.state === 'error' &&
                             kept === undefined && (
                               <details>
-                                <summary className="caption">Details</summary>
-                                <code className="caption">{info.detail}</code>
+                                <Caption as="summary">Details</Caption>
+                                <Caption as="code">{info.detail}</Caption>
                               </details>
                             )}
                         </div>
@@ -443,7 +446,7 @@ export function GetTonesDialog({
                           ))}
                       </>
                     ) : (
-                      <label className="field">
+                      <FormField>
                         <span>
                           {roleLabel(tone.role)}: one of your saved tones
                         </span>
@@ -470,20 +473,20 @@ export function GetTonesDialog({
                             ))}
                           </SelectContent>
                         </Select>
-                      </label>
+                      </FormField>
                     )}
                   </li>
                 );
               })}
             </ul>
-            <p className="caption">
+            <Caption>
               On this unit: {total - left.length - unbound.length} of {total}
-            </p>
+            </Caption>
             {unit.sources.length === 0 && unbound.length > 0 && (
-              <p className="caption">
+              <Caption>
                 No saved tones yet. Download or import one in Tones and IRs
                 first.
-              </p>
+              </Caption>
             )}
             <DialogFooter>
               <Button variant="outline" disabled={working} onClick={onClose}>
@@ -554,9 +557,9 @@ export function GetTonesDialog({
             <p role="alert">
               <strong>Failed:</strong> {phase.message}
             </p>
-            <p className="caption">
+            <Caption>
               The tones stay on this unit; only saving the sound failed.
-            </p>
+            </Caption>
             <DialogFooter>
               <Button variant="outline" onClick={onClose}>
                 Close
@@ -567,10 +570,10 @@ export function GetTonesDialog({
         )}
         {phase.name === 'alt' && (
           <>
-            <p className="caption">
+            <Caption>
               From your TONE3000 account and this unit. Pick one with a similar
               sound.
-            </p>
+            </Caption>
             <ul className="grid list-none gap-2 p-0">
               {isFactoryVoice(phase.role) &&
                 factoryVoices[phase.role].captures.slice(1).map((capture) => {
@@ -604,7 +607,7 @@ export function GetTonesDialog({
                   );
                 })}
             </ul>
-            <label className="field">
+            <FormField>
               <span>Or one of your saved tones</span>
               <Select
                 onValueChange={(value) => {
@@ -628,7 +631,7 @@ export function GetTonesDialog({
                   ))}
                 </SelectContent>
               </Select>
-            </label>
+            </FormField>
             <DialogFooter>
               <Button variant="outline" onClick={onClose}>
                 Close

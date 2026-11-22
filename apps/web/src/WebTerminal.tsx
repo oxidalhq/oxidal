@@ -4,6 +4,11 @@ import { Terminal } from '@xterm/xterm';
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Card } from '@oxidal/design-system/components/card';
+import {
+  ActionRow,
+  FormField,
+} from '@oxidal/design-system/components/form-layout';
 import {
   Select,
   SelectContent,
@@ -11,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { terminalCommand, type TerminalState } from './api';
 
@@ -199,23 +205,26 @@ function TerminalPanel({ mode }: { mode: 'unprivileged' | 'admin' }) {
   }, [mode]);
   return (
     <div className="mt-3 grid min-w-0 gap-3">
-      <p className="caption">
+      <Caption>
         {mode === 'admin'
           ? 'Use sudo and the admin password for system changes. '
           : 'Unprivileged shell. '}
         Session stays open until End. No command time or total-output cutoff.
-      </p>
+      </Caption>
       <p role="status">
         {state
           ? `${state.identity} · ${state.directory} · ${connected ? (state.session?.running ? 'running' : 'ready') : 'disconnected'}`
           : 'Connecting to terminal service…'}
       </p>
       {error && (
-        <p role="alert" className="error">
+        <p
+          role="alert"
+          className="mb-4 min-w-0 rounded-lg border border-destructive px-3 py-2.5 wrap-anywhere text-destructive"
+        >
           {error}
         </p>
       )}
-      <div className="action-row">
+      <ActionRow>
         <Button
           disabled={!connected || !!state?.session}
           onClick={() => actions.current.start()}
@@ -239,7 +248,7 @@ function TerminalPanel({ mode }: { mode: 'unprivileged' | 'admin' }) {
         <Button variant="outline" onClick={() => actions.current.reconnect()}>
           Reconnect terminal
         </Button>
-      </div>
+      </ActionRow>
       <div
         ref={host}
         aria-label="Interactive terminal"
@@ -252,12 +261,12 @@ export function WebTerminal() {
   const [open, setOpen] = useState(true);
   const [mode, setMode] = useState<'unprivileged' | 'admin'>('unprivileged');
   return (
-    <section className="panel min-w-0" aria-label="Web terminal">
+    <Card className="min-w-0" aria-label="Web terminal">
       <details open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
-        <summary>Interactive terminal</summary>
+        <summary className="min-h-touch">Interactive terminal</summary>
         {open && (
           <>
-            <label className="field mt-3">
+            <FormField className="mt-3">
               Terminal access
               <Select
                 value={mode}
@@ -273,15 +282,15 @@ export function WebTerminal() {
                   </SelectItem>
                 </SelectContent>
               </Select>
-            </label>
-            <p className="caption">
+            </FormField>
+            <Caption>
               Changing access leaves the other session running. End each session
               when finished.
-            </p>
+            </Caption>
             <TerminalPanel key={mode} mode={mode} />
           </>
         )}
       </details>
-    </section>
+    </Card>
   );
 }

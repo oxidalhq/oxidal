@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import {
+  ActionRow,
+  FormField,
+} from '@oxidal/design-system/components/form-layout';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
@@ -78,7 +83,7 @@ export function SceneMenu({
     return (
       <AdjustmentDialog title="Rename scene" onCancel={onClose}>
         <form
-          className="control-stack"
+          className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
           onSubmit={(event) => {
             event.preventDefault();
             const label = step.value.trim();
@@ -90,7 +95,7 @@ export function SceneMenu({
             );
           }}
         >
-          <label className="field">
+          <FormField>
             <span>Scene name</span>
             <input
               className="h-11 w-full rounded-md border border-input bg-card px-3"
@@ -101,15 +106,15 @@ export function SceneMenu({
                 setStep({ kind: 'rename', value: event.target.value })
               }
             />
-          </label>
-          <div className="action-row">
+          </FormField>
+          <ActionRow>
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
             <Button type="submit" disabled={!step.value.trim()}>
               Rename
             </Button>
-          </div>
+          </ActionRow>
         </form>
       </AdjustmentDialog>
     );
@@ -117,9 +122,9 @@ export function SceneMenu({
     return (
       <AdjustmentDialog title="Cannot delete" onCancel={onClose}>
         <p role="alert">{LAST_SCENE}</p>
-        <div className="action-row">
+        <ActionRow>
           <Button onClick={onClose}>OK</Button>
-        </div>
+        </ActionRow>
       </AdjustmentDialog>
     );
   if (step.kind === 'delete')
@@ -129,7 +134,7 @@ export function SceneMenu({
         onCancel={onClose}
       >
         <p>Its MIDI binding is removed too.</p>
-        <div className="action-row">
+        <ActionRow>
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
@@ -150,7 +155,7 @@ export function SceneMenu({
           >
             Delete
           </Button>
-        </div>
+        </ActionRow>
       </AdjustmentDialog>
     );
   if (step.kind === 'copy')
@@ -241,13 +246,11 @@ export function SceneMenu({
         ))}
       </div>
       {pending && (
-        <p className="caption">
+        <Caption>
           Save or discard your scene updates first to change the scenes.
-        </p>
+        </Caption>
       )}
-      <p className="caption">
-        MIDI bindings follow the scene, not its position.
-      </p>
+      <Caption>MIDI bindings follow the scene, not its position.</Caption>
     </AdjustmentDialog>
   );
 }
@@ -359,8 +362,8 @@ function CopyToPreset({
   }
   return (
     <AdjustmentDialog title="Copy to preset" onCancel={onClose}>
-      <div className="control-stack">
-        <label className="field">
+      <div className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start">
+        <FormField>
           <span>Copy &apos;{sceneName}&apos; to</span>
           <select
             className="h-11 w-full rounded-md border border-input bg-card px-3"
@@ -380,11 +383,9 @@ function CopyToPreset({
               </option>
             ))}
           </select>
-        </label>
+        </FormField>
         {targets && !targets.length && (
-          <p className="caption">
-            No other preset in Mine has scenes to copy into.
-          </p>
+          <Caption>No other preset in Mine has scenes to copy into.</Caption>
         )}
         {plan && (
           <ul className="grid gap-1" aria-label="What copies">
@@ -405,7 +406,7 @@ function CopyToPreset({
           </ul>
         )}
         {error && <p role="alert">{error}</p>}
-        <div className="action-row">
+        <ActionRow>
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
@@ -415,7 +416,7 @@ function CopyToPreset({
           >
             Copy
           </Button>
-        </div>
+        </ActionRow>
       </div>
     </AdjustmentDialog>
   );

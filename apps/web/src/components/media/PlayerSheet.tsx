@@ -2,7 +2,9 @@ import { DownloadSimple, Stop, Warning } from '@phosphor-icons/react';
 import { useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { FormField } from '@oxidal/design-system/components/form-layout';
 import { Slider } from '@oxidal/design-system/components/slider';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { type MediaAsset, originalPath, updateAsset } from '../../api';
@@ -172,7 +174,7 @@ function FullPlayer({ onClose }: { onClose: () => void }) {
             <p className="m-0 text-lg font-semibold break-words">
               {track.title}
             </p>
-            <p className="caption">
+            <Caption>
               {[
                 channelsLabel(track.channels),
                 asset ? formatLabel(asset) : null,
@@ -187,7 +189,7 @@ function FullPlayer({ onClose }: { onClose: () => void }) {
                   <strong>Output muted</strong>
                 </>
               )}
-            </p>
+            </Caption>
           </div>
           <Banner />
           {slow ? (
@@ -197,7 +199,7 @@ function FullPlayer({ onClose }: { onClose: () => void }) {
                 {formatTime(at)}
               </span>{' '}
               of {formatTime(length)}{' '}
-              <span className="caption">(updates every second)</span>
+              <Caption as="span">(updates every second)</Caption>
             </p>
           ) : (
             <PositionBar
@@ -225,7 +227,7 @@ function FullPlayer({ onClose }: { onClose: () => void }) {
             aria-label="Repeat"
           >
             <strong aria-hidden="true">Repeat</strong>
-            <div className="segmented">
+            <div className="flex flex-wrap gap-1.5">
               {(
                 [
                   [false, 'Off'],
@@ -267,10 +269,10 @@ function FullPlayer({ onClose }: { onClose: () => void }) {
               Details
             </Button>
           </div>
-          <p className="caption">
+          <Caption>
             Plays over your guitar from the device, so it keeps going if you
             close this page. Preset changes don&apos;t affect it.
-          </p>
+          </Caption>
         </div>
       )}
     </AdjustmentDialog>
@@ -332,9 +334,9 @@ function BackingList({ onClose }: { onClose: () => void }) {
           <p>No backing tracks yet. Import a WAV or MP3 in Library.</p>
         )}
         {media.refusal && <p role="alert">{media.refusal}</p>}
-        <p className="caption">
+        <Caption>
           Cue fades out the current track and cues the one you pick, stopped.
-        </p>
+        </Caption>
         <Button
           variant="outline"
           onClick={() => {
@@ -437,8 +439,8 @@ function TrackDetails({
             Underruns this session: {cued ? (media.player?.underruns ?? 0) : 0}
           </dd>
         </dl>
-        <div className="grid min-w-0 grid-cols-[minmax(0,9rem)_auto] items-end gap-2 [&_.caption]:col-span-full">
-          <label className="field">
+        <div className="grid min-w-0 grid-cols-[minmax(0,9rem)_auto] items-end gap-2 [&_[data-slot=caption]]:col-span-full">
+          <FormField>
             Track trim (dB)
             <input
               type="number"
@@ -451,7 +453,7 @@ function TrackDetails({
               aria-describedby="media-trim-help"
               onChange={(event) => setTrim(event.target.value)}
             />
-          </label>
+          </FormField>
           <Button
             variant="outline"
             disabled={protect || saving || !valid || value === saved}
@@ -459,11 +461,11 @@ function TrackDetails({
           >
             Save trim
           </Button>
-          <p id="media-trim-help" className="caption">
+          <Caption id="media-trim-help">
             Set at import to match −18 LUFS. −24 to +6 dB.
-          </p>
+          </Caption>
         </div>
-        {protect && <p className="caption">{PROTECT_REASON}</p>}
+        {protect && <Caption>{PROTECT_REASON}</Caption>}
         {error && <p role="alert">{error}</p>}
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Button

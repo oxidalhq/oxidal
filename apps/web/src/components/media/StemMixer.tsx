@@ -9,6 +9,7 @@ import { DownloadSimple, Faders } from '@phosphor-icons/react';
 import { useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Caption } from '@oxidal/design-system/components/text';
 import { StemStrip } from '@oxidal/design-system/widgets/stem-strip';
 
 import { type PlayerSnapshot, saveSongMix, songView } from '../../api';
@@ -301,7 +302,7 @@ function LiveStemsBody({
         <h3 id="live-stems-title">
           <Faders aria-hidden="true" /> Stems
         </h3>
-        <span className="caption">Changes are heard as you make them</span>
+        <Caption as="span">Changes are heard as you make them</Caption>
       </div>
       <StemMixer
         roles={ROLE_ORDER.filter((role) => live.roles.includes(role))}

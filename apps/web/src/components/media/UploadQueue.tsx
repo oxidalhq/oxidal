@@ -1,6 +1,7 @@
 import { UploadSimple, Warning } from '@phosphor-icons/react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Eyebrow } from '@oxidal/design-system/components/text';
 
 import type { UploadItem } from '../../lib/mediaUpload';
 import { fileSize, useSessionMedia } from './sessionMedia';
@@ -36,7 +37,7 @@ export function UploadQueue() {
   if (!uploads.length || !queue) return null;
   return (
     <section className="grid min-w-0 gap-3" aria-label="Importing">
-      <span className="eyebrow">Importing</span>
+      <Eyebrow>Importing</Eyebrow>
       <ul className="m-0 grid min-w-0 list-none divide-y divide-border border-y border-border p-0">
         {uploads.map((item) => {
           const fraction =

@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { DialogFooter } from '@oxidal/design-system/components/dialog';
+import { FormField } from '@oxidal/design-system/components/form-layout';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { deleteAsset, type MediaAsset, updateAsset } from '../../api';
@@ -44,7 +45,7 @@ export function RenameDialog({
           if (next && next !== asset.title) void save();
         }}
       >
-        <label className="field">
+        <FormField>
           Name
           <input
             value={title}
@@ -52,7 +53,7 @@ export function RenameDialog({
             disabled={saving}
             onChange={(event) => setTitle(event.target.value)}
           />
-        </label>
+        </FormField>
         {error && <p role="alert">{error}</p>}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose}>

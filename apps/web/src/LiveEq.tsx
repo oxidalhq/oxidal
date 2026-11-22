@@ -262,7 +262,10 @@ export function LiveEq<S extends EqSession>({
         ))}
       </div>
       {error && !draft && (
-        <p role="alert" className="error">
+        <p
+          role="alert"
+          className="mb-4 min-w-0 rounded-lg border border-destructive px-3 py-2.5 wrap-anywhere text-destructive"
+        >
           {error}
         </p>
       )}
@@ -272,7 +275,10 @@ export function LiveEq<S extends EqSession>({
           onCancel={() => void finish(true)}
         >
           {error && (
-            <p role="alert" className="error">
+            <p
+              role="alert"
+              className="mb-4 min-w-0 rounded-lg border border-destructive px-3 py-2.5 wrap-anywhere text-destructive"
+            >
               {error}
             </p>
           )}

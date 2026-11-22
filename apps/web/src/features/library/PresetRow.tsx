@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { Button } from '@oxidal/design-system/components/button';
 import { LibraryRow } from '@oxidal/design-system/patterns/library-list';
 
-import { type RowAction,RowMenu } from '../../components/RowMenu';
+import { type RowAction, RowMenu } from '../../components/RowMenu';
 
 /**
  * One preset row everywhere in Library (7.2): the name and a one-line summary,

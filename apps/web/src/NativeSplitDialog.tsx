@@ -3,6 +3,10 @@ import { useEffect, useState } from 'react';
 import { Button } from '@oxidal/design-system/components/button';
 import { Checkbox } from '@oxidal/design-system/components/checkbox';
 import {
+  ActionRow,
+  FormField,
+} from '@oxidal/design-system/components/form-layout';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -10,6 +14,7 @@ import {
   SelectValue,
 } from '@oxidal/design-system/components/select';
 import { Loading, StateNotice } from '@oxidal/design-system/components/states';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { type AssetArtwork, presetArtwork } from './api';
@@ -74,7 +79,7 @@ export function NativeSplitDialog({
         {loading && <Loading label="Reading saved tone…" />}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {(['amp', 'cab'] as const).map((role) => (
-            <label key={role} className="field min-w-0">
+            <FormField key={role} className="min-w-0">
               {role === 'amp' ? 'Amp block' : 'Cab / IR block'}
               <Select
                 value={role === 'amp' ? amp : cab}
@@ -98,9 +103,9 @@ export function NativeSplitDialog({
                     ))}
                 </SelectContent>
               </Select>
-            </label>
+            </FormField>
           ))}
-          <label className="field min-w-0">
+          <FormField className="min-w-0">
             Amp input
             <Select
               value={input}
@@ -114,7 +119,7 @@ export function NativeSplitDialog({
                 <SelectItem value="right">Right</SelectItem>
               </SelectContent>
             </Select>
-          </label>
+          </FormField>
         </div>
         <label className="flex min-h-11 items-center gap-2 text-sm">
           <Checkbox
@@ -124,13 +129,13 @@ export function NativeSplitDialog({
           />
           <span>This NAM is an amp-head capture, without a baked-in cab.</span>
         </label>
-        <p className="caption">48 kHz · one amp + mono IR · checked on Play.</p>
+        <Caption>48 kHz · one amp + mono IR · checked on Play.</Caption>
         {error && (
           <StateNotice kind="error" title="Cannot separate this tone">
             {error}
           </StateNotice>
         )}
-        <div className="action-row sticky bottom-0 bg-card py-2">
+        <ActionRow className="sticky bottom-0 bg-card py-2">
           <Button
             disabled={loading || !!error || !amp || !cab || !confirmed}
             onClick={() => onSplit(splitNative(effect, amp, cab, input))}
@@ -140,7 +145,7 @@ export function NativeSplitDialog({
           <Button variant="ghost" onClick={onCancel}>
             Keep whole tone
           </Button>
-        </div>
+        </ActionRow>
       </div>
     </AdjustmentDialog>
   );

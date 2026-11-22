@@ -2,6 +2,7 @@ import { Minus, Plus } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { boosts as boostApi, type BoostState } from './api';
@@ -71,11 +72,11 @@ export function BoostControl({
       </Button>
       {open && (
         <AdjustmentDialog title="Boost" onCancel={() => setOpen(false)}>
-          <div className="control-stack">
-            <p className="caption">
+          <div className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start">
+            <Caption>
               Extra level for a solo preset or scene, on top of the evened-out
               level. It stays on this unit and applies as soon as it plays.
-            </p>
+            </Caption>
             {targets.map((t) => (
               <div
                 key={t.key}
@@ -120,10 +121,10 @@ export function BoostControl({
               </div>
             ))}
             {!!state?.calibrated_db && (
-              <p className="caption">
+              <Caption>
                 Evened out by {db(state.calibrated_db)} (Library → Even out
                 all); the boost adds to that.
-              </p>
+              </Caption>
             )}
             {targets.length > 1 && (
               <p role="status">Playing now: {db(total)} in all.</p>

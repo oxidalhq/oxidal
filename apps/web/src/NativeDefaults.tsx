@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { FormField } from '@oxidal/design-system/components/form-layout';
 import {
   Select,
   SelectContent,
@@ -9,6 +10,7 @@ import {
   SelectValue,
 } from '@oxidal/design-system/components/select';
 import { Switch } from '@oxidal/design-system/components/switch';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { type NativeDefaults as Defaults, nativeDefaults } from './api';
 import { friendlyError } from './lib/friendlyError';
@@ -83,7 +85,7 @@ export function NativeDefaults({ connected }: { connected: boolean }) {
   }
   return (
     <section
-      className="control-stack border-t border-border pt-4"
+      className="grid min-w-0 items-start gap-3 border-t border-border pt-4 [&>button]:max-w-full [&>button]:justify-self-start"
       aria-labelledby="native-defaults"
     >
       <h3 id="native-defaults">Defaults for new NAM blocks</h3>
@@ -93,13 +95,16 @@ export function NativeDefaults({ connected }: { connected: boolean }) {
         factory default is Full A2 at 8× oversampling; dense presets can use
         Lite or less oversampling when processing load requires it.
       </p>
-      <p className="caption">
+      <Caption>
         A preset saved at 2× while the default is 8× is not a conflict: the
         preset&apos;s own setting overrides the default when it plays.
-      </p>
+      </Caption>
       {draft && (
-        <fieldset disabled={!connected || busy} className="control-stack">
-          <label className="field">
+        <fieldset
+          disabled={!connected || busy}
+          className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
+        >
+          <FormField>
             NAM size for new models
             <Select
               value={String(draft.nam_size)}
@@ -118,7 +123,7 @@ export function NativeDefaults({ connected }: { connected: boolean }) {
                 <SelectItem value="1">Full</SelectItem>
               </SelectContent>
             </Select>
-          </label>
+          </FormField>
           <label className="flex min-h-11 items-center justify-between gap-3 text-sm">
             <span>Native multi-core processing</span>
             <Switch
@@ -139,7 +144,7 @@ export function NativeDefaults({ connected }: { connected: boolean }) {
               aria-label="Input calibration"
             />
           </label>
-          <label className="field">
+          <FormField>
             Input calibration (dBu)
             <input
               type="number"
@@ -160,8 +165,8 @@ export function NativeDefaults({ connected }: { connected: boolean }) {
                   );
               }}
             />
-          </label>
-          <label className="field">
+          </FormField>
+          <FormField>
             Oversampling
             <Select
               value={oversampling}
@@ -195,17 +200,17 @@ export function NativeDefaults({ connected }: { connected: boolean }) {
                 )}
               </SelectContent>
             </Select>
-          </label>
+          </FormField>
           {oversampling === 'other' && (
-            <p className="caption">
+            <Caption>
               The saved default uses a factor this screen does not list. It is
               kept unless you choose another.
-            </p>
+            </Caption>
           )}
           {pending && (
-            <p className="caption">
+            <Caption>
               Unsaved changes · nothing uses them until you save.
-            </p>
+            </Caption>
           )}
           <div className="flex flex-wrap gap-2">
             <Button disabled={!pending} onClick={() => void save()}>

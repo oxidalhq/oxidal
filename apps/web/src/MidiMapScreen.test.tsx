@@ -810,7 +810,7 @@ it('learns backing-player switches and a level knob outside every preset', async
   expect(
     within(group)
       .getAllByRole('listitem')
-      .map((row) => row.querySelector('.midi-row-label')?.textContent),
+      .map((row) => row.querySelector('[data-midi-row-label]')?.textContent),
   ).toEqual([
     'Play/Pause',
     'Stop track',

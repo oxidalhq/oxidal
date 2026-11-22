@@ -1,4 +1,5 @@
 import { Checkbox } from '@oxidal/design-system/components/checkbox';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { MAX_SCENE_CONTROLS } from '../../sceneEdit';
 import type { useSceneSettings } from './SceneEditorSettings';
@@ -15,10 +16,10 @@ export function SceneSettings({
   return (
     <fieldset className="my-2 grid gap-1.5">
       <legend className="font-semibold">Effect settings in scenes</legend>
-      <p className="caption">
+      <Caption>
         Ticked settings are kept by every scene. Others stay shared by the whole
         preset.
-      </p>
+      </Caption>
       <ul className="grid gap-1">
         {settings.offered.map((s) => (
           <li key={key(s)}>
@@ -30,12 +31,12 @@ export function SceneSettings({
               />
               <span>
                 {s.label} {s.display}
-                <span className="caption">
+                <Caption as="span">
                   {' '}
                   · {s.stepped ? 'switches when silent' : 'glides'}
                   {s.inScenes ? ' · in every scene' : ''}
                   {s.changed ? ' · changed' : ''}
-                </span>
+                </Caption>
               </span>
             </label>
           </li>

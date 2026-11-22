@@ -2,6 +2,7 @@ import { Copy } from '@phosphor-icons/react';
 import { useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { friendlyError } from '../../lib/friendlyError';
 import { OfflineEditor } from '../library/OfflineEditor';
@@ -71,9 +72,9 @@ export function RigHeaderDuplicate({
         <span className="phone-hidden">Duplicate</span>
       </Button>
       {message && (
-        <p className="caption basis-full" role="status">
+        <Caption className="basis-full" role="status">
           {message}
-        </p>
+        </Caption>
       )}
       {opened && (
         <OfflineEditor

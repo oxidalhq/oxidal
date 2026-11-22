@@ -3,6 +3,10 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import {
+  FormField,
+  FormGrid,
+} from '@oxidal/design-system/components/form-layout';
+import {
   Segment,
   SegmentedControl,
 } from '@oxidal/design-system/components/segmented';
@@ -14,6 +18,7 @@ import {
   SelectValue,
 } from '@oxidal/design-system/components/select';
 import { StateNotice } from '@oxidal/design-system/components/states';
+import { Caption } from '@oxidal/design-system/components/text';
 import { LIBRARY_SECTIONS } from '@oxidal/design-system/patterns/library-sections';
 import { Workspace } from '@oxidal/design-system/patterns/workspace';
 
@@ -674,11 +679,11 @@ export function Library({
             {busy && !presets.length ? (
               <StateNotice kind="loading" title="Reading TONE3000 presets…" />
             ) : !originalsShown.length ? (
-              <p role="status" className="caption">
+              <Caption role="status">
                 {toneQuery.trim() || category
                   ? 'No TONE3000 presets match these filters.'
                   : 'No TONE3000 presets yet. Import a preset file below.'}
-              </p>
+              </Caption>
             ) : (
               <ul className="m-0 grid list-none gap-2 p-0">
                 {originalsShown.map((preset) =>
@@ -697,13 +702,13 @@ export function Library({
               aria-label="Import a preset"
             >
               <h2 className="text-base">Import a TONE3000 preset file</h2>
-              <p className="caption">
+              <Caption>
                 Importing does not change what is playing. The original file is
                 kept unchanged; importing the same file twice keeps one copy. Up
                 to 32 MiB.
-              </p>
-              <div className="form-grid">
-                <label className="field">
+              </Caption>
+              <FormGrid>
+                <FormField>
                   TONE3000 preset file
                   <input
                     type="file"
@@ -713,7 +718,7 @@ export function Library({
                       setFile(event.target.files?.[0] ?? null)
                     }
                   />
-                </label>
+                </FormField>
                 <Button
                   disabled={
                     !file || !connected || importMessage === 'Importing…'
@@ -722,7 +727,7 @@ export function Library({
                 >
                   Import
                 </Button>
-              </div>
+              </FormGrid>
               {importMessage && <p role="status">{importMessage}</p>}
               {importMessage === 'Importing…' && (
                 <Button
@@ -738,17 +743,17 @@ export function Library({
         )}
         {section === 'setlist' && (
           <div>
-            <p className="caption">
+            <Caption>
               The order of presets here is the order MIDI program changes and
               Previous/Next follow. Presets you remove from the list stay in
               Mine and can be restored.
-            </p>
+            </Caption>
             <LibraryManagement
               connected={connected}
               onOpenRig={onOpenRig}
               onChanged={() => setRefresh((v) => v + 1)}
             />
-            <details className="control-help">
+            <details className="border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']">
               <summary>How live switching works</summary>
               <p>
                 Presets with scenes or effects load in adjacent groups of four,

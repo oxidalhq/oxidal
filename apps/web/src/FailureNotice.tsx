@@ -8,7 +8,7 @@ function FailureDetails({ failure }: { failure: Failure }) {
   if (!failure.details || failure.message.includes(failure.details))
     return null;
   return (
-    <details className="failure-details">
+    <details className="[&_code]:block [&_code]:wrap-anywhere [&_code]:whitespace-pre-wrap">
       <summary>Details</summary>
       <code>{failure.details}</code>
     </details>

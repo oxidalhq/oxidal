@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { Card, CardTitle } from '@oxidal/design-system/components/card';
+import { ActionRow } from '@oxidal/design-system/components/form-layout';
 import {
   Sheet,
   SheetBody,
   SheetContent,
   SheetHeader,
 } from '@oxidal/design-system/components/sheet';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { libraryCatalog } from '../../../api';
 import { factoryRoles, factoryTopologySummary } from '../../../factoryRecipes';
@@ -100,12 +102,12 @@ export function SoundDetails({
   }
   const content = (
     <div className="grid min-w-0 gap-3 [overflow-wrap:anywhere]">
-      <p className="caption">
+      <Caption>
         {item.meta.genres.join(' · ')} · {engineLabel(item.meta.engine)} ·{' '}
         {complexityLabel(item.meta.complexity)}
-      </p>
+      </Caption>
       <p>{item.description}</p>
-      <div className="action-row flex-wrap">
+      <ActionRow className="flex-wrap">
         {!primary && <Button disabled>Try {item.name}</Button>}
         {primary && (
           <Button
@@ -136,7 +138,7 @@ export function SoundDetails({
         >
           Make my copy
         </Button>
-      </div>
+      </ActionRow>
       {item.meta.inspiration && <p>{item.meta.inspiration}</p>}
       <section aria-label="How to play it">
         <h3>How to play it</h3>
@@ -182,7 +184,7 @@ export function SoundDetails({
                 {tones.map(({ role, capture }) => (
                   <li key={role}>
                     <span>{roleLabel(role)}</span>
-                    <span className="caption">
+                    <Caption as="span">
                       <ToneLink tone={capture.tone} />
                       {capture.model !== undefined &&
                         ` · model ${capture.model}`}
@@ -190,7 +192,7 @@ export function SoundDetails({
                         (missing.has(role)
                           ? ' · not on this unit'
                           : ' · on this unit')}
-                    </span>
+                    </Caption>
                   </li>
                 ))}
               </ul>
@@ -204,16 +206,12 @@ export function SoundDetails({
         <p role="status">Play is not offered: {cardLine(item, state, unit)}</p>
       )}
       {!copyable && state.kind !== 'loading' && (
-        <p className="caption">
+        <Caption>
           Install what it needs first; then it can join the set list or be
           copied.
-        </p>
+        </Caption>
       )}
-      {setList && (
-        <p className="caption" role="status">
-          {setList}
-        </p>
-      )}
+      {setList && <Caption role="status">{setList}</Caption>}
     </div>
   );
   if (inline)

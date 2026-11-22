@@ -12,6 +12,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { FormField } from '@oxidal/design-system/components/form-layout';
 import {
   Select,
   SelectContent,
@@ -20,6 +21,7 @@ import {
   SelectValue,
 } from '@oxidal/design-system/components/select';
 import { StateNotice } from '@oxidal/design-system/components/states';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import {
   applyMidiTemplate,
@@ -799,7 +801,7 @@ export function MidiMapScreen({
   }
 
   if (!map || !catalog) {
-    return <p className="caption">{error || 'Reading controller map…'}</p>;
+    return <Caption>{error || 'Reading controller map…'}</Caption>;
   }
   const sourceReady = Boolean(
     connected &&
@@ -832,7 +834,7 @@ export function MidiMapScreen({
       {error && <p role="alert">{error}</p>}
       {error && <RecoveryAction failure={recoverFailure} />}
       <div className="grid gap-3 rounded-lg bg-muted/45 p-3 md:grid-cols-[minmax(0,1fr)_10rem]">
-        <label className="field min-w-0">
+        <FormField className="min-w-0">
           MIDI input
           <Select
             value={map.input ?? '__off__'}
@@ -862,8 +864,8 @@ export function MidiMapScreen({
               ))}
             </SelectContent>
           </Select>
-        </label>
-        <label className="field">
+        </FormField>
+        <FormField>
           Channel
           <Select
             value={String(map.channel)}
@@ -887,7 +889,7 @@ export function MidiMapScreen({
               ))}
             </SelectContent>
           </Select>
-        </label>
+        </FormField>
         <div className="md:col-span-2">
           <ExtraControllers
             map={map}
@@ -916,24 +918,25 @@ export function MidiMapScreen({
                     ? 'Primary controller connected'
                     : 'Primary controller disconnected'}
             </strong>
-            {status && (
-              <span className="caption">{status.events} messages</span>
-            )}
+            {status && <Caption as="span">{status.events} messages</Caption>}
           </div>
           {status?.last ? (
             <output
-              className="midi-message mt-2"
+              className="mt-2 block border-l-3 border-foreground bg-muted px-3 py-2 font-mono text-sm wrap-anywhere"
               aria-label="Last MIDI message"
             >
               Channel {status.last.channel} · {messageText(status.last)}
             </output>
           ) : status ? (
-            <p className="caption mt-1">
+            <Caption className="mt-1">
               The last incoming message appears here.
-            </p>
+            </Caption>
           ) : null}
           {(status?.recent?.length ?? 0) > 1 && (
-            <ol className="midi-recent" aria-label="Recent MIDI messages">
+            <ol
+              className="mt-2 flex list-none flex-wrap gap-x-2 gap-y-1 p-0 font-mono text-xs text-muted-foreground"
+              aria-label="Recent MIDI messages"
+            >
               {status!
                 .recent!.slice(-6, -1)
                 .reverse()
@@ -946,14 +949,14 @@ export function MidiMapScreen({
           )}
           {action && action.seq > 0 && (
             <p
-              className="midi-action-result mt-1"
+              className="mt-1 text-sm data-[ok=false]:text-destructive"
               data-ok={action.ok}
               role="status"
             >
               Last action: {action.message}
             </p>
           )}
-          {status?.error && <p className="caption mt-1">{status.error}</p>}
+          {status?.error && <Caption className="mt-1">{status.error}</Caption>}
         </div>
       </div>
 
@@ -1007,26 +1010,29 @@ export function MidiMapScreen({
         }
       />
 
-      <details className="midi-helpers" aria-label="MIDI mapping helpers">
+      <details
+        className="border-y border-border open:pb-3 [&>summary]:min-h-13"
+        aria-label="MIDI mapping helpers"
+      >
         <summary className="cursor-pointer px-3 py-3">
           <span className="ml-1 flex min-w-0 flex-1 flex-col pr-2">
             <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
               <strong>Mapping helpers</strong>
-              <span className="caption">
+              <Caption as="span">
                 {map.template
                   ? `${map.template.scene_buttons} buttons · CC ${map.template.first_controller}–${map.template.first_controller + map.template.scene_buttons - 1}`
                   : 'No unit template'}
-              </span>
+              </Caption>
             </span>
-            <span className="caption mt-1 flex max-w-2xl">
+            <Caption as="span" className="mt-1 flex max-w-2xl">
               New Mine presets inherit the unit template. It assigns consecutive
               CC buttons to up to two, four or eight scenes.
-            </span>
+            </Caption>
           </span>
         </summary>
         <div className="space-y-3 px-3 pb-3">
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem_auto] sm:items-end">
-            <label className="field min-w-0">
+            <FormField className="min-w-0">
               Scene template
               <Select
                 value={String(templateButtons)}
@@ -1043,8 +1049,8 @@ export function MidiMapScreen({
                   <SelectItem value="8">8 buttons</SelectItem>
                 </SelectContent>
               </Select>
-            </label>
-            <label className="field">
+            </FormField>
+            <FormField>
               First CC
               <input
                 aria-label="First template CC"
@@ -1057,7 +1063,7 @@ export function MidiMapScreen({
                   setTemplateController(Number(event.target.value))
                 }
               />
-            </label>
+            </FormField>
             <Button
               variant="outline"
               disabled={
@@ -1074,7 +1080,7 @@ export function MidiMapScreen({
             </p>
           )}
           <div className="grid gap-2 border-t border-border/70 pt-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
-            <label className="field min-w-0">
+            <FormField className="min-w-0">
               Copy from
               <Select
                 value={copyFrom || undefined}
@@ -1095,8 +1101,8 @@ export function MidiMapScreen({
                   ))}
                 </SelectContent>
               </Select>
-            </label>
-            <label className="field min-w-0">
+            </FormField>
+            <FormField className="min-w-0">
               Copy to
               <Select
                 value={copyTo || undefined}
@@ -1119,7 +1125,7 @@ export function MidiMapScreen({
                     ))}
                 </SelectContent>
               </Select>
-            </label>
+            </FormField>
             <Button
               variant="outline"
               disabled={!copyFrom || !copyTo || busy || !connected}
@@ -1128,16 +1134,16 @@ export function MidiMapScreen({
               <CopySimple size={18} aria-hidden="true" /> Copy mappings
             </Button>
           </div>
-          <p className="caption">
+          <Caption>
             Copy keeps exact scene, block and control targets; use it between
             copies of the same rig. Use the scene template for different rigs.
-          </p>
+          </Caption>
         </div>
       </details>
 
-      <div className="midi-toolbar">
+      <div className="flex flex-wrap items-center justify-end gap-2">
         {groups.length > 0 && (
-          <label className="midi-search relative min-w-0">
+          <label className="relative min-w-0 grow basis-full sm:basis-48">
             <MagnifyingGlass
               className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
               size={18}
@@ -1155,7 +1161,7 @@ export function MidiMapScreen({
         )}
         <Button
           variant="outline"
-          className="midi-toolbar-button"
+          className="min-w-26 flex-1 sm:flex-none"
           onClick={() => {
             const previous = history.current.at(-1);
             if (previous)
@@ -1167,7 +1173,7 @@ export function MidiMapScreen({
         </Button>
         <Button
           variant="outline"
-          className="midi-toolbar-button"
+          className="min-w-26 flex-1 sm:flex-none"
           onClick={() => setPendingClearAll(true)}
           disabled={busy || !connected || groups.every((group) => !group.map)}
         >
@@ -1175,7 +1181,7 @@ export function MidiMapScreen({
         </Button>
         <Button
           variant="outline"
-          className="midi-toolbar-button"
+          className="min-w-26 flex-1 sm:flex-none"
           onClick={exportMap}
           disabled={busy || groups.length === 0}
         >
@@ -1184,7 +1190,7 @@ export function MidiMapScreen({
         </Button>
         <Button
           variant="outline"
-          className="midi-toolbar-button"
+          className="min-w-26 flex-1 sm:flex-none"
           onClick={() => fileInput.current?.click()}
           disabled={busy || !connected}
         >
@@ -1242,10 +1248,10 @@ export function MidiMapScreen({
             mappings in {map.entries.length}{' '}
             {map.entries.length === 1 ? 'preset' : 'presets'}?
           </strong>
-          <p className="caption mt-1">
+          <Caption className="mt-1">
             Presets, tones, the controller input, the scene template and
             Previous/Next stay. Undo restores them.
-          </p>
+          </Caption>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button
               variant="destructive"
@@ -1270,11 +1276,11 @@ export function MidiMapScreen({
           aria-label="Confirm MIDI map import"
         >
           <strong>Replace this unit’s MIDI map?</strong>
-          <p className="caption mt-1">
+          <Caption className="mt-1">
             {pendingImport.entries.length} preset mappings · channel{' '}
             {pendingImport.channel || 'All'} ·{' '}
             {pendingImport.input ? 'controller included' : 'MIDI off'}
-          </p>
+          </Caption>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button
               onClick={() => {
@@ -1332,7 +1338,11 @@ export function MidiMapScreen({
         }
       />
 
-      <div className="midi-preset-list" aria-label="Complete MIDI map">
+      <div
+        data-midi-preset-list=""
+        className="border-y border-border"
+        aria-label="Complete MIDI map"
+      >
         {visibleGroups.map((group) => {
           const isCurrent = sameEntry(current, group.entry);
           const local = group.map;
@@ -1388,7 +1398,7 @@ export function MidiMapScreen({
             return (
               <Button
                 variant={active ? 'secondary' : 'outline'}
-                className="midi-action"
+                className="min-w-21 flex-1 sm:flex-none"
                 aria-pressed={active ? true : undefined}
                 disabled={!canLearn}
                 onClick={() =>
@@ -1411,7 +1421,7 @@ export function MidiMapScreen({
           const testButton = (row: RowRef, label: string, off = false) => (
             <Button
               variant="outline"
-              className="midi-action"
+              className="min-w-21 flex-1 sm:flex-none"
               disabled={busy || !connected || off}
               title={
                 row.kind !== 'preset' && !isCurrent
@@ -1456,13 +1466,18 @@ export function MidiMapScreen({
             return (
               <li
                 key={id}
-                className="midi-row"
+                className="group grid min-w-0 items-center gap-x-4 gap-y-2 border-t border-border/70 py-2 pr-3 pl-5 data-[conflict=true]:bg-destructive/5 sm:grid-cols-[minmax(0,1fr)_9.5rem_auto] sm:pl-7"
                 data-conflict={conflict ? 'true' : undefined}
                 data-off={off ? 'true' : undefined}
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <span className="midi-row-label">{label}</span>
+                    <span
+                      data-midi-row-label=""
+                      className="text-base font-medium group-data-[off=true]:line-through group-data-[off=true]:opacity-65"
+                    >
+                      {label}
+                    </span>
                     {off && (
                       <span className="text-xs font-semibold text-muted-foreground">
                         Disabled
@@ -1480,13 +1495,15 @@ export function MidiMapScreen({
                     )}
                   </div>
                 </div>
-                <code className="midi-address">{detail}</code>
-                <div className="midi-actions">
+                <code className="font-mono text-xs wrap-anywhere text-muted-foreground group-data-[off=true]:line-through group-data-[off=true]:opacity-65">
+                  {detail}
+                </code>
+                <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
                   {learnButton(row, label)}
                   {testButton(row, label, off)}
                   <Button
                     variant="outline"
-                    className="midi-action"
+                    className="min-w-21 flex-1 sm:flex-none"
                     disabled={busy || !connected || !ident}
                     aria-pressed={off}
                     onClick={toggle}
@@ -1499,8 +1516,11 @@ export function MidiMapScreen({
             );
           };
           return (
-            <section key={keyOf(group.entry)} className="midi-preset-group">
-              <div className="midi-group-head">
+            <section
+              key={keyOf(group.entry)}
+              className="min-w-0 border-b border-border last:border-b-0"
+            >
+              <div className="grid min-w-0 items-center gap-x-4 gap-y-2 bg-muted/55 p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="m-0 text-base">{group.name}</h3>
@@ -1515,14 +1535,14 @@ export function MidiMapScreen({
                       </span>
                     )}
                   </div>
-                  <p className="caption mt-0.5">
+                  <Caption className="mt-0.5">
                     {group.slot >= 0
                       ? group.slot < 128
                         ? `Preset · Program ${group.slot + 1}`
                         : `Preset · Bank ${Math.floor(group.slot / 128)}, Program ${(group.slot % 128) + 1}`
                       : 'Saved local mappings'}{' '}
                     · {rowCount} local {rowCount === 1 ? 'mapping' : 'mappings'}
-                  </p>
+                  </Caption>
                   {recallConflict && (
                     <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-destructive">
                       <WarningCircle size={15} aria-hidden="true" /> A scene
@@ -1531,19 +1551,19 @@ export function MidiMapScreen({
                     </p>
                   )}
                   {recallShared && !recallConflict && (
-                    <p className="caption mt-1">
+                    <Caption className="mt-1">
                       Program {group.slot + 1} is also used inside another
                       preset; local mappings remain preset-scoped.
-                    </p>
+                    </Caption>
                   )}
                 </div>
-                <div className="midi-actions">
-                  <div className="midi-tools">
+                <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+                  <div className="flex basis-full flex-wrap gap-x-2 gap-y-1 empty:hidden sm:contents">
                     {group.entry.kind === 'rig' && map.template && (
                       <>
                         <Button
                           variant="ghost"
-                          className="midi-tool"
+                          className="px-2"
                           disabled={busy || !connected}
                           onClick={() => {
                             if (
@@ -1564,7 +1584,7 @@ export function MidiMapScreen({
                         {pendingTemplate === keyOf(group.entry) && (
                           <Button
                             variant="ghost"
-                            className="midi-tool"
+                            className="px-2"
                             onClick={() => setPendingTemplate('')}
                           >
                             Cancel
@@ -1578,7 +1598,7 @@ export function MidiMapScreen({
                         <>
                           <Button
                             variant="destructive"
-                            className="midi-tool"
+                            className="px-2"
                             disabled={busy || !connected}
                             onClick={() => void clearMappings(group.entry)}
                           >
@@ -1586,7 +1606,7 @@ export function MidiMapScreen({
                           </Button>
                           <Button
                             variant="ghost"
-                            className="midi-tool"
+                            className="px-2"
                             onClick={() => setPendingClear('')}
                           >
                             Cancel
@@ -1595,7 +1615,7 @@ export function MidiMapScreen({
                       ) : (
                         <Button
                           variant="ghost"
-                          className="midi-tool text-destructive"
+                          className="px-2 text-destructive"
                           disabled={busy || !connected}
                           onClick={() => setPendingClear(keyOf(group.entry))}
                         >

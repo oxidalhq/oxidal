@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { DialogFooter } from '@oxidal/design-system/components/dialog';
+import { FormField } from '@oxidal/design-system/components/form-layout';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 
@@ -38,7 +39,7 @@ export function ProfileDialog({
           void onSave(next, notes.trim()).finally(() => setSaving(false));
         }}
       >
-        <label className="field">
+        <FormField>
           Name
           <input
             value={name}
@@ -46,8 +47,8 @@ export function ProfileDialog({
             disabled={saving}
             onChange={(event) => setName(event.target.value)}
           />
-        </label>
-        <label className="field">
+        </FormField>
+        <FormField>
           Notes
           <input
             value={notes}
@@ -56,7 +57,7 @@ export function ProfileDialog({
             placeholder="What the room needs, such as “boomy corner”"
             onChange={(event) => setNotes(event.target.value)}
           />
-        </label>
+        </FormField>
         {error && <p role="alert">{error}</p>}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onCancel}>

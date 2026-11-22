@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { FormField } from '@oxidal/design-system/components/form-layout';
 
 import {
   type LibraryCatalog,
@@ -79,7 +80,7 @@ export function PresetVersions({
     <section aria-label="Preset versions" className="space-y-2">
       {view && version ? (
         <>
-          <label className="field">
+          <FormField>
             Version
             <select
               value={selected}
@@ -97,7 +98,7 @@ export function PresetVersions({
                 </option>
               ))}
             </select>
-          </label>
+          </FormField>
           {editable && (
             <fieldset disabled={busy} className="space-y-2">
               {onEdit && kind === 'rig' && (
@@ -115,14 +116,14 @@ export function PresetVersions({
                   Edit this version offline
                 </Button>
               )}
-              <label className="field">
+              <FormField>
                 Version name
                 <input
                   value={name}
                   maxLength={120}
                   onChange={(e) => setName(e.target.value)}
                 />
-              </label>
+              </FormField>
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"

@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@oxidal/design-system/components/button';
 import { ListRow } from '@oxidal/design-system/components/list-row';
 import { EmptyState } from '@oxidal/design-system/components/states';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import type { LocalModel } from './api';
@@ -73,6 +74,7 @@ export function ModelLibrary({
   const [progress, setProgress] = useState<ImportState | null>(null);
   const [importing, setImporting] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
+  const downloadButton = useRef<HTMLButtonElement>(null);
   const [building, setBuilding] = useState(false);
   const [saved, setSaved] = useState('');
   const [importOpen, setImportOpen] = useState(false);
@@ -224,12 +226,13 @@ export function ModelLibrary({
           <Button
             variant="ghost"
             disabled={importing || !connected}
+            ref={downloadButton}
             onClick={() => setDownloadOpen(true)}
           >
             <CloudArrowDown aria-hidden="true" /> TONE3000
           </Button>
         </div>
-        <span className="caption text-xs">
+        <Caption as="span" className="text-xs">
           {loading
             ? 'Loading…'
             : data
@@ -237,7 +240,7 @@ export function ModelLibrary({
                 ? `${data.data.length} shown`
                 : `${data.data.length} ${data.data.length === 1 ? 'file' : 'files'}`
               : 'Library unavailable'}
-        </span>
+        </Caption>
       </div>
       {progress && (
         <div
@@ -266,7 +269,10 @@ export function ModelLibrary({
             max={progress.total}
             value={progress.complete}
           />
-          <div className="caption flex flex-wrap items-center justify-between gap-2">
+          <Caption
+            as="div"
+            className="flex flex-wrap items-center justify-between gap-2"
+          >
             <span className="min-w-0 break-words">
               {progress.current ||
                 (progress.cancelled
@@ -276,7 +282,7 @@ export function ModelLibrary({
             <span>
               {size(progress.doneBytes)} / {size(progress.bytes)}
             </span>
-          </div>
+          </Caption>
           {progress.errors.length > 0 && (
             <details className="disclosure">
               <summary>
@@ -441,7 +447,7 @@ export function ModelLibrary({
           >
             <ArrowLeft aria-hidden="true" /> Previous
           </Button>
-          <span className="caption">Page {cursors.length}</span>
+          <Caption as="span">Page {cursors.length}</Caption>
           <Button
             variant="ghost"
             disabled={loading || !data?.next}
@@ -525,10 +531,10 @@ export function ModelLibrary({
                 <FolderOpen aria-hidden="true" /> Choose folder
               </Button>
             </div>
-            <p className="caption">
+            <Caption>
               Choose a folder to import a collection. You can cancel at any
               time; completed files stay in your library.
-            </p>
+            </Caption>
           </div>
         </AdjustmentDialog>
       )}
@@ -547,6 +553,7 @@ export function ModelLibrary({
         <ModelPicker
           name={label}
           intent="download"
+          returnFocus={() => downloadButton.current}
           initialFormat={format}
           allowedFormat={format}
           onClose={() => setDownloadOpen(false)}

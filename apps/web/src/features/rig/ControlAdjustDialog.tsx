@@ -1,4 +1,5 @@
 import { Button } from '@oxidal/design-system/components/button';
+import { ActionRow } from '@oxidal/design-system/components/form-layout';
 import { RelativeAdjustment as TouchAdjust } from '@oxidal/design-system/components/number-field';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
@@ -55,7 +56,7 @@ export function ControlAdjustDialog({ rig, vm }: RigViewProps) {
                 : (scale?.format ?? String)
             }
           />
-          <div className="action-row">
+          <ActionRow>
             <Button disabled={busy} onClick={() => void finish(false)}>
               Done
             </Button>
@@ -66,7 +67,7 @@ export function ControlAdjustDialog({ rig, vm }: RigViewProps) {
             >
               Cancel
             </Button>
-          </div>
+          </ActionRow>
           {error && <p role="alert">{error}</p>}
         </AdjustmentDialog>
       )}

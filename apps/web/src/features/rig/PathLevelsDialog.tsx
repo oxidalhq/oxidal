@@ -1,6 +1,8 @@
 import { useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { ActionRow } from '@oxidal/design-system/components/form-layout';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import type { IdStep } from '../../rigChain';
@@ -50,7 +52,7 @@ export function PathLevelsDialog({ rig, vm }: RigViewProps) {
             Remove Path {removing.path + 1} and its {removing.effects}{' '}
             {removing.effects === 1 ? 'effect' : 'effects'}?
           </p>
-          <div className="action-row">
+          <ActionRow>
             <Button variant="outline" onClick={() => setRemoving(null)}>
               Cancel
             </Button>
@@ -60,7 +62,7 @@ export function PathLevelsDialog({ rig, vm }: RigViewProps) {
             >
               Remove
             </Button>
-          </div>
+          </ActionRow>
         </AdjustmentDialog>
       )}
       {routingSplit &&
@@ -85,7 +87,10 @@ export function PathLevelsDialog({ rig, vm }: RigViewProps) {
               description="Each path's level into the merge. Changes are live; Save keeps them."
               onCancel={() => setRoutingSplit(null)}
             >
-              <div className="control-stack" aria-label="Path levels">
+              <div
+                className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
+                aria-label="Path levels"
+              >
                 {split.branches.map((_, port) => {
                   const sides = ['left', 'right'].map((side) =>
                     state.control?.controls.find(
@@ -119,7 +124,7 @@ export function PathLevelsDialog({ rig, vm }: RigViewProps) {
                         <span>Path {port + 1}</span>
                       )}
                       {editable && (
-                        <div className="action-row">
+                        <ActionRow>
                           <Button
                             variant="outline"
                             aria-label={`Copy path ${port + 1}`}
@@ -153,14 +158,14 @@ export function PathLevelsDialog({ rig, vm }: RigViewProps) {
                           >
                             Remove
                           </Button>
-                        </div>
+                        </ActionRow>
                       )}
                     </div>
                   );
                 })}
               </div>
               {editable && (
-                <div className="action-row">
+                <ActionRow>
                   <Button
                     variant="outline"
                     disabled={waiting}
@@ -173,12 +178,12 @@ export function PathLevelsDialog({ rig, vm }: RigViewProps) {
                   >
                     + Add dry path
                   </Button>
-                </div>
+                </ActionRow>
               )}
-              <p className="caption">
+              <Caption>
                 Removing the second-last path removes the split. Scene presets
                 keep at least one split.
-              </p>
+              </Caption>
             </AdjustmentDialog>
           );
         })()}

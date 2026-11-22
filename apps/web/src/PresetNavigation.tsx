@@ -1,4 +1,5 @@
 import { Button } from '@oxidal/design-system/components/button';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import type { MidiMap } from './api';
 
@@ -61,17 +62,20 @@ export function PresetNavigation({
   onClear: (key: NavigationKey) => void;
 }) {
   return (
-    <section className="midi-preset-group" aria-label="Device controls">
-      <div className="midi-group-head">
+    <section
+      className="min-w-0 border-b border-border last:border-b-0"
+      aria-label="Device controls"
+    >
+      <div className="grid min-w-0 items-center gap-x-4 gap-y-2 bg-muted/55 p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
         <div className="min-w-0">
           <h3 className="m-0 text-base">Device controls</h3>
-          <p className="caption mt-0.5">
+          <Caption className="mt-0.5">
             Previous and Next move through the Mine set-list and stop at the
             first and last preset. Mute silences the output until pressed again.
             Tuner opens the global tuner overlay from any screen when a browser
             is connected. Next guitar switches to the next guitar profile and
             wraps after the last.
-          </p>
+          </Caption>
         </div>
       </div>
       <ul className="m-0 list-none p-0">
@@ -79,19 +83,27 @@ export function PresetNavigation({
           const active = learning === key;
           const assigned = navigation?.[key];
           return (
-            <li key={key} className="midi-row">
-              <span className="midi-row-label">{label}</span>
-              <code className="midi-address">
+            <li
+              key={key}
+              className="group grid min-w-0 items-center gap-x-4 gap-y-2 border-t border-border/70 py-2 pr-3 pl-5 data-[conflict=true]:bg-destructive/5 sm:grid-cols-[minmax(0,1fr)_9.5rem_auto] sm:pl-7"
+            >
+              <span
+                data-midi-row-label=""
+                className="text-base font-medium group-data-[off=true]:line-through group-data-[off=true]:opacity-65"
+              >
+                {label}
+              </span>
+              <code className="font-mono text-xs wrap-anywhere text-muted-foreground group-data-[off=true]:line-through group-data-[off=true]:opacity-65">
                 {active
                   ? key === 'output_level' || key === 'sheet_speed'
                     ? 'Move the control…'
                     : 'Press the switch…'
                   : triggerText(assigned)}
               </code>
-              <div className="midi-actions">
+              <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
                 <Button
                   variant={active ? 'secondary' : 'outline'}
-                  className="midi-action"
+                  className="min-w-21 flex-1 sm:flex-none"
                   aria-pressed={active ? true : undefined}
                   disabled={!active && (!canLearn || busy)}
                   onClick={() => onLearn(active ? null : key)}
@@ -101,7 +113,7 @@ export function PresetNavigation({
                 </Button>
                 <Button
                   variant="outline"
-                  className="midi-action"
+                  className="min-w-21 flex-1 sm:flex-none"
                   disabled={!assigned || busy}
                   onClick={() => onClear(key)}
                 >

@@ -2,16 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import {
+  ActionRow,
+  FormField,
+} from '@oxidal/design-system/components/form-layout';
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
-import {
-  playingPresetCaption,
-  PresetStartOptions,
-} from '@oxidal/design-system/patterns/preset-dialogs';
+import { Caption } from '@oxidal/design-system/components/text';
+import { playingPresetCaption } from '@oxidal/design-system/lib/preset-caption';
+import { PresetStartOptions } from '@oxidal/design-system/patterns/preset-dialogs';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
@@ -219,13 +222,13 @@ export function NewPresetDialog({
   return (
     <AdjustmentDialog title="New preset" onCancel={() => !busy && onCancel()}>
       <form
-        className="control-stack"
+        className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
         onSubmit={(event) => {
           event.preventDefault();
           void create();
         }}
       >
-        <label className="field">
+        <FormField>
           <span>Name</span>
           <input
             className="h-11 w-full rounded-md border border-input bg-card px-3"
@@ -235,7 +238,7 @@ export function NewPresetDialog({
             aria-invalid={touched && !!nameError}
             onChange={(event) => setName(event.target.value)}
           />
-        </label>
+        </FormField>
         {touched && nameError && <p role="alert">{nameError}</p>}
         <PresetStartOptions<Start>
           value={start}
@@ -281,7 +284,7 @@ export function NewPresetDialog({
           ]}
         />
         {start !== 'empty' && start !== 'playing' && (
-          <label className="field">
+          <FormField>
             <span>Preset to copy</span>
             <Select value={source} onValueChange={setSource}>
               <SelectTrigger aria-label="Preset to copy">
@@ -297,14 +300,12 @@ export function NewPresetDialog({
                 ))}
               </SelectContent>
             </Select>
-          </label>
+          </FormField>
         )}
-        <p className="caption">
-          Nothing starts playing. The original stays unchanged.
-        </p>
+        <Caption>Nothing starts playing. The original stays unchanged.</Caption>
         {error && <p role="alert">{error}</p>}
         <FailureNotice failure={failure} busy={busy} />
-        <div className="action-row">
+        <ActionRow>
           <Button
             type="button"
             variant="ghost"
@@ -338,7 +339,7 @@ export function NewPresetDialog({
           >
             {busy ? 'Creating…' : 'Create preset'}
           </Button>
-        </div>
+        </ActionRow>
       </form>
     </AdjustmentDialog>
   );

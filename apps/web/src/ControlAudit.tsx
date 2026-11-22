@@ -2,6 +2,7 @@ import { ArrowClockwise, DownloadSimple, FunnelX } from '@phosphor-icons/react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { ActionRow } from '@oxidal/design-system/components/form-layout';
 import {
   Select,
   SelectContent,
@@ -9,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { Caption } from '@oxidal/design-system/components/text';
 import { AuditLog } from '@oxidal/design-system/widgets/audit-log';
 
 import { type ControlAudit as History, controlAudit } from './api';
@@ -119,7 +121,7 @@ export function ControlAudit() {
       <AuditLog records={summary} limit={50} />
       {error && !open && <p role="alert">{error}</p>}
       <details
-        className="control-help"
+        className="border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']"
         onToggle={(event) => {
           setOpen(event.currentTarget.open);
           if (event.currentTarget.open) {
@@ -155,10 +157,10 @@ export function ControlAudit() {
                 </a>
               </Button>
             </div>
-            <p className="caption">
+            <Caption>
               Accepted means the API accepted a request, not that audio has
               applied it.
-            </p>
+            </Caption>
             <div
               className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2"
               onChange={() => setLimit(50)}
@@ -212,7 +214,7 @@ export function ControlAudit() {
                 />
               </label>
             </div>
-            <div className="action-row">
+            <ActionRow>
               <Button
                 variant="outline"
                 disabled={busy || !history || invalidRange || !records.length}
@@ -235,7 +237,7 @@ export function ControlAudit() {
               >
                 <FunnelX aria-hidden="true" /> Clear filters
               </Button>
-            </div>
+            </ActionRow>
             {invalidRange && <p role="alert">From must be before Until.</p>}
             {error && <p role="alert">{error}</p>}
             {history &&
@@ -249,9 +251,9 @@ export function ControlAudit() {
                 </p>
               )}
             {history && (
-              <p className="caption">
+              <Caption>
                 {records.length} matching requests · newest first
-              </p>
+              </Caption>
             )}
             {history && records.length === 0 && <p>No matching requests.</p>}
             <ol className="grid min-w-0 gap-2" aria-label="Audit entries">
@@ -291,9 +293,9 @@ export function ControlAudit() {
                 Show 50 more
               </Button>
             )}
-            <details className="control-help">
+            <details className="border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']">
               <summary>Audit scope</summary>
-              <p className="caption">
+              <Caption>
                 Completed control API requests, retained across restarts up to 2
                 MiB. Request bodies, credentials, terminal commands and audio
                 are excluded. Repeated adjustments are separate requests. Worker
@@ -301,7 +303,7 @@ export function ControlAudit() {
                 recorded. Export all includes every retained record. Export
                 filtered includes every matching record, including entries
                 beyond Show more.
-              </p>
+              </Caption>
             </details>
           </section>
         )}

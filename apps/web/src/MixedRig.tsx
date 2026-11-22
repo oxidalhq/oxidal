@@ -1,5 +1,11 @@
 import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
+import { Card } from '@oxidal/design-system/components/card';
+import {
+  FormField,
+  FormGrid,
+} from '@oxidal/design-system/components/form-layout';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { rigAudioCommand, rigAudioState } from './api';
@@ -164,8 +170,8 @@ export function MixedRig(props: {
       </>
     );
   return (
-    <section
-      className="panel rig-editor space-y-3 max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:shadow-none data-loading:[&>:not([data-slot=rig-heading]):not([data-rig-switching])]:hidden"
+    <Card
+      className="rig-editor space-y-3 max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:shadow-none data-loading:[&>:not([data-slot=rig-heading]):not([data-rig-switching])]:hidden"
       aria-label="Sounding mixed rig"
       data-loading={performSwitching || undefined}
     >
@@ -174,7 +180,10 @@ export function MixedRig(props: {
       <StompControls rig={rig} vm={vm} />
       <RecoveryNotice message={state.recovery_error} />
       {(error || readError || state.error) && (
-        <p role="alert" className="error">
+        <p
+          role="alert"
+          className="mb-4 min-w-0 rounded-lg border border-destructive px-3 py-2.5 wrap-anywhere text-destructive"
+        >
           {error || readError || state.error}
         </p>
       )}
@@ -218,7 +227,7 @@ export function MixedRig(props: {
           }
         />
         {!!state.control?.prepared?.length && (
-          <details className="min-w-0 border-y border-border [&+details]:border-t-0 [&>.caption]:mx-1 [&>.caption]:mb-2.5 [&>summary]:min-w-0 [&>summary]:gap-2 [&>summary]:px-1 [&>summary>:first-child]:shrink-0 [&>summary>:first-child]:font-semibold">
+          <details className="min-w-0 border-y border-border [&+details]:border-t-0 [&>[data-slot=caption]]:mx-1 [&>[data-slot=caption]]:mb-2.5 [&>summary]:min-w-0 [&>summary]:gap-2 [&>summary]:px-1 [&>summary>:first-child]:shrink-0 [&>summary>:first-child]:font-semibold">
             <summary>
               <span>Ready to switch</span>
               <Badge>{state.control.prepared.length + 1} presets</Badge>
@@ -230,11 +239,11 @@ export function MixedRig(props: {
                 processing
               </span>
             </summary>
-            <p className="caption">
+            <Caption>
               Loaded presets can switch without reopening audio. Playing is the
               sound you hear; Processing is still rendering a tail; Sleeping is
               loaded but using no DSP. These are presets, not scenes.
-            </p>
+            </Caption>
             <div
               className="flex flex-wrap gap-2 px-1 pb-3 [&>button]:gap-2"
               role="group"
@@ -320,7 +329,10 @@ export function MixedRig(props: {
         </div>
       )}
       {modelChange?.progress.error && (
-        <p role="alert" className="error">
+        <p
+          role="alert"
+          className="mb-4 min-w-0 rounded-lg border border-destructive px-3 py-2.5 wrap-anywhere text-destructive"
+        >
           {modelChange!.progress.error}
         </p>
       )}
@@ -371,11 +383,11 @@ export function MixedRig(props: {
             if (!busy) setSaveOpening(null);
           }}
         >
-          <p className="caption">
+          <Caption>
             Keep this sound for offline use. The original rig stays unchanged.
-          </p>
-          <div className="form-grid">
-            <label className="field">
+          </Caption>
+          <FormGrid>
+            <FormField>
               Preset name
               <input
                 disabled={busy}
@@ -383,7 +395,7 @@ export function MixedRig(props: {
                 maxLength={128}
                 onChange={(e) => setName(e.target.value)}
               />
-            </label>
+            </FormField>
             <Button
               disabled={
                 disabled ||
@@ -397,7 +409,7 @@ export function MixedRig(props: {
             >
               {busy ? 'Saving…' : 'Save'}
             </Button>
-          </div>
+          </FormGrid>
           {rig.sourceOrigin === 'mine' && rig.revision && (
             <SaveSoundVersion
               key={rig.revision}
@@ -429,6 +441,6 @@ export function MixedRig(props: {
             : 'Saved for offline use'}
         </p>
       )}
-    </section>
+    </Card>
   );
 }

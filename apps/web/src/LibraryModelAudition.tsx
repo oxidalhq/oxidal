@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { FormField } from '@oxidal/design-system/components/form-layout';
 import {
   Select,
   SelectContent,
@@ -8,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import {
   type AudioState,
@@ -208,14 +210,14 @@ export function LibraryModelAudition({
     >
       <h3>Audio audition</h3>
       {loading ? (
-        <p className="caption">Reading the playing preset…</p>
+        <Caption>Reading the playing preset…</Caption>
       ) : options.length ? (
         <>
-          <p className="caption">
+          <Caption>
             Choose a block in the playing preset. Audition changes that block;
             Undo in Rig restores it.
-          </p>
-          <label className="field">
+          </Caption>
+          <FormField>
             Replace block
             <Select
               value={choice || undefined}
@@ -233,7 +235,7 @@ export function LibraryModelAudition({
                 ))}
               </SelectContent>
             </Select>
-          </label>
+          </FormField>
           <div className="flex flex-wrap gap-2">
             <Button
               disabled={busy || applied || !choice}
@@ -248,24 +250,14 @@ export function LibraryModelAudition({
         </>
       ) : (
         <>
-          <p className="caption">
-            Start a native or mixed rig to audition this model.
-          </p>
+          <Caption>Start a native or mixed rig to audition this model.</Caption>
           <Button variant="outline" onClick={onOpenRig}>
             Open Rig
           </Button>
         </>
       )}
-      {message && (
-        <p role="status" className="caption">
-          {message}
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="caption">
-          {error}
-        </p>
-      )}
+      {message && <Caption role="status">{message}</Caption>}
+      {error && <Caption role="alert">{error}</Caption>}
     </section>
   );
 }

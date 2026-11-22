@@ -4,6 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
 import {
+  ActionRow,
+  FormField,
+} from '@oxidal/design-system/components/form-layout';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -16,6 +20,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@oxidal/design-system/components/tabs';
+import { Caption, Eyebrow, Title } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
@@ -300,8 +305,8 @@ export function RigComposer({
   }
   return (
     <section className="min-w-0 space-y-3" aria-label="Compose rig">
-      <header className="flex min-w-0 items-center gap-3 max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto] [&_input]:min-h-touch [&_input]:text-md [&_input]:font-semibold [&>.field]:m-0 max-sm:[&>.field]:col-span-full">
-        <label className="field min-w-0 flex-1">
+      <header className="flex min-w-0 items-center gap-3 max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto] [&_input]:min-h-touch [&_input]:text-md [&_input]:font-semibold [&>[data-slot=form-field]]:m-0 max-sm:[&>[data-slot=form-field]]:col-span-full">
+        <FormField className="min-w-0 flex-1">
           <span className="sr-only">Preset name</span>
           <input
             value={name}
@@ -309,7 +314,7 @@ export function RigComposer({
             disabled={busy}
             onChange={(event) => setName(event.target.value)}
           />
-        </label>
+        </FormField>
         <Badge>Draft</Badge>
         <Button
           disabled={!connected || busy || !name.trim()}
@@ -318,7 +323,7 @@ export function RigComposer({
           {busy ? 'Preparing…' : 'Play draft'}
         </Button>
       </header>
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 max-sm:items-stretch max-sm:[&>*]:w-full [&>.action-row]:m-0 max-sm:[&>.action-row>*]:flex-1">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 max-sm:items-stretch max-sm:[&>*]:w-full [&>[data-slot=action-row]]:m-0 max-sm:[&>[data-slot=action-row]>*]:flex-1">
         <Tabs
           value={layout}
           onValueChange={(value) => chooseLayout(value as 'serial' | 'scenes')}
@@ -337,7 +342,7 @@ export function RigComposer({
             </TabsTrigger>
           </TabsList>
         </Tabs>
-        <div className="action-row">
+        <ActionRow>
           <Button
             variant="outline"
             disabled={!connected || busy}
@@ -362,7 +367,7 @@ export function RigComposer({
           >
             Add effect
           </Button>
-        </div>
+        </ActionRow>
       </div>
       {preparing && (
         <Button
@@ -377,12 +382,14 @@ export function RigComposer({
         <div className="min-w-0 rounded-xl border border-border bg-background p-3 sm:p-4">
           <div className="mb-3 flex min-w-0 items-center justify-between gap-3 [&_h2]:m-0 [&_p]:m-0">
             <div>
-              <p className="eyebrow">Signal path</p>
-              <h2>{layout === 'serial' ? 'Chain' : 'Scenes'}</h2>
+              <Eyebrow as="p">Signal path</Eyebrow>
+              <Title as="h2" size="sm">
+                {layout === 'serial' ? 'Chain' : 'Scenes'}
+              </Title>
             </div>
-            <span className="caption">
+            <Caption as="span">
               {effects.length} {effects.length === 1 ? 'block' : 'blocks'}
-            </span>
+            </Caption>
           </div>
           {layout === 'serial' ? (
             <ChainView
@@ -467,7 +474,7 @@ export function RigComposer({
           )}
         </div>
         <section
-          className="grid min-w-0 scroll-mt-4 gap-4 min-[820px]:sticky min-[820px]:top-3 min-[820px]:border-l min-[820px]:border-border min-[820px]:pl-4 [&>.field]:m-0"
+          className="grid min-w-0 scroll-mt-4 gap-4 min-[820px]:sticky min-[820px]:top-3 min-[820px]:border-l min-[820px]:border-border min-[820px]:pl-4 [&>[data-slot=form-field]]:m-0"
           aria-label="Block inspector"
         >
           {selectedEffect ? (
@@ -533,7 +540,7 @@ export function RigComposer({
                 </Button>
               </div>
               {layout === 'scenes' && selectedEffect.kind === 'native' && (
-                <label className="field">
+                <FormField>
                   Scene name
                   <input
                     aria-label={`Scene ${
@@ -556,7 +563,7 @@ export function RigComposer({
                       )
                     }
                   />
-                </label>
+                </FormField>
               )}
               {layout === 'serial' &&
                 selectedEffect.kind === 'native' &&
@@ -570,18 +577,18 @@ export function RigComposer({
                   </Button>
                 )}
               {selectedEffect.kind === 'native' && selectedEffect.stage && (
-                <p className="caption">
+                <Caption>
                   {selectedEffect.stage.role === 'amp'
                     ? `Amp · ${selectedEffect.stage.recipe.input === 'left' ? 'L' : 'R'} input`
                     : 'Cab / IR'}{' '}
                   · linked pair · 48 kHz
-                </p>
+                </Caption>
               )}
               {selectedEffect.kind === 'lv2' &&
                 selectedEffect.plugin.ports.filter(
                   (port) => port.audio && port.input,
                 ).length === 1 && (
-                  <label className="field">
+                  <FormField>
                     Mono input
                     <Select
                       value={selectedEffect.mono}
@@ -608,12 +615,12 @@ export function RigComposer({
                         <SelectItem value="right">Right</SelectItem>
                       </SelectContent>
                     </Select>
-                  </label>
+                  </FormField>
                 )}
-              <p className="caption">
+              <Caption>
                 Draft changes do not alter the sounding rig until you choose
                 Play draft.
-              </p>
+              </Caption>
             </>
           ) : (
             <div className="grid gap-1 text-muted-foreground [&>strong]:text-foreground">
@@ -623,10 +630,10 @@ export function RigComposer({
           )}
         </section>
       </div>
-      <p className="caption">
+      <Caption>
         Play to hear it, then save from the sounding rig. Mono effects return
         the same signal to L and R.
-      </p>
+      </Caption>
       {error && !picker && <p role="alert">{error}</p>}
       <Button variant="ghost" disabled={busy} onClick={onBack}>
         Discard composition
@@ -650,10 +657,10 @@ export function RigComposer({
           onCancel={() => setPicker(null)}
         >
           <div className="space-y-3">
-            <label className="field">
+            <FormField>
               Search
               <input value={query} onChange={(e) => setQuery(e.target.value)} />
-            </label>
+            </FormField>
             {loading && <Loading label="Loading…" />}
             {error && <p role="alert">{error}</p>}
             <div className="max-h-64 space-y-2 overflow-y-auto">
@@ -720,10 +727,10 @@ export function RigComposer({
                         </Button>
                         {(plugin.unsupported ||
                           plugin.ports.some((p) => p.atom)) && (
-                          <p className="caption">
+                          <Caption>
                             {plugin.unsupported ??
                               'Message and file controls are not available yet.'}
-                          </p>
+                          </Caption>
                         )}
                       </div>
                     ))}
