@@ -44,6 +44,14 @@
       "next": {
         "program": null,
         "controller": 83
+      },
+      "repeat": {
+        "program": null,
+        "controller": 84
+      },
+      "click": {
+        "program": null,
+        "controller": 85
       }
     }
   }

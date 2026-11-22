@@ -806,6 +806,8 @@ async fn backing_action(shared: &Shared, action: DeviceAction) -> Result<String,
     use crate::player::{Origin, PlayerCommand, PlayerRequest};
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let (command, done) = match action {
+        DeviceAction::BackingRepeat => (PlayerCommand::ToggleRepeat, "Backing repeat toggled"),
+        DeviceAction::BackingClick => (PlayerCommand::ToggleClick, "Backing click toggled"),
         DeviceAction::BackingPlayPause => (PlayerCommand::TogglePlay, "Backing track play/pause"),
         DeviceAction::BackingStop => (PlayerCommand::Stop, "Backing track stopped"),
         DeviceAction::BackingNext => (PlayerCommand::Next, "Next backing track"),

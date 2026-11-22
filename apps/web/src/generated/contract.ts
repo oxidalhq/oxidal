@@ -884,6 +884,12 @@ export type PlayerCommand =
       kind: "toggle_play";
     }
   | {
+      kind: "toggle_repeat";
+    }
+  | {
+      kind: "toggle_click";
+    }
+  | {
       kind: "play";
     }
   | {
@@ -3049,6 +3055,7 @@ export interface Navigation {
  * Backing-track player switches and level knob.
  */
 export interface BackingTriggers {
+  click?: Trigger | null;
   /**
    * A CC whose value (0–127) sets the player level, −60 to +6 dB.
    */
@@ -3056,6 +3063,7 @@ export interface BackingTriggers {
   next?: Trigger | null;
   play_pause?: Trigger | null;
   previous?: Trigger | null;
+  repeat?: Trigger | null;
   skip_back?: Trigger | null;
   skip_forward?: Trigger | null;
   stop?: Trigger | null;

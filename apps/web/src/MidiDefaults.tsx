@@ -23,6 +23,8 @@ const player = {
   stop: 'player:stop',
   previous: 'player:previous',
   next: 'player:next',
+  repeat: 'player:loop',
+  click: 'player:click',
 } as const;
 
 function defaultRows<K extends string>(
@@ -122,9 +124,9 @@ export function MidiDefaults({
         ))}
       </ul>
       <p>
-        Output level, expression, player loop and click, and sheet scroll and
-        speed have no device-wide MIDI default. Block bypass and branch switches
-        need a target in each preset.
+        Output level, expression, and sheet scroll and speed have no device-wide
+        MIDI default. Block bypass and branch switches need a target in each
+        preset.
       </p>
       {conflicts.length > 0 && (
         <p role="alert">

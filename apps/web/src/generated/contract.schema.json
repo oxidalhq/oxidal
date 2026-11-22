@@ -2635,6 +2635,16 @@
       "description": "Device-wide backing-player controls. New maps assign CC 80–83 to transport.",
       "type": "object",
       "properties": {
+        "click": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Trigger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "level": {
           "description": "A CC whose value (0–127) sets the player level, −60 to +6 dB.",
           "type": [
@@ -2666,6 +2676,16 @@
           ]
         },
         "previous": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Trigger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "repeat": {
           "anyOf": [
             {
               "$ref": "#/$defs/Trigger"
@@ -10318,6 +10338,32 @@
             "kind": {
               "type": "string",
               "const": "toggle_play"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "toggle_repeat"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "toggle_click"
             }
           },
           "additionalProperties": false,

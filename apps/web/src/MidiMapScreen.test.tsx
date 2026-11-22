@@ -731,6 +731,8 @@ it('learns backing-player switches and a level knob outside every preset', async
     'Previous track',
     'Back 10 s',
     'Forward 10 s',
+    'Loop',
+    'Click',
     'Level knob',
   ]);
   fireEvent.click(
@@ -846,6 +848,8 @@ it('reviews and explicitly resets supported defaults without replacing preset ma
           stop: trigger(81),
           previous: trigger(82),
           next: trigger(83),
+          repeat: trigger(84),
+          click: trigger(85),
           level: 70,
         },
       },

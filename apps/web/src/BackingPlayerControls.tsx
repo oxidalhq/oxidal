@@ -14,6 +14,8 @@ const rows: [BackingKey, string][] = [
   ['previous', 'Previous track'],
   ['skip_back', 'Back 10 s'],
   ['skip_forward', 'Forward 10 s'],
+  ['repeat', 'Loop'],
+  ['click', 'Click'],
   ['level', 'Level knob'],
 ];
 

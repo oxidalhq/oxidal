@@ -309,6 +309,10 @@ pub struct BackingTriggers {
     pub skip_back: Option<Trigger>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub skip_forward: Option<Trigger>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repeat: Option<Trigger>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub click: Option<Trigger>,
     /// A CC whose value (0–127) sets the player level, −60 to +6 dB.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub level: Option<u8>,
@@ -318,7 +322,7 @@ impl BackingTriggers {
     pub fn is_empty(&self) -> bool {
         *self == Self::default()
     }
-    fn triggers(&self) -> [Option<Trigger>; 6] {
+    fn triggers(&self) -> [Option<Trigger>; 8] {
         [
             self.play_pause,
             self.stop,
@@ -326,6 +330,8 @@ impl BackingTriggers {
             self.previous,
             self.skip_back,
             self.skip_forward,
+            self.repeat,
+            self.click,
         ]
     }
 }
@@ -352,6 +358,8 @@ pub enum DeviceAction {
     BackingPrevious,
     BackingSkipBack,
     BackingSkipForward,
+    BackingRepeat,
+    BackingClick,
     /// The level CC moved to this value.
     BackingLevel {
         value: u8,
@@ -403,6 +411,8 @@ impl Navigation {
             (b.previous, DeviceAction::BackingPrevious),
             (b.skip_back, DeviceAction::BackingSkipBack),
             (b.skip_forward, DeviceAction::BackingSkipForward),
+            (b.repeat, DeviceAction::BackingRepeat),
+            (b.click, DeviceAction::BackingClick),
         ];
         if let Some((_, action)) = actions
             .iter()
@@ -2126,6 +2136,8 @@ mod tests {
             (81, DeviceAction::BackingStop),
             (82, DeviceAction::BackingPrevious),
             (83, DeviceAction::BackingNext),
+            (84, DeviceAction::BackingRepeat),
+            (85, DeviceAction::BackingClick),
         ] {
             let message = |value| Message::Control {
                 channel: 1,
@@ -2196,5 +2208,36 @@ mod tests {
             ..nav
         };
         assert!(clash.validate(&BTreeMap::new()).is_err());
+    }
+    #[test]
+    fn backing_loop_and_click_respond_only_to_their_assigned_presses() {
+        let nav: Navigation = serde_json::from_value(serde_json::json!({
+            "backing":{"repeat":{"controller":84},"click":{"controller":85}}
+        }))
+        .unwrap();
+        for (controller, action) in [
+            (84, DeviceAction::BackingRepeat),
+            (85, DeviceAction::BackingClick),
+        ] {
+            let cc = |value| Message::Control {
+                channel: 1,
+                controller,
+                value,
+            };
+            assert_eq!(nav.action(cc(127)), Some(action));
+            assert_eq!(nav.action(cc(0)), None);
+            assert_eq!(Navigation::default().action(cc(127)), None);
+            assert!(
+                Navigation {
+                    tap: Some(Trigger {
+                        controller: Some(controller),
+                        program: None
+                    }),
+                    ..nav
+                }
+                .validate(&BTreeMap::new())
+                .is_err()
+            );
+        }
     }
 }

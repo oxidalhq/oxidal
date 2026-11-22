@@ -651,6 +651,39 @@ async fn prepared_song_mixes_save_reopen_cue_and_export_both_stem_counts() {
     .await;
     assert_eq!(timing["source"], source);
     assert_eq!(timing["peaks"].as_array().unwrap().len(), 240);
+    let midi_toggle = async |id: &str, kind: &str| {
+        let (status, receipt) = json_request(
+            &app,
+            "POST",
+            "/player/commands",
+            json!({
+                "requestId":id, "origin":"midi", "expectedCue":asset, "command":{"kind":kind}
+            }),
+        )
+        .await;
+        assert_eq!(status, 200, "{receipt}");
+        let (_, readback) = request(&app, "GET", "/player", Body::empty()).await;
+        let observed: Value = serde_json::from_slice(&readback).unwrap();
+        assert_eq!(observed["repeat"], receipt["repeat"]);
+        assert_eq!(observed["click"], receipt["click"]);
+        receipt
+    };
+    let on = midi_toggle("loop-on", "toggle_repeat").await;
+    assert_eq!(on["repeat"], true);
+    let duplicate = midi_toggle("loop-on", "toggle_repeat").await;
+    assert_eq!(duplicate["revision"], on["revision"]);
+    assert_eq!(
+        midi_toggle("loop-off", "toggle_repeat").await["repeat"],
+        false
+    );
+    let first_click = midi_toggle("click-on", "toggle_click").await;
+    let detected = !timing["beats"].as_array().unwrap().is_empty();
+    assert_eq!(
+        first_click["click"]["kind"],
+        if detected { "detected" } else { "manual" }
+    );
+    assert!(midi_toggle("click-off", "toggle_click").await["click"].is_null());
+
     for (index, command) in [
         json!({"kind":"set_practice_range","range":{"a":0,"b":6000}}),
         json!({"kind":"set_speed","percent":75}),
@@ -681,6 +714,9 @@ async fn prepared_song_mixes_save_reopen_cue_and_export_both_stem_counts() {
         quieter["click"],
         json!({"kind":"manual","bpm_tenths":1200,"first_frame":0,"level_db":-24.0})
     );
+    assert!(midi_toggle("manual-off", "toggle_click").await["click"].is_null());
+    let restored = midi_toggle("manual-on", "toggle_click").await;
+    assert_eq!(restored["click"], quieter["click"]);
     for field in ["track", "frame", "range", "speedPercent", "stems", "state"] {
         assert_eq!(quieter[field], before[field], "{field}");
     }

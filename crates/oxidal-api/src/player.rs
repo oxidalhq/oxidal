@@ -137,6 +137,8 @@ pub enum StemEdit {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum PlayerCommand {
     TogglePlay,
+    ToggleRepeat,
+    ToggleClick,
     Play,
     Pause,
     Stop,
@@ -245,6 +247,7 @@ struct Inner {
     repeat: bool,
     range: Option<LoopRange>,
     click: Option<Click>,
+    last_click: Option<Click>,
     speed: Option<u16>,
     stems: Option<(LiveStems, MixRecipe)>,
     muted_part: Option<PlayerPart>,
@@ -369,6 +372,7 @@ impl Player {
             repeat: false,
             range: None,
             click: None,
+            last_click: None,
             speed: None,
             stems: None,
             muted_part: None,
@@ -527,6 +531,7 @@ fn cue(inner: &mut Inner, manifest: &MediaManifest, rate: u32) {
     inner.muted_part = None;
     inner.range = None;
     inner.click = None;
+    inner.last_click = None;
     inner.speed = None;
     inner.lease = None;
     inner.frame = 0;
@@ -747,6 +752,42 @@ pub(crate) async fn apply(
     result
 }
 
+/// Resume the last click for this cue. A first press follows the same beat grid
+/// or manual 120 BPM fallback as the practice controls.
+async fn toggled_click(shared: &Shared, inner: &Inner) -> Result<Option<Click>, Refusal> {
+    if inner.click.is_some() {
+        return Ok(None);
+    }
+    if let Some(last) = inner.last_click {
+        return Ok(Some(last));
+    }
+    let id = inner
+        .track
+        .as_ref()
+        .ok_or((StatusCode::CONFLICT, "Choose a track first".into()))?
+        .id
+        .clone();
+    let store = store(shared)?;
+    let timing = tokio::task::spawn_blocking(move || crate::timing::load(&store, &id))
+        .await
+        .ok()
+        .and_then(Result::ok)
+        .flatten()
+        .filter(|result| !result.beats.is_empty())
+        .and_then(|result| MediaId::parse(&result.source));
+    Ok(Some(match timing {
+        Some(timing) => Click::Detected {
+            timing,
+            level_db: -12.0,
+        },
+        None => Click::Manual {
+            bpm_tenths: 1200,
+            first_frame: 0,
+            level_db: -12.0,
+        },
+    }))
+}
+
 async fn run(
     shared: &Shared,
     inner: &mut Inner,
@@ -767,11 +808,16 @@ async fn run(
     let mut persist = false;
     inner.notice = None;
     match request.command {
-        PlayerCommand::TogglePlay => {
-            let command = if inner.state == PlayerState::Playing {
-                PlayerCommand::Pause
-            } else {
-                PlayerCommand::Play
+        PlayerCommand::TogglePlay | PlayerCommand::ToggleRepeat | PlayerCommand::ToggleClick => {
+            let command = match request.command {
+                PlayerCommand::ToggleRepeat => PlayerCommand::SetRepeat {
+                    repeat: !inner.repeat,
+                },
+                PlayerCommand::ToggleClick => PlayerCommand::SetClick {
+                    click: toggled_click(shared, inner).await?,
+                },
+                _ if inner.state == PlayerState::Playing => PlayerCommand::Pause,
+                _ => PlayerCommand::Play,
             };
             return Box::pin(run(
                 shared,
@@ -952,6 +998,7 @@ async fn run(
                 send(shared, command).await?;
             }
             inner.click = Some(click);
+            inner.last_click = Some(click);
         }
         PlayerCommand::SetClick { click } => {
             let Some(track) = &inner.track else {
@@ -993,6 +1040,9 @@ async fn run(
             {
                 inner.click = previous;
                 return Err(error);
+            }
+            if click.is_some() {
+                inner.last_click = click;
             }
         }
         PlayerCommand::SetSpeed { percent } => {
