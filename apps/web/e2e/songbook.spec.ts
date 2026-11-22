@@ -165,6 +165,12 @@ test('songbook dock remembers placement through close, rotation and reload witho
     .click();
   await open();
   await expect(panel).toHaveAttribute('data-place', 'float');
+  const floatingLeft = await panel.evaluate(
+    (element) => getComputedStyle(element).left,
+  );
+  const floatingWidth = await panel.evaluate(
+    (element) => getComputedStyle(element).width,
+  );
   await page.setViewportSize({ width: 393, height: 852 });
   await expect(
     page.getByRole('heading', { name: 'Chord sheet', exact: true }),
@@ -174,6 +180,8 @@ test('songbook dock remembers placement through close, rotation and reload witho
   ).toHaveCount(0);
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(panel).toHaveAttribute('data-place', 'float');
+  await expect(panel).toHaveCSS('left', floatingLeft);
+  await expect(panel).toHaveCSS('width', floatingWidth);
   const box = await panel.boundingBox();
   expect(box).not.toBeNull();
   expect(box!.x).toBeGreaterThanOrEqual(0);

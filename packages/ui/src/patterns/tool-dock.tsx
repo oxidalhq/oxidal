@@ -45,6 +45,7 @@ export type DockTool = {
 };
 
 const WIDTH = '22rem';
+const FLOAT_VIEWPORT = '(min-width: 48rem)';
 
 /**
  * Keeping things open beside the page. Anything that opens as a sheet can
@@ -86,7 +87,7 @@ export function ToolDock({
   className?: string;
 }) {
   const wide = useMedia('(min-width: 64rem)');
-  const tablet = useMedia('(min-width: 48rem)');
+  const tablet = useMedia(FLOAT_VIEWPORT);
   const [localSpots, setLocalSpots] = React.useState<
     Record<string, ToolPosition>
   >({});
@@ -102,6 +103,9 @@ export function ToolDock({
   };
   React.useEffect(() => {
     const keepReachable = () => {
+      // Phone layouts show sheets. Keep each floating window's saved rectangle
+      // until the viewer returns to a viewport that can display it.
+      if (!window.matchMedia?.(FLOAT_VIEWPORT).matches) return;
       let changed = false;
       const next = { ...spots };
       for (const [id, spot] of Object.entries(spots)) {
@@ -498,6 +502,7 @@ function ToolPanel({
     const element = box.current;
     if (!float || !element || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(() => {
+      if (!window.matchMedia?.(FLOAT_VIEWPORT).matches) return;
       const width = Math.round(element.offsetWidth);
       const height = Math.round(element.offsetHeight);
       if (width !== spot.width || height !== spot.height)
