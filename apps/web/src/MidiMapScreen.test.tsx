@@ -946,3 +946,60 @@ it('names blocking preset and retained controller conflicts before a reset', asy
   ).toBeDisabled();
   expect(updateMidiMap).not.toHaveBeenCalled();
 });
+
+it('checks each switch against new device messages and saves the named layout in one update', async () => {
+  const user = userEvent.setup();
+  arrange();
+  function view(first: number, programs: number[], listening: boolean) {
+    const mixed = rig();
+    const recent = programs.map((program, index) => ({
+      seq: first + index,
+      source: 0,
+      message: { kind: 'program' as const, channel: 2, program },
+    }));
+    Object.assign(mixed.control!.midi!, {
+      recent,
+      events: recent.at(-1)?.seq,
+      learning: listening,
+    });
+    return (
+      <MidiMapScreen
+        connected
+        native={{ phase: 'stopped' } as AudioState}
+        mixed={mixed}
+        onMapApplied={vi.fn(async () => undefined)}
+      />
+    );
+  }
+  const screenView = render(view(20, [1, 2, 3, 0], false));
+  const setup = within(
+    await screen.findByRole('region', { name: 'Controller setup' }),
+  );
+  await user.click(setup.getByRole('button', { name: 'Guided setup' }));
+  await user.click(setup.getByRole('button', { name: 'Next' }));
+  await user.click(setup.getByRole('button', { name: 'Next' }));
+  await user.click(setup.getByRole('button', { name: 'Check pedal' }));
+  expect(setup.getByText(/0 of 4 switches received/)).toBeVisible();
+  // The device window is already full. Its length stays constant while seq advances.
+  screenView.rerender(view(24, [0, 1, 2, 3], true));
+  expect(setup.getByText(/4 of 4 switches received/)).toBeVisible();
+  await user.click(setup.getByRole('button', { name: 'Next' }));
+  await user.type(
+    setup.getByRole('textbox', { name: 'Layout name' }),
+    'Rehearsal pedal',
+  );
+  await user.click(setup.getByRole('button', { name: 'Save named layout' }));
+  expect(await setup.findByText('Saved Rehearsal pedal.')).toBeVisible();
+  expect(updateMidiMap).toHaveBeenCalledTimes(1);
+  expect(updateMidiMap).toHaveBeenCalledWith(
+    expect.objectContaining({
+      entries: map.entries,
+      saved_layouts: [
+        expect.objectContaining({
+          name: 'Rehearsal pedal',
+          profile: 'chocolate',
+        }),
+      ],
+    }),
+  );
+});

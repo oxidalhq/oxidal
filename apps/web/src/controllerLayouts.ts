@@ -5,6 +5,23 @@ type Trigger = NonNullable<Navigation['previous']>;
 type Template = NonNullable<MidiMap['template']>;
 
 /** What one physical switch sends and what Oxidal does with it. */
+export type Message = {
+  kind: string;
+  program?: number;
+  controller?: number;
+  value?: number;
+};
+export const sameMessage = (
+  row: SwitchRow,
+  message: Message | null | undefined,
+) =>
+  !!message &&
+  (row.message.program != null
+    ? message.kind === 'program' && message.program === row.message.program
+    : message.kind === 'control' &&
+      message.controller === row.message.controller &&
+      (message.value ?? 0) >= 64);
+
 export type SwitchRow = {
   switch: string;
   sends: string;
@@ -239,25 +256,6 @@ export function presetTriggerConflicts(
       if (uses(null, b.controller)) found.push(label(press(b.controller)));
   }
   return found;
-}
-
-/** True once a received message is the one the layout's check asks you to press. */
-export function checkPassed(
-  layout: Layout,
-  messages: {
-    kind: string;
-    program?: number;
-    controller?: number;
-    value?: number;
-  }[],
-): boolean {
-  return messages.some((m) =>
-    layout.check.program != null
-      ? m.kind === 'program' && m.program === layout.check.program
-      : m.kind === 'control' &&
-        m.controller === layout.check.controller &&
-        (m.value ?? 0) >= 64,
-  );
 }
 
 type SavedLayout = NonNullable<MidiMap['saved_layouts']>[number];

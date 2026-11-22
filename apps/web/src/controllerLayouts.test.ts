@@ -2,9 +2,9 @@ import { expect, it } from 'vitest';
 
 import {
   applyLayout,
-  checkPassed,
   layoutConflicts,
   profiles,
+  sameMessage,
 } from './controllerLayouts';
 
 const layout = (profile: string, id: string) =>
@@ -61,19 +61,6 @@ it('names existing mappings that already use a number the layout needs', () => {
   ).toEqual([]);
 });
 
-it('passes the message check only for the expected press, not a release', () => {
-  const hybrid = layout('generic', 'hybrid');
-  expect(
-    checkPassed(hybrid, [{ kind: 'control', controller: 18, value: 0 }]),
-  ).toBe(false);
-  expect(
-    checkPassed(hybrid, [{ kind: 'control', controller: 18, value: 127 }]),
-  ).toBe(true);
-  const presets = layout('chocolate', 'presets');
-  expect(checkPassed(presets, [{ kind: 'program', program: 1 }])).toBe(false);
-  expect(checkPassed(presets, [{ kind: 'program', program: 0 }])).toBe(true);
-});
-
 it('saves the current template and triggers under a unique readable id', async () => {
   const { layoutFromCurrent, savedToLayout, describeSaved } =
     await import('./controllerLayouts');
@@ -107,4 +94,17 @@ it('saves the current template and triggers under a unique readable id', async (
     protect: null,
     tuner: null,
   });
+});
+
+it('recognizes a switch press and ignores its release and other switches', () => {
+  const row = layout('generic', 'hybrid').switches[2]!;
+  expect(sameMessage(row, { kind: 'control', controller: 18, value: 0 })).toBe(
+    false,
+  );
+  expect(
+    sameMessage(row, { kind: 'control', controller: 18, value: 127 }),
+  ).toBe(true);
+  const program = layout('chocolate', 'presets').switches[0]!;
+  expect(sameMessage(program, { kind: 'program', program: 1 })).toBe(false);
+  expect(sameMessage(program, { kind: 'program', program: 0 })).toBe(true);
 });

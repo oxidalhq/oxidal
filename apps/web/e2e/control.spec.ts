@@ -1138,3 +1138,36 @@ test('rig tuner is accessible outside preset authoring and survives rotation', a
     await expect(dialog).toHaveCount(0);
   }
 });
+
+test('controller guide saves and reopens a named layout without a physical pedal', async ({
+  page,
+}, testInfo) => {
+  const name = `Guide ${testInfo.project.name}`;
+  await page.goto('/#settings/midi');
+  const setup = page.getByRole('region', { name: 'Controller setup' });
+  await setup.getByRole('button', { name: 'Guided setup' }).click();
+  await expect(
+    setup.getByRole('combobox', { name: 'Controller profile' }),
+  ).toBeVisible();
+  await setup.getByRole('button', { name: 'Next' }).click();
+  await expect(
+    setup.getByRole('radiogroup', { name: 'Starting layout' }),
+  ).toBeVisible();
+  await setup.getByRole('button', { name: 'Next' }).click();
+  await expect(setup.getByText(/0 of 4 switches received/)).toBeVisible();
+  await setup
+    .getByRole('button', { name: 'Continue without checking all switches' })
+    .click();
+  await setup.getByLabel('Layout name').fill(name);
+  await setup.getByRole('button', { name: 'Save named layout' }).click();
+  await expect(setup.getByText(`Saved ${name}.`)).toBeVisible();
+  await page.reload();
+  const saved = setup.getByRole('group', { name: 'Saved layouts' });
+  await expect(
+    saved.getByRole('button', { name: `Apply ${name}`, exact: true }),
+  ).toBeVisible();
+  await saved.getByRole('button', { name: `Delete ${name}` }).click();
+  await expect(
+    saved.getByRole('button', { name: `Apply ${name}`, exact: true }),
+  ).toHaveCount(0);
+});

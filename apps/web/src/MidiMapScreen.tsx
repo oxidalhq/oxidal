@@ -890,7 +890,10 @@ export function MidiMapScreen({
             onChange={(extra_inputs) =>
               void replaceMap({ ...map, extra_inputs }).catch(() => undefined)
             }
-            onLearnSource={setLearnSource}
+            onLearnSource={(source) => {
+              setChecking(false);
+              setLearnSource(source);
+            }}
           />
         </div>
         <div className="min-w-0 md:col-span-2">
@@ -947,6 +950,7 @@ export function MidiMapScreen({
       </div>
 
       <ControllerSetup
+        key={learnSource}
         map={map}
         nameOf={(entry) =>
           groups.find((group) => sameEntry(group.entry, entry))?.name ??
@@ -956,11 +960,19 @@ export function MidiMapScreen({
           sourceRecent.at(-1)?.message ??
           (learnSource === 0 && !status?.recent?.length ? status?.last : null)
         }
-        recent={sourceRecent.map((item) => item.message)}
+        recent={sourceRecent}
         checking={checking}
-        canCheck={sourceReady && !learning && !navLearning}
+        listening={!!status?.learning}
+        canCheck={sourceReady && !learning && !navLearning && !backingLearning}
         busy={busy}
         onChecking={setChecking}
+        onSaveGuided={async (content, saved_layouts) => {
+          try {
+            return !!(await replaceMap({ ...map, ...content, saved_layouts }));
+          } catch {
+            return false;
+          }
+        }}
         onApply={(content) =>
           void replaceMap({ ...map, ...content }).catch(() => undefined)
         }
