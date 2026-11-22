@@ -45,7 +45,7 @@ it('requires confirmation and rechecks network state before requesting device po
     }),
   );
   expect(deviceNetwork).toHaveBeenCalledTimes(3);
-  expect(await screen.findByText(/Request accepted/)).toBeInTheDocument();
+  expect(await screen.findByText(/Restart requested/)).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Restart device' })).toBeDisabled();
   expect(
     screen.getByRole('button', { name: 'Shut down device' }),

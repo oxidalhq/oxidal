@@ -196,7 +196,10 @@ export function AppShell({
             <ResourceStrip readings={readings} state={resourceState} />
           </aside>
         )}
-        <NoticeTray />
+        <NoticeTray
+          placement="inline"
+          className="absolute top-full right-page z-tray mt-2 w-[calc(100%-2*var(--spacing-page))]"
+        />
       </div>
       <main
         data-slot="app-content"

@@ -23,7 +23,7 @@ import { useDeviceNetwork } from './useDeviceNetwork';
  * @see docs/device-service.md
  */
 export function NetworkSettings({ connected }: { connected: boolean }) {
-  const { state, error, readError, busy, refresh, run } =
+  const { state, error, readError, busy, refresh, run, joinedSsid } =
     useDeviceNetwork(connected);
   const [iface, setIface] = useState('');
   const [edit, setEdit] = useState<Omit<
@@ -138,6 +138,7 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
           state?.pending
             ? {
                 secondsLeft: state.pending.seconds_remaining,
+                label: joinedSsid,
                 applying:
                   state.pending.phase !== 'awaiting_confirmation'
                     ? 'Connecting… Reconnect your browser to the device.'
@@ -280,7 +281,13 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
               onCancel={() => setEdit(null)}
               onApply={(change) => {
                 setEdit(null);
-                void run(change);
+                const ssid =
+                  change.type === 'join' || change.type === 'join_open'
+                    ? change.ssid
+                    : change.type === 'connect'
+                      ? state?.saved.find((p) => p.uuid === change.uuid)?.ssid
+                      : undefined;
+                void run(change, ssid ?? undefined);
               }}
             />
           )

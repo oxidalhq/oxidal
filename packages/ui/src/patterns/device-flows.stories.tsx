@@ -39,9 +39,13 @@ export const Di: StoryObj = {
   render: () => <DiReampsDemo />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: 'Record DI' }));
-    await userEvent.click(canvas.getByRole('button', { name: 'Record DI' }));
-    await expect(canvas.getByText('Take 3')).toBeVisible();
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Record DI', pressed: false }),
+    );
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Record DI', pressed: true }),
+    );
+    await expect(await canvas.findByText('Take 3')).toBeVisible();
   },
 };
 

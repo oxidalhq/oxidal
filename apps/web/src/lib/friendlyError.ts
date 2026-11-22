@@ -82,7 +82,7 @@ const causes: [RegExp, string][] = [
   ],
   [
     /storage is locked|unlock storage|read-only/i,
-    'Device storage is locked. Unlock it in Settings → Device, then try again.',
+    'Device storage is locked. Unlock it in Settings → Maintenance, then try again.',
   ],
   [
     /no space|disk full|enospc/i,

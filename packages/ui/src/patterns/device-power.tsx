@@ -11,6 +11,16 @@ import {
 import { Description } from '../components/ui/text';
 import { SettingGroup, SettingRow } from './settings-page';
 
+export function PowerReceipt({ action }: { action: 'reboot' | 'shutdown' }) {
+  return (
+    <p role="status">
+      {action === 'reboot'
+        ? 'Restart requested. Oxidal will reconnect when ready.'
+        : 'Shutdown requested. Wait for the device to power down before unplugging it.'}
+    </p>
+  );
+}
+
 /** Device power controls; the caller confirms availability and pending work.
  * The pattern never sends a command when opening or closing the review.
  */

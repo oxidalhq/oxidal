@@ -8,7 +8,7 @@ export function openFirstRun() {
     );
     localStorage.setItem('oxidal.first-run', 'seen');
     if (!returning)
-      history.replaceState(history.state, '', '#settings/essentials');
+      history.replaceState(history.state, '', '#settings/essentials/setup');
   } catch {
     // The guide remains available in Settings when this browser refuses storage.
   }

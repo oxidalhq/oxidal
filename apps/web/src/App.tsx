@@ -30,7 +30,18 @@ import {
   type FirstRunRoute,
 } from '@oxidal/design-system/patterns/first-run';
 import { SettingsPage } from '@oxidal/design-system/patterns/settings-page';
+import {
+  SettingGroup,
+  SettingRow,
+} from '@oxidal/design-system/patterns/settings-page';
 import { SETTINGS_SECTIONS } from '@oxidal/design-system/patterns/settings-sections';
+import {
+  LibrarySkeleton,
+  LoadingScreen,
+  PlayerSkeleton,
+  RigSkeleton,
+  SettingsSkeleton,
+} from '@oxidal/design-system/patterns/skeletons';
 
 import { About } from './About';
 import {
@@ -82,6 +93,7 @@ import {
   replaceWorkspaceLocation,
   useSectionLocation,
   useWorkspaceNavigation,
+  WORKSPACE_LOCATION_EVENT,
   WorkspaceMemory,
 } from './workspaceMemory';
 
@@ -114,6 +126,19 @@ function InstrumentApp() {
     playingName !== null || graphName !== null || mixedName !== null;
   const [state, setState] = useState<Snapshot | null>(null);
   const [connected, setConnected] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(
+    () => location.hash === '#settings/essentials/setup',
+  );
+  useEffect(() => {
+    const sync = () =>
+      setSetupOpen(location.hash === '#settings/essentials/setup');
+    window.addEventListener('hashchange', sync);
+    window.addEventListener(WORKSPACE_LOCATION_EVENT, sync);
+    return () => {
+      window.removeEventListener('hashchange', sync);
+      window.removeEventListener(WORKSPACE_LOCATION_EVENT, sync);
+    };
+  }, []);
   const [storage, setStorage] = useState<StorageState | null>(null);
   const [simulator, setSimulator] = useState(false);
   // Example state is never a fallback for a stopped or unavailable audio engine.
@@ -513,6 +538,7 @@ function InstrumentApp() {
       bottomBar={<NowPlaying />}
     >
       <PerformanceTools
+        stage={displayMode === 'stage'}
         tunerOpen={tunerOpen}
         connected={connected}
         slow={displayMode === 'epaper'}
@@ -530,6 +556,11 @@ function InstrumentApp() {
           }
         >
           <div
+            aria-hidden={
+              (view === 'rig' &&
+                (playingName !== null || mixedName !== null)) ||
+              undefined
+            }
             className={
               view === 'settings' ||
               view === 'library' ||
@@ -653,7 +684,24 @@ function InstrumentApp() {
             </div>
           )}
           {!state ? (
-            <Loading label="Connecting to Oxidal…" />
+            <LoadingScreen
+              label="Connecting to Oxidal"
+              skeleton={
+                view === 'library' ? (
+                  location.hash === '#library/backing' ? (
+                    <PlayerSkeleton />
+                  ) : (
+                    <LibrarySkeleton
+                      artwork={location.hash === '#library/tone3000'}
+                    />
+                  )
+                ) : view === 'rig' ? (
+                  <RigSkeleton />
+                ) : (
+                  <SettingsSkeleton />
+                )
+              }
+            />
           ) : view === 'guitars' ? (
             <div className="-mx-page">
               <GuitarSettings />
@@ -697,7 +745,14 @@ function InstrumentApp() {
                   developmentSimulator || graphPresent || mixedPresent
                 }
               />
-              <Suspense fallback={<Loading label="Loading the rig…" />}>
+              <Suspense
+                fallback={
+                  <LoadingScreen
+                    label="Loading the rig"
+                    skeleton={<RigSkeleton />}
+                  />
+                }
+              >
                 <FeatureBoundary name="the mixed rig">
                   <MixedRig
                     connected={connected}
@@ -836,12 +891,48 @@ function InstrumentApp() {
                   leaveScreen(() => setSettingsSection(section.id));
               }}
             >
-              {settingsSection === 'essentials' && (
-                <FirstRun
-                  onStep={openSetupStep}
-                  onDone={() => setView('rig')}
-                />
-              )}
+              {settingsSection === 'essentials' &&
+                (setupOpen ? (
+                  <FirstRun
+                    onStep={(route) => {
+                      setSetupOpen(false);
+                      openSetupStep(route);
+                    }}
+                    onDone={() => {
+                      setSetupOpen(false);
+                      setView('rig');
+                    }}
+                  />
+                ) : (
+                  <>
+                    <Suspense
+                      fallback={<Loading label="Reading device checks…" />}
+                    >
+                      <SoundCheck
+                        connected={connected}
+                        displayMode={displayMode}
+                        onGuitars={() => setView('guitars')}
+                        onLibrary={() => setView('library')}
+                        onAudioSetup={() => setSettingsSection('audio')}
+                        beforePlay={{
+                          storage: storage?.available
+                            ? (storage.current ?? null)
+                            : null,
+                          onStorage: () => setSettingsSection('maintenance'),
+                          onLevels: () => setView('monitor'),
+                        }}
+                      />
+                    </Suspense>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        window.location.hash = 'settings/essentials/setup';
+                      }}
+                    >
+                      Open setup guide
+                    </Button>
+                  </>
+                ))}
               {settingsSection === 'display' && (
                 <DisplaySettings
                   mode={displayMode}
@@ -905,21 +996,40 @@ function InstrumentApp() {
               )}
               {settingsSection === 'device' && (
                 <>
-                  <StorageLock
-                    connected={connected}
-                    state={storage}
-                    onState={setStorage}
-                  />
+                  <SettingGroup title="This device">
+                    <SettingRow label="Memory">
+                      {resource.readings.ram
+                        ? `${(resource.readings.ram.total / 1024).toFixed(1)} GiB`
+                        : 'Unavailable'}
+                    </SettingRow>
+                    <SettingRow label="Temperature">
+                      {resource.readings.temperature != null
+                        ? `${resource.readings.temperature.toFixed(0)} °C`
+                        : 'Unavailable'}
+                    </SettingRow>
+                  </SettingGroup>
                   <DevicePower connected={connected} />
                 </>
               )}
               {settingsSection === 'maintenance' && (
                 <>
-                  <p className="caption">
-                    Device maintenance · control protocol {state.protocol}.
-                    Audio setup and monitoring remain available from their own
-                    pages.
-                  </p>
+                  <SettingGroup title="Storage">
+                    <SettingRow
+                      label="Backup"
+                      caption="Presets, set lists, descriptions, MIDI maps and local NAM and IR files."
+                    >
+                      <Button size="sm" variant="outline" asChild>
+                        <a href="/api/v1/backup/library" download>
+                          Download backup
+                        </a>
+                      </Button>
+                    </SettingRow>
+                  </SettingGroup>
+                  <StorageLock
+                    connected={connected}
+                    state={storage}
+                    onState={setStorage}
+                  />
                   <FeatureBoundary name="the terminal">
                     <Suspense fallback={<Loading label="Loading terminal…" />}>
                       <WebTerminal />

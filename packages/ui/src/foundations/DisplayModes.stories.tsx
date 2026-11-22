@@ -75,7 +75,11 @@ export const SideBySide: StoryObj = {
   render: () => (
     <div className="grid grid-cols-1 gap-px bg-border md:grid-cols-2 xl:grid-cols-4">
       {MODES.map(([mode, label]) => (
-        <div key={mode} data-display={mode} className="grid gap-0">
+        <div
+          key={mode}
+          data-display={mode}
+          className="display-sample grid gap-0"
+        >
           <div className="bg-background px-6 pt-4 text-foreground">
             <Caption className="text-xs">{label}</Caption>
           </div>

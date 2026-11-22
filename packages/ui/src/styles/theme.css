@@ -8,7 +8,8 @@
    Tailwind utilities and hand-written CSS read the same variable. */
 
 /* ---------- Colour (per display mode) ---------- */
-:root {
+:root,
+.display-sample {
   color-scheme: light;
   --background: #f3f1ec;
   --foreground: #1b1a17;
@@ -103,7 +104,7 @@
 }
 
 /* Night (stored as `stage`): dark stage, no pure white, darkest faceplate. */
-:root[data-display='stage'] {
+:is(:root, .display-sample)[data-display='stage'] {
   color-scheme: dark;
   --background: #161513;
   --foreground: #ece9e2;
@@ -139,7 +140,7 @@
 }
 
 /* Sunlight: pure black on white; secondary text stays black; no shadows. */
-:root[data-display='sunlight'] {
+:is(:root, .display-sample)[data-display='sunlight'] {
   --background: #ffffff;
   --foreground: #000000;
   --card: #ffffff;
@@ -174,7 +175,7 @@
 }
 
 /* E-paper (BOOX): black and white only; no greys that dither; no shadows; no motion. */
-:root[data-display='epaper'] {
+:is(:root, .display-sample)[data-display='epaper'] {
   --background: #ffffff;
   --foreground: #000000;
   --card: #ffffff;
@@ -211,9 +212,9 @@
   --enclosure-border: #000000;
   --chart-secondary: #000000;
 }
-:root[data-display='sunlight'],
-:root[data-display='stage'],
-:root[data-display='epaper'] {
+:is(:root, .display-sample)[data-display='sunlight'],
+:is(:root, .display-sample)[data-display='stage'],
+:is(:root, .display-sample)[data-display='epaper'] {
   --touch-target: max(48px, 3rem);
 }
 
@@ -434,7 +435,8 @@
   }
 }
 /* Preserve pointer translation while removing decorative lift. */
-:root[data-display='epaper'] [data-slot='chain-block'][data-lifted] {
+:is(:root, .display-sample)[data-display='epaper']
+  [data-slot='chain-block'][data-lifted] {
   scale: none;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -454,9 +456,9 @@
   }
 }
 
-:root[data-display='epaper'] *,
-:root[data-display='epaper'] *::before,
-:root[data-display='epaper'] *::after {
+:is(:root, .display-sample)[data-display='epaper'] *,
+:is(:root, .display-sample)[data-display='epaper'] *::before,
+:is(:root, .display-sample)[data-display='epaper'] *::after {
   animation: none !important;
   transition: none !important;
 }
@@ -467,9 +469,9 @@
     --spacing-touch: max(44px, 2.75rem);
     --touch-target: max(44px, 2.75rem);
   }
-  :root[data-display='stage'],
-  :root[data-display='sunlight'],
-  :root[data-display='epaper'] {
+  :is(:root, .display-sample)[data-display='stage'],
+  :is(:root, .display-sample)[data-display='sunlight'],
+  :is(:root, .display-sample)[data-display='epaper'] {
     --touch-target: max(48px, 3rem);
   }
 }

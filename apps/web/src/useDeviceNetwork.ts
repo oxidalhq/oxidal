@@ -10,6 +10,10 @@ export function useDeviceNetwork(connected: boolean) {
   const [error, setError] = useState('');
   const [readError, setReadError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [joined, setJoined] = useState<{
+    transaction: string;
+    ssid: string;
+  } | null>(null);
   const owner = useRef({
     active: false,
     generation: 0,
@@ -63,7 +67,7 @@ export function useDeviceNetwork(connected: boolean) {
   }, [refresh]);
 
   const run = useCallback(
-    async (command: NetworkCommand) => {
+    async (command: NetworkCommand, joinedSsid?: string) => {
       const current = owner.current;
       if (
         !connected ||
@@ -87,6 +91,12 @@ export function useDeviceNetwork(connected: boolean) {
           setState(next);
           setReadError('');
           current.stale = false;
+          if (next.pending && joinedSsid)
+            setJoined({
+              transaction: next.pending.transaction,
+              ssid: joinedSsid,
+            });
+          else if (!next.pending) setJoined(null);
           succeeded = true;
         }
       } catch (failure) {
@@ -115,5 +125,11 @@ export function useDeviceNetwork(connected: boolean) {
     [connected, refresh],
   );
 
-  return { state, error, readError, busy, refresh, run };
+  const joinedSsid =
+    joined &&
+    joined.transaction === state?.pending?.transaction &&
+    state.pending.phase === 'awaiting_confirmation'
+      ? joined.ssid
+      : undefined;
+  return { state, error, readError, busy, refresh, run, joinedSsid };
 }

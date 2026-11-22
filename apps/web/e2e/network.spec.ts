@@ -175,7 +175,7 @@ test('network setup uses explicit open, saved and radio operations with interfac
     .click();
   await page
     .getByRole('dialog')
-    .getByRole('button', { name: 'Keep this connection' })
+    .getByRole('button', { name: 'Keep Same name' })
     .click();
   expect(commands.find((command) => command.type === 'connect')).toEqual({
     type: 'connect',
@@ -322,7 +322,7 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
     interface: 'wlan0',
   });
   await expect(
-    page.getByRole('dialog', { name: 'Keep this connection?' }),
+    page.getByRole('dialog', { name: 'Keep Studio: Wi-Fi?' }),
   ).toBeVisible();
   await page.reload();
   await expect(

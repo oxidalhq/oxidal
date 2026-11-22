@@ -13,7 +13,9 @@ test('IR discovery keeps its empty state full width and returns keyboard focus',
     page.getByRole('complementary', { name: 'DSP and system resources' }),
   ).toHaveAttribute('data-connected', 'true');
   await openSounds(page, 'ir');
-  const launch = page.getByRole('button', { name: 'TONE3000', exact: true });
+  const launch = page
+    .getByRole('region', { name: 'IRs library' })
+    .getByRole('button', { name: 'TONE3000', exact: true });
   await launch.click();
   const dialog = page.getByRole('dialog', { name: 'Get IRs' });
   const empty = dialog.getByRole('status');

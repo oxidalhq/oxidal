@@ -6,7 +6,7 @@ test('first run opens setup and every step reaches its working destination', asy
   page,
 }, info) => {
   await page.goto('/');
-  await expect(page).toHaveURL(/#settings\/essentials$/);
+  await expect(page).toHaveURL(/#settings\/essentials\/setup$/);
   await expect(
     page.getByRole('heading', { name: "Welcome. Let's get you playing." }),
   ).toBeVisible();
@@ -22,7 +22,7 @@ test('first run opens setup and every step reaches its working destination', asy
     ['Get a tone', /#library\/oxidal$/, 'Oxidal sounds'],
   ] as const;
   for (const [title, url, destination] of steps) {
-    await page.goto('/#settings/essentials');
+    await page.goto('/#settings/essentials/setup');
     await page
       .getByRole('button', { name: `Open: ${title}`, exact: true })
       .click();
@@ -36,7 +36,7 @@ test('first run opens setup and every step reaches its working destination', asy
     await page.reload();
     await expect(page).toHaveURL(url);
   }
-  await page.goto('/#settings/essentials');
+  await page.goto('/#settings/essentials/setup');
   await page.getByRole('button', { name: 'Go to Rig', exact: true }).click();
   await expect(page).toHaveURL(/#rig$/);
 });
@@ -49,4 +49,21 @@ test('first run preserves an explicit library link on a new browser', async ({
   await expect(
     page.getByRole('heading', { name: "Welcome. Let's get you playing." }),
   ).toHaveCount(0);
+});
+
+test('returning player sees current checks and can reopen the setup guide', async ({
+  page,
+}) => {
+  await page.goto('/#settings/essentials');
+  const checks = page.getByRole('list', { name: 'Before you play' });
+  await expect(
+    checks.getByText('Choose and start an audio interface'),
+  ).toBeVisible();
+  await checks.getByRole('button', { name: 'Audio setup' }).click();
+  await expect(page).toHaveURL(/#settings\/audio$/);
+  await page.goto('/#settings/essentials');
+  await page.getByRole('button', { name: 'Open setup guide' }).click();
+  await expect(
+    page.getByRole('heading', { name: "Welcome. Let's get you playing." }),
+  ).toBeVisible();
 });

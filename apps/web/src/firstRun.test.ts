@@ -11,7 +11,7 @@ afterEach(() => {
 it('opens setup once on a plain first visit and preserves history state', () => {
   history.replaceState({ key: 'existing' }, '', '/');
   openFirstRun();
-  expect(location.hash).toBe('#settings/essentials');
+  expect(location.hash).toBe('#settings/essentials/setup');
   expect(history.state).toEqual({ key: 'existing' });
   history.replaceState(null, '', '/');
   openFirstRun();

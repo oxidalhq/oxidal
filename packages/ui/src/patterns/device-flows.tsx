@@ -142,6 +142,32 @@ export function BlockEq({
   );
 }
 
+export function RecordDiToggle({
+  recording,
+  disabled = false,
+  onRecording,
+}: {
+  recording: boolean;
+  disabled?: boolean;
+  onRecording: (on: boolean) => void;
+}) {
+  return (
+    <Toggle
+      size="sm"
+      disabled={disabled}
+      pressed={recording}
+      onPressedChange={onRecording}
+      aria-label="Record DI"
+    >
+      <Microphone />{' '}
+      <StableLabel
+        value={recording ? 'Stop and keep' : 'Record DI'}
+        options={['Record DI', 'Stop and keep']}
+      />
+    </Toggle>
+  );
+}
+
 export type DiTake = {
   id: string;
   name: string;
@@ -173,18 +199,7 @@ export function DiReamps({
     <Card>
       <CardHeader>
         <CardTitle>DI and reamps</CardTitle>
-        <Toggle
-          size="sm"
-          pressed={recording}
-          onPressedChange={onRecording}
-          aria-label="Record DI"
-        >
-          <Microphone />{' '}
-          <StableLabel
-            value={recording ? 'Stop and keep' : 'Record DI'}
-            options={['Record DI', 'Stop and keep']}
-          />
-        </Toggle>
+        <RecordDiToggle recording={recording} onRecording={onRecording} />
       </CardHeader>
       {recording && (
         <Caption role="status">

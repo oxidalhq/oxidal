@@ -341,7 +341,9 @@ test('guitar profiles explain automatic Levels use and guard removal', async ({
     page.locator('[data-slot=badge]').filter({ hasText: /^Playing$/ }),
   ).toBeVisible();
   await expect(
-    page.getByText('Level reference', { exact: true }),
+    page
+      .getByRole('region', { name: 'Guitar profiles' })
+      .getByText('Level reference', { exact: true }),
   ).toBeVisible();
 
   await expect(

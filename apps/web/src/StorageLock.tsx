@@ -113,7 +113,8 @@ export function StorageLock({
                   disabled={!connected || busy}
                   onClick={() => setReviewMode(next)}
                 >
-                  <ArrowClockwise aria-hidden="true" /> Reboot now
+                  <ArrowClockwise aria-hidden="true" /> Restart into{' '}
+                  {next === 'locked' ? 'Locked' : 'Unlocked'} mode…
                 </Button>
               </div>
             )}

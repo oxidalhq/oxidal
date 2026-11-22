@@ -2,7 +2,10 @@ import { ArrowClockwise } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
-import { DevicePower as DevicePowerView } from '@oxidal/design-system/patterns/device-power';
+import {
+  DevicePower as DevicePowerView,
+  PowerReceipt,
+} from '@oxidal/design-system/patterns/device-power';
 
 import { deviceNetwork, type NetworkState } from './api';
 import { friendlyError } from './lib/friendlyError';
@@ -14,7 +17,7 @@ export function DevicePower({ connected }: { connected: boolean }) {
   const [state, setState] = useState<NetworkState | null>(null);
   const [action, setAction] = useState<'reboot' | 'shutdown' | null>(null);
   const [busy, setBusy] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [sent, setSent] = useState<'reboot' | 'shutdown' | null>(null);
   const [error, setError] = useState('');
   const [readError, setReadError] = useState('');
   const [refresh, setRefresh] = useState(0);
@@ -50,7 +53,7 @@ export function DevicePower({ connected }: { connected: boolean }) {
           'Read device status or update the device service for guarded power controls.',
         );
       await deviceNetwork({ type: 'power', action });
-      setSent(true);
+      setSent(action);
       setAction(null);
     } catch (cause) {
       setError(friendlyError(cause, 'change device power'));
@@ -59,7 +62,7 @@ export function DevicePower({ connected }: { connected: boolean }) {
     }
   }
   const disabled =
-    !connected || !state?.available || !!state.pending || busy || sent;
+    !connected || !state?.available || !!state.pending || busy || Boolean(sent);
   return (
     <section aria-label="Device power">
       <DevicePowerView
@@ -99,12 +102,7 @@ export function DevicePower({ connected }: { connected: boolean }) {
                 Device power is unavailable on this installation.
               </p>
             )}
-            {sent && (
-              <p role="status">
-                Request accepted. Restart reconnects when ready; after shutdown,
-                wait for the device to power down before unplugging it.
-              </p>
-            )}
+            {sent && <PowerReceipt action={sent} />}
           </>
         }
       />

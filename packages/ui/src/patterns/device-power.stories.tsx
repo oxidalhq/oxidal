@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, userEvent, within } from 'storybook/test';
 
-import { DevicePower } from './device-power';
+import { DevicePower, PowerReceipt } from './device-power';
 
 const meta: Meta = {
   title: 'Patterns/Device power',
@@ -12,18 +12,16 @@ export default meta;
 
 function Demo() {
   const [action, setAction] = useState<'reboot' | 'shutdown' | null>(null);
-  const [receipt, setReceipt] = useState('');
+  const [receipt, setReceipt] = useState<'reboot' | 'shutdown' | null>(null);
   return (
     <DevicePower
       action={action}
       disabled={Boolean(receipt)}
-      notice={receipt && <p role="status">{receipt}</p>}
+      notice={receipt && <PowerReceipt action={receipt} />}
       onRequest={setAction}
       onCancel={() => setAction(null)}
       onConfirm={() => {
-        setReceipt(
-          `Demo: ${action === 'reboot' ? 'restart' : 'shutdown'} requested.`,
-        );
+        setReceipt(action);
         setAction(null);
       }}
     />
@@ -55,8 +53,8 @@ export const ReviewBeforePower: StoryObj = {
     await userEvent.click(
       shutdown.getByRole('button', { name: 'Confirm shutdown' }),
     );
-    await expect(canvas.getByRole('status')).toHaveTextContent(
-      'Demo: shutdown requested.',
+    await expect(await canvas.findByRole('status')).toHaveTextContent(
+      'Shutdown requested.',
     );
     await expect(
       canvas.getByRole('button', { name: 'Restart device' }),

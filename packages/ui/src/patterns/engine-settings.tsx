@@ -23,13 +23,15 @@ export type Pack = {
   id: string;
   name: string;
   website: string;
-  licence: string;
+  licence?: string;
+  licenceUrl?: string;
+  version?: string | null;
   effects: number;
   sizeMib: number;
   qualification: string;
   installed: boolean;
   /** Saved presets that use it. */
-  usedBy: string[];
+  usedBy: string[] | null;
 };
 
 export type BuiltInEffect = { name: string; caption: string };
@@ -84,18 +86,21 @@ export function PluginPacks({
   packs,
   job,
   playing = false,
+  disabled = false,
   onInstall,
   onRemove,
 }: {
   packs: Pack[];
   /** The install running on the device, if any. */
-  job?: { id: string; progress: number };
+  job?: { id: string; progress?: number; action?: 'install' | 'remove' };
+  disabled?: boolean;
   /** Audio is playing: installs and removals wait for it to stop. */
   playing?: boolean;
   onInstall: (pack: Pack) => void;
   onRemove: (pack: Pack) => void;
 }) {
-  const [removing, setRemoving] = useState<Pack | null>(null);
+  const [removeId, setRemoving] = useState<string | null>(null);
+  const removing = packs.find((p) => p.id === removeId && p.installed);
   const [understood, setUnderstood] = useState(false);
   const install = onInstall;
   const remove = (pack: Pack) => {
@@ -104,7 +109,8 @@ export function PluginPacks({
     setUnderstood(false);
   };
   const working = packs.find((p) => p.id === job?.id);
-  const blocked = playing || Boolean(job);
+  const blocked = disabled || playing || Boolean(job);
+  const jobLabel = job?.action === 'remove' ? 'Removing' : 'Installing';
 
   return (
     <>
@@ -123,10 +129,13 @@ export function PluginPacks({
           className="grid gap-1.5 rounded-lg border border-border bg-card px-3 py-2"
         >
           <span className="text-sm">
-            Installing {working.name}… You can leave this page; the device
+            {jobLabel} {working.name}… You can leave this page; the device
             finishes the job.
           </span>
-          <Progress value={job.progress} label={`Installing ${working.name}`} />
+          <Progress
+            value={job.progress}
+            label={`${jobLabel} ${working.name}`}
+          />
         </div>
       )}
       <SettingGroup title="Installed">
@@ -158,20 +167,29 @@ export function PluginPacks({
               description="Its effects leave the block chooser. Your presets and their settings stay."
             />
             <DialogBody className="grid gap-2">
-              {removing.usedBy.length ? (
+              {removing.usedBy?.length !== 0 ? (
                 <>
-                  <p className="m-0 text-sm">
-                    Used by {removing.usedBy.length} saved{' '}
-                    {removing.usedBy.length === 1 ? 'preset' : 'presets'}:
-                  </p>
-                  <ul
-                    aria-label="Presets that use this pack"
-                    className="m-0 pl-5 text-sm"
-                  >
-                    {removing.usedBy.map((name) => (
-                      <li key={name}>{name}</li>
-                    ))}
-                  </ul>
+                  {removing.usedBy ? (
+                    <>
+                      <p className="m-0 text-sm">
+                        Used by {removing.usedBy.length} saved{' '}
+                        {removing.usedBy.length === 1 ? 'preset' : 'presets'}:
+                      </p>
+                      <ul
+                        aria-label="Presets that use this pack"
+                        className="m-0 pl-5 text-sm"
+                      >
+                        {removing.usedBy.map((name) => (
+                          <li key={name}>{name}</li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : (
+                    <Caption>
+                      Oxidal could not check which saved presets use these
+                      effects.
+                    </Caption>
+                  )}
                   <label className="flex min-h-touch items-center gap-2 text-sm">
                     <Checkbox
                       checked={understood}
@@ -191,7 +209,9 @@ export function PluginPacks({
               </Button>
               <Button
                 variant="destructive"
-                disabled={removing.usedBy.length > 0 && !understood}
+                disabled={
+                  blocked || (removing.usedBy?.length !== 0 && !understood)
+                }
                 onClick={() => remove(removing)}
               >
                 Remove pack
@@ -210,9 +230,11 @@ export function PluginPacks({
         title={p.name}
         caption={
           <>
-            {p.effects} effects · about {p.sizeMib} MiB · {p.licence} ·{' '}
-            {p.qualification}
+            {p.effects} usable effects · about {p.sizeMib} MiB
+            {p.licence && ` · ${p.licence}`} · {p.qualification}
+            {p.version && ` · ${p.version}`}
             {p.installed &&
+              p.usedBy &&
               ` · ${p.usedBy.length ? `used by ${p.usedBy.length} ${p.usedBy.length === 1 ? 'preset' : 'presets'}` : 'not used by saved presets'}`}
           </>
         }
@@ -227,13 +249,26 @@ export function PluginPacks({
             >
               <ArrowSquareOut aria-hidden="true" className="size-4" />
             </a>
+            {p.licenceUrl && (
+              <a
+                href={p.licenceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs underline"
+              >
+                Licence and copyright
+              </a>
+            )}
             {p.installed ? (
               <Button
                 size="sm"
                 variant="ghost"
                 disabled={blocked}
                 aria-label={`Remove ${p.name}…`}
-                onClick={() => setRemoving(p)}
+                onClick={() => {
+                  setUnderstood(false);
+                  setRemoving(p.id);
+                }}
               >
                 Remove…
               </Button>

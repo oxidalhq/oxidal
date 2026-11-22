@@ -55,7 +55,9 @@ it('schedules Locked for the next boot without claiming a live remount', async (
     expect(changeStorage).toHaveBeenCalledWith({ mode: 'locked' }),
   );
   expect(onState).toHaveBeenCalledWith(next);
-  expect(screen.queryByText('Reboot now')).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: /^Restart into/ }),
+  ).not.toBeInTheDocument();
 });
 
 it('requires confirmation before rebooting into the scheduled mode', async () => {
@@ -81,7 +83,7 @@ it('requires confirmation before rebooting into the scheduled mode', async () =>
   };
   vi.mocked(deviceNetwork).mockResolvedValue(network);
   render(<StorageLock connected state={scheduled} onState={() => {}} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Reboot now' }));
+  fireEvent.click(screen.getByRole('button', { name: /^Restart into/ }));
   expect(
     screen.getByRole('dialog', { name: 'Restart into Locked mode?' }),
   ).toBeInTheDocument();
@@ -131,7 +133,7 @@ it('keeps unknown storage explicit and never offers a restart without a known ne
   expect(screen.getByText('Next boot: Unknown.')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /Locked/ })).toBeDisabled();
   expect(
-    screen.queryByRole('button', { name: 'Reboot now' }),
+    screen.queryByRole('button', { name: /^Restart into/ }),
   ).not.toBeInTheDocument();
   expect(changeStorage).not.toHaveBeenCalled();
   expect(deviceNetwork).not.toHaveBeenCalled();
@@ -146,7 +148,7 @@ it('keeps the reviewed mode fixed and refuses a locally changed queue before any
   const view = render(
     <StorageLock connected state={scheduled} onState={() => {}} />,
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Reboot now' }));
+  fireEvent.click(screen.getByRole('button', { name: /^Restart into/ }));
   view.rerender(
     <StorageLock
       connected
