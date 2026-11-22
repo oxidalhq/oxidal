@@ -418,10 +418,7 @@ async fn midi_navigation_round_trips_is_validated_and_reports_no_action_yet() {
         .json()
         .await
         .unwrap();
-    assert!(
-        map.get("navigation").is_none(),
-        "empty navigation is omitted"
-    );
+    assert_eq!(map["navigation"]["boost"]["controller"], 28);
     let nav = json!({
         "previous": {"program": 2, "controller": null},
         "next": {"program": null, "controller": 21}
@@ -487,6 +484,19 @@ async fn idle_position_and_mute_explain_themselves_instead_of_guessing() {
     assert_eq!(mute.status(), 409);
     let body: Value = mute.json().await.unwrap();
     assert!(body.to_string().contains("Play a preset before using Mute"));
+    let boost = client
+        .post(format!("{url}/midi/boost"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(boost.status(), 409);
+    assert!(
+        boost
+            .text()
+            .await
+            .unwrap()
+            .contains("Play a preset before using Boost")
+    );
     let navigate = client
         .post(format!("{url}/midi/navigate"))
         .json(&json!({"direction": "next"}))

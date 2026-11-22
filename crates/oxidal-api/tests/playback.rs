@@ -158,6 +158,25 @@ async fn protect_reaches_native_worker_and_keeps_tuner_and_saved_pin_available()
             .status(),
         200
     );
+    for expected in [true, false] {
+        let response = client
+            .post(format!("{url}/midi/boost"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 204);
+        tokio::time::timeout(std::time::Duration::from_secs(6), async {
+            loop {
+                let monitor = get(&client, &url, "monitor").await;
+                if monitor["audio"]["monitoring"]["boost_active"].as_bool() == Some(expected) {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+            }
+        })
+        .await
+        .expect("protected worker confirms the Stage boost");
+    }
     for enabled in [true, false] {
         state = get(&client, &url, "audio").await;
         let response = send(&client, &url, &state, json!({"kind":"authoring","action":{"kind":"utility","command":{"kind":"tuner","enabled":enabled}}})).await;

@@ -516,6 +516,7 @@ it('learns a Mute trigger and shows it beside Previous and Next', async () => {
 it.each([
   ['Tuner', 'tuner'],
   ['Tap tempo', 'tap'],
+  ['Temporary boost', 'boost'],
 ])('learns a global %s trigger', async (label, key) => {
   arrange();
   const view = render(

@@ -121,6 +121,7 @@ pub(crate) fn start(shared: Weak<Shared>, mut events: mpsc::Receiver<Event>) {
                     DeviceAction::Previous => navigate_recorded(&shared, -1).await.ok(),
                     DeviceAction::Next => navigate_recorded(&shared, 1).await.ok(),
                     DeviceAction::MuteToggle => toggle_mute(&shared).await.ok(),
+                    DeviceAction::BoostToggle => toggle_boost(&shared).await.ok(),
                     DeviceAction::TunerOpen => {
                         let result = Ok("Tuner requested".to_owned());
                         record(&shared, &result);
@@ -311,6 +312,16 @@ pub(crate) async fn toggle_mute(shared: &Arc<Shared>) -> Result<String, String> 
     let result = crate::player::send_utility(shared, command)
         .await
         .map(|()| "Output mute toggled".to_owned())
+        .map_err(|(_, reason)| reason);
+    record(shared, &result);
+    result
+}
+
+/// Toggle only the instrument lift. The running worker owns its state.
+pub(crate) async fn toggle_boost(shared: &Shared) -> Result<String, String> {
+    let result = crate::player::send_utility(shared, oxidal_audio::tools::HostUtility::BoostToggle)
+        .await
+        .map(|()| "Instrument boost toggled".to_owned())
         .map_err(|(_, reason)| reason);
     record(shared, &result);
     result

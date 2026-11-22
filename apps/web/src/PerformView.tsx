@@ -581,6 +581,11 @@ export function PerformView({
                   blocks={boxes.map(({ block }) => block)}
                   disabled={disabled || stepping}
                   tempo={snapshot?.tempo ?? undefined}
+                  boost={
+                    now.playing && audio?.monitoring
+                      ? (audio.monitoring.boost_active ?? false)
+                      : undefined
+                  }
                   onStep={(direction) => void step(direction)}
                   onToggle={onToggle}
                 />

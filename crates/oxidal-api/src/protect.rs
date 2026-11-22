@@ -99,6 +99,7 @@ fn utility(command: &HostUtility) -> bool {
         command,
         HostUtility::OutputMute { .. }
             | HostUtility::OutputMuteToggle
+            | HostUtility::BoostToggle
             | HostUtility::HearYourself { .. }
             | HostUtility::Tuner { .. }
     )
@@ -339,6 +340,7 @@ mod job_tests {
             "Mute and listening aids stay available"
         );
         assert!(utility(&HostUtility::OutputMuteToggle));
+        assert!(utility(&HostUtility::BoostToggle));
         protect.job_flag().store(false, Ordering::SeqCst);
         assert!(protect.refuse(false).is_none());
     }

@@ -930,6 +930,11 @@ export async function muteMidi(): Promise<void> {
   const response = await fetch('/api/v1/midi/mute', { method: 'POST' });
   if (!response.ok) await presetResponse(response);
 }
+/** Toggle the running worker’s temporary instrument boost. */
+export async function boostMidi(): Promise<void> {
+  const response = await fetch('/api/v1/midi/boost', { method: 'POST' });
+  if (!response.ok) await presetResponse(response);
+}
 /** Moves one preset through the Mine set-list, exactly as a footswitch does. */
 export async function navigateMidi(
   direction: Contract['midi_navigate']['direction'],

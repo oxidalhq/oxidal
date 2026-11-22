@@ -6565,6 +6565,10 @@
             }
           ]
         },
+        "boost_active": {
+          "type": "boolean",
+          "default": false
+        },
         "capture": {
           "description": "The worker's Record DI or reamp job, when one has run.",
           "anyOf": [
@@ -6673,6 +6677,20 @@
             "kind": {
               "type": "string",
               "const": "output_mute_toggle"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "description": "Toggle a temporary 3 dB instrument lift for this audio stream.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "boost_toggle"
             }
           },
           "additionalProperties": false,
@@ -9395,6 +9413,17 @@
         "backing": {
           "description": "Backing-track player switches and level knob.",
           "$ref": "#/$defs/BackingTriggers"
+        },
+        "boost": {
+          "description": "Toggle the temporary instrument boost.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Trigger"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "guitar": {
           "description": "Selects the next guitar profile, wrapping after the last.",

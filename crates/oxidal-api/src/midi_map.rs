@@ -181,6 +181,13 @@ pub(super) async fn mute(State(shared): State<Arc<Shared>>) -> impl IntoResponse
     }
 }
 
+pub(super) async fn boost(State(shared): State<Arc<Shared>>) -> impl IntoResponse {
+    match crate::midi_recall::toggle_boost(&shared).await {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(error) => crate::failure(StatusCode::CONFLICT, &error).into_response(),
+    }
+}
+
 /// The newest device-wide MIDI action and whether it ran, for the UI to show.
 pub(super) async fn action(State(shared): State<Arc<Shared>>) -> impl IntoResponse {
     let action = shared.midi_action.borrow().clone();

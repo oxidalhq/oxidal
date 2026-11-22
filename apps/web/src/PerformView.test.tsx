@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import {
   type AudioState,
+  boostMidi,
   libraryCatalog,
   midiPosition,
   type Monitoring,
@@ -23,6 +24,7 @@ import { setPerform } from './performState';
 import { PerformView } from './PerformView';
 vi.mock('./api', () => ({
   midiPosition: vi.fn(),
+  boostMidi: vi.fn(),
   muteMidi: vi.fn(),
   navigateMidi: vi.fn(),
   monitoring: vi.fn(),
@@ -252,6 +254,55 @@ it('shows each neighbour with its readiness and mutes only from confirmed state'
   // The click alone does not claim Muted; only the confirmed reading does.
   await vi.waitFor(() => expect(mute).toBeEnabled());
   expect(mute).toHaveAttribute('aria-pressed', 'false');
+});
+
+it('shows boost from the worker and sends one Stage press', async () => {
+  const props = {
+    layout: 'ten' as const,
+    blocks: [],
+    disabled: false,
+    onStep: vi.fn(),
+    onToggle: vi.fn(),
+  };
+  const view = render(<StageFootswitches {...props} boost={false} />);
+  const button = screen.getByRole('button', { name: 'C Boost' });
+  fireEvent.click(button);
+  expect(boostMidi).toHaveBeenCalledTimes(1);
+  expect(button).toHaveAttribute('aria-pressed', 'false');
+  view.rerender(<StageFootswitches {...props} boost />);
+  expect(button).toHaveAttribute('aria-pressed', 'true');
+});
+
+it('holds A for Boost on four switches without also selecting its scene', () => {
+  const onSelect = vi.fn();
+  render(
+    <StageFootswitches
+      layout="four"
+      scenes={{
+        active: 'verse',
+        scenes: [{ id: 'verse', name: 'Verse' }],
+        onSelect,
+      }}
+      blocks={[]}
+      disabled={false}
+      boost={false}
+      onStep={vi.fn()}
+      onToggle={vi.fn()}
+    />,
+  );
+  const button = screen.getByRole('button', { name: 'A Verse Hold · Boost' });
+  vi.mocked(boostMidi).mockClear();
+  vi.useFakeTimers();
+  try {
+    fireEvent.pointerDown(button, { button: 0, isPrimary: true });
+    vi.advanceTimersByTime(500);
+    fireEvent.pointerUp(button);
+    fireEvent.click(button);
+    expect(boostMidi).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it('uses the mapped block for a held switch and the scene for a tap', () => {

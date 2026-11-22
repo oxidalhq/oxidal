@@ -129,6 +129,8 @@ pub enum HostUtility {
     /// Flip the output mute. The worker owns the state, so a footswitch needs no
     /// mirrored copy that could disagree with the screen.
     OutputMuteToggle,
+    /// Toggle a temporary 3 dB instrument lift for this audio stream.
+    BoostToggle,
     /// Oxidal's input tuner: listens to the raw input under any preset.
     Tuner {
         enabled: bool,
@@ -209,8 +211,9 @@ impl HostLevels {
     }
     /// Preset and scene boost: part of the guitar signal, applied before the
     /// session mix so a backing track never receives it.
-    fn tone_gain(&self) -> f32 {
-        10f32.powf(self.boost_db / 20.0)
+    fn tone_gain(&self, boost_active: bool) -> f32 {
+        let offset = self.boost_db + if boost_active { 3.0 } else { 0.0 };
+        10f32.powf(offset.min(Self::OFFSET_RANGE.1) / 20.0)
     }
     /// Master level after the mix and venue EQ; −60 dB is silent.
     fn master_gain(&self) -> f32 {
@@ -230,6 +233,8 @@ pub struct HostState {
     pub hear_yourself: bool,
     #[serde(default)]
     pub output_muted: bool,
+    #[serde(default)]
+    pub boost_active: bool,
     pub test_tone_active: bool,
     #[serde(default)]
     pub levels: HostLevels,
@@ -254,6 +259,7 @@ pub struct HostSignal {
     tuner: crate::tuner::Tuner,
     hear: bool,
     output_muted: bool,
+    boost_active: bool,
     rate: u32,
     test_frame: u32,
     test_active: bool,
@@ -407,12 +413,13 @@ impl HostSignal {
             tuner: crate::tuner::Tuner::new(rate),
             hear,
             output_muted: false,
+            boost_active: false,
             rate,
             test_frame: 0,
             test_active: false,
             levels,
             input_gain: Glide::new(rate, levels.input_gain()),
-            tone_gain: Glide::new(rate, levels.tone_gain()),
+            tone_gain: Glide::new(rate, levels.tone_gain(false)),
             master_gain: Glide::new(rate, levels.master_gain()),
             monitor_gain: Glide::new(rate, 1.0),
             gate: Gate::new(rate, levels.gate_db),
@@ -520,6 +527,10 @@ impl HostSignal {
                 self.output_muted = !self.output_muted;
                 self.monitor_gain.target = if self.output_muted { 0.0 } else { 1.0 };
             }
+            HostUtility::BoostToggle => {
+                self.boost_active = !self.boost_active;
+                self.tone_gain.target = self.levels.tone_gain(self.boost_active);
+            }
             HostUtility::Tuner { enabled } => self.tuner.set(enabled),
             HostUtility::TestTone => {
                 if !self.test_active {
@@ -551,7 +562,7 @@ impl HostSignal {
                 if levels.validate().is_ok() {
                     self.levels = levels;
                     self.input_gain.target = levels.input_gain();
-                    self.tone_gain.target = levels.tone_gain();
+                    self.tone_gain.target = levels.tone_gain(self.boost_active);
                     self.master_gain.target = levels.master_gain();
                     self.gate.set(levels.gate_db);
                 }
@@ -562,6 +573,7 @@ impl HostSignal {
         HostState {
             hear_yourself: self.hear,
             output_muted: self.output_muted,
+            boost_active: self.boost_active,
             test_tone_active: self.test_active,
             levels: self.levels,
             reference: self.reference.reading(),
@@ -1262,6 +1274,30 @@ mod host_tests {
         // Once settled the split is the same product, to float rounding.
         assert!(settled < 1e-6, "{settled}");
     }
+    #[test]
+    fn temporary_boost_follows_saved_levels_without_changing_them() {
+        let mut signal = HostSignal::new(48000, true, HostLevels::default());
+        signal.command(HostUtility::BoostToggle);
+        assert!(signal.state().boost_active);
+        assert_eq!(signal.state().levels.boost_db, 0.0);
+        assert_eq!(signal.tone_gain.target, 10f32.powf(3.0 / 20.0));
+        let (mut left, mut right) = ([0.25; 8192], [0.25; 8192]);
+        signal.output(&mut left, &mut right);
+        assert!(left[0] < left[8191]);
+        assert!((left[8191] - 0.25 * signal.tone_gain.target).abs() < 1e-5);
+        let levels = HostLevels {
+            boost_db: 23.0,
+            ..HostLevels::default()
+        };
+        signal.command(HostUtility::Levels { levels });
+        assert_eq!(signal.tone_gain.target, 10f32.powf(24.0 / 20.0));
+        signal.command(HostUtility::BoostToggle);
+        assert!(!signal.state().boost_active);
+        assert_eq!(signal.tone_gain.target, 10f32.powf(23.0 / 20.0));
+        assert_eq!(signal.state().levels.boost_db, 23.0);
+        assert!(!HostSignal::new(48000, true, levels).state().boost_active);
+    }
+
     #[test]
     fn a_boost_change_differs_only_inside_its_ramp() {
         let rate = 48000;

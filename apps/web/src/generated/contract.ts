@@ -154,6 +154,9 @@ export type HostUtility =
       kind: "output_mute_toggle";
     }
   | {
+      kind: "boost_toggle";
+    }
+  | {
       enabled: boolean;
       kind: "tuner";
     }
@@ -2453,6 +2456,7 @@ export interface HostState {
    * The worker's backing player, when its stream has one.
    */
   backing?: BackingStatus | null;
+  boost_active?: boolean;
   /**
    * The worker's Record DI or reamp job, when one has run.
    */
@@ -3014,6 +3018,10 @@ export interface Disabled {
  */
 export interface Navigation {
   backing?: BackingTriggers;
+  /**
+   * Toggle the temporary instrument boost.
+   */
+  boost?: Trigger | null;
   /**
    * Selects the next guitar profile, wrapping after the last.
    */

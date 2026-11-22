@@ -692,6 +692,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/midi/navigate", post(midi_map::navigate))
         .route("/midi/position", get(midi_map::position))
         .route("/midi/mute", post(midi_map::mute))
+        .route("/midi/boost", post(midi_map::boost))
         .route("/audio/probe", post(audio::probe_admitted))
         .route(
             "/native",

@@ -665,6 +665,7 @@ pub(crate) async fn send_utility(shared: &Shared, utility: HostUtility) -> Resul
         (
             StatusCode::CONFLICT,
             match utility {
+                HostUtility::BoostToggle => "Play a preset before using Boost",
                 HostUtility::OutputMuteToggle => "Play a preset before using Mute",
                 HostUtility::Backing { .. } => "Start the audio to play the track",
                 _ => "Start audio before using this control",

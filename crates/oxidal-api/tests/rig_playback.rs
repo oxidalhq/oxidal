@@ -168,6 +168,25 @@ async fn scene_bypass_survives_mixed_worker_restart_and_independent_save() {
             .send()
     };
     assert!(set_protect(true).await.unwrap().status().is_success());
+    for expected in [true, false] {
+        let response = client
+            .post(format!("{url}/midi/boost"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 204);
+        tokio::time::timeout(std::time::Duration::from_secs(6), async {
+            loop {
+                let monitor = get(&client, &url, "monitor").await;
+                if monitor["audio"]["monitoring"]["boost_active"].as_bool() == Some(expected) {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+            }
+        })
+        .await
+        .expect("protected worker confirms the Stage boost");
+    }
     let action = json!({"kind":"stomp_group","command":{
         "session":with_midi["control"]["session"],"expected_revision":with_midi["control"]["revision"],"group":"amp-toggle"
     }});

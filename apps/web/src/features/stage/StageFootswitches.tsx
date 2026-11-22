@@ -6,7 +6,7 @@ import {
 } from '@oxidal/design-system/widgets/controllers';
 import { Footswitches } from '@oxidal/design-system/widgets/footswitches';
 
-import { sendTempo } from '../../api';
+import { boostMidi, sendTempo } from '../../api';
 import { useSessionMedia } from '../../components/media/sessionMedia';
 import { friendlyError } from '../../lib/friendlyError';
 import { requestTuner } from '../../tunerNavigation';
@@ -25,6 +25,7 @@ export function StageFootswitches({
   blocks,
   disabled,
   tempo,
+  boost,
   onStep,
   onToggle,
 }: {
@@ -33,12 +34,14 @@ export function StageFootswitches({
   blocks: { id: string; label: string; on: boolean }[];
   disabled: boolean;
   tempo?: { bpm?: number | null };
+  boost?: boolean;
   onStep: (direction: 'previous' | 'next') => void;
   onToggle: (id: string) => void;
 }) {
   const media = useSessionMedia();
   const [error, setError] = useState('');
   const tapPending = useRef(false);
+  const boostPending = useRef(false);
   const play = media.shown === 'playing' || media.shown === 'stalled';
   const canPlay =
     !!media.player?.track &&
@@ -62,18 +65,30 @@ export function StageFootswitches({
       if (tap.kind === 'block') tap = mappedBlock(tap.block) ?? unassigned;
       if (hold?.kind === 'block') hold = mappedBlock(hold.block);
       if (
-        tap.kind === 'boost' ||
+        (tap.kind === 'boost' && boost == null) ||
         (tap.kind === 'tap' && !tempo) ||
         (tap.kind === 'play' && (!canPlay || media.pending))
       )
         tap = unassigned;
       if (hold?.kind === 'tap' && !tempo) hold = undefined;
-      if (hold?.kind === 'boost') hold = undefined;
+      if (hold?.kind === 'boost' && boost == null) hold = undefined;
       if (hold?.kind === 'loop' && (!canPlay || media.pending))
         hold = undefined;
       return { ...item, tap, hold };
     }),
   };
+  async function toggleBoost() {
+    if (boost == null || boostPending.current) return;
+    boostPending.current = true;
+    setError('');
+    try {
+      await boostMidi();
+    } catch (cause) {
+      setError(friendlyError(cause, 'toggle boost'));
+    } finally {
+      boostPending.current = false;
+    }
+  }
   async function tapTempo() {
     if (!tempo || tapPending.current) return;
     tapPending.current = true;
@@ -94,7 +109,7 @@ export function StageFootswitches({
           scene: scenes?.active ?? null,
           scenes: liveScenes,
           blocks: Object.fromEntries(blocks.map((block) => [block.id, block])),
-          boost: false,
+          boost: boost ?? false,
           tuner: false,
           playing: play,
           loop: media.player?.repeat ?? false,
@@ -112,6 +127,8 @@ export function StageFootswitches({
               return onToggle(action.block);
             case 'tuner':
               return requestTuner();
+            case 'boost':
+              return void toggleBoost();
             case 'tap':
               return void tapTempo();
             case 'loop':

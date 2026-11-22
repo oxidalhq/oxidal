@@ -123,7 +123,10 @@ from presets, under `OXIDAL_MEDIA_DIR`. Uploads are chunked and resumable, an
 asset becomes visible only after an atomic rename, and anything that fails its
 check at startup is quarantined. In the shared audio host stage, preset boost
 now applies before the session mix and Master after it, with venue EQ between
-the mix and mono fold. See [session media](media.md).
+the mix and mono fold. The Stage Boost switch adds 3 dB to the instrument
+within the same combined offset limit. Its state belongs to the running audio
+stream and clears when that stream closes. New MIDI maps assign CC 28 to
+Boost. Once assigned, a footswitch works with the browser closed. See [session media](media.md).
 
 ## Appliance and device services
 

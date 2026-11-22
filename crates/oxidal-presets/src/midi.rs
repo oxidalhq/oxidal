@@ -212,7 +212,13 @@ impl Default for Book {
             input: None,
             channel: 1,
             template: None,
-            navigation: Navigation::default(),
+            navigation: Navigation {
+                boost: Some(Trigger {
+                    program: None,
+                    controller: Some(28),
+                }),
+                ..Navigation::default()
+            },
             saved_layouts: Vec::new(),
             extra_inputs: Vec::new(),
             entries: BTreeMap::new(),
@@ -271,6 +277,9 @@ pub struct Navigation {
     /// A device-stamped performance tempo tap.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tap: Option<Trigger>,
+    /// Toggle the temporary instrument boost.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub boost: Option<Trigger>,
     /// Backing-track player switches and level knob.
     #[serde(default, skip_serializing_if = "BackingTriggers::is_empty")]
     pub backing: BackingTriggers,
@@ -327,6 +336,7 @@ pub enum DeviceAction {
     TunerOpen,
     GuitarNext,
     TapTempo,
+    BoostToggle,
     BackingPlayPause,
     BackingStop,
     BackingNext,
@@ -347,6 +357,7 @@ impl Navigation {
             && self.tuner.is_none()
             && self.guitar.is_none()
             && self.tap.is_none()
+            && self.boost.is_none()
             && self.backing.is_empty()
     }
 
@@ -364,6 +375,8 @@ impl Navigation {
             Some(DeviceAction::GuitarNext)
         } else if self.tap.is_some_and(|t| t.matches(message)) {
             Some(DeviceAction::TapTempo)
+        } else if self.boost.is_some_and(|t| t.matches(message)) {
+            Some(DeviceAction::BoostToggle)
         } else {
             self.backing_action(message)
         }
@@ -402,6 +415,7 @@ impl Navigation {
             self.tuner,
             self.guitar,
             self.tap,
+            self.boost,
         ]
         .into_iter()
         .chain(self.backing.triggers())
@@ -784,6 +798,7 @@ impl MidiMapStore {
         let mut book = Book {
             input: Some(settings.input.clone()),
             channel: settings.channel,
+            navigation: Navigation::default(),
             ..Book::default()
         };
         let mapping = PresetMap::from_settings(&settings);
@@ -1566,6 +1581,7 @@ mod tests {
             backing: BackingTriggers::default(),
             guitar: None,
             tap: None,
+            boost: None,
         };
         let saved = store
             .replace(update(nav, vec![], &initial.revision))
@@ -1582,6 +1598,7 @@ mod tests {
                 backing: BackingTriggers::default(),
                 guitar: None,
                 tap: None,
+                boost: None,
             },
             // Mute may not reuse Previous either.
             Navigation {
@@ -1592,6 +1609,7 @@ mod tests {
                 backing: BackingTriggers::default(),
                 guitar: None,
                 tap: None,
+                boost: None,
             },
             Navigation {
                 previous: Some(Trigger {
@@ -1604,6 +1622,7 @@ mod tests {
                 backing: BackingTriggers::default(),
                 guitar: None,
                 tap: None,
+                boost: None,
             },
             Navigation {
                 previous: Some(Trigger {
@@ -1616,6 +1635,7 @@ mod tests {
                 backing: BackingTriggers::default(),
                 guitar: None,
                 tap: None,
+                boost: None,
             },
         ] {
             assert!(matches!(
@@ -1659,7 +1679,11 @@ mod tests {
         // An empty navigation is not serialized, so maps saved before this
         // field existed keep their revision (value recorded from the prior build).
         assert_eq!(
-            initial.revision,
+            revision(&Book {
+                navigation: Navigation::default(),
+                ..Book::default()
+            })
+            .unwrap(),
             "38eb924807afdfc80f86e87b767cfecb01000b48928f176256ab153593285691"
         );
     }
@@ -1759,6 +1783,7 @@ mod tests {
                 backing: BackingTriggers::default(),
                 guitar: None,
                 tap: None,
+                boost: None,
             },
         };
         let update = |layouts: Vec<SavedLayout>, revision: &str| MidiMapUpdate {
@@ -2053,6 +2078,27 @@ mod tests {
         assert_eq!(nav.action(press(0)), None, "a release does nothing");
         let clash = Navigation {
             mute: nav.guitar,
+            ..nav
+        };
+        assert!(clash.validate(&BTreeMap::new()).is_err());
+    }
+    #[test]
+    fn only_new_maps_assign_cc28_to_boost_and_only_presses_toggle_it() {
+        let nav = Book::default().navigation;
+        let cc = |value| Message::Control {
+            channel: 1,
+            controller: 28,
+            value,
+        };
+        assert_eq!(nav.action(cc(127)), Some(DeviceAction::BoostToggle));
+        assert_eq!(nav.action(cc(0)), None);
+        let old: Book = serde_json::from_value(serde_json::json!({
+            "schema":1, "input":null, "channel":1, "entries":{}
+        }))
+        .unwrap();
+        assert_eq!(old.navigation.action(cc(127)), None);
+        let clash = Navigation {
+            tap: nav.boost,
             ..nav
         };
         assert!(clash.validate(&BTreeMap::new()).is_err());
