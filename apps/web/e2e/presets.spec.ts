@@ -5725,10 +5725,9 @@ test('device portrait set-list drag and keyboard order agree with picker and Per
     .click();
   await expect
     .poll(async () =>
-      (await page.locator('.preset-pad-text strong').allTextContents()).slice(
-        0,
-        2,
-      ),
+      (
+        await page.locator('[data-slot="preset-pad-name"]').allTextContents()
+      ).slice(0, 2),
     )
     .toEqual([rigName, secondName]);
   expect(

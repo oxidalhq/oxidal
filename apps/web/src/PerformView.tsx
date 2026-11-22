@@ -6,6 +6,7 @@ import {
 } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
 import {
   Select,
   SelectContent,
@@ -15,9 +16,8 @@ import {
 } from '@oxidal/design-system/components/select';
 import { StageHeading } from '@oxidal/design-system/patterns/stage-heading';
 import { FootswitchPad } from '@oxidal/design-system/widgets/footswitches';
+import { Meter } from '@oxidal/design-system/widgets/meter';
 
-import './ChainView.css';
-import './PerformView.css';
 import {
   type MidiPosition,
   midiPosition,
@@ -48,10 +48,6 @@ const HOLD_MS = 1500;
 const NO_INPUT_MS = 3000;
 // Rails appear while there is signal and fade this long after it stops.
 const SHOW_MS = 2000;
-const level = (db: number | null | undefined) =>
-  db == null || !Number.isFinite(db)
-    ? 0
-    : Math.min(1, Math.max(0, (db - FLOOR_DB) / -FLOOR_DB));
 type Channel = NonNullable<Monitoring['audio']>['input'][number];
 type Held = { db: number; at: number }[];
 
@@ -85,7 +81,7 @@ function EdgeMeter({
   const top = held.length ? Math.max(...held) : null;
   return (
     <div
-      className="edge-meter"
+      className="pointer-events-none self-stretch opacity-0 transition-opacity data-[showing]:opacity-100 motion-reduce:transition-none [[data-display=epaper]_&]:opacity-100 [[data-display=epaper]_&]:transition-none"
       data-side={side}
       data-showing={showing || undefined}
       role="meter"
@@ -101,18 +97,20 @@ function EdgeMeter({
             : `${top.toFixed(1)} dBFS peak`
       }
     >
-      <div className="edge-meter-bars">
-        {(channels ?? [null, null]).map((c, i) => (
-          <span
+      <div aria-hidden="true" className="flex h-full gap-px">
+        {(channels?.length ? channels : [null, null]).map((channel, i) => (
+          <Meter
             key={i}
-            className="edge-meter-bar"
-            data-clip={clipped[i] || undefined}
-          >
-            <i style={{ height: `${level(c?.peak_dbfs) * 100}%` }} />
-            {held[i] != null && (
-              <b style={{ bottom: `${level(held[i]) * 100}%` }} />
-            )}
-          </span>
+            orientation="vertical"
+            size="sm"
+            label={`${label} ${i + 1}`}
+            value={channel?.peak_dbfs ?? null}
+            peak={held[i]}
+            clipped={clipped[i]}
+            state={channel ? 'live' : 'unavailable'}
+            showValue={false}
+            className="min-w-0 [&>[aria-hidden=true]]:w-[3px] [&>span]:sr-only"
+          />
         ))}
       </div>
     </div>
@@ -176,38 +174,43 @@ function PresetSteps({
   }
   const line = (label: string, n: MidiPosition['previous']) =>
     n ? (
-      <span data-ready={n.ready}>
+      <span data-ready={n.ready} className="data-[ready=false]:text-foreground">
         {label}: {n.name} · {n.detail}
       </span>
     ) : (
       <span>{label}: none, end of the Set list</span>
     );
   return (
-    <div className="perform-steps">
+    <div className="flex min-w-0 flex-wrap items-center justify-center gap-2">
       <StageSetList
         key={owner}
         position={position}
         disabled={disabled || busy || stepping}
         onRecall={() => setReload((count) => count + 1)}
       />
-      <div role="group" aria-label="Set list">
-        <button
+      <div role="group" aria-label="Set list" className="inline-flex gap-1">
+        <Button
+          variant="outline"
           type="button"
           disabled={disabled || busy || stepping}
           onClick={() => onStep('previous')}
         >
           <CaretLeft aria-hidden="true" /> Previous
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="outline"
           type="button"
           disabled={disabled || busy || stepping}
           onClick={() => onStep('next')}
         >
           Next <CaretRight aria-hidden="true" />
-        </button>
+        </Button>
       </div>
       {position && position.index != null && (
-        <div className="perform-neighbors" aria-label="Set list neighbours">
+        <div
+          className="min-w-0 text-center text-xs text-muted-foreground"
+          aria-label="Set list neighbours"
+        >
           <p>
             {line('Previous', position.previous)} {line('Next', position.next)}
           </p>
@@ -217,15 +220,16 @@ function PresetSteps({
           </p>
         </div>
       )}
-      <button
+      <Button
+        variant="outline"
         type="button"
-        className="perform-mute"
+        className="aria-pressed:bg-primary aria-pressed:text-primary-foreground"
         aria-pressed={muted}
         disabled={disabled || busy}
         onClick={() => void mute()}
       >
         {muted ? 'Muted · tap to unmute' : 'Mute output'}
-      </button>
+      </Button>
       {refusal && <p role="alert">{refusal}</p>}
     </div>
   );
@@ -458,20 +462,20 @@ export function PerformView({
     .join(' · ');
   return (
     <section
-      className="perform perform-gig"
+      className="grid min-w-0 gap-3"
       aria-label="Perform"
       data-mode={mode}
     >
-      <div className="perform-bar flex-wrap">
-        <button
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <Button
+          variant="outline"
           type="button"
-          className="perform-edit"
           aria-label="Back to Rig"
           onClick={onEdit}
         >
           <ArrowLeft aria-hidden="true" /> Rig
-        </button>
-        <h2>Perform</h2>
+        </Button>
+        <h2 className="m-0 text-base font-semibold">Perform</h2>
         <Select
           value={layout}
           onValueChange={(value) => {
@@ -488,25 +492,30 @@ export function PerformView({
             <SelectItem value="ten">Ten switches</SelectItem>
           </SelectContent>
         </Select>
-        <div className="perform-modes" role="group" aria-label="Perform view">
+        <div
+          className="ml-auto inline-flex flex-wrap gap-1"
+          role="group"
+          aria-label="Perform view"
+        >
           {(
             [
               ['play', 'Play'],
               ['presets', 'Presets'],
             ] as const
           ).map(([id, label]) => (
-            <button
+            <Button
+              variant={mode === id ? 'default' : 'outline'}
               key={id}
               type="button"
               aria-pressed={mode === id}
               onClick={() => setMode(id)}
             >
               {label}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
-      <div className="perform-body">
+      <div className="grid min-h-[calc(100dvh-9rem)] min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] gap-1 sm:gap-2">
         <EdgeMeter
           side="in"
           channels={audio?.input}
@@ -515,7 +524,7 @@ export function PerformView({
           quiet={quiet}
           showing={live.showing}
         />
-        <div className="perform-main">
+        <div className="flex min-w-0 flex-col gap-3">
           <StageHeading
             name={
               now.name ?? (switching ? 'Preparing preset…' : 'Unsaved preset')
@@ -531,7 +540,9 @@ export function PerformView({
             }
             detail={
               now.modified ? (
-                <span className="perform-edited">edited, not saved</span>
+                <span className="font-medium text-brand">
+                  edited, not saved
+                </span>
               ) : (
                 'saved'
               )
@@ -558,7 +569,11 @@ export function PerformView({
           </div>
           {stepRefusal && <p role="alert">{stepRefusal}</p>}
           {switching ? (
-            <div className="perform-switching" role="status" aria-live="polite">
+            <div
+              className="flex min-h-32 items-center justify-center gap-3 rounded-lg border border-border bg-card p-4 [&>span]:grid [&>svg]:size-6 [&>svg]:animate-spin motion-reduce:[&>svg]:animate-none [[data-display=epaper]_&>svg]:animate-none"
+              role="status"
+              aria-live="polite"
+            >
               <ArrowsClockwise aria-hidden="true" />
               <span>
                 <strong>Switching preset…</strong>
@@ -568,7 +583,7 @@ export function PerformView({
               </span>
             </div>
           ) : mode === 'presets' ? (
-            <div className="perform-section perform-fill">{selector}</div>
+            <div className="grid min-w-0 flex-1 content-start">{selector}</div>
           ) : null}
           <LinkedSheet stage />
           {!switching && mode === 'play' && (
@@ -593,7 +608,7 @@ export function PerformView({
               {layout === 'pads' &&
                 (boxes.length > 0 ? (
                   <div
-                    className="perform-boxes"
+                    className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] [&>button]:min-h-24"
                     role="group"
                     aria-label="Blocks"
                   >
@@ -632,36 +647,49 @@ export function PerformView({
           {knobs}
           <MasterLevel />
           <details
-            className="perform-more"
+            className="min-w-0 rounded-lg border border-border bg-card px-3 data-[warn]:border-brand"
             data-warn={stats.some((s) => s.warn) || undefined}
           >
-            <summary>{summary}</summary>
-            <div className="perform-stats" role="group" aria-label="Live stats">
+            <summary className="min-h-touch cursor-pointer py-3 text-sm font-medium">
+              {summary}
+            </summary>
+            <div
+              className="grid min-w-0 grid-cols-2 gap-2 border-t border-border py-2 sm:grid-cols-3 lg:grid-cols-6"
+              role="group"
+              aria-label="Live stats"
+            >
               {stats.map((s) => {
+                const tile =
+                  'group grid min-w-0 content-start gap-0.5 rounded-md p-2 text-left';
                 const content = (
                   <>
-                    <span className="perform-stat-label">{s.label}</span>
-                    <span className="perform-stat-value">
+                    <span className="small-caps text-xs text-muted-foreground">
+                      {s.label}
+                    </span>
+                    <span className="font-mono text-lg font-semibold tabular-nums group-data-[warn]:text-brand [&>small]:ml-1 [&>small]:text-xs">
                       {s.value}
                       {s.unit && <small>{s.unit}</small>}
                     </span>
-                    <span className="perform-stat-detail">{s.detail}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {s.detail}
+                    </span>
                   </>
                 );
                 return s.onClick ? (
-                  <button
+                  <Button
+                    variant="ghost"
                     key={s.label}
                     type="button"
-                    className="perform-stat"
+                    className={`${tile} h-auto justify-start whitespace-normal`}
                     data-warn={s.warn || undefined}
                     onClick={s.onClick}
                   >
                     {content}
-                  </button>
+                  </Button>
                 ) : (
                   <div
                     key={s.label}
-                    className="perform-stat"
+                    className={tile}
                     data-warn={s.warn || undefined}
                   >
                     {content}

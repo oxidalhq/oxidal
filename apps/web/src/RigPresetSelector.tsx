@@ -193,8 +193,10 @@ export function RigPresetSelector({
     const previous = index > 0 ? pickerItems[index - 1] : undefined;
     const next = index >= 0 ? pickerItems[index + 1] : undefined;
     const steps = (
-      <div className="preset-step">
-        <button
+      <div className="grid min-w-0 grid-cols-2 gap-2">
+        <Button
+          variant="outline"
+          className="grid h-auto min-h-14 min-w-0 justify-start gap-0.5 text-left whitespace-normal [&>span]:text-xs [&>strong]:line-clamp-2"
           type="button"
           aria-label={
             previous ? `Previous preset: ${previous.name}` : 'Previous preset'
@@ -204,8 +206,10 @@ export function RigPresetSelector({
         >
           <span>‹ Previous</span>
           <strong>{previous?.name ?? '—'}</strong>
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="outline"
+          className="grid h-auto min-h-14 min-w-0 justify-start gap-0.5 text-left whitespace-normal [&>span]:text-xs [&>strong]:line-clamp-2"
           type="button"
           aria-label={next ? `Next preset: ${next.name}` : 'Next preset'}
           disabled={disabled || loading || !next}
@@ -213,12 +217,12 @@ export function RigPresetSelector({
         >
           <span>Next ›</span>
           <strong>{next?.name ?? '—'}</strong>
-        </button>
+        </Button>
       </div>
     );
     return (
-      <div className="preset-pads" aria-label="Preset pads">
-        <h3>
+      <div className="grid min-w-0 gap-3" aria-label="Preset pads">
+        <h3 className="m-0 flex flex-wrap items-baseline justify-between gap-2 font-semibold [&>span]:font-mono [&>span]:text-xs [&>span]:font-medium">
           Presets
           <span>
             {pickerItems.length
@@ -234,28 +238,29 @@ export function RigPresetSelector({
             disabled={disabled}
           />
         )}
-        <div className="preset-pad-grid">
+        <div className="grid min-w-0 grid-cols-2 gap-2 md:grid-cols-4">
           {pickerItems
             .slice(currentBank * size, currentBank * size + size)
             .map((item, offset) => {
               const playingPad = sounding && key(item) === selected;
               const upcoming = !!next && key(item) === key(next);
               return (
-                <button
+                <Button
                   type="button"
                   key={key(item)}
-                  className="preset-pad"
+                  variant={playingPad ? 'default' : 'outline'}
+                  className="h-auto min-h-20 min-w-0 items-start justify-start gap-2 text-left whitespace-normal aria-pressed:disabled:opacity-100 data-[next]:border-dashed"
                   data-next={upcoming || undefined}
                   aria-pressed={playingPad}
                   disabled={disabled || loading || playingPad}
                   onClick={() => choose(item)}
                 >
-                  <span className="preset-pad-number">
+                  <span className="shrink-0 font-mono text-xs tabular-nums opacity-75">
                     {currentBank * size + offset + 1}
                   </span>
-                  <span className="preset-pad-text">
-                    <strong>{item.name}</strong>
-                    <span className="preset-pad-origin">
+                  <span className="grid min-w-0 gap-1 break-words">
+                    <strong data-slot="preset-pad-name">{item.name}</strong>
+                    <span className="text-xs font-normal opacity-80">
                       {playingPad
                         ? 'Playing'
                         : upcoming
@@ -263,24 +268,28 @@ export function RigPresetSelector({
                           : choiceSummary(item)}
                     </span>
                   </span>
-                </button>
+                </Button>
               );
             })}
         </div>
         {pickerItems.length > size && (
-          <div className="preset-bank">
-            <button
+          <div className="flex items-center justify-center gap-3 font-mono text-sm tabular-nums">
+            <Button
+              variant="outline"
+              size="icon"
               type="button"
               aria-label="Previous bank"
               disabled={currentBank === 0 || disabled}
               onClick={() => setBank(currentBank - 1)}
             >
               <CaretLeft aria-hidden="true" />
-            </button>
+            </Button>
             <span>
               {currentBank + 1} / {Math.ceil(pickerItems.length / size)}
             </span>
-            <button
+            <Button
+              variant="outline"
+              size="icon"
               type="button"
               aria-label="Next bank"
               disabled={
@@ -289,7 +298,7 @@ export function RigPresetSelector({
               onClick={() => setBank(currentBank + 1)}
             >
               <CaretRight aria-hidden="true" />
-            </button>
+            </Button>
           </div>
         )}
         {!all && steps}

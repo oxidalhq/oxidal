@@ -673,11 +673,25 @@ test('mixed rig authoring: four- and ten-switch Stage follows confirmed scenes a
       stage.getByText('Scene · Lead', { exact: true }),
     ).toBeVisible();
     await expect(ten.getByRole('button', { name: 'C —' })).toBeDisabled();
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= innerWidth,
-      ),
-    ).toBe(true);
+    const viewport = page.viewportSize()!;
+    for (const size of [
+      viewport,
+      { width: viewport.height, height: viewport.width },
+    ]) {
+      await page.setViewportSize(size);
+      await expect(ten.getByRole('button')).toHaveCount(10);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      for (const name of ['Input level', 'Output level']) {
+        const rail = stage.getByRole('meter', { name, exact: true });
+        const bounds = await rail.boundingBox();
+        expect(bounds?.width).toBeGreaterThan(0);
+        expect(bounds?.width).toBeLessThan(24);
+      }
+    }
   } finally {
     await remove(request, revisions);
   }

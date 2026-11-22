@@ -651,7 +651,7 @@ export function GuitarSwitch({
   const buttons = profiles.guitars.map((g) => (
     <Button
       key={g.id}
-      variant="outline"
+      variant={profiles.active === g.id ? 'default' : 'outline'}
       aria-pressed={profiles.active === g.id}
       disabled={busy}
       onClick={() => void save({ ...profiles, active: g.id })}
@@ -661,14 +661,24 @@ export function GuitarSwitch({
   ));
   return (
     <div
-      className={layout === 'compact' ? 'perform-guitar' : 'perform-section'}
+      className={
+        layout === 'compact'
+          ? 'flex min-w-0 flex-wrap items-center justify-center gap-2'
+          : 'grid min-w-0 gap-2'
+      }
     >
       {layout === 'compact' ? (
-        <span className="perform-guitar-label">Guitar</span>
+        <span className="small-caps text-xs font-semibold text-muted-foreground">
+          Guitar
+        </span>
       ) : (
         <h3>Guitar</h3>
       )}
-      <div className="perform-guitars" role="group" aria-label="Guitar">
+      <div
+        className="flex min-w-0 flex-wrap items-center gap-1"
+        role="group"
+        aria-label="Guitar"
+      >
         {buttons}
       </div>
     </div>
