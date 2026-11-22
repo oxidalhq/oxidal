@@ -179,7 +179,9 @@ test('device portrait and landscape keep controls accessible and preserve a rota
     await page.getByRole('button', { name: 'Rig', exact: true }).click();
   }
   await expect(page.locator('.masthead select')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Parallel', exact: true }).click();
+  const parallel = page.getByRole('button', { name: 'Parallel', exact: true });
+  await parallel.click();
+  await expect(parallel).toHaveAttribute('aria-pressed', 'true');
   const before = await page.getByTestId('value-nam-a.level').textContent();
   await page
     .getByRole('button', { name: 'Adjust NAM A level value', exact: true })

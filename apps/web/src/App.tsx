@@ -648,7 +648,7 @@ function InstrumentApp() {
                   </label>
                   <TunerButton />
                   <Button
-                    className="bypass-switch min-h-12"
+                    className="bypass-switch min-h-[max(48px,3rem)]"
                     variant="outline"
                     disabled={!connected}
                     aria-pressed={state.bypassed}

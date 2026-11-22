@@ -531,7 +531,7 @@ function ToolPanel({
       data-slot="tool-panel"
       data-place={place}
       className={cn(
-        'grid animate-arrive rounded-lg border border-border bg-card',
+        'grid min-w-0 animate-arrive grid-cols-1 rounded-lg border border-border bg-card',
         float &&
           // Drag its corner to resize it, within sensible limits.
           'fixed z-popover max-h-[calc(100dvh-6rem)] min-h-40 max-w-[calc(100vw-1rem)] min-w-64 resize overflow-auto border-foreground/30 shadow-raised',
