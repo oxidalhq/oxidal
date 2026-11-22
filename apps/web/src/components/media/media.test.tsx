@@ -250,10 +250,41 @@ it('full player: seek keys, repeat, level and the refusal', () => {
   expect(value.send).toHaveBeenLastCalledWith({ kind: 'next' });
   fireEvent.click(within(sheet).getByRole('button', { name: 'Stop track' }));
   expect(value.send).toHaveBeenLastCalledWith({ kind: 'stop' });
-  fireEvent.change(within(sheet).getByRole('slider', { name: 'Level' }), {
-    target: { value: '-12' },
+  fireEvent.keyDown(within(sheet).getByRole('slider', { name: 'Level' }), {
+    key: 'ArrowDown',
   });
-  expect(value.send).toHaveBeenLastCalledWith({ kind: 'set_level', db: -12 });
+  expect(value.send).toHaveBeenLastCalledWith({ kind: 'set_level', db: -7 });
+});
+
+it('holds a position preview until release and drops a cancelled seek', () => {
+  const value = media({
+    player: snapshot('paused'),
+    sheet: { kind: 'player' },
+  });
+  withMedia(value, <MediaSheets />);
+  const thumb = screen.getByRole('slider', { name: 'Position' });
+  const track = thumb
+    .closest('[data-slot="slider"]')!
+    .querySelector<HTMLElement>('span[data-orientation]')!;
+  track.getBoundingClientRect = () => ({ left: 0, width: 222 }) as DOMRect;
+  track.setPointerCapture = vi.fn();
+  track.hasPointerCapture = () => true;
+  track.releasePointerCapture = vi.fn();
+  fireEvent.pointerDown(track, { button: 0, pointerId: 1, clientX: 100 });
+  fireEvent.pointerMove(track, { pointerId: 1, clientX: 120 });
+  expect(thumb).toHaveAttribute('aria-valuenow', '120');
+  expect(value.send).not.toHaveBeenCalled();
+  fireEvent.pointerCancel(track, { pointerId: 1 });
+  expect(thumb).toHaveAttribute('aria-valuenow', '72');
+  expect(value.send).not.toHaveBeenCalled();
+  fireEvent.pointerDown(track, { button: 0, pointerId: 2, clientX: 95 });
+  fireEvent.pointerMove(track, { pointerId: 2, clientX: 110 });
+  fireEvent.pointerUp(track, { pointerId: 2 });
+  fireEvent.blur(thumb);
+  expect(value.send).toHaveBeenCalledExactlyOnceWith({
+    kind: 'seek_to',
+    frame: 110 * 48000,
+  });
 });
 
 it('e-paper player: text state, 1 Hz time and step buttons, no drag', () => {

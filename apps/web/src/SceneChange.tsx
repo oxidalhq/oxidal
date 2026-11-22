@@ -6,7 +6,6 @@ import {
 } from '@oxidal/design-system/components/segmented';
 import { Slider } from '@oxidal/design-system/components/slider';
 
-import './MasterLevel.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { type SceneBlends, sceneBlends } from './api';
 import { friendlyError } from './lib/friendlyError';

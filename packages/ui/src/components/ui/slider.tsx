@@ -18,6 +18,7 @@ export function Slider({
   orientation = 'horizontal',
   value,
   defaultValue,
+  'aria-valuetext': valueText,
   ...props
 }: Omit<React.ComponentProps<typeof SliderPrimitive.Root>, 'orientation'> & {
   label: string;
@@ -81,6 +82,7 @@ export function Slider({
           <SliderPrimitive.Thumb
             key={index}
             aria-label={label}
+            aria-valuetext={valueText}
             className="block size-5 rounded-full border-2 border-foreground bg-background outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-110"
           />
         ))}

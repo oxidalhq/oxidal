@@ -1,6 +1,8 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
-import './MasterLevel.css';
+import { Button } from '@oxidal/design-system/components/button';
+import { Slider } from '@oxidal/design-system/components/slider';
+
 import { type UnitLevels, unitLevels } from './api';
 import {
   formatLevel,
@@ -102,31 +104,26 @@ export function MasterLevel({
   // Render once loaded so the row never flashes in and out on older daemons.
   if (!levels)
     return error ? (
-      <p className="master-level-error" role="alert">
+      <p className="col-span-full text-sm" role="alert">
         {error}
       </p>
     ) : null;
-  const db = levels?.output_level_db ?? 0;
+  const db = levels.output_level_db;
   return (
-    <div
-      className="master-level"
-      data-off={db <= LEVEL_MIN || undefined}
-      data-extra={extra ? true : undefined}
-    >
-      <label htmlFor="master-level">Level</label>
-      <input
-        id="master-level"
-        className="ink-range"
-        type="range"
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 border-b border-border py-1 sm:auto-cols-auto sm:grid-flow-col">
+      <Slider
+        label="Level"
+        readout={formatLevel(db)}
+        live
         min={0}
         max={STEPS}
         step={1}
-        value={Math.round(levelToPosition(db) * STEPS)}
-        disabled={disabled || !levels}
+        value={[Math.round(levelToPosition(db) * STEPS)]}
+        disabled={disabled}
         aria-valuetext={formatLevel(db)}
         title="Master output for every preset. Not saved in presets."
-        onChange={(e) =>
-          change(positionToLevel(Number(e.target.value) / STEPS))
+        onValueChange={([position]) =>
+          change(positionToLevel(position! / STEPS))
         }
         onKeyDown={(e) => {
           // Arrow keys move in whole dB rather than fader steps.
@@ -136,23 +133,19 @@ export function MasterLevel({
               : e.key === 'ArrowDown' || e.key === 'ArrowLeft'
                 ? -1
                 : 0;
-          if (!delta) return;
+          if (!delta || disabled) return;
           e.preventDefault();
           const from = latest.current?.output_level_db ?? db;
           change(
             Math.min(LEVEL_MAX, Math.max(LEVEL_MIN, Math.round(from) + delta)),
           );
         }}
-        style={{ '--level': levelToPosition(db) } as React.CSSProperties}
       />
-      <output htmlFor="master-level" aria-live="off">
-        {levels ? formatLevel(db) : '—'}
-      </output>
-      <button
+      <Button
         type="button"
-        className="master-mono"
-        aria-pressed={levels?.mono ?? false}
-        disabled={disabled || !levels}
+        variant={levels.mono ? 'default' : 'outline'}
+        aria-pressed={levels.mono ?? false}
+        disabled={disabled}
         title="Sum left and right: check how the preset sounds on a mono PA, or leave on for mono output"
         onClick={() => {
           const now = latest.current;
@@ -160,10 +153,14 @@ export function MasterLevel({
         }}
       >
         Mono
-      </button>
-      {extra && <div className="master-extra">{extra}</div>}
+      </Button>
+      {extra && (
+        <div className="col-span-full grid auto-cols-fr grid-flow-col items-center gap-2 sm:col-span-1 sm:flex">
+          {extra}
+        </div>
+      )}
       {error && (
-        <p className="master-level-error" role="alert">
+        <p className="col-span-full text-sm" role="alert">
           {error}
         </p>
       )}

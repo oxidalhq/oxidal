@@ -1,7 +1,5 @@
 /* The backing transport sits in the shared bottom dock on every screen. */
 
-@import '../../MasterLevel.css';
-
 .now-playing {
   display: none;
   min-width: 0;
@@ -234,10 +232,6 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-}
-.media-level input {
-  flex: 1;
-  min-width: 0;
 }
 .media-level output {
   min-width: 4.5rem;

@@ -12,11 +12,11 @@ import {
 import { DialogFooter } from '@oxidal/design-system/components/dialog';
 import { ListRow } from '@oxidal/design-system/components/list-row';
 import { NumberField } from '@oxidal/design-system/components/number-field';
+import { Slider } from '@oxidal/design-system/components/slider';
 import { StateNotice } from '@oxidal/design-system/components/states';
 import { GuitarWorkspace } from '@oxidal/design-system/patterns/guitar-workspace';
 import { Meter } from '@oxidal/design-system/widgets/meter';
 
-import './MasterLevel.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { boosts, type GuitarProfiles } from './api';
 import { CaptureListening } from './CaptureListening';
@@ -352,7 +352,7 @@ export function GuitarSettings() {
             onCancel={() => setEditing(null)}
           >
             <div className="control-stack">
-              <div className="guitar-trim">
+              <div className="flex items-center justify-center gap-4">
                 <Button
                   variant="outline"
                   size="icon"
@@ -366,7 +366,12 @@ export function GuitarSettings() {
                 >
                   <Minus aria-hidden="true" />
                 </Button>
-                <output aria-live="polite">{db(openTrim)}</output>
+                <output
+                  className="min-w-[6ch] text-center font-mono text-xl font-semibold tabular-nums"
+                  aria-live="polite"
+                >
+                  {db(openTrim)}
+                </output>
                 <Button
                   variant="outline"
                   size="icon"
@@ -381,24 +386,16 @@ export function GuitarSettings() {
                   <Plus aria-hidden="true" />
                 </Button>
               </div>
-              <input
-                type="range"
+              <Slider
+                label={`${open.name} trim`}
                 min={TRIM.min}
                 max={TRIM.max}
                 step={TRIM.step}
-                aria-label={`${open.name} trim`}
-                className="ink-range ink-range-wide"
-                style={
-                  {
-                    '--level': (openTrim - TRIM.min) / (TRIM.max - TRIM.min),
-                  } as React.CSSProperties
-                }
-                value={openTrim}
+                value={[openTrim]}
+                aria-valuetext={db(openTrim)}
                 disabled={busy}
-                onChange={(e) =>
-                  change(open.id, {
-                    trim_db: clampTrim(Number(e.target.value)),
-                  })
+                onValueChange={([trim]) =>
+                  change(open.id, { trim_db: clampTrim(trim!) })
                 }
               />
               <p className="caption">

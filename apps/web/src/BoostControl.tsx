@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 
-import './MasterLevel.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { boosts as boostApi, type BoostState } from './api';
 import { friendlyError } from './lib/friendlyError';
@@ -65,7 +64,10 @@ export function BoostControl({
         disabled={disabled || state == null}
         onClick={() => setOpen(true)}
       >
-        Boost <span className="boost-value">{db(total)}</span>
+        Boost{' '}
+        <span className="font-mono text-sm font-medium tabular-nums">
+          {db(total)}
+        </span>
       </Button>
       {open && (
         <AdjustmentDialog title="Boost" onCancel={() => setOpen(false)}>
@@ -75,9 +77,14 @@ export function BoostControl({
               level. It stays on this unit and applies as soon as it plays.
             </p>
             {targets.map((t) => (
-              <div key={t.key} className="boost-row">
-                <span className="boost-label">{t.label}</span>
-                <div className="guitar-trim">
+              <div
+                key={t.key}
+                className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 border-b border-border py-1 max-sm:grid-cols-[minmax(0,1fr)_auto]"
+              >
+                <span className="font-semibold wrap-anywhere max-sm:col-span-full">
+                  {t.label}
+                </span>
+                <div className="flex items-center justify-center gap-2">
                   <Button
                     variant="outline"
                     size="icon"
@@ -87,7 +94,12 @@ export function BoostControl({
                   >
                     <Minus aria-hidden="true" />
                   </Button>
-                  <output aria-live="polite">{db(value(t.key))}</output>
+                  <output
+                    className="min-w-[6ch] text-center font-mono font-semibold tabular-nums"
+                    aria-live="polite"
+                  >
+                    {db(value(t.key))}
+                  </output>
                   <Button
                     variant="outline"
                     size="icon"

@@ -1,4 +1,6 @@
-import { type CSSProperties, useState } from 'react';
+import { useRef, useState } from 'react';
+
+import { Slider } from '@oxidal/design-system/components/slider';
 
 import { formatTime, spokenTime } from '../../lib/playerClock';
 import { usePlayerPosition, useSessionMedia } from './sessionMedia';
@@ -20,31 +22,31 @@ export function PositionBar({ disabled = false }: { disabled?: boolean }) {
     const to = Math.min(max, Math.max(0, seconds));
     void send({ kind: 'seek_to', frame: Math.round(to * rate) });
   };
+  const pending = useRef<number | null>(null);
+  const preview = (to: number | null) => {
+    pending.current = to;
+    setDrag(to);
+  };
   const commit = () => {
-    if (drag === null) return;
-    const to = drag;
-    setDrag(null);
-    seek(to);
+    const to = pending.current;
+    if (to === null) return;
+    preview(null);
+    if (!disabled && rate) seek(to);
   };
   return (
     <div className="media-position">
-      <label className="sr-only" htmlFor="media-position">
-        Position
-      </label>
-      <input
-        id="media-position"
-        className="ink-range"
-        type="range"
+      <Slider
+        label="Position"
         min={0}
         max={max}
         step={1}
-        value={Math.min(max, Math.floor(shown))}
+        value={[Math.min(max, Math.floor(shown))]}
         disabled={disabled || !rate}
         aria-valuetext={`${spokenTime(shown)} of ${spokenTime(length)}`}
-        style={{ '--level': shown / max } as CSSProperties}
-        onChange={(event) => setDrag(Number(event.target.value))}
+        onValueChange={([to]) => preview(to!)}
         onPointerUp={commit}
-        onPointerCancel={() => setDrag(null)}
+        onPointerCancel={() => preview(null)}
+        onLostPointerCapture={() => preview(null)}
         onBlur={commit}
         onKeyDown={(event) => {
           const step =
@@ -61,9 +63,9 @@ export function PositionBar({ disabled = false }: { disabled?: boolean }) {
                       : event.key === 'End'
                         ? Infinity
                         : 0;
-          if (!step) return;
+          if (!step || disabled || !rate) return;
           event.preventDefault();
-          setDrag(null);
+          preview(null);
           seek(Number.isFinite(step) ? at + step : step < 0 ? 0 : max);
         }}
       />

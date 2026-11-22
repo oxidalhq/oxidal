@@ -1,7 +1,8 @@
 import { DownloadSimple, Stop, Warning } from '@phosphor-icons/react';
-import { type CSSProperties, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Slider } from '@oxidal/design-system/components/slider';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { type MediaAsset, originalPath, updateAsset } from '../../api';
@@ -122,28 +123,16 @@ function PlayerLevel() {
       </div>
     );
   return (
-    <div className="media-level">
-      <label htmlFor="media-level">
-        <strong>Level</strong>
-      </label>
-      <input
-        id="media-level"
-        className="ink-range"
-        type="range"
-        min={LEVEL_MIN}
-        max={LEVEL_MAX}
-        step={1}
-        value={db}
-        aria-valuetext={formatDb(db)}
-        style={
-          {
-            '--level': (db - LEVEL_MIN) / (LEVEL_MAX - LEVEL_MIN),
-          } as CSSProperties
-        }
-        onChange={(event) => void change(Number(event.target.value))}
-      />
-      <output htmlFor="media-level">{formatDb(db)}</output>
-    </div>
+    <Slider
+      label="Level"
+      min={LEVEL_MIN}
+      max={LEVEL_MAX}
+      step={1}
+      value={[db]}
+      aria-valuetext={formatDb(db)}
+      readout={formatDb(db)}
+      onValueChange={([next]) => void change(next!)}
+    />
   );
 }
 
@@ -198,7 +187,7 @@ function FullPlayer({ onClose }: { onClose: () => void }) {
               <span className="caption">(updates every second)</span>
             </p>
           ) : (
-            <PositionBar disabled={shown === 'unavailable'} />
+            <PositionBar key={track.id} disabled={shown === 'unavailable'} />
           )}
           <FullTransport />
           <Button

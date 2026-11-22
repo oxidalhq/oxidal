@@ -102,5 +102,9 @@ it('follows a confirmed master move from the worker', async () => {
       },
     });
   });
-  expect(screen.getByRole('slider')).toHaveValue('250');
+  expect(screen.getByRole('slider')).toHaveAttribute('aria-valuenow', '250');
+  expect(screen.getByRole('slider')).toHaveAttribute(
+    'aria-valuetext',
+    '−30.0 dB',
+  );
 });
