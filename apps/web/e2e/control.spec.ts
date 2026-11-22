@@ -1127,8 +1127,23 @@ test('rig tuner is accessible outside preset authoring and survives rotation', a
     await expect(
       dialog.getByRole('radio', { name: 'Mute', exact: true }),
     ).toBeDisabled();
+    await dialog
+      .getByRole('button', { name: 'Full screen', exact: true })
+      .click();
     const size = page.viewportSize()!;
+    const fillsViewport = () =>
+      dialog.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        return (
+          Math.abs(box.left) < 2 &&
+          Math.abs(box.top) < 2 &&
+          Math.abs(box.width - innerWidth) < 2 &&
+          Math.abs(box.height - innerHeight) < 2
+        );
+      });
+    await expect.poll(fillsViewport).toBe(true);
     await page.setViewportSize({ width: size.height, height: size.width });
+    await expect.poll(fillsViewport).toBe(true);
     await expect(
       dialog.getByRole('button', { name: 'Close dialog', exact: true }),
     ).toBeInViewport();

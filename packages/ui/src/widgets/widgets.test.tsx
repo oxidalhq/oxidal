@@ -97,6 +97,36 @@ it('the tuner names the note and says when it is in tune', () => {
   expect(screen.getByRole('status')).toHaveAccessibleName('Tuner: no note');
 });
 
+it('keeps the precision strobe stationary at one cent and reports tenths on E-paper', () => {
+  document.documentElement.dataset.display = 'epaper';
+  try {
+    const { container, rerender } = render(
+      <TunerFace precision still note={69} cents={0.8} frequency={440.2} />,
+    );
+    expect(screen.getByRole('status')).toHaveAccessibleName(
+      'A4, +0.8 cents, in tune',
+    );
+    expect(container.querySelector('g[transform]')).toHaveAttribute(
+      'transform',
+      'rotate(0.00 120 120)',
+    );
+    rerender(
+      <TunerFace precision still note={69} cents={1.4} frequency={440.36} />,
+    );
+    expect(screen.getByRole('meter', { name: 'Tuning cents' })).toHaveAttribute(
+      'aria-valuenow',
+      '1.4',
+    );
+    expect(screen.getByText('+1.4 cents')).toBeVisible();
+    expect(container.querySelector('g[transform]')).not.toHaveAttribute(
+      'transform',
+      'rotate(0.00 120 120)',
+    );
+  } finally {
+    delete document.documentElement.dataset.display;
+  }
+});
+
 it('the chain names bypassed blocks, selects on click and moves with Shift+arrows when editing', async () => {
   const user = userEvent.setup();
   const select = vi.fn();

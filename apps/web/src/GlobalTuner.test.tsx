@@ -68,8 +68,8 @@ it('shows how far and which way a string is out', async () => {
   vi.mocked(tuner).mockResolvedValue(listening(110 * 2 ** (-5 / 1200)));
   render(<GlobalTuner onClose={vi.fn()} />);
   expect(await screen.findByText('−5.0 cents')).toBeVisible();
-  expect(screen.getByText('◀ flat')).toHaveAttribute('data-on', 'true');
-  expect(screen.getByText('sharp ▶')).toHaveAttribute('data-on', 'false');
+  expect(screen.getByText('♭ flat')).toHaveAttribute('data-on', 'true');
+  expect(screen.getByText('sharp ♯')).toHaveAttribute('data-on', 'false');
   expect(screen.getByRole('meter', { name: 'Tuning cents' })).toHaveAttribute(
     'aria-valuenow',
     '-5',
@@ -90,7 +90,7 @@ it('lets the player hear the guitar, change the reference and fill the screen', 
   expect(await screen.findByText('A4 441')).toBeVisible();
   await waitFor(() => expect(screen.queryByText('In tune')).toBeNull());
   fireEvent.click(screen.getByRole('button', { name: 'Full screen' }));
-  expect(screen.getByRole('dialog')).toHaveClass('tuner-full');
+  expect(screen.getByRole('dialog')).toHaveClass('h-dvh');
   fireEvent.click(screen.getByRole('button', { name: 'Day look' }));
   expect(localStorage.getItem('oxidal.tuner.look')).toBe('day');
   expect(localStorage.getItem('oxidal.tuner.full')).toBe('1');

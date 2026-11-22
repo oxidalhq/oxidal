@@ -1,6 +1,7 @@
 import { SpeakerSlash } from '@phosphor-icons/react';
 
 import { cn } from '../lib/cn';
+import { TunerStrobe } from './tuner-strobe';
 
 const NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
 
@@ -23,6 +24,9 @@ export function TunerFace({
   reference = 440,
   day = false,
   size = 'md',
+  precision = false,
+  idleLabel = 'Play a string',
+  still = false,
   muted,
   onMuted,
   className,
@@ -35,23 +39,34 @@ export function TunerFace({
   reference?: number;
   day?: boolean;
   size?: 'md' | 'lg';
+  /** Show the one-cent strobe dial and tenths of a cent. */
+  precision?: boolean;
+  idleLabel?: string;
+  still?: boolean;
   /** The outputs are muted while the tuner is open. */
   muted?: boolean;
   onMuted?: (muted: boolean) => void;
   className?: string;
 }) {
   const heard = note !== null;
-  const inTune = heard && Math.abs(cents) <= LOCK;
+  const inTune = heard && Math.abs(cents) <= (precision ? 1 : LOCK);
   const name = heard ? NAMES[((note % 12) + 12) % 12] : '—';
   const octave = heard ? Math.floor(note / 12) - 1 : '';
   const position = 50 + Math.max(-50, Math.min(50, cents));
-  const ink = inTune ? 'var(--tuner-green)' : 'var(--tuner-amber)';
+  const ink = day
+    ? inTune
+      ? 'var(--tuner-day-green)'
+      : 'var(--tuner-day-ink)'
+    : inTune
+      ? 'var(--tuner-green)'
+      : 'var(--tuner-amber)';
+  const shown = heard ? Math.round(cents * 10) / 10 : null;
   return (
     <div
       data-slot="tuner"
       style={{
         background: day ? 'var(--tuner-day-surface)' : 'var(--tuner-surface)',
-        color: day ? 'var(--tuner-day-ink)' : 'var(--enclosure-foreground)',
+        color: day ? 'var(--tuner-day-ink)' : 'var(--tuner-foreground)',
       }}
       className={cn(
         'grid justify-items-center gap-2 rounded-lg p-6 select-none',
@@ -67,74 +82,117 @@ export function TunerFace({
         aria-live="polite"
         aria-label={
           heard
-            ? `${name}${octave}, ${cents > 0 ? '+' : ''}${cents.toFixed(0)} cents${inTune ? ', in tune' : ''}`
-            : 'Tuner: no note'
+            ? `${name}${octave}, ${cents > 0 ? '+' : ''}${cents.toFixed(precision ? 1 : 0)} cents${inTune ? ', in tune' : ''}`
+            : precision
+              ? idleLabel
+              : 'Tuner: no note'
         }
         className={cn(
           'grid w-full justify-items-center gap-4',
           size === 'lg' && 'gap-6',
         )}
       >
-        <div className="grid justify-items-center gap-1">
+        <div className="grid w-full justify-items-center gap-1">
           <span className="small-caps text-sm font-medium opacity-70">
             {heard
-              ? `${frequency ? `${frequency.toFixed(1)} Hz · ` : ''}A = ${reference} Hz`
-              : 'Play a string'}
+              ? `${frequency ? `${frequency.toFixed(precision ? 2 : 1)} Hz · ` : ''}A = ${reference} Hz`
+              : idleLabel}
           </span>
-          <span
-            className={cn(
-              'font-display font-semibold tracking-tight tabular-nums',
-              size === 'lg'
-                ? 'text-[clamp(5rem,20vw,10rem)] leading-none'
-                : 'text-display',
-            )}
-            style={{
-              color: heard
-                ? day && inTune
-                  ? 'var(--tuner-day-green)'
-                  : ink
-                : undefined,
-            }}
-          >
-            {name}
-            {heard && (
-              <span className="text-[0.35em] font-normal opacity-70">
-                {octave}
-              </span>
-            )}
-          </span>
+          {precision ? (
+            <div className="w-full" style={{ color: ink }}>
+              <TunerStrobe
+                cents={heard ? cents : null}
+                name={name ?? '—'}
+                octave={String(octave)}
+                still={still}
+              />
+            </div>
+          ) : (
+            <span
+              className={cn(
+                'font-display font-semibold tracking-tight tabular-nums',
+                size === 'lg'
+                  ? 'text-[clamp(5rem,20vw,10rem)] leading-none'
+                  : 'text-display',
+              )}
+              style={{
+                color: heard ? ink : undefined,
+              }}
+            >
+              {name}
+              {heard && (
+                <span className="text-[0.35em] font-normal opacity-70">
+                  {octave}
+                </span>
+              )}
+            </span>
+          )}
         </div>
         <div className="grid w-full max-w-md gap-1">
-          <div className="relative h-10" aria-hidden="true">
-            {/* Scale: ticks every 10 cents, a tall tick at 0. */}
-            {Array.from({ length: 11 }, (_, index) => (
-              <span
-                key={index}
-                className={cn(
-                  'absolute top-1/2 w-px -translate-y-1/2 bg-current',
-                  index === 5 ? 'h-8 opacity-80' : 'h-3 opacity-35',
-                )}
-                style={{ left: `${index * 10}%` }}
-              />
-            ))}
-            {heard && (
-              <span
-                className="absolute top-0 h-10 w-1 -translate-x-1/2 rounded-full transition-[left] duration-[var(--duration-fast)]"
-                style={{
-                  left: `${position}%`,
-                  background: day && inTune ? 'var(--tuner-day-green)' : ink,
-                }}
-              />
-            )}
-          </div>
-          <div className="flex justify-between small-caps text-sm font-medium opacity-70">
-            <span>♭ flat</span>
-            <span className="font-mono tabular-nums">
-              {heard
-                ? `${cents > 0 ? '+' : cents < 0 ? '−' : ''}${Math.abs(cents).toFixed(0)}¢`
-                : ''}
+          {!precision && (
+            <div className="relative h-10" aria-hidden="true">
+              {/* Scale: ticks every 10 cents, a tall tick at 0. */}
+              {Array.from({ length: 11 }, (_, index) => (
+                <span
+                  key={index}
+                  className={cn(
+                    'absolute top-1/2 w-px -translate-y-1/2 bg-current',
+                    index === 5 ? 'h-8 opacity-80' : 'h-3 opacity-35',
+                  )}
+                  style={{ left: `${index * 10}%` }}
+                />
+              ))}
+              {heard && (
+                <span
+                  className="absolute top-0 h-10 w-1 -translate-x-1/2 rounded-full transition-[left] duration-[var(--duration-fast)]"
+                  style={{
+                    left: `${position}%`,
+                    background: ink,
+                  }}
+                />
+              )}
+            </div>
+          )}
+          <div
+            role={precision ? 'meter' : undefined}
+            aria-label={precision ? 'Tuning cents' : undefined}
+            aria-valuemin={precision ? -50 : undefined}
+            aria-valuemax={precision ? 50 : undefined}
+            aria-valuenow={precision ? (shown ?? 0) : undefined}
+            aria-valuetext={
+              precision
+                ? shown === null
+                  ? 'No clear note'
+                  : `${shown} cents`
+                : undefined
+            }
+            className="flex justify-between small-caps text-sm font-medium opacity-70"
+          >
+            <span
+              data-on={heard && !inTune && cents < 0}
+              className={
+                precision ? 'opacity-45 data-[on=true]:opacity-100' : undefined
+              }
+            >
+              ♭ flat
             </span>
-            <span>sharp ♯</span>
+            <span className="font-mono tabular-nums">
+              {precision && shown !== null
+                ? inTune
+                  ? 'In tune'
+                  : `${shown > 0 ? '+' : '−'}${Math.abs(shown).toFixed(1)} cents`
+                : heard
+                  ? `${cents > 0 ? '+' : cents < 0 ? '−' : ''}${Math.abs(cents).toFixed(0)}¢`
+                  : ''}
+            </span>
+            <span
+              data-on={heard && !inTune && cents > 0}
+              className={
+                precision ? 'opacity-45 data-[on=true]:opacity-100' : undefined
+              }
+            >
+              sharp ♯
+            </span>
           </div>
         </div>
       </div>

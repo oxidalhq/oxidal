@@ -241,6 +241,7 @@ export const Tuner: StoryObj = {
   render: () => (
     <div className="grid max-w-2xl gap-6">
       <Tuning />
+      <TunerFace precision note={40} cents={-3.4} frequency={82.25} />
       <TunerFace note={40} cents={-32} frequency={81} />
       <TunerFace note={null} cents={0} />
       <Tuning day />
