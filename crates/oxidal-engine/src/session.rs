@@ -710,6 +710,13 @@ impl Session {
         &mut self,
         command: oxidal_lv2::protocol::PluginDefaultsCommand,
     ) -> Result<(), String> {
+        self.apply_plugin_settings(command, None)
+    }
+    pub fn apply_plugin_settings(
+        &mut self,
+        command: oxidal_lv2::protocol::PluginDefaultsCommand,
+        settings: Option<(&str, &std::collections::BTreeMap<String, f32>)>,
+    ) -> Result<(), String> {
         if !self.matches_cursor(&command.session, command.expected_revision) {
             return Err("rig_control_conflict; refresh status".into());
         }
@@ -728,10 +735,13 @@ impl Session {
             .checked_add(1)
             .ok_or("Rig revision exhausted")?;
         let Some(Processor::Lv2(plugin)) = self.graph.processor_mut(&command.node) else {
-            return Err("Defaults require a running LV2 node".into());
+            return Err("Block settings require a running LV2 node".into());
         };
-        let defaults = plugin.factory_defaults()?;
-        let confirmed = defaults
+        let values = match settings {
+            Some((uri, controls)) => plugin.named_settings(uri, controls)?,
+            None => plugin.factory_defaults()?,
+        };
+        let confirmed = values
             .values()
             .iter()
             .map(|&(index, value)| {
@@ -749,7 +759,7 @@ impl Session {
                 Ok((control, f64::from(value), port.display(value)))
             })
             .collect::<Result<Vec<_>, String>>()?;
-        if let Err(error) = plugin.write_defaults(&defaults) {
+        if let Err(error) = plugin.write_values(&values) {
             self.failed = !plugin.healthy();
             return Err(error.to_string());
         }

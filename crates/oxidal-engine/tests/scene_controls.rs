@@ -719,3 +719,93 @@ fn moment_keeps_the_caught_phrase_through_bypassed_and_active_scenes() {
         }
     }
 }
+
+#[test]
+#[ignore = "requires the actual built stereo Moment LV2 bundle"]
+fn named_settings_change_the_running_moment_atomically() {
+    use oxidal_lv2::protocol::PluginDefaultsCommand;
+    let bundle = std::env::var_os("OXIDAL_MOMENT_LV2_BUNDLE").expect("Moment test bundle");
+    let world = World::bundle(std::path::Path::new(&bundle)).unwrap();
+    let uri = "urn:oxidal:plugin:moment#stereo";
+    let mut manifest: Value =
+        serde_json::from_slice(&bypass_only(0., false).manifest().encode().unwrap()).unwrap();
+    manifest["oxidal"]["lv2"][0]["pluginUri"] = json!(uri);
+    let plugin = world
+        .plugins(RATE)
+        .unwrap()
+        .into_iter()
+        .find(|p| p.uri == uri)
+        .unwrap();
+    let defaults: BTreeMap<_, _> = plugin
+        .ports
+        .iter()
+        .filter(|p| p.control && p.input)
+        .map(|p| (&p.symbol, p.default.unwrap()))
+        .collect();
+    manifest["oxidal"]["lv2"][0]["controls"] = json!(defaults);
+    let preset =
+        Bundle::from_parts(serde_json::to_vec(&manifest).unwrap(), BTreeMap::new()).unwrap();
+    let mut rig = Session::new(preset, &world, RATE, FRAMES, 1 << 20).unwrap();
+    let original = rig.snapshot();
+    let command = PluginDefaultsCommand {
+        session: original.session.clone(),
+        expected_revision: original.revision,
+        node: "fx".into(),
+    };
+    let previous: BTreeMap<_, _> = original
+        .controls
+        .iter()
+        .filter_map(|c| match &c.target {
+            Target::Lv2 { node, symbol } if node == "fx" => Some((symbol.clone(), c.value as f32)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(previous.len(), 24);
+    let mut values = previous.clone();
+    values.insert("mix".into(), 0.);
+    values.insert("length".into(), 7.);
+    let mut bad = values.clone();
+    bad.insert("shape".into(), 101.);
+    for (plugin, settings) in [(uri, &bad), ("urn:oxidal:plugin:echo#stereo", &values)] {
+        assert!(
+            rig.apply_plugin_settings(command.clone(), Some((plugin, settings)))
+                .is_err()
+        );
+        let state = rig.snapshot();
+        assert_eq!(state.revision, original.revision);
+        assert_eq!(control(&state, "fx", "mix"), f64::from(previous["mix"]));
+        assert_eq!(
+            control(&state, "fx", "length"),
+            f64::from(previous["length"])
+        );
+    }
+    rig.apply_plugin_settings(command.clone(), Some((uri, &values)))
+        .unwrap();
+    let state = rig.snapshot();
+    assert!(state.modified);
+    assert_eq!(state.revision, original.revision + 1);
+    assert_eq!(control(&state, "fx", "mix"), 0.);
+    assert_eq!(control(&state, "fx", "length"), 7.);
+    let mut clock = 0;
+    for _ in 0..100 {
+        render(&mut rig, |_| 0.25, &mut clock);
+    }
+    assert!(
+        render(&mut rig, |_| 0.25, &mut clock)
+            .iter()
+            .all(|v| (*v - 0.25).abs() < 0.0001)
+    );
+    assert!(
+        rig.apply_plugin_settings(command.clone(), Some((uri, &previous)))
+            .is_err()
+    );
+    let undo = PluginDefaultsCommand {
+        expected_revision: state.revision,
+        ..command
+    };
+    rig.apply_plugin_settings(undo, Some((uri, &previous)))
+        .unwrap();
+    let restored = rig.snapshot();
+    assert!(!restored.modified);
+    assert_eq!(restored.revision, state.revision + 1);
+}

@@ -11,6 +11,8 @@ import {
 } from '../../lv2PluginPanel';
 import { MomentMemoryNotice } from '../../MomentMemoryNotice';
 import { PluginSourceDetails } from '../../PluginSourceDetails';
+import { NamedSettings } from '../library/NamedSettings';
+import { supportsNamedSettings } from '../library/namedSettingValues';
 import { rigBusy } from './mixedRigViewModel';
 import { QuickLv2Panel } from './QuickLv2Panel';
 import type { RigViewProps } from './useMixedRigSession';
@@ -157,6 +159,43 @@ export function LiveLv2Panel({ rig, vm }: RigViewProps) {
         onAdjust={onAdjust}
         disabled={disabled}
       />
+      {plugin && state.control && supportsNamedSettings(plugin.uri) && (
+        <NamedSettings
+          key={panelKey}
+          live
+          block={{
+            name: selectedView.label,
+            plugin,
+            controls: Object.fromEntries(
+              Array.from(live, ([symbol, control]) => [symbol, control.value]),
+            ),
+          }}
+          disabled={
+            disabled ||
+            state.phase !== 'running' ||
+            !plugin.ports
+              .filter((p) => p.control && p.input)
+              .every((p) => live.has(p.symbol))
+          }
+          onApply={async (values) => {
+            if (!state.control || disabled) return false;
+            return command(
+              {
+                kind: 'apply_block_settings',
+                command: {
+                  session: state.control.session,
+                  expected_revision: state.control.revision,
+                  node: selected.id,
+                },
+                plugin: plugin.uri,
+                controls: values,
+              },
+              true,
+              state,
+            );
+          }}
+        />
+      )}
       {plugin && <PluginSourceDetails key={plugin.uri} plugin={plugin} />}
       <MomentMemoryNotice uri={selectedPluginUri} />
     </>

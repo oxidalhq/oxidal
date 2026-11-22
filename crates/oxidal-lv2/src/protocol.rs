@@ -4,7 +4,7 @@ use oxidal_control::{Command, MappingFile, Snapshot};
 use oxidal_graph::{BlockKind, Rig};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub const REQUEST_LIMIT: usize = 65536;
 pub const REPLY_LIMIT: usize = 262144;
@@ -168,6 +168,11 @@ pub enum WorkerRequest {
     RestorePluginDefaults {
         command: PluginDefaultsCommand,
     },
+    ApplyBlockSettings {
+        command: PluginDefaultsCommand,
+        plugin: String,
+        controls: BTreeMap<String, f32>,
+    },
     HostUtility {
         command: oxidal_audio::tools::HostUtility,
     },
@@ -217,6 +222,11 @@ pub struct GraphAudioState {
 pub enum GraphAudioAction {
     RestorePluginDefaults {
         command: PluginDefaultsCommand,
+    },
+    ApplyBlockSettings {
+        command: PluginDefaultsCommand,
+        plugin: String,
+        controls: BTreeMap<String, f32>,
     },
     HostUtility {
         command: oxidal_audio::tools::HostUtility,

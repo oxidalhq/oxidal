@@ -10,11 +10,18 @@ import { namedSettingValues } from './namedSettingValues';
 export function NamedSettings({
   block,
   disabled,
+  live = false,
   onApply,
 }: {
-  block: Extract<DraftEffect, { kind: 'lv2' }>;
+  block: Pick<
+    Extract<DraftEffect, { kind: 'lv2' }>,
+    'plugin' | 'name' | 'controls'
+  >;
+  live?: boolean;
   disabled: boolean;
-  onApply: (values: Record<string, number>) => void;
+  onApply: (
+    values: Record<string, number>,
+  ) => void | Promise<boolean | undefined>;
 }) {
   const [library, setLibrary] = useState<Contract['block_settings']>();
   const [name, setName] = useState('');
@@ -24,7 +31,7 @@ export function NamedSettings({
   const [message, setMessage] = useState('');
   const [undo, setUndo] = useState<{
     before: Record<string, number>;
-    after: string;
+    after: Record<string, number>;
   }>();
   const entries =
     library?.entries.filter((e) => e.plugin === block.plugin.uri) ?? [];
@@ -58,7 +65,7 @@ export function NamedSettings({
               id: chosen,
               name: kind === 'create' ? name.trim() : entry!.name,
               plugin: block.plugin.uri,
-              controls: namedSettingValues(block.plugin, block.controls, true),
+              controls: namedSettingValues(block.plugin, block.controls, !live),
             },
           };
         }
@@ -82,17 +89,36 @@ export function NamedSettings({
       setBusy(false);
     }
   }
-  function recall() {
-    if (!entry) return;
+  async function recall(restore = false) {
+    if (pending.current || disabled || (restore ? !undo : !entry)) return;
+    pending.current = true;
+    setBusy(true);
+    setMessage('');
     try {
-      const values = namedSettingValues(block.plugin, entry.controls, false);
-      setUndo({ before: { ...block.controls }, after: JSON.stringify(values) });
-      onApply(values);
-      setMessage('Settings applied to this draft.');
+      const values = restore
+        ? undo!.before
+        : namedSettingValues(block.plugin, entry!.controls, false);
+      const before = { ...block.controls };
+      const result = onApply(values);
+      if (result && !(await result))
+        throw new Error(
+          'The device did not confirm the block settings. Check the current values.',
+        );
+      setUndo(restore ? undefined : { before, after: values });
+      setMessage(
+        restore
+          ? 'Previous block settings restored.'
+          : live
+            ? 'Settings applied to the playing block.'
+            : 'Settings applied to this draft.',
+      );
     } catch (cause) {
       setMessage(
         cause instanceof Error ? cause.message : 'Cannot apply these settings.',
       );
+    } finally {
+      pending.current = false;
+      setBusy(false);
     }
   }
   return (
@@ -137,8 +163,12 @@ export function NamedSettings({
           </select>
         </label>
         <div className="action-row">
-          <Button type="button" disabled={locked || !entry} onClick={recall}>
-            Apply to draft
+          <Button
+            type="button"
+            disabled={locked || !entry}
+            onClick={() => void recall()}
+          >
+            {live ? 'Apply to playing block' : 'Apply to draft'}
           </Button>
           <Button
             type="button"
@@ -164,20 +194,21 @@ export function NamedSettings({
           >
             Refresh settings
           </Button>
-          {undo && JSON.stringify(block.controls) === undo.after && (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={locked}
-              onClick={() => {
-                onApply(undo.before);
-                setUndo(undefined);
-                setMessage('Previous block settings restored.');
-              }}
-            >
-              Undo recall
-            </Button>
-          )}
+          {undo &&
+            Object.keys(undo.after).length ===
+              Object.keys(block.controls).length &&
+            Object.entries(undo.after).every(
+              ([symbol, value]) => block.controls[symbol] === value,
+            ) && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={locked}
+                onClick={() => void recall(true)}
+              >
+                Undo recall
+              </Button>
+            )}
         </div>
         {message && <p role="status">{message}</p>}
       </div>

@@ -1383,20 +1383,42 @@ impl Owner {
                     return Err(e);
                 }
             }
-            RigAudioAction::RestorePluginDefaults { command } => {
+            action @ (RigAudioAction::RestorePluginDefaults { .. }
+            | RigAudioAction::ApplyBlockSettings { .. }) => {
                 if self.export.is_some() {
-                    return Err("Finish saving before restoring plugin defaults".into());
+                    return Err("Finish saving before changing plugin settings".into());
                 }
                 if self.state.phase != AudioPhase::Running {
                     return Err("Mixed audio is not running".into());
                 }
-                let reply = match self
-                    .exchange(&WorkerRequest::RestorePluginDefaults { command })
-                    .await
-                {
+                let request = match action {
+                    RigAudioAction::ApplyBlockSettings {
+                        command,
+                        plugin,
+                        controls,
+                    } => {
+                        if !oxidal_lv2::supports_named_settings(&plugin)
+                            || controls.is_empty()
+                            || controls.len() > 128
+                            || controls.keys().any(|s| s.is_empty() || s.len() > 128)
+                        {
+                            return Err("Invalid named block settings".into());
+                        }
+                        WorkerRequest::ApplyBlockSettings {
+                            command,
+                            plugin,
+                            controls,
+                        }
+                    }
+                    RigAudioAction::RestorePluginDefaults { command } => {
+                        WorkerRequest::RestorePluginDefaults { command }
+                    }
+                    _ => unreachable!(),
+                };
+                let reply = match self.exchange(&request).await {
                     Ok(reply) => reply,
                     Err(error) => {
-                        let error = format!("Plugin defaults could not be confirmed: {error}");
+                        let error = format!("Plugin settings could not be confirmed: {error}");
                         return Err(self.release_after_fault(error, false).await);
                     }
                 };

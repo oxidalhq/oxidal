@@ -97,6 +97,18 @@ impl ScalePoint {
         points
     }
 }
+/// Bundled effects whose reusable parameter settings have no external assets.
+pub fn supports_named_settings(uri: &str) -> bool {
+    matches!(
+        uri.strip_prefix("urn:oxidal:plugin:")
+            .and_then(|s| s.split_once('#')),
+        Some((
+            "bloom" | "echo" | "motion" | "sustain" | "moment",
+            "mono" | "stereo"
+        ))
+    )
+}
+
 /// Curated plugins whose complete sound is represented by scalar controls.
 /// Their Atom ports carry UI preset messages; no messages are sent in this mode.
 /// Unknown plugins and changed port layouts still require portable state.

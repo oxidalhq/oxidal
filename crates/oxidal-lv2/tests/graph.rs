@@ -440,3 +440,57 @@ fn atom_processing_does_not_allocate_rust_memory() {
     COUNTING.with(|c| c.set(false));
     assert_eq!(ALLOCATIONS.with(|n| n.get()), 0);
 }
+
+#[test]
+#[ignore = "requires the shipped Moment LV2 bundle"]
+fn named_settings_apply_to_one_effect_as_one_revision() {
+    use oxidal_lv2::protocol::PluginDefaultsCommand;
+    use std::collections::BTreeMap;
+
+    let bundle = std::env::var_os("OXIDAL_MOMENT_LV2_BUNDLE").unwrap();
+    let world = World::bundle(Path::new(&bundle)).unwrap();
+    let uri = "urn:oxidal:plugin:moment#stereo";
+    let mut graph = PreparedGraph::new(&world, rig(false), &bindings(uri), 48000.0, 64).unwrap();
+    let cursor = |g: &PreparedGraph| {
+        let snapshot = g.snapshot();
+        PluginDefaultsCommand {
+            node: "b".into(),
+            session: snapshot.session,
+            expected_revision: snapshot.revision.into(),
+        }
+    };
+    let original = graph.snapshot();
+    let mut values: BTreeMap<_, _> = original
+        .parameters
+        .iter()
+        .filter(|p| p.writable)
+        .filter_map(|p| {
+            p.id.strip_prefix("b.")
+                .map(|symbol| (symbol.to_owned(), graph.native_value(&p.id).unwrap()))
+        })
+        .collect();
+    assert_eq!(values.len(), 24);
+    values.insert("time".into(), 42.0);
+    values.insert("width".into(), 75.0);
+    let stale = cursor(&graph);
+    graph
+        .apply_plugin_settings(cursor(&graph), Some((uri, &values)))
+        .unwrap();
+    assert_eq!(graph.snapshot().revision, original.revision + 1);
+    assert_eq!(graph.native_value("b.time").unwrap(), 42.0);
+    assert_eq!(graph.native_value("b.width").unwrap(), 75.0);
+    assert_eq!(graph.native_value("a.time").unwrap(), 50.0);
+    assert!(
+        graph
+            .apply_plugin_settings(stale, Some((uri, &values)))
+            .is_err()
+    );
+    values.remove("clock");
+    assert!(
+        graph
+            .apply_plugin_settings(cursor(&graph), Some((uri, &values)))
+            .is_err()
+    );
+    assert_eq!(graph.snapshot().revision, original.revision + 1);
+    assert_eq!(graph.native_value("b.time").unwrap(), 42.0);
+}

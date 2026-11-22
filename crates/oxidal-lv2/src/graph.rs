@@ -232,6 +232,13 @@ impl PreparedGraph {
         &mut self,
         command: crate::protocol::PluginDefaultsCommand,
     ) -> Result<(), String> {
+        self.apply_plugin_settings(command, None)
+    }
+    pub fn apply_plugin_settings(
+        &mut self,
+        command: crate::protocol::PluginDefaultsCommand,
+        settings: Option<(&str, &BTreeMap<String, f32>)>,
+    ) -> Result<(), String> {
         if self.failed {
             return Err("Failed graph must be recreated".into());
         }
@@ -250,9 +257,12 @@ impl PreparedGraph {
         let plugin = self.nodes[index]
             .plugin
             .as_mut()
-            .ok_or("Defaults require a running LV2 node")?;
-        let defaults = plugin.factory_defaults()?;
-        let normalized = defaults
+            .ok_or("Plugin settings require a running LV2 node")?;
+        let values = match settings {
+            Some((uri, controls)) => plugin.named_settings(uri, controls)?,
+            None => plugin.factory_defaults()?,
+        };
+        let normalized = values
             .values()
             .iter()
             .map(|&(port, value)| {
@@ -269,7 +279,7 @@ impl PreparedGraph {
             .collect::<Result<Vec<_>, String>>()?;
         let mut candidate = self.control.clone();
         candidate.set_prepared_parameters(&normalized)?;
-        if let Err(error) = plugin.write_defaults(&defaults) {
+        if let Err(error) = plugin.write_values(&values) {
             self.failed = !plugin.healthy();
             return Err(error.to_string());
         }

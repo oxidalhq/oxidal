@@ -9,19 +9,24 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import {
+  blockSettings,
   graphAudioCommand,
   type GraphAudioState,
   graphAudioState,
   graphLibrary,
   type GraphSettings,
+  installedLv2,
+  type Lv2Plugin,
   protectState,
 } from './api';
+import fixtures from './fixtures/factory-lv2.json';
 import { GraphAuthor } from './GraphAuthor';
 import { DeviceError } from './lib/friendlyError';
 
 vi.mock('./api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./api')>()),
   graphAudioCommand: vi.fn(),
+  blockSettings: vi.fn(),
   graphAudioState: vi.fn(),
   graphLibrary: vi.fn(async () => []),
   installedLv2: vi.fn(async () => []),
@@ -404,4 +409,90 @@ it('explains what happens to a caught loop in the effects-only Moment rig', asyn
     'Saving or exporting a preset keeps the control settings only.',
   );
   expect(graphAudioCommand).not.toHaveBeenCalled();
+});
+
+it('applies named settings to the reviewed effects instance in a single device command', async () => {
+  const plugin = (fixtures as Lv2Plugin[]).find(
+    (p) => p.uri === 'urn:oxidal:plugin:moment#stereo',
+  )!;
+  const ports = plugin.ports.filter((p) => p.input && p.control);
+  const rig: GraphSettings['rig'] = {
+    nodes: [
+      { id: 'in', kind: 'input', level: 1 },
+      { id: 'fx', kind: 'lv2', level: 1 },
+      { id: 'out', kind: 'output', level: 1 },
+    ],
+    edges: [
+      { from: 'in', to: 'fx' },
+      { from: 'fx', to: 'out' },
+    ],
+  };
+  const opening: GraphAudioState = {
+    ...running,
+    configured: {
+      ...configured,
+      rig,
+      bindings: [{ node: 'fx', uri: plugin.uri }],
+    },
+    control: {
+      ...running.control!,
+      rig,
+      parameters: ports.map((p) => ({
+        id: 'fx.' + p.symbol,
+        label: p.name ?? p.symbol,
+        min: 0,
+        max: 1,
+        step: 0.01,
+        default: 0,
+        value: 0,
+        writable: true,
+        unit: '',
+      })),
+    },
+    native_values: ports.map((p) => ({
+      target: 'fx.' + p.symbol,
+      value: p.default!,
+    })),
+  };
+  const controls = Object.fromEntries(ports.map((p) => [p.symbol, p.default!]));
+  controls.time = 42;
+  const entry = {
+    id: 'a'.repeat(32),
+    name: 'Encore',
+    plugin: plugin.uri,
+    controls,
+  };
+  vi.mocked(installedLv2).mockResolvedValue([plugin]);
+  vi.mocked(blockSettings).mockResolvedValue({ revision: 1, entries: [entry] });
+  vi.mocked(graphAudioState).mockResolvedValue(opening);
+  vi.mocked(graphAudioCommand).mockResolvedValue({
+    ...opening,
+    native_values: ports.map((p) => ({
+      target: 'fx.' + p.symbol,
+      value: controls[p.symbol]!,
+    })),
+  });
+  const user = userEvent.setup();
+  render(<GraphAuthor connected liveOnly />);
+  await user.click(await screen.findByText('Named settings'));
+  await user.selectOptions(
+    await screen.findByLabelText(/Saved settings for/),
+    await screen.findByRole('option', { name: 'Encore' }),
+  );
+  await user.click(
+    screen.getByRole('button', { name: 'Apply to playing block' }),
+  );
+  expect(
+    await screen.findByText('Settings applied to the playing block.'),
+  ).toBeVisible();
+  expect(graphAudioCommand).toHaveBeenCalledExactlyOnceWith(opening, {
+    kind: 'apply_block_settings',
+    plugin: plugin.uri,
+    controls,
+    command: {
+      session: opening.control!.session,
+      expected_revision: 1,
+      node: 'fx',
+    },
+  });
 });

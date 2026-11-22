@@ -600,6 +600,14 @@ export type GraphAudioAction =
       kind: "restore_plugin_defaults";
     }
   | {
+      command: PluginDefaultsCommand;
+      controls: {
+        [k: string]: number;
+      };
+      kind: "apply_block_settings";
+      plugin: string;
+    }
+  | {
       command: HostUtility;
       kind: "host_utility";
     }
@@ -1018,6 +1026,14 @@ export type RigAudioAction =
   | {
       command: PluginDefaultsCommand;
       kind: "restore_plugin_defaults";
+    }
+  | {
+      command: PluginDefaultsCommand;
+      controls: {
+        [k: string]: number;
+      };
+      kind: "apply_block_settings";
+      plugin: string;
     }
   | {
       command: HostUtility;

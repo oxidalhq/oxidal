@@ -588,7 +588,13 @@ export function useMixedRigSession({
       }
       if (
         promote &&
-        ['authoring', 'control', 'eq', 'model'].includes(action.kind)
+        [
+          'authoring',
+          'control',
+          'eq',
+          'model',
+          'apply_block_settings',
+        ].includes(action.kind)
       )
         await promoteMixedEdit(next);
       return true;

@@ -913,10 +913,7 @@ impl Owner {
                                 ));
                             }
                             Err(oxidal_presets::Error::Io(e))
-                                if e.kind() == std::io::ErrorKind::NotFound =>
-                            {
-                                ()
-                            }
+                                if e.kind() == std::io::ErrorKind::NotFound => {}
                             Err(e) => return Err(e),
                         }
                     }
@@ -980,17 +977,38 @@ impl Owner {
                 self.state.revision += 1;
                 self.publish();
             }
-            GraphAudioAction::RestorePluginDefaults { command } => {
+            action @ (GraphAudioAction::RestorePluginDefaults { .. }
+            | GraphAudioAction::ApplyBlockSettings { .. }) => {
                 if self.state.phase != AudioPhase::Running {
                     return Err("Effects audio is not running".into());
                 }
-                let reply = match self
-                    .exchange(&WorkerRequest::RestorePluginDefaults { command })
-                    .await
-                {
+                let request = match action {
+                    GraphAudioAction::RestorePluginDefaults { command } => {
+                        WorkerRequest::RestorePluginDefaults { command }
+                    }
+                    GraphAudioAction::ApplyBlockSettings {
+                        command,
+                        plugin,
+                        controls,
+                    } => {
+                        if !oxidal_lv2::supports_named_settings(&plugin)
+                            || controls.is_empty()
+                            || controls.len() > 128
+                        {
+                            return Err("Invalid named block settings".into());
+                        }
+                        WorkerRequest::ApplyBlockSettings {
+                            command,
+                            plugin,
+                            controls,
+                        }
+                    }
+                    _ => unreachable!(),
+                };
+                let reply = match self.exchange(&request).await {
                     Ok(reply) => reply,
                     Err(error) => {
-                        let error = format!("Plugin defaults could not be confirmed: {error}");
+                        let error = format!("Plugin settings could not be confirmed: {error}");
                         return Err(self.fault(error).await);
                     }
                 };

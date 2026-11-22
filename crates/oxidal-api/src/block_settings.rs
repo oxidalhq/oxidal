@@ -54,17 +54,7 @@ pub enum BlockSettingsCommand {
 }
 
 fn validate(entry: &NamedBlockSettings) -> Result<(), Error> {
-    let plugin = entry
-        .plugin
-        .strip_prefix("urn:oxidal:plugin:")
-        .and_then(|s| s.split_once('#'));
-    if !matches!(
-        plugin,
-        Some((
-            "bloom" | "echo" | "motion" | "sustain" | "moment",
-            "mono" | "stereo"
-        ))
-    ) {
+    if !oxidal_lv2::supports_named_settings(&entry.plugin) {
         return Err(Error::Invalid("Choose a bundled Oxidal effect"));
     }
     if entry.id.len() != 32

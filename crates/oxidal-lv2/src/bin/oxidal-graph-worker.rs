@@ -204,6 +204,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         None
                     }
                     WorkerRequest::Control { command } => graph.apply(*command, true).err(),
+                    WorkerRequest::ApplyBlockSettings {
+                        command,
+                        plugin,
+                        controls,
+                    } => graph
+                        .apply_plugin_settings(command, Some((&plugin, &controls)))
+                        .err(),
                     WorkerRequest::RestorePluginDefaults { command } => {
                         graph.restore_plugin_defaults(command).err()
                     }

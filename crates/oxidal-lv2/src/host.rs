@@ -439,7 +439,7 @@ pub struct AtomEvent {
     pub body: Vec<u8>,
 }
 
-/// A complete factory-default set read from one prepared plugin.
+/// A checked set of writable port values for one prepared plugin.
 #[derive(Debug)]
 pub struct PluginDefaults(Vec<(u32, f32)>);
 
@@ -708,10 +708,37 @@ impl Plugin {
         Ok(PluginDefaults(defaults))
     }
 
+    /// Resolves every saved symbol on the exact running effect before any write.
+    pub fn named_settings(
+        &self,
+        uri: &str,
+        settings: &std::collections::BTreeMap<String, f32>,
+    ) -> Result<PluginDefaults, String> {
+        if self.info.uri != uri || !crate::supports_named_settings(uri) {
+            return Err("The saved settings belong to another effect".into());
+        }
+        let mut values = self.factory_defaults()?;
+        if values.0.len() != settings.len() {
+            return Err("The settings do not cover this effect's complete control layout".into());
+        }
+        for (index, value) in &mut values.0 {
+            let port = &self.info.ports[*index as usize];
+            let saved = *settings
+                .get(&port.symbol)
+                .ok_or("Missing saved effect control")?;
+            port.validate_value(saved, true)?;
+            *value = saved;
+        }
+        Ok(values)
+    }
+    /// Keeps the existing defaults operation on the same checked batch write.
+    pub fn write_defaults(&mut self, defaults: &PluginDefaults) -> Result<(), ControlError> {
+        self.write_values(defaults)
+    }
     /// The processor owner stages and confirms all ports before publishing.
     /// Both mono instances are included when this is a dual-mono processor.
-    pub fn write_defaults(&mut self, defaults: &PluginDefaults) -> Result<(), ControlError> {
-        let values = defaults.values();
+    pub fn write_values(&mut self, controls: &PluginDefaults) -> Result<(), ControlError> {
+        let values = controls.values();
         let mut previous = [[0.0; 2]; 128];
         let prior = previous
             .get_mut(..values.len())

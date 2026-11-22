@@ -5909,6 +5909,35 @@
           "type": "object",
           "properties": {
             "command": {
+              "$ref": "#/$defs/PluginDefaultsCommand"
+            },
+            "controls": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number",
+                "format": "float"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "apply_block_settings"
+            },
+            "plugin": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "command",
+            "plugin",
+            "controls"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "command": {
               "$ref": "#/$defs/HostUtility"
             },
             "kind": {
@@ -12379,6 +12408,35 @@
           "required": [
             "kind",
             "command"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "command": {
+              "$ref": "#/$defs/PluginDefaultsCommand"
+            },
+            "controls": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number",
+                "format": "float"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "apply_block_settings"
+            },
+            "plugin": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "command",
+            "plugin",
+            "controls"
           ]
         },
         {

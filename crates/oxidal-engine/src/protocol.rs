@@ -541,6 +541,11 @@ pub enum WorkerRequest {
     RestorePluginDefaults {
         command: PluginDefaultsCommand,
     },
+    ApplyBlockSettings {
+        command: PluginDefaultsCommand,
+        plugin: String,
+        controls: std::collections::BTreeMap<String, f32>,
+    },
     Protect {
         on: bool,
     },
@@ -665,6 +670,11 @@ pub struct RigAudioState {
 pub enum RigAudioAction {
     RestorePluginDefaults {
         command: PluginDefaultsCommand,
+    },
+    ApplyBlockSettings {
+        command: PluginDefaultsCommand,
+        plugin: String,
+        controls: std::collections::BTreeMap<String, f32>,
     },
     HostUtility {
         command: oxidal_audio::tools::HostUtility,

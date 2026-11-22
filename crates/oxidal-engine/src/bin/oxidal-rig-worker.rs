@@ -456,6 +456,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 WorkerRequest::MidiLearn { .. } => "midi learn",
                 WorkerRequest::Control { .. } => "control",
                 WorkerRequest::RestorePluginDefaults { .. } => "restore plugin defaults",
+                WorkerRequest::ApplyBlockSettings { .. } => "apply block settings",
                 WorkerRequest::Scene { .. } => "scene",
                 WorkerRequest::StompGroup { .. } => "stomp group",
                 WorkerRequest::Branch { .. } => "branch",
@@ -536,6 +537,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
 
+                WorkerRequest::ApplyBlockSettings {
+                    command,
+                    plugin,
+                    controls,
+                } => {
+                    if rig.switching() {
+                        Some("Wait for the prepared preset switch to finish".into())
+                    } else {
+                        rig.active_mut()
+                            .apply_plugin_settings(command, Some((&plugin, &controls)))
+                            .err()
+                    }
+                }
                 WorkerRequest::Scene { command } => rig.active_mut().select_scene(command).err(),
                 WorkerRequest::StompGroup { command } => {
                     if rig.switching() {

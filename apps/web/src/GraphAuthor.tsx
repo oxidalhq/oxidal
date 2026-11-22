@@ -30,6 +30,8 @@ import {
 } from './api';
 import { ChainView, LedToggle } from './ChainView';
 import { ControlEditor } from './ControlEditor';
+import { NamedSettings } from './features/library/NamedSettings';
+import { supportsNamedSettings } from './features/library/namedSettingValues';
 import { SaveSoundVersion } from './features/library/SaveSoundVersion';
 import { StageControls } from './features/stage/StageControls';
 import { GearIcon } from './GearIcon';
@@ -212,6 +214,7 @@ export function GraphAuthor({
       }
       if (action.kind === 'save_copy' || action.kind === 'save_version')
         await refreshLibrary();
+      return next;
     } catch (cause) {
       if (action.kind === 'recall_saved' || action.kind === 'restart') {
         // A refusal or failed start can include a recovered worker and new
@@ -780,6 +783,19 @@ export function GraphAuthor({
                 c.target.kind === 'lv2' ? [[c.target.symbol, c] as const] : [],
               ),
             );
+            const prefix = node.id + '.';
+            const portValues = Object.fromEntries(
+              state.native_values
+                .filter(
+                  (value) =>
+                    value.target.startsWith(prefix) &&
+                    bySymbol.get(value.target.slice(prefix.length))?.writable,
+                )
+                .map((value) => [
+                  value.target.slice(prefix.length),
+                  value.value,
+                ]),
+            );
             return (
               <section key={node.id} className="space-y-2" aria-label={title}>
                 <PluginPanel
@@ -843,6 +859,54 @@ export function GraphAuthor({
                     );
                   }}
                 />
+                {plugin && supportsNamedSettings(plugin.uri) && running && (
+                  <NamedSettings
+                    key={JSON.stringify([
+                      state.control!.session,
+                      node.id,
+                      plugin.uri,
+                    ])}
+                    live
+                    block={{
+                      name: title,
+                      plugin,
+                      controls: portValues,
+                    }}
+                    disabled={
+                      disabled ||
+                      !!state.control!.edit ||
+                      plugin.ports.some(
+                        (port) =>
+                          port.input &&
+                          port.control &&
+                          portValues[port.symbol] === undefined,
+                      )
+                    }
+                    onApply={async (controls) => {
+                      const reviewed = state.control!;
+                      const reply = await command({
+                        kind: 'apply_block_settings',
+                        plugin: plugin.uri,
+                        controls,
+                        command: {
+                          session: reviewed.session,
+                          expected_revision: reviewed.revision,
+                          node: node.id,
+                        },
+                      });
+                      return (
+                        reply?.control?.session === reviewed.session &&
+                        Object.entries(controls).every(([symbol, value]) =>
+                          reply?.native_values.some(
+                            (p) =>
+                              p.target === node.id + '.' + symbol &&
+                              p.value === Math.fround(value),
+                          ),
+                        )
+                      );
+                    }}
+                  />
+                )}
                 {plugin && (
                   <PluginSourceDetails key={plugin.uri} plugin={plugin} />
                 )}

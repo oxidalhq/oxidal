@@ -541,7 +541,7 @@ export function routeBlockSettings(
   ) {
     throw new Error('The selected effect changed. Open its settings again.');
   }
-  block.controls = { ...controls };
+  at!.list[at!.index] = { ...block, controls: { ...controls } };
   return next;
 }
 
