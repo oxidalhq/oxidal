@@ -4,8 +4,15 @@ import {
   CaretLeft,
   CaretRight,
 } from '@phosphor-icons/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@oxidal/design-system/components/select';
 import { StageHeading } from '@oxidal/design-system/patterns/stage-heading';
 import { FootswitchPad } from '@oxidal/design-system/widgets/footswitches';
 
@@ -23,8 +30,14 @@ import { PerformPlayerRow } from './components/media/PerformPlayerRow';
 import { CueEntryBacking } from './components/media/SongLinkControls';
 import { LinkedSheet } from './features/library/LinkedSheet';
 import { RehearsalReport } from './features/library/RehearsalReport';
+import {
+  StageFootswitches,
+  type StageSceneControls,
+} from './features/stage/StageFootswitches';
+import { StageSetList } from './features/stage/StageSetList';
 import { GuitarSwitch } from './GuitarSettings';
 import { friendlyError } from './lib/friendlyError';
+import { useSessionState } from './lib/sessionState';
 import { MasterLevel } from './MasterLevel';
 import { useMonitorReadings } from './monitorFeed';
 import { setPerform, usePerform } from './performState';
@@ -120,9 +133,17 @@ function EdgeMeter({
 function PresetSteps({
   disabled,
   muted,
+  owner,
+  stepping,
+  navigationRefresh,
+  onStep,
 }: {
   disabled: boolean;
   muted: boolean;
+  owner: string;
+  stepping: boolean;
+  navigationRefresh: number;
+  onStep: (direction: 'previous' | 'next') => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState('');
@@ -141,19 +162,7 @@ function PresetSteps({
       live = false;
       window.clearInterval(timer);
     };
-  }, [reload]);
-  async function step(direction: 'previous' | 'next') {
-    setBusy(true);
-    setRefusal('');
-    try {
-      await navigateMidi(direction);
-      setReload((count) => count + 1);
-    } catch (cause) {
-      setRefusal(friendlyError(cause, 'change preset'));
-    } finally {
-      setBusy(false);
-    }
-  }
+  }, [owner, reload, navigationRefresh]);
   async function mute() {
     setBusy(true);
     setRefusal('');
@@ -175,18 +184,24 @@ function PresetSteps({
     );
   return (
     <div className="perform-steps">
+      <StageSetList
+        key={owner}
+        position={position}
+        disabled={disabled || busy || stepping}
+        onRecall={() => setReload((count) => count + 1)}
+      />
       <div role="group" aria-label="Set list">
         <button
           type="button"
-          disabled={disabled || busy}
-          onClick={() => void step('previous')}
+          disabled={disabled || busy || stepping}
+          onClick={() => onStep('previous')}
         >
           <CaretLeft aria-hidden="true" /> Previous
         </button>
         <button
           type="button"
-          disabled={disabled || busy}
-          onClick={() => void step('next')}
+          disabled={disabled || busy || stepping}
+          onClick={() => onStep('next')}
         >
           Next <CaretRight aria-hidden="true" />
         </button>
@@ -225,6 +240,7 @@ export function PerformView({
   onEdit,
   knobs,
   scenes,
+  sceneControls,
   selector,
 }: {
   /** What is playing: the surface is the same for every engine. */
@@ -245,6 +261,7 @@ export function PerformView({
   knobs?: React.ReactNode;
   /** Scene pads, for a preset with scenes. */
   scenes?: React.ReactNode;
+  sceneControls?: StageSceneControls;
   /** The preset pads, rendered by the rig that owns the library. */
   selector: React.ReactNode;
 }) {
@@ -267,6 +284,29 @@ export function PerformView({
     signalAt: null,
     showing: false,
   });
+  const [layout, setLayout] = useSessionState<'pads' | 'four' | 'ten'>(
+    'stage-controller-layout',
+    'pads',
+  );
+  const [stepping, setStepping] = useState(false);
+  const [navigationRefresh, setNavigationRefresh] = useState(0);
+  const [stepRefusal, setStepRefusal] = useState('');
+  const navigationPending = useRef(false);
+  async function step(direction: 'previous' | 'next') {
+    if (navigationPending.current || disabled || switching) return;
+    navigationPending.current = true;
+    setStepping(true);
+    setStepRefusal('');
+    try {
+      await navigateMidi(direction);
+      setNavigationRefresh((count) => count + 1);
+    } catch (cause) {
+      setStepRefusal(friendlyError(cause, 'change preset'));
+    } finally {
+      navigationPending.current = false;
+      setStepping(false);
+    }
+  }
   const { mode } = usePerform();
   const setMode = (next: 'play' | 'presets') => setPerform({ mode: next });
   const [baseline, setBaseline] = useState<{
@@ -422,7 +462,7 @@ export function PerformView({
       aria-label="Perform"
       data-mode={mode}
     >
-      <div className="perform-bar">
+      <div className="perform-bar flex-wrap">
         <button
           type="button"
           className="perform-edit"
@@ -432,6 +472,22 @@ export function PerformView({
           <ArrowLeft aria-hidden="true" /> Rig
         </button>
         <h2>Perform</h2>
+        <Select
+          value={layout}
+          onValueChange={(value) => {
+            if (value === 'pads' || value === 'four' || value === 'ten')
+              setLayout(value);
+          }}
+        >
+          <SelectTrigger aria-label="On-screen controller layout" size="sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="pads">Rig pads</SelectItem>
+            <SelectItem value="four">Four switches</SelectItem>
+            <SelectItem value="ten">Ten switches</SelectItem>
+          </SelectContent>
+        </Select>
         <div className="perform-modes" role="group" aria-label="Perform view">
           {(
             [
@@ -494,8 +550,13 @@ export function PerformView({
             <PresetSteps
               disabled={disabled || !!switching}
               muted={audio?.monitoring?.output_muted ?? false}
+              owner={recallKey}
+              stepping={stepping}
+              navigationRefresh={navigationRefresh}
+              onStep={(direction) => void step(direction)}
             />
           </div>
+          {stepRefusal && <p role="alert">{stepRefusal}</p>}
           {switching ? (
             <div className="perform-switching" role="status" aria-live="polite">
               <ArrowsClockwise aria-hidden="true" />
@@ -511,27 +572,43 @@ export function PerformView({
           ) : (
             <>
               {scenes}
-              {boxes.length > 0 ? (
-                <div className="perform-boxes" role="group" aria-label="Blocks">
-                  {boxes.map(({ block, tag }) => (
-                    <FootswitchPad
-                      key={block.id}
-                      name={tag ?? block.kind}
-                      label={block.label}
-                      accessibleName={`${tag ?? block.kind} ${block.label} on`}
-                      pressed={block.on}
-                      disabled={disabled}
-                      onTap={() => onToggle(block.id)}
-                    />
-                  ))}
-                </div>
-              ) : (
-                !scenes && (
-                  <p className="caption">
-                    Nothing to switch in this preset. Presets has the rest.
-                  </p>
-                )
+              {layout !== 'pads' && (
+                <StageFootswitches
+                  layout={layout}
+                  scenes={sceneControls}
+                  blocks={boxes.map(({ block }) => block)}
+                  disabled={disabled || stepping}
+                  tempo={snapshot?.tempo ?? undefined}
+                  onStep={(direction) => void step(direction)}
+                  onToggle={onToggle}
+                />
               )}
+              {layout === 'pads' &&
+                (boxes.length > 0 ? (
+                  <div
+                    className="perform-boxes"
+                    role="group"
+                    aria-label="Blocks"
+                  >
+                    {boxes.map(({ block, tag }) => (
+                      <FootswitchPad
+                        key={block.id}
+                        name={tag ?? block.kind}
+                        label={block.label}
+                        accessibleName={`${tag ?? block.kind} ${block.label} on`}
+                        pressed={block.on}
+                        disabled={disabled}
+                        onTap={() => onToggle(block.id)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  !scenes && (
+                    <p className="caption">
+                      Nothing to switch in this preset. Presets has the rest.
+                    </p>
+                  )
+                ))}
             </>
           )}
           <LinkedSheet stage />

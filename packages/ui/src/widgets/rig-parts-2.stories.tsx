@@ -99,12 +99,13 @@ export const TapTempoStory: StoryObj = {
   name: 'Tap tempo',
   render: () => <Tap />,
   play: async ({ canvasElement }) => {
-    const root =
-      canvasElement.querySelector('[data-slot=tap-tempo]') ??
-      canvasElement.firstElementChild!;
+    const root = canvasElement.querySelector('[data-slot=tap-tempo]');
+    if (!root) throw new Error('Tap tempo widget missing');
     const start = size(root);
-    const buttons = within(canvasElement).getAllByRole('button');
-    for (let i = 0; i < 3; i++) await userEvent.click(buttons[0]!);
+    const tap = within(root as HTMLElement).getByRole('button', {
+      name: /^Tap tempo/,
+    });
+    for (let i = 0; i < 3; i++) await userEvent.click(tap);
     await expect(size(root)[1]).toBe(start[1]);
   },
 };
@@ -197,6 +198,7 @@ export const FootswitchesStory: StoryObj = {
     const tiles = [
       ...canvasElement.querySelectorAll('[data-slot=footswitches] button'),
     ];
+    await expect(tiles.length).toBeGreaterThan(1);
     const before = tiles.map(size);
     await userEvent.click(tiles[1]!);
     await expect(tiles.map(size)).toEqual(before);

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 
 import { Caption } from '../components/ui/text';
 import { HealthStatus } from './health-status';
@@ -269,7 +269,7 @@ export const TunerMute: StoryObj = {
     const toggle = canvas.getByRole('switch', { name: 'Mute while tuning' });
     await expect(toggle).toBeChecked();
     await userEvent.click(toggle);
-    await expect(toggle).not.toBeChecked();
+    await waitFor(() => expect(toggle).not.toBeChecked());
   },
 };
 

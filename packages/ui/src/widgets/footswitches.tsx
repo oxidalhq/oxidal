@@ -68,11 +68,13 @@ function Switch({
   state,
   onAction,
   size,
+  disabled,
 }: {
   sw: Footswitch;
   state: StageState;
   onAction: (action: SwitchAction) => void;
   size: 'md' | 'lg';
+  disabled?: boolean;
 }) {
   const tap = describe(sw.tap, state);
   const hold = sw.hold ? describe(sw.hold, state) : null;
@@ -87,6 +89,7 @@ function Switch({
       scene={sw.tap.kind === 'scene'}
       colour={tap.colour}
       size={size}
+      disabled={disabled || (sw.tap.kind === 'none' && !sw.hold)}
       onTap={() => onAction(sw.tap)}
       onHold={sw.hold ? () => onAction(sw.hold!) : undefined}
     />
@@ -225,12 +228,14 @@ export function Footswitches({
   onAction,
   size = 'lg',
   className,
+  disabled,
 }: {
   profile: ControllerProfile;
   state: StageState;
   onAction: (action: SwitchAction) => void;
   size?: 'md' | 'lg';
   className?: string;
+  disabled?: boolean;
 }) {
   const columns = Math.min(profile.columns, 5);
   return (
@@ -254,6 +259,7 @@ export function Footswitches({
           state={state}
           onAction={onAction}
           size={size}
+          disabled={disabled}
         />
       ))}
     </div>
