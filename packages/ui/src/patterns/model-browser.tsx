@@ -453,26 +453,11 @@ export function ModelBrowser({
           {showTones && (
             <section aria-label="From TONE3000" className="grid gap-2">
               {!only && <Eyebrow>From TONE3000</Eyebrow>}
-              {status.state === 'signed-out' ? (
-                <Notice
-                  title="Sign in to search TONE3000"
-                  about="Your favourites and downloads come with you. Models on this device still work."
-                  action="Sign in"
-                  onAction={catalogue?.onSignIn}
-                />
-              ) : status.state === 'offline' ? (
-                <Notice
-                  title="TONE3000 needs the internet"
-                  about="Models on this device still work. Connect Oxidal to Wi-Fi in Settings › Network to search."
-                  action="Try again"
-                  onAction={catalogue?.onRetry}
-                />
-              ) : status.state === 'failed' ? (
-                <Notice
-                  title="TONE3000 did not answer"
-                  about={status.message}
-                  action="Try again"
-                  onAction={catalogue?.onRetry}
+              {status.state !== 'ready' && status.state !== 'searching' ? (
+                <CatalogueNotice
+                  status={status}
+                  onSignIn={catalogue?.onSignIn}
+                  onRetry={catalogue?.onRetry}
                 />
               ) : (
                 <>
@@ -517,6 +502,46 @@ export function ModelBrowser({
         )}
       </div>
     </div>
+  );
+}
+
+export function CatalogueNotice({
+  status,
+  onSignIn,
+  onRetry,
+}: {
+  status: Extract<
+    ToneCatalogueStatus,
+    { state: 'signed-out' | 'offline' | 'failed' }
+  >;
+  onSignIn?: () => void;
+  onRetry?: () => void;
+}) {
+  if (status.state === 'signed-out')
+    return (
+      <Notice
+        title="Sign in to search TONE3000"
+        about="Your favourites and downloads come with you. Models on this device still work."
+        action="Sign in"
+        onAction={onSignIn}
+      />
+    );
+  if (status.state === 'offline')
+    return (
+      <Notice
+        title="TONE3000 needs the internet"
+        about="Models on this device still work. Connect Oxidal to Wi-Fi in Settings › Connections to search."
+        action="Try again"
+        onAction={onRetry}
+      />
+    );
+  return (
+    <Notice
+      title="TONE3000 did not answer"
+      about={status.message}
+      action="Try again"
+      onAction={onRetry}
+    />
   );
 }
 

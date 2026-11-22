@@ -182,8 +182,9 @@ export function useSongbook(connected: boolean) {
       setStale(false);
       await refresh().catch(() => {});
     } catch (cause) {
-      setEditError(friendlyError(cause, 'save this song'));
-      setStale(cause instanceof DeviceError && cause.status === 409);
+      const conflict = cause instanceof DeviceError && cause.status === 409;
+      setStale(conflict);
+      if (!conflict) setEditError(friendlyError(cause, 'save this song'));
     } finally {
       setBusy(false);
     }

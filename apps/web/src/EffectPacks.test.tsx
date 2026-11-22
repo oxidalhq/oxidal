@@ -75,7 +75,9 @@ it('shows only the curated inventory and starts a device-owned install', async (
     job: { pack: 'dragonfly', action: 'install', phase: 'running' },
   });
   render(<EffectPacks connected audioRunning={false} />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Install' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Install Dragonfly Reverb' }),
+  );
   await waitFor(() =>
     expect(changeEffectPack).toHaveBeenCalledWith('dragonfly', 'install'),
   );
@@ -83,14 +85,15 @@ it('shows only the curated inventory and starts a device-owned install', async (
     'Installing Dragonfly Reverb',
   );
   expect(screen.getByText(/78 usable effects/)).toBeInTheDocument();
-  expect(screen.getAllByRole('link', { name: 'Website' })[0]).toHaveAttribute(
+  expect(
+    screen.getAllByRole('link', { name: 'Dragonfly Reverb website' })[0],
+  ).toHaveAttribute(
     'href',
     'https://github.com/michaelwillis/dragonfly-reverb',
   );
-  expect(screen.getAllByRole('link', { name: 'Website' })[0]).toHaveAttribute(
-    'target',
-    '_blank',
-  );
+  expect(
+    screen.getAllByRole('link', { name: 'Dragonfly Reverb website' })[0],
+  ).toHaveAttribute('target', '_blank');
 });
 
 it('refuses changes while audio plays and confirms removal in a dialog', async () => {
@@ -100,11 +103,13 @@ it('refuses changes while audio plays and confirms removal in a dialog', async (
     job: { pack: 'swh', action: 'remove', phase: 'running' },
   });
   const view = render(<EffectPacks connected audioRunning />);
-  expect(await screen.findByRole('button', { name: 'Remove' })).toBeDisabled();
+  expect(
+    await screen.findByRole('button', { name: 'Remove SWH…' }),
+  ).toBeDisabled();
   expect(screen.getByRole('status')).toHaveTextContent('Stop audio');
 
   view.rerender(<EffectPacks connected audioRunning={false} />);
-  const remove = screen.getByRole('button', { name: 'Remove' });
+  const remove = screen.getByRole('button', { name: 'Remove SWH…' });
   fireEvent.click(remove);
   expect(changeEffectPack).not.toHaveBeenCalled();
   expect(
@@ -112,9 +117,9 @@ it('refuses changes while audio plays and confirms removal in a dialog', async (
   ).toBeInTheDocument();
   // Without the preset list Oxidal cannot tell, so removal needs a confirmation.
   expect(screen.getByText(/could not check which saved presets/)).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Remove effects' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Remove pack' })).toBeDisabled();
   fireEvent.click(screen.getByRole('checkbox'));
-  fireEvent.click(screen.getByRole('button', { name: 'Remove effects' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Remove pack' }));
   await waitFor(() =>
     expect(changeEffectPack).toHaveBeenCalledWith('swh', 'remove'),
   );
@@ -128,11 +133,15 @@ it('offers Install again after audio stops, without a reload', async () => {
   });
   vi.mocked(effectPacks).mockResolvedValue(inventory);
   const view = render(<EffectPacks connected audioRunning />);
-  expect(await screen.findByRole('button', { name: 'Install' })).toBeDisabled();
+  expect(
+    await screen.findByRole('button', { name: 'Install Dragonfly Reverb' }),
+  ).toBeDisabled();
 
   view.rerender(<EffectPacks connected audioRunning={false} />);
   await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'Install' })).toBeEnabled(),
+    expect(
+      screen.getByRole('button', { name: 'Install Dragonfly Reverb' }),
+    ).toBeEnabled(),
   );
   expect(screen.queryByText(/Stop audio before installing/)).toBeNull();
 });
@@ -143,8 +152,10 @@ it('keeps apt actions unavailable while the active system root is locked', async
     storage_writable: false,
   });
   render(<EffectPacks connected audioRunning={false} />);
-  expect(await screen.findByRole('button', { name: 'Install' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: 'Remove' })).toBeDisabled();
+  expect(
+    await screen.findByRole('button', { name: 'Install Dragonfly Reverb' }),
+  ).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Remove SWH…' })).toBeDisabled();
   expect(screen.getByRole('status')).toHaveTextContent('Unlock system storage');
 });
 
@@ -155,7 +166,9 @@ it('offers Try again when an install fails because the device is busy', async ()
   );
   vi.mocked(changeEffectPack).mockResolvedValue(inventory);
   render(<EffectPacks connected audioRunning={false} />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Install' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Install Dragonfly Reverb' }),
+  );
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Could not change effect packs. Another change is still running on the device.',
   );
@@ -212,15 +225,15 @@ it('names the saved presets a removal would leave unplayable', async () => {
     },
   ] as unknown as Awaited<ReturnType<typeof graphLibrary>>);
   render(<EffectPacks connected audioRunning={false} />);
-  expect(await screen.findByText(/Used by 2 presets/)).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+  expect(await screen.findByText(/used by 2 presets/i)).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Remove SWH…' }));
   const users = screen.getByRole('list', {
-    name: 'Presets that use these effects',
+    name: 'Presets that use this pack',
   });
   expect(users).toHaveTextContent('Swh Phaser');
   expect(users).toHaveTextContent('Old Swh Delay');
   expect(users).not.toHaveTextContent('Clean');
-  expect(screen.getByRole('button', { name: 'Remove effects' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Remove pack' })).toBeDisabled();
 });
 
 it('says when no effect pack is installed', async () => {
@@ -234,7 +247,5 @@ it('says when no effect pack is installed', async () => {
     presets: [],
   } as Awaited<ReturnType<typeof rigLibrary>>);
   render(<EffectPacks connected audioRunning={false} />);
-  expect(
-    await screen.findByText(/No effect packs installed yet/),
-  ).toBeVisible();
+  expect(await screen.findByText(/No packs installed/)).toBeVisible();
 });

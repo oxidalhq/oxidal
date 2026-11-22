@@ -33,6 +33,47 @@ const starts = (playing: string) =>
     ['tone3000', 'A TONE3000 tone', 'A capture you have, with a cab after it'],
   ] as const;
 
+export function PresetStartOptions<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: readonly {
+    id: T;
+    title: string;
+    caption: string;
+    disabled?: boolean;
+  }[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  const group = React.useId();
+  return (
+    <fieldset className="m-0 grid min-w-0 gap-1.5 border-0 p-0">
+      <legend className="mb-1 small-caps text-xs text-muted-foreground">
+        Start from
+      </legend>
+      {options.map(({ id, title, caption, disabled }) => (
+        <label
+          key={id}
+          className="relative grid cursor-pointer gap-0.5 rounded-lg border border-input px-3 py-2 text-left has-checked:border-foreground has-checked:bg-foreground has-checked:text-background has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-disabled:opacity-50"
+        >
+          <input
+            className="sr-only"
+            type="radio"
+            name={group}
+            checked={value === id}
+            disabled={disabled}
+            onChange={() => onChange(id)}
+          />
+          <span className="text-sm font-semibold">{title}</span>
+          <span className="text-xs opacity-80">{caption}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
 /** New preset: a name and where it starts from. */
 export function NewPresetDialog({
   open,
@@ -67,25 +108,15 @@ export function NewPresetDialog({
               className="h-10 rounded-md border border-input bg-background px-3 text-sm"
             />
           </label>
-          <div
-            role="radiogroup"
-            aria-label="Start from"
-            className="grid gap-1.5"
-          >
-            {starts(playing).map(([id, title, caption]) => (
-              <button
-                key={id}
-                type="button"
-                role="radio"
-                aria-checked={from === id}
-                onClick={() => setFrom(id)}
-                className="grid gap-0.5 rounded-lg border border-input px-3 py-2 text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring aria-checked:border-foreground aria-checked:bg-foreground aria-checked:text-background"
-              >
-                <span className="text-sm font-semibold">{title}</span>{' '}
-                <span className="text-xs opacity-80">{caption}</span>
-              </button>
-            ))}
-          </div>
+          <PresetStartOptions
+            options={starts(playing).map(([id, title, caption]) => ({
+              id,
+              title,
+              caption,
+            }))}
+            value={from}
+            onChange={setFrom}
+          />
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

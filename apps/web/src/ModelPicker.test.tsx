@@ -260,9 +260,9 @@ it('browses inline in Discover, keeps the opened tone across a remount and offer
     />,
   );
   expect(
-    await screen.findByText(/already on this device still work/),
+    await screen.findByText(/Models on this device still work/),
   ).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Connect TONE3000' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
   expect(signIn).toHaveBeenCalledTimes(1);
 });
 
@@ -280,8 +280,6 @@ it('says only the internet is missing when TONE3000 cannot be reached', async ()
       onSignIn={() => {}}
     />,
   );
-  expect(
-    await screen.findByText(/TONE3000 needs internet access/),
-  ).toBeVisible();
-  expect(screen.queryByRole('button', { name: 'Connect TONE3000' })).toBeNull();
+  expect(await screen.findByText(/TONE3000 needs the internet/)).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Sign in' })).toBeNull();
 });

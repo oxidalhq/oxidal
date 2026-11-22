@@ -1,6 +1,9 @@
 import { type APIRequestContext, expect, test } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
+import type { EffectPacks } from '../src/api';
+import { serialRig } from '../src/rigDraft';
 import {
   expectSettingsSection,
   expectWorkspaceSection,
@@ -75,19 +78,84 @@ test('library sections keep the Mine search after a reload', async ({
   await expect(search).toHaveValue('');
 });
 
-test('Settings sections have links and LV2 shows which presets need a pack', async ({
-  page,
-}) => {
+test('Settings sections link directly to LV2 and About', async ({ page }) => {
   await page.goto('/#settings/plugins');
   await expectSettingsSection(page, 'LV2');
   const effects = page.getByRole('region', { name: 'Effects' });
   await expect(
-    effects.getByRole('list', { name: 'Curated packs' }),
+    effects.getByText('Available to install', { exact: true }),
   ).toBeVisible();
   await selectSettingsSection(page, 'About');
   await expect(page).toHaveURL(/#settings\/about$/);
   await page.reload();
   await expectSettingsSection(page, 'About');
+});
+
+test('LV2 packs install, identify an affected preset and require acknowledgement before removal', async ({
+  page,
+  request,
+}) => {
+  // The real inventory supplies pack IDs, names and websites. The isolated
+  // package-administration fixture handles the two commands without running apt.
+  const inventory: EffectPacks = await (
+    await request.get('/api/v1/packs')
+  ).json();
+  inventory.available = true;
+  inventory.storage_writable = true;
+  inventory.message = '';
+  for (const pack of inventory.packs) pack.installed = pack.id === 'guitarix';
+  const commands: string[] = [];
+  await page.route('**/api/v1/packs', (route) =>
+    route.fulfill({ json: inventory }),
+  );
+  await page.route('**/api/v1/packs/*/*', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const [, , , , id, action] = path.split('/');
+    expect(route.request().method()).toBe('POST');
+    expect(['install', 'remove']).toContain(action);
+    const pack = inventory.packs.find((item) => item.id === id)!;
+    pack.installed = action === 'install';
+    commands.push(action + ' ' + id);
+    await route.fulfill({ json: inventory });
+  });
+  await page.route('**/api/v1/presets/rigs', (route) =>
+    route.fulfill({
+      json: {
+        native_profile: 'local',
+        next: null,
+        presets: [
+          {
+            id: 'brown',
+            revision: 'a'.repeat(64),
+            name: 'Brown Crunch',
+            origin: 'mine',
+            native_instances: 0,
+            lv2_instances: 1,
+            lv2_plugins: [
+              'http://guitarix.sourceforge.net/plugins/gx_amp#GUITARIX',
+            ],
+            topology: 'serial',
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto('/#settings/plugins');
+  await page.getByRole('button', { name: 'Install Dragonfly Reverb' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Remove Dragonfly Reverb…' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Remove Guitarix…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Remove Guitarix?' });
+  await expect(dialog.getByText('Brown Crunch')).toBeVisible();
+  const remove = dialog.getByRole('button', { name: 'Remove pack' });
+  await expect(remove).toBeDisabled();
+  await dialog.getByRole('checkbox').click();
+  await remove.click();
+  await expect(
+    page.getByRole('button', { name: 'Install Guitarix' }),
+  ).toBeVisible();
+  expect(commands).toEqual(['install dragonfly', 'remove guitarix']);
 });
 
 type RigEntry = {
@@ -109,6 +177,43 @@ async function allRigs(request: APIRequestContext) {
   } while (after);
   return rigs;
 }
+
+test('new preset starts from a locally prepared Oxidal sound and saves a separate revision', async ({
+  page,
+  request,
+}) => {
+  const key = randomUUID();
+  const sourceName = 'Prepared clean ' + key;
+  const name = 'Friday opener ' + key;
+  const body = serialRig(key, sourceName, [], 'local', false);
+  const manifest = JSON.parse(body.manifest_json);
+  manifest.extensions['urn:oxidal:authoring'].origin = 'oxidal_example';
+  const source = await request.post('/api/v1/presets/rigs', {
+    data: { ...body, manifest_json: JSON.stringify(manifest) },
+  });
+  expect(source.ok(), await source.text()).toBe(true);
+  const original = await source.json();
+  await page.goto('/#library/mine');
+  await page.getByRole('button', { name: 'New preset', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'New preset' });
+  await dialog.getByLabel('Name').fill(name);
+  await dialog.getByText('An Oxidal sound', { exact: true }).click();
+  const selector = dialog.getByRole('combobox', { name: 'Preset to copy' });
+  await selector.click();
+  await page.getByRole('option', { name: sourceName, exact: true }).click();
+  const published = page.waitForResponse(
+    (r) =>
+      new URL(r.url()).pathname === '/api/v1/presets/rigs' &&
+      r.request().method() === 'POST',
+  );
+  await dialog.getByRole('button', { name: 'Create preset' }).click();
+  const copy = await (await published).json();
+  expect(copy.manifest.name).toBe(name);
+  expect(copy.manifest.id).not.toBe(original.manifest.id);
+  expect(copy.manifest.oxidal.graph).toEqual(original.manifest.oxidal.graph);
+  expect(copy.manifest.extensions['urn:oxidal:authoring'].origin).toBe('mine');
+  await expect(dialog).toHaveCount(0);
+});
 
 test('new preset creates an empty preset of your own without hardware', async ({
   page,

@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@oxidal/design-system/components/select';
 import { Loading } from '@oxidal/design-system/components/states';
+import { CatalogueNotice } from '@oxidal/design-system/patterns/model-browser';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
@@ -40,7 +41,11 @@ import {
 } from './api';
 import { GearIcon, GearLabel } from './GearIcon';
 import { friendlyError } from './lib/friendlyError';
-import { remoteProblem, useSessionState } from './lib/sessionState';
+import {
+  remoteProblem,
+  setReturnTarget,
+  useSessionState,
+} from './lib/sessionState';
 
 /** Gear types TONE3000 can narrow a list to, per model type. */
 const GEARS = {
@@ -150,6 +155,8 @@ export function ModelPicker({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<'download' | 'assign' | null>(null);
   const [error, setError] = useState('');
+  const [catalogueError, setCatalogueError] = useState('');
+  const [retry, setRetry] = useState(0);
   const [choice, setChoice] = useState<{
     asset: string;
     label: string;
@@ -171,6 +178,7 @@ export function ModelPicker({
     async function load() {
       setLoading(true);
       setError('');
+      setCatalogueError('');
       try {
         if (source === 'local') {
           const page = await localModels(localAfter, controller.signal, true);
@@ -188,15 +196,18 @@ export function ModelPicker({
           if (!controller.signal.aborted) setTones(page);
         }
       } catch (cause) {
-        if (!controller.signal.aborted)
-          setError(friendlyError(cause, 'read the sounds'));
+        if (!controller.signal.aborted) {
+          const message = friendlyError(cause, 'read the sounds');
+          if (source === 'local') setError(message);
+          else setCatalogueError(message);
+        }
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
     }
     void load();
     return () => controller.abort();
-  }, [query, tone, modelPage, format, source, localAfter]);
+  }, [query, tone, modelPage, format, source, localAfter, retry]);
   function close() {
     if (busy === 'assign') return;
     download.current?.abort();
@@ -291,7 +302,7 @@ export function ModelPicker({
     if (tone) setModelPage(next);
     else setQuery({ ...query, page: next });
   }
-  const problem = error ? remoteProblem(error) : null;
+  const problem = remoteProblem(catalogueError);
   const title =
     intent === 'download'
       ? `Get ${format === 'nam' ? 'NAM models' : 'IRs'}`
@@ -582,9 +593,9 @@ export function ModelPicker({
             >
               {loading ? (
                 <p className="catalog-empty" role="status">
-                  Loading…
+                  Searching TONE3000…
                 </p>
-              ) : tone ? (
+              ) : catalogueError ? null : tone ? (
                 <>
                   {!models?.data.length && (
                     <p className="catalog-empty" role="status">
@@ -701,20 +712,28 @@ export function ModelPicker({
               : error || comparison?.error}
           </p>
         )}
-        {problem && (
-          <div className="action-row">
-            <span className="caption">
-              {problem === 'account'
-                ? 'Browsing TONE3000 needs your account.'
-                : 'TONE3000 needs internet access.'}{' '}
-              Presets and sounds already on this device still work.
-            </span>
-            {problem === 'account' && onSignIn && (
-              <Button variant="outline" onClick={onSignIn}>
-                Connect TONE3000
-              </Button>
-            )}
-          </div>
+        {catalogueError && (
+          <CatalogueNotice
+            status={
+              problem === 'account'
+                ? { state: 'signed-out' }
+                : problem === 'offline'
+                  ? { state: 'offline' }
+                  : { state: 'failed', message: catalogueError }
+            }
+            onRetry={() => setRetry((n) => n + 1)}
+            onSignIn={
+              onSignIn ??
+              (() => {
+                setReturnTarget({
+                  hash: window.location.hash || '#rig',
+                  label: intent === 'download' ? 'Sounds' : 'Rig',
+                });
+                close();
+                window.location.hash = 'settings/accounts';
+              })
+            }
+          />
         )}
         {inline && choice && !busy && (
           <p role="status">{choice.label} is saved in Sounds.</p>

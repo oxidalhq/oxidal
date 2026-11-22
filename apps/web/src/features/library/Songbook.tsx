@@ -319,7 +319,7 @@ export function Songbook({ connected }: { connected: boolean }) {
               {book.editError && <p role="alert">{book.editError}</p>}
               {book.stale && (
                 <div className="grid gap-2 rounded-lg border border-border p-3">
-                  <p className="text-sm">
+                  <p role="alert" className="text-sm">
                     The saved version changed. Your text has been kept.
                   </p>
                   <Button

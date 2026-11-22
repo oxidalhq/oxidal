@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { PresetStartOptions } from '@oxidal/design-system/patterns/preset-dialogs';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
@@ -31,12 +32,12 @@ import {
   presetNameError,
 } from './newPreset';
 
-type Start = 'empty' | 'copy';
+type Start = 'empty' | 'copy' | 'oxidal' | 'tone3000';
 
 /**
- * The single New preset entry (7.3): a name, then Empty or Copy of a saved
- * preset. Works without audio hardware; nothing starts playing. The result
- * stays in Library until the player explicitly chooses Play to edit.
+ * Creates an empty preset or starts from a saved preset, a prepared Oxidal
+ * sound or a local TONE3000 tone. The new preset stays in Library until
+ * the player chooses Play to edit.
  * @see docs/presets/format.md
  */
 export function NewPresetDialog({
@@ -69,11 +70,16 @@ export function NewPresetDialog({
       const found: RigEntry[] = [];
       let page = await rigLibrary();
       const native = page.native_profile;
-      for (let i = 0; i < 20; i++) {
-        found.push(...page.presets);
-        if (!page.next) break;
+      found.push(...page.presets);
+      const seen = new Set<string>();
+      while (alive && page.next) {
+        if (seen.has(page.next))
+          throw new Error('Preset list repeated a page.');
+        seen.add(page.next);
         page = await rigLibrary(page.next);
+        found.push(...page.presets);
       }
+      if (!alive) return;
       const sources = await rigNativeSources().catch(() => []);
       if (!alive) return;
       setRigs(found);
@@ -91,17 +97,33 @@ export function NewPresetDialog({
     };
   }, [fail]);
   const nameError = presetNameError(name);
-  const options = [
-    ...rigs.map((r) => ({ value: `rig:${r.revision}`, label: r.name })),
-    ...tones.map((t) => ({
-      value: `tone:${t.preset.sha256}`,
-      label: `${t.preset.name} · TONE3000`,
-    })),
-  ];
+  const saved = rigs.map((r) => ({
+    value: `rig:${r.revision}`,
+    label: r.name,
+  }));
+  const examples = rigs
+    .filter((r) => r.origin === 'oxidal_example')
+    .map((r) => ({ value: `rig:${r.revision}`, label: r.name }));
+  const localTones = tones.map((t) => ({
+    value: `tone:${t.preset.sha256}`,
+    label: t.preset.name,
+  }));
+  const sources = {
+    empty: [],
+    copy: saved,
+    oxidal: examples,
+    tone3000: localTones,
+  };
+  const options = sources[start];
+  function chooseStart(choice: Start) {
+    setStart(choice);
+    setSource(sources[choice][0]?.value ?? '');
+    setError('');
+  }
   async function create() {
     setTouched(true);
     if (nameError || busy || !profile) return;
-    if (start === 'copy' && !source) {
+    if (start !== 'empty' && !source) {
       setError('Choose the preset to copy.');
       return;
     }
@@ -157,28 +179,42 @@ export function NewPresetDialog({
           />
         </label>
         {touched && nameError && <p role="alert">{nameError}</p>}
-        <fieldset className="space-y-2">
-          <legend className="mb-1 font-medium">Start from</legend>
-          <label className="flex items-center gap-2">
-            <input
-              type="radio"
-              name="start"
-              checked={start === 'empty'}
-              onChange={() => setStart('empty')}
-            />
-            Empty · input straight to output, add blocks in Rig
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="radio"
-              name="start"
-              checked={start === 'copy'}
-              onChange={() => setStart('copy')}
-            />
-            Copy of a saved preset
-          </label>
-        </fieldset>
-        {start === 'copy' && (
+        <PresetStartOptions<Start>
+          value={start}
+          onChange={chooseStart}
+          options={[
+            {
+              id: 'empty',
+              title: 'Empty',
+              caption: 'Input straight to output. Add blocks in Rig.',
+            },
+            {
+              id: 'copy',
+              title: 'Copy of a saved preset',
+              caption: saved.length
+                ? 'Choose a saved revision to copy.'
+                : 'No saved presets on this device.',
+              disabled: !saved.length,
+            },
+            {
+              id: 'oxidal',
+              title: 'An Oxidal sound',
+              caption: examples.length
+                ? 'Choose a finished Oxidal preset.'
+                : 'Prepare a sound in Library › Oxidal sounds first.',
+              disabled: !examples.length,
+            },
+            {
+              id: 'tone3000',
+              title: 'A TONE3000 tone',
+              caption: localTones.length
+                ? 'Choose a TONE3000 chain saved on this device.'
+                : 'Save a TONE3000 chain on this device first.',
+              disabled: !localTones.length,
+            },
+          ]}
+        />
+        {start !== 'empty' && (
           <label className="field">
             <span>Preset to copy</span>
             <Select value={source} onValueChange={setSource}>

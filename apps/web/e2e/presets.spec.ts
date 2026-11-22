@@ -318,9 +318,14 @@ test('rig controls follow the actual session without example effects', async ({
     await rig
       .getByRole('button', { name: /^My amp Tone block(?: |$)/ })
       .click();
-  await expect(selectedControl).toBeVisible();
-  await selectedControl.scrollIntoViewIfNeeded();
-  await expect(selectedControl).toBeInViewport();
+  const rotatedControl = (
+    verticalAfterRotation
+      ? page.getByRole('dialog')
+      : rig.locator('.rig-inspector-column')
+  ).getByRole('slider', { name: /(?:My amp )?Input gain/ });
+  await expect(rotatedControl).toBeVisible();
+  await rotatedControl.scrollIntoViewIfNeeded();
+  await expect(rotatedControl).toBeInViewport();
   if (!verticalAfterRotation) {
     const chainBounds = (await rig.locator('.rig-chain-column').boundingBox())!;
     const inspectorBounds = (await rig
@@ -5021,7 +5026,11 @@ test('mixed rig authoring keeps a long selected block name on its own row beside
     const routingBox = (await routing.boundingBox())!;
     // Its own row, the panel's full width, one line high, never per letter.
     expect(titleBox.width).toBeGreaterThan(160);
-    expect(toggleBox.x - titleBox.x - titleBox.width).toBeCloseTo(8, 0);
+    // The selected block header uses a half-rem gap at the shared root size.
+    const halfRem = await page.evaluate(
+      () => parseFloat(getComputedStyle(document.documentElement).fontSize) / 2,
+    );
+    expect(toggleBox.x - titleBox.x - titleBox.width).toBeCloseTo(halfRem, 1);
     expect(titleBox.height).toBeLessThan(48);
     expect(routingBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
     await expect(title).toHaveCSS('text-overflow', 'ellipsis');

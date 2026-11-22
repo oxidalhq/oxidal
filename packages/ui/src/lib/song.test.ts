@@ -18,6 +18,18 @@ it('keeps every plain-text lyric when the Library supplies the title', () => {
   );
 });
 
+it('shows a standalone matching title once and keeps a matching first lyric in its verse', () => {
+  const verse = parseSong(
+    'Night Drive\n\nVerse:\nFirst line',
+    'text',
+    'Night Drive',
+  );
+  expect(verse.lines[0]).toMatchObject({ kind: 'section', text: 'Verse' });
+  expect(
+    parseSong('Night Drive\nSecond line', 'text', 'Night Drive').lines[0],
+  ).toEqual({ kind: 'text', text: 'Night Drive' });
+});
+
 it('reads ChordPro directives, sections, comments and inline chords', () => {
   const song = parseSong(
     [

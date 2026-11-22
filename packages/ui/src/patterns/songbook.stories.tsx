@@ -91,7 +91,7 @@ Conflict.play = async ({ canvasElement }) => {
   await userEvent.clear(words);
   await userEvent.type(words, 'My retained words');
   await userEvent.click(page.getByRole('button', { name: 'Save' }));
-  await expect(page.getByRole('alert')).toHaveTextContent(
+  await expect(await page.findByRole('alert')).toHaveTextContent(
     'Your text has been kept',
   );
   await expect(words).toHaveValue('My retained words');

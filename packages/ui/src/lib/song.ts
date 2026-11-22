@@ -127,7 +127,8 @@ function parseLines(
   suppliedTitle?: string,
 ): Song {
   const song: Song = { title: '', format, lines: [] };
-  for (const raw of source.split(/\r?\n/)) {
+  const lines = source.split(/\r?\n/);
+  for (const [index, raw] of lines.entries()) {
     const line = raw.replace(/\s+$/, '');
     if (!line.trim()) {
       song.lines.push({ kind: 'blank' });
@@ -165,7 +166,8 @@ function parseLines(
     if (isChordLine(line)) song.lines.push({ kind: 'chords', text: line });
     else if (
       !song.title &&
-      suppliedTitle === undefined &&
+      (suppliedTitle === undefined ||
+        (line.trim() === suppliedTitle && lines[index + 1]?.trim() === '')) &&
       format === 'text' &&
       song.lines.every((l) => l.kind === 'blank')
     )

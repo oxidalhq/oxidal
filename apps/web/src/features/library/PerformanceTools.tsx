@@ -89,11 +89,13 @@ function readPreferences(): Preferences {
 export function PerformanceTools({
   connected,
   slow = false,
+  stage = false,
   tunerOpen = false,
   children,
 }: {
   connected: boolean;
   slow?: boolean;
+  stage?: boolean;
   tunerOpen?: boolean;
   children: ReactNode;
 }) {
@@ -120,7 +122,9 @@ export function PerformanceTools({
                 id: 'tuner',
                 title: 'Tuner',
                 icon: <Waveform />,
-                render: () => <TunerTool onStart={requestTuner} />,
+                render: () => (
+                  <TunerTool stage={stage} onStart={requestTuner} />
+                ),
               },
               {
                 id: 'venue',

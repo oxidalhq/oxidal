@@ -1,11 +1,8 @@
-import { ArrowSquareOut } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
-import { Button } from '@oxidal/design-system/components/button';
-import { DialogFooter } from '@oxidal/design-system/components/dialog';
 import { Loading } from '@oxidal/design-system/components/states';
+import { PluginPacks } from '@oxidal/design-system/patterns/engine-settings';
 
-import { AdjustmentDialog } from './AdjustmentDialog';
 import {
   changeEffectPack,
   type EffectPacks as EffectPacksState,
@@ -29,9 +26,7 @@ export function EffectPacks({
   const { failure: recoverFailure, fail: recoverFail } = useFailure();
   const [state, setState] = useState<EffectPacksState | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const [acknowledged, setAcknowledged] = useState(false);
   // Saved presets and the LV2 effects they need, to protect removal (7.17).
   const [presets, setPresets] = useState<PresetPlugins[] | null>(null);
 
@@ -119,7 +114,6 @@ export function EffectPacks({
     setError('');
     try {
       setState(await changeEffectPack(id, action));
-      setConfirmRemove(null);
     } catch (cause) {
       setError(friendlyError(cause, 'change effect packs'));
       recoverFail(cause, 'change effect packs', () => void change(id, action));
@@ -129,13 +123,6 @@ export function EffectPacks({
   }
 
   const playing = audioRunning || Boolean(state?.audio_running);
-  const locked = Boolean(state?.job) || busy !== null;
-  const removal = state?.packs.find((pack) => pack.id === confirmRemove);
-  const usedBy = (id: string) =>
-    presets ? presetsUsingPack(id, presets) : null;
-  const removalUsers = removal ? usedBy(removal.id) : null;
-  const installed = state?.packs.filter((pack) => pack.installed).length ?? 0;
-
   return (
     <section className="panel effect-packs" aria-label="Effects">
       <h2 className="sr-only">Effects</h2>
@@ -144,23 +131,9 @@ export function EffectPacks({
         plugins stay hidden.
       </p>
 
-      {playing && (
-        <p role="status" className="rounded-md bg-muted px-3 py-2 text-sm">
-          Stop audio before installing or removing effects. This protects the
-          playing session from package and disk activity.
-        </p>
-      )}
       {state && !state.storage_writable && (
         <p role="status" className="rounded-md bg-muted px-3 py-2 text-sm">
           Unlock system storage and restart before changing effect packs.
-        </p>
-      )}
-      {state?.job && (
-        <p role="status" className="rounded-md bg-muted px-3 py-2 text-sm">
-          {state.job.action === 'install' ? 'Installing' : 'Removing'}{' '}
-          {state.packs.find((pack) => pack.id === state.job?.pack)?.name ??
-            state.job.pack}
-          … You can leave this screen; the device owns the job.
         </p>
       )}
       {error && <p role="alert">{error}</p>}
@@ -172,12 +145,6 @@ export function EffectPacks({
       )}
 
       {!state && !error && <Loading label="Reading installed effects…" />}
-      {state && installed === 0 && (
-        <p role="status" className="effect-packs-empty">
-          No effect packs installed yet. Install one to add its effects to
-          presets. Nothing is installed automatically.
-        </p>
-      )}
       {state && !state.available && (
         <p role="status" className="caption">
           This device cannot install packages, so effect packs are shown for
@@ -185,158 +152,36 @@ export function EffectPacks({
         </p>
       )}
       {state && (
-        <ul className="effect-pack-list" aria-label="Curated packs">
-          {state.packs.map((pack) => {
-            const active = state.job?.pack === pack.id || busy === pack.id;
-            return (
-              <li key={pack.id} className="effect-pack-row">
-                <div className="effect-pack-copy">
-                  <div className="effect-pack-title">
-                    <strong>{pack.name}</strong>
-                    <a
-                      className="inline-flex min-h-touch w-fit items-center gap-1 text-xs font-semibold underline"
-                      href={pack.website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Website <ArrowSquareOut aria-hidden="true" />
-                    </a>
-                    {pack.copyright_available && (
-                      <a
-                        className="inline-flex min-h-touch items-center text-xs underline"
-                        href={`/api/v1/packs/${encodeURIComponent(pack.id)}/copyright`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        Licence and copyright
-                      </a>
-                    )}
-                    <span className="effect-pack-state">
-                      {pack.installed
-                        ? `Installed${pack.version ? ` · ${pack.version}` : ''}`
-                        : 'Not installed'}
-                    </span>
-                  </div>
-                  <p className="caption effect-pack-meta">
-                    {pack.usable_plugins} usable effects · about {pack.size_mib}{' '}
-                    MiB · {pack.qualification}
-                    {pack.installed &&
-                      (() => {
-                        const users = usedBy(pack.id);
-                        if (!users) return null;
-                        return users.length
-                          ? ` · Used by ${users.length} ${users.length === 1 ? 'preset' : 'presets'}`
-                          : ' · Not used by saved presets';
-                      })()}
-                  </p>
-                </div>
-                <div className="effect-pack-action">
-                  {pack.installed ? (
-                    <Button
-                      variant="ghost"
-                      className="text-destructive"
-                      disabled={
-                        !connected ||
-                        !state.available ||
-                        !state.storage_writable ||
-                        playing ||
-                        locked
-                      }
-                      onClick={() => {
-                        setAcknowledged(false);
-                        setConfirmRemove(pack.id);
-                      }}
-                    >
-                      {active ? 'Working…' : 'Remove'}
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      disabled={
-                        !connected ||
-                        !state.available ||
-                        !state.storage_writable ||
-                        playing ||
-                        locked
-                      }
-                      onClick={() => void change(pack.id, 'install')}
-                    >
-                      {active ? 'Working…' : 'Install'}
-                    </Button>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {removal && (
-        <AdjustmentDialog
-          title={`Remove ${removal.name}?`}
-          onCancel={() => {
-            if (!busy) setConfirmRemove(null);
-          }}
-        >
-          <p>
-            This removes the effect collection from the unit. Presets that use
-            one of its effects will need the collection installed again before
-            they can play completely.
-          </p>
-          {removalUsers === null ? (
-            <p className="caption">
-              Oxidal could not check which saved presets use these effects.
-            </p>
-          ) : removalUsers.length > 0 ? (
-            <>
-              <p>
-                Used by {removalUsers.length}{' '}
-                {removalUsers.length === 1 ? 'saved preset' : 'saved presets'}:
-              </p>
-              <ul aria-label="Presets that use these effects">
-                {removalUsers.slice(0, 8).map((name) => (
-                  <li key={name}>{name}</li>
-                ))}
-                {removalUsers.length > 8 && (
-                  <li>and {removalUsers.length - 8} more</li>
-                )}
-              </ul>
-            </>
-          ) : (
-            <p className="caption">No saved preset uses these effects.</p>
-          )}
-          {removalUsers?.length !== 0 && (
-            <label className="flex min-h-11 items-center gap-2">
-              <input
-                type="checkbox"
-                checked={acknowledged}
-                onChange={(e) => setAcknowledged(e.target.checked)}
-              />
-              I understand these presets will not play completely until I
-              install it again
-            </label>
-          )}
-          <p className="caption">
-            Local presets and their settings are not deleted.
-          </p>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              disabled={busy !== null}
-              onClick={() => setConfirmRemove(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={
-                busy !== null || (removalUsers?.length !== 0 && !acknowledged)
-              }
-              onClick={() => void change(removal.id, 'remove')}
-            >
-              Remove effects
-            </Button>
-          </DialogFooter>
-        </AdjustmentDialog>
+        <PluginPacks
+          playing={playing}
+          disabled={
+            !connected ||
+            !state.available ||
+            !state.storage_writable ||
+            busy !== null
+          }
+          job={
+            state.job
+              ? { id: state.job.pack, action: state.job.action }
+              : undefined
+          }
+          packs={state.packs.map((pack) => ({
+            id: pack.id,
+            name: pack.name,
+            installed: pack.installed,
+            effects: pack.usable_plugins,
+            sizeMib: pack.size_mib,
+            qualification: pack.qualification,
+            website: pack.website,
+            version: pack.version,
+            licenceUrl: pack.copyright_available
+              ? `/api/v1/packs/${encodeURIComponent(pack.id)}/copyright`
+              : undefined,
+            usedBy: presets ? presetsUsingPack(pack.id, presets) : null,
+          }))}
+          onInstall={(pack) => void change(pack.id, 'install')}
+          onRemove={(pack) => void change(pack.id, 'remove')}
+        />
       )}
     </section>
   );
