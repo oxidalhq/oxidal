@@ -349,9 +349,10 @@ pub(super) async fn perform(
     if session(s, e).as_ref() != Some(&request.session) {
         return Err("The playing preset or session changed".into());
     }
-    if received_ms
-        .zip(gates.changed_ms)
-        .is_some_and(|(received, changed)| received <= changed)
+    if request.pressed
+        && received_ms
+            .zip(gates.changed_ms)
+            .is_some_and(|(received, changed)| received <= changed)
     {
         return Err("Switch layout changed after MIDI receipt".into());
     }
