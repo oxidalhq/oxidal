@@ -483,8 +483,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     None
                 }
                 WorkerRequest::Status => None,
-                WorkerRequest::Tempo { bpm } => {
-                    rig.set_host_tempo(bpm);
+                WorkerRequest::Tempo { bpm, tap_note } => {
+                    rig.set_host_tempo(bpm, tap_note);
                     None
                 }
                 WorkerRequest::SettleAuthoring => {

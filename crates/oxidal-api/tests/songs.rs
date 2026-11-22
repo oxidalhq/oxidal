@@ -850,12 +850,54 @@ async fn device_tempo_agrees_for_viewers_and_restores_preset_on_song_stop() {
         json_request(&app, "GET", "/tempo", Value::Null).await.1,
         tapped
     );
+    assert!(tapped.get("tap_note").is_none());
+    let choose_note = |note: &str, revision: &Value| json!({"kind":"set_tap_note","tap_note":note,"expected_revision":revision});
+    let mut current = tapped.clone();
+    for note in ["quarter", "eighth", "eighth_triplet", "dotted_eighth"] {
+        let (status, state) = json_request(
+            &app,
+            "POST",
+            "/tempo",
+            choose_note(note, &current["revision"]),
+        )
+        .await;
+        assert_eq!(status, 200, "{state}");
+        assert_eq!(state["tap_note"], note);
+        assert_eq!(state["bpm"], tapped["bpm"]);
+        current = state;
+    }
+    assert_eq!(
+        json_request(
+            &other,
+            "POST",
+            "/tempo",
+            choose_note("quarter", &tapped["revision"])
+        )
+        .await
+        .0,
+        409
+    );
+    assert_eq!(
+        json_request(&other, "GET", "/tempo", Value::Null).await.1,
+        current
+    );
     drop(app);
     drop(other);
     let restarted = router(config).unwrap();
     let (_, persisted) = json_request(&restarted, "GET", "/tempo", Value::Null).await;
     assert_eq!(persisted["source"], "tap");
     assert_eq!(persisted["bpm"], tapped["bpm"]);
+    assert_eq!(persisted["tap_note"], "dotted_eighth");
+    let (status, authored) = json_request(
+        &restarted,
+        "POST",
+        "/tempo",
+        json!({"kind":"set_tap_note","tap_note":null,"expected_revision":persisted["revision"]}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert!(authored.get("tap_note").is_none());
+
     drop(restarted);
     std::fs::remove_dir_all(root).unwrap();
 }

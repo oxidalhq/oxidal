@@ -162,6 +162,8 @@ pub struct PluginDefaultsCommand {
 pub enum WorkerRequest {
     Tempo {
         bpm: Option<f32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tap_note: Option<crate::TapNote>,
     },
     RestorePluginDefaults {
         command: PluginDefaultsCommand,

@@ -230,9 +230,9 @@ impl ResidentSet {
         }
         Ok(result)
     }
-    pub fn set_host_tempo(&mut self, bpm: Option<f32>) {
+    pub fn set_host_tempo(&mut self, bpm: Option<f32>, tap_note: Option<oxidal_lv2::TapNote>) {
         for resident in &mut self.residents {
-            resident.session.graph.set_host_tempo(bpm);
+            resident.session.graph.set_host_tempo(bpm, tap_note);
         }
     }
 

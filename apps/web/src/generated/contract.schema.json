@@ -15927,6 +15927,16 @@
         "fade_frames"
       ]
     },
+    "TapNote": {
+      "description": "Delay repeat selected for the device's Tap tempo action.",
+      "type": "string",
+      "enum": [
+        "quarter",
+        "dotted_eighth",
+        "eighth",
+        "eighth_triplet"
+      ]
+    },
     "Target": {
       "type": "object",
       "properties": {
@@ -16071,6 +16081,35 @@
             },
             "kind": {
               "type": "string",
+              "const": "set_tap_note"
+            },
+            "tap_note": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TapNote"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "expected_revision"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "expected_revision": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
               "const": "select"
             },
             "source": {
@@ -16117,6 +16156,16 @@
         },
         "source": {
           "$ref": "#/$defs/TempoSource"
+        },
+        "tap_note": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TapNote"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,

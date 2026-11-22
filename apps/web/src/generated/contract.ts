@@ -717,6 +717,10 @@ export type ImportPhase =
 export type AssignmentKind = "scene" | "branch" | "parameter";
 export type MidiDirection = "previous" | "next";
 export type TempoSource = "tap" | "song" | "preset";
+/**
+ * Delay repeat selected for the device's Tap tempo action.
+ */
+export type TapNote = "quarter" | "dotted_eighth" | "eighth" | "eighth_triplet";
 export type EditorAction =
   | {
       id: string;
@@ -1170,6 +1174,11 @@ export type StartupOwner = "native" | "mixed" | "effects";
 export type TempoCommand =
   | {
       kind: "tap";
+    }
+  | {
+      expected_revision: number;
+      kind: "set_tap_note";
+      tap_note?: TapNote | null;
     }
   | {
       expected_revision: number;
@@ -3208,6 +3217,7 @@ export interface TempoState {
   reason?: string | null;
   revision: number;
   source: TempoSource;
+  tap_note?: TapNote | null;
 }
 export interface History {
   dropped_samples: number;

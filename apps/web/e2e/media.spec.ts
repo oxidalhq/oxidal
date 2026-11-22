@@ -213,6 +213,16 @@ test('backing mini-player stays on every page and opens the full player', async 
     .click();
   const sheet = page.getByRole('dialog', { name: 'Backing player' });
   await expect(sheet).toBeVisible();
+  const note = sheet.getByRole('combobox', { name: 'Echo repeats per tap' });
+  await expect(note).toHaveText('Preset division');
+  await note.click();
+  await page.getByRole('option', { name: 'Dotted eighth' }).click();
+  await expect(note).toHaveText('Dotted eighth');
+  const tempo = await (await page.request.get('/api/v1/tempo')).json();
+  expect(tempo.tap_note).toBe('dotted_eighth');
+  await note.click();
+  await page.getByRole('option', { name: 'Preset division' }).click();
+  await expect(note).toHaveText('Preset division');
   await expect(sheet).toContainText('Mono · MP3');
   await expect(
     sheet.getByRole('button', { name: 'Stop track' }),

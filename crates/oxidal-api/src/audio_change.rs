@@ -161,6 +161,7 @@ pub(super) enum OwnerRequest<C> {
     Tempo {
         worker_session: String,
         bpm: Option<f32>,
+        tap_note: Option<oxidal_lv2::TapNote>,
     },
     Action(C),
     Occurrence {

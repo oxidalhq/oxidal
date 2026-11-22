@@ -722,8 +722,32 @@ pub fn qualification_bundle() -> &'static std::path::Path {
 /// Exact linked-mode control of the shipped effects that consume host tempo.
 pub fn tempo_link_control(uri: &str) -> Option<(&'static str, f32)> {
     match uri {
-        "urn:oxidal:plugin:echo#mono" | "urn:oxidal:plugin:echo#stereo" => Some(("sync", 1.0)),
+        "urn:oxidal:plugin:echo#mono"
+        | "urn:oxidal:plugin:echo#stereo"
+        | "urn:oxidal:plugin:motion#mono"
+        | "urn:oxidal:plugin:motion#stereo" => Some(("sync", 1.0)),
         "urn:oxidal:plugin:moment#mono" | "urn:oxidal:plugin:moment#stereo" => Some(("link", 3.0)),
         _ => None,
+    }
+}
+
+/// Delay repeat selected for the device's Tap tempo action.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TapNote {
+    Quarter,
+    DottedEighth,
+    Eighth,
+    EighthTriplet,
+}
+impl TapNote {
+    /// Index in the shipped Echo plugin's Division scale.
+    pub fn echo_division(self) -> u8 {
+        match self {
+            Self::Quarter => 6,
+            Self::DottedEighth => 7,
+            Self::Eighth => 9,
+            Self::EighthTriplet => 10,
+        }
     }
 }

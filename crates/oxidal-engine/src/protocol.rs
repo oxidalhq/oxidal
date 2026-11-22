@@ -535,6 +535,8 @@ pub struct OccurrenceStart {
 pub enum WorkerRequest {
     Tempo {
         bpm: Option<f32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tap_note: Option<oxidal_lv2::TapNote>,
     },
     RestorePluginDefaults {
         command: PluginDefaultsCommand,

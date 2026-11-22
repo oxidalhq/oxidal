@@ -461,7 +461,7 @@ pub struct Plugin {
     channels: usize,
     latency_port: Option<u32>,
     prepared_latency: Option<u32>,
-    host_tempo: Option<(u32, f32)>,
+    host_tempo: [Option<(u32, f32)>; 2],
 }
 impl Plugin {
     /// Map an Atom URI between processing calls. IDs belong to this instance.
@@ -617,7 +617,7 @@ impl Plugin {
                 channels: if mono && !stereo { 1 } else { 2 },
                 latency_port,
                 prepared_latency: None,
-                host_tempo: None,
+                host_tempo: [None; 2],
             });
         }
         Err("LV2 URI not discovered".into())
@@ -831,30 +831,46 @@ impl Plugin {
     }
     /// Only the shipped effects with independently qualified BPM and division
     /// processing receive the shared tempo. Authored control state remains live.
-    pub fn set_host_tempo(&mut self, bpm: Option<f32>) {
-        self.host_tempo = bpm
-            .filter(|value| (40.0..=240.0).contains(value))
-            .and_then(|value| {
-                tempo_link_control(&self.info.uri)?;
-                self.info
-                    .ports
-                    .iter()
-                    .find(|port| {
-                        port.symbol == "bpm"
-                            && port.control
-                            && port.input
-                            && !port.output
-                            && port.minimum == Some(40.0)
-                            && port.maximum == Some(240.0)
-                    })
-                    .map(|port| (port.index, value))
-            });
+    pub fn set_host_tempo(&mut self, bpm: Option<f32>, tap_note: Option<crate::TapNote>) {
+        self.host_tempo = [None; 2];
+        let Some(bpm) = bpm.filter(|v| (40.0..=240.0).contains(v)) else {
+            return;
+        };
+        if tempo_link_control(&self.info.uri).is_none() {
+            return;
+        }
+        let port = |symbol, minimum, maximum| {
+            self.info
+                .ports
+                .iter()
+                .find(|port| {
+                    port.symbol == symbol
+                        && port.control
+                        && port.input
+                        && !port.output
+                        && port.minimum == Some(minimum)
+                        && port.maximum == Some(maximum)
+                })
+                .map(|port| port.index)
+        };
+        self.host_tempo[0] = port("bpm", 40.0, 240.0).map(|index| (index, bpm));
+        if self.host_tempo[0].is_some()
+            && matches!(
+                self.info.uri.as_str(),
+                "urn:oxidal:plugin:echo#mono" | "urn:oxidal:plugin:echo#stereo"
+            )
+            && let Some(note) = tap_note
+        {
+            self.host_tempo[1] =
+                port("division", 0.0, 12.0).map(|index| (index, f32::from(note.echo_division())));
+        }
     }
 
-    fn begin_host_tempo(&mut self) -> Option<(u32, [f32; 2])> {
-        self.host_tempo.and_then(|(port, tempo)| {
+    fn begin_host_tempo(&mut self) -> [Option<(u32, [f32; 2])>; 2] {
+        self.host_tempo.map(|setting| {
+            let (port, value) = setting?;
             let authored = self.channel_values(port).ok()?;
-            self.write_channels(port, [tempo; 2]);
+            self.write_channels(port, [value; 2]);
             Some((port, authored))
         })
     }
@@ -892,7 +908,7 @@ impl Plugin {
         } else {
             self.check_latency()
         };
-        if let Some((port, authored)) = authored_tempo {
+        for (port, authored) in authored_tempo.into_iter().flatten() {
             self.write_channels(port, authored);
         }
         if let Err(reason) = result {
@@ -952,7 +968,7 @@ impl Plugin {
         } else {
             self.check_latency()
         };
-        if let Some((port, authored)) = authored_tempo {
+        for (port, authored) in authored_tempo.into_iter().flatten() {
             self.write_channels(port, authored);
         }
         if let Err(reason) = result {

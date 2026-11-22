@@ -733,7 +733,7 @@ fn plugin_defaults_keep_moments_recorded_audio() {
 }
 
 #[test]
-#[ignore = "requires the actual shipped Echo and Moment LV2 bundles"]
+#[ignore = "requires the actual shipped Echo, Motion and Moment LV2 bundles"]
 fn shared_tempo_uses_the_effect_division_without_changing_authored_bpm() {
     for (var, uri, settings) in [
         (
@@ -744,6 +744,16 @@ fn shared_tempo_uses_the_effect_division_without_changing_authored_bpm() {
                 ("division", 8.0),
                 ("mix", 100.0),
                 ("feedback", 0.0),
+            ][..],
+        ),
+        (
+            "OXIDAL_MOTION_LV2_BUNDLE",
+            "urn:oxidal:plugin:motion#stereo",
+            &[
+                ("sync", 1.0),
+                ("division", 8.0),
+                ("mix", 100.0),
+                ("depth", 100.0),
             ][..],
         ),
         (
@@ -784,8 +794,18 @@ fn shared_tempo_uses_the_effect_division_without_changing_authored_bpm() {
             .find(|row| row.symbol == "bpm")
             .unwrap()
             .index;
+        let division = direct
+            .info()
+            .ports
+            .iter()
+            .find(|p| p.symbol == "division")
+            .unwrap()
+            .index;
         direct.set(bpm, 90.0).unwrap();
-        override_bpm.set_host_tempo(Some(90.0));
+        if uri == "urn:oxidal:plugin:echo#stereo" {
+            direct.set(division, 7.0).unwrap();
+        }
+        override_bpm.set_host_tempo(Some(90.0), Some(oxidal_lv2::TapNote::DottedEighth));
         let mut changed = 0.0_f32;
         for block in 0..600 {
             let input = |channel: f32| {
@@ -806,6 +826,7 @@ fn shared_tempo_uses_the_effect_division_without_changing_authored_bpm() {
             }
             assert_eq!(target, reference, "{uri} block {block}");
             assert_eq!(override_bpm.value(bpm).unwrap(), 120.0, "{uri}");
+            assert_eq!(override_bpm.value(division).unwrap(), 8.0, "{uri}");
             changed = changed.max(
                 target
                     .iter()
@@ -819,9 +840,10 @@ fn shared_tempo_uses_the_effect_division_without_changing_authored_bpm() {
             changed > 1.0e-3,
             "{uri} did not follow its division at 90 BPM"
         );
-        override_bpm.set_host_tempo(None);
+        override_bpm.set_host_tempo(None, None);
         assert_eq!(override_bpm.value(bpm).unwrap(), 120.0);
         direct.set(bpm, 120.0).unwrap();
+        direct.set(division, 8.0).unwrap();
         for _ in 0..16 {
             let (mut left, mut right) = ([0.1; 128], [-0.1; 128]);
             let (mut left_ref, mut right_ref) = (left, right);

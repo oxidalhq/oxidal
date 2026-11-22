@@ -500,6 +500,7 @@ impl Owner {
             OwnerRequest::Tempo {
                 worker_session,
                 bpm,
+                tap_note,
             } => {
                 self.change.admits(AudioChangeOwner::Effects, false, None)?;
                 if self.state.phase != AudioPhase::Running
@@ -511,7 +512,7 @@ impl Owner {
                 {
                     return Err("The playing effects changed before tempo could be applied".into());
                 }
-                let reply = match self.exchange(&WorkerRequest::Tempo { bpm }).await {
+                let reply = match self.exchange(&WorkerRequest::Tempo { bpm, tap_note }).await {
                     Ok(reply) => reply,
                     Err(error) => return Err(self.fault(error).await),
                 };
@@ -1238,11 +1239,13 @@ impl GraphPlayback {
         &self,
         worker_session: String,
         bpm: Option<f32>,
+        tap_note: Option<oxidal_lv2::TapNote>,
     ) -> Result<(), String> {
         self.send(
             OwnerRequest::Tempo {
                 worker_session,
                 bpm,
+                tap_note,
             },
             None,
         )

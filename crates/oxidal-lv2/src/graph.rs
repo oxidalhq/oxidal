@@ -351,13 +351,13 @@ impl PreparedGraph {
     }
     /// Sum fan-in at unity without normalization or clipping; preserve independent stereo.
     /// Global bypass returns dry input while running the graph with silence to drain histories.
-    pub fn set_host_tempo(&mut self, bpm: Option<f32>) {
+    pub fn set_host_tempo(&mut self, bpm: Option<f32>, tap_note: Option<crate::TapNote>) {
         for plugin in self
             .nodes
             .iter_mut()
             .filter_map(|node| node.plugin.as_mut())
         {
-            plugin.set_host_tempo(bpm);
+            plugin.set_host_tempo(bpm, tap_note);
         }
     }
 

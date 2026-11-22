@@ -474,7 +474,11 @@ preset tempos show as unavailable. Selecting Song or Preset requires the
 latest tempo revision. The device remembers the source and last measured Tap
 tempo across restart.
 
-Echo in Sync mode and Moment in Link Tempo mode use the selected external BPM
-with their own note divisions. The override leaves saved BPM values intact. A
+Echo and Motion in Sync mode and Moment in Link Tempo mode use the selected
+external BPM. **Echo repeats per tap** selects the preset division, quarter note,
+dotted eighth, eighth note or eighth-note triplet. The device remembers the
+choice for both on-screen and MIDI taps. It applies only while Tap is the source.
+Song and Preset use the authored division. Motion and Moment keep their own
+divisions. These listening settings preserve the preset’s BPM and control values. A
 scene recall retains Tap. Stopping backing returns Song to Preset and leaves
 guitar audio running. Stopping backing while Tap is selected leaves Tap active.

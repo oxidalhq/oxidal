@@ -199,8 +199,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         None
                     }
                     WorkerRequest::Status => None,
-                    WorkerRequest::Tempo { bpm } => {
-                        graph.set_host_tempo(bpm);
+                    WorkerRequest::Tempo { bpm, tap_note } => {
+                        graph.set_host_tempo(bpm, tap_note);
                         None
                     }
                     WorkerRequest::Control { command } => graph.apply(*command, true).err(),

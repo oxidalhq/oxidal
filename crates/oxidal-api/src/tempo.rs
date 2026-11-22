@@ -8,6 +8,7 @@ use axum::{
 };
 use oxidal_audio::{backing::Click, lifecycle::AudioPhase};
 use oxidal_engine::protocol::Target;
+use oxidal_lv2::TapNote;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -38,6 +39,10 @@ pub enum SelectTempoSource {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum TempoCommand {
     Tap,
+    SetTapNote {
+        tap_note: Option<TapNote>,
+        expected_revision: u64,
+    },
     Select {
         source: SelectTempoSource,
         expected_revision: u64,
@@ -49,6 +54,8 @@ pub enum TempoCommand {
 pub struct TempoState {
     pub revision: u64,
     pub source: TempoSource,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tap_note: Option<TapNote>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bpm: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -60,6 +67,8 @@ pub struct TempoState {
 struct Saved {
     source: TempoSource,
     tap: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    tap_note: Option<TapNote>,
 }
 
 fn unavailable(source: TempoSource) -> &'static str {
@@ -102,18 +111,23 @@ impl Engine {
         None
     }
 
-    async fn apply(&self, shared: &Shared, bpm: Option<f32>) -> Result<(), String> {
+    async fn apply(
+        &self,
+        shared: &Shared,
+        bpm: Option<f32>,
+        tap_note: Option<TapNote>,
+    ) -> Result<(), String> {
         match self {
             Self::Mixed(session) => {
                 shared
                     .rig_playback
-                    .set_host_tempo(session.clone(), bpm)
+                    .set_host_tempo(session.clone(), bpm, tap_note)
                     .await
             }
             Self::Effects(session) => {
                 shared
                     .graph_playback
-                    .set_host_tempo(session.clone(), bpm)
+                    .set_host_tempo(session.clone(), bpm, tap_note)
                     .await
             }
         }
@@ -124,7 +138,7 @@ impl Engine {
 struct Inner {
     saved: Saved,
     taps: VecDeque<Instant>,
-    applied: Option<(Engine, Option<f32>)>,
+    applied: Option<(Engine, Option<f32>, Option<TapNote>)>,
     preset: Option<(Engine, u64, Option<f32>)>,
     song: Option<(String, Instant, Option<f32>)>,
 }
@@ -195,6 +209,7 @@ impl Tempo {
         let (status, _) = watch::channel(TempoState {
             revision: 0,
             source: saved.source,
+            tap_note: saved.tap_note,
             bpm,
             reason: bpm.is_none().then(|| unavailable(saved.source).to_owned()),
         });
@@ -254,6 +269,15 @@ impl Tempo {
         let prior_taps = inner.taps.clone();
         let saved = match command {
             TempoCommand::Tap => inner.tap(at),
+            TempoCommand::SetTapNote {
+                tap_note,
+                expected_revision,
+            } => {
+                if self.status.borrow().revision != expected_revision {
+                    return Err("Tempo changed; check the current note and try again".into());
+                }
+                Saved { tap_note, ..before }
+            }
             TempoCommand::Select {
                 expected_revision,
                 source,
@@ -309,18 +333,24 @@ impl Tempo {
             bpm
         };
         if let Some(engine) = engine {
-            let next = (engine, overlay);
+            let note = if overlay.is_some() && source == TempoSource::Tap {
+                inner.saved.tap_note
+            } else {
+                None
+            };
+            let next = (engine, overlay, note);
             // A fresh worker starts with no overlay. Avoid an unnecessary
             // transaction unless an override needs setting or clearing.
             let prior = inner
                 .applied
                 .as_ref()
                 .filter(|old| old.0 == next.0)
-                .and_then(|old| old.1);
-            if prior == overlay {
+                .map(|old| (old.1, old.2))
+                .unwrap_or_default();
+            if prior == (overlay, note) {
                 inner.applied = Some(next);
             } else {
-                match next.0.apply(shared, next.1).await {
+                match next.0.apply(shared, next.1, next.2).await {
                     Ok(()) => inner.applied = Some(next),
                     Err(error) => {
                         bpm = None;
@@ -332,12 +362,17 @@ impl Tempo {
             inner.applied = None;
         }
         self.status.send_if_modified(|state| {
-            if state.source == source && state.bpm == bpm && state.reason == reason {
+            if state.source == source
+                && state.tap_note == inner.saved.tap_note
+                && state.bpm == bpm
+                && state.reason == reason
+            {
                 return false;
             }
             *state = TempoState {
                 revision: state.revision.saturating_add(1),
                 source,
+                tap_note: inner.saved.tap_note,
                 bpm,
                 reason,
             };
