@@ -5,17 +5,12 @@ import {
   SpeakerHigh,
   WarningCircle,
 } from '@phosphor-icons/react';
-import {
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
 import { StateNotice } from '@oxidal/design-system/components/states';
+import { SoundCheck as ReadinessList } from '@oxidal/design-system/patterns/guitar-tools';
 import {
   LEVELS_SECTIONS,
   type LevelsSection,
@@ -36,11 +31,14 @@ import {
   unitLevels,
 } from './api';
 import { CaptureListening } from './CaptureListening';
+import { VenueEq } from './components/media/VenueEq';
 import { EvenOut } from './EvenOut';
 import {
   guitarVerificationDetail,
   guitarVerificationState,
 } from './guitarVerification';
+import { leaveScreen } from './lib/leaveGuard';
+import { MasterLevel } from './MasterLevel';
 import { useMonitorFeed } from './monitorFeed';
 import { Monitoring } from './Monitoring';
 import { processingHeadroom } from './processingHeadroom';
@@ -57,7 +55,7 @@ type HealthData = {
 
 type Fix = {
   title: string;
-  detail: ReactNode;
+  detail: string;
   action?: { label: string; run: () => void };
 };
 
@@ -84,12 +82,18 @@ export function SoundCheck({
   onAudioSetup,
   onGuitars,
   onLibrary,
+  beforePlay,
 }: {
   connected: boolean;
   displayMode: string;
   onAudioSetup: () => void;
   onGuitars: () => void;
   onLibrary: () => void;
+  beforePlay?: {
+    storage: string | null;
+    onStorage: () => void;
+    onLevels: () => void;
+  };
 }) {
   const [data, setData] = useState<HealthData>({
     calibration: null,
@@ -180,6 +184,7 @@ export function SoundCheck({
   const limitedCorrections = entries.filter(
     (entry) =>
       targetLufs != null &&
+      Math.abs(entry.offset_db) >= 24 &&
       Math.abs(entry.lufs + entry.offset_db - targetLufs) >= 0.25,
   );
   const limitedGroups = limitedCorrections.reduce<
@@ -292,8 +297,49 @@ export function SoundCheck({
       title: `${limitedCorrections.length} ${limitedCorrections.length === 1 ? 'scene needs' : 'scenes need'} manual gain review`,
       detail:
         'The Library is wider than Oxidal’s complete ±24 dB correction range. The affected sounds are grouped in Loudness instead of claiming they reached the target.',
-      action: { label: 'Review loudness', run: () => setView('loudness') },
+      action: {
+        label: 'Review loudness',
+        run: beforePlay?.onLevels ?? (() => setView('loudness')),
+      },
     });
+
+  if (beforePlay) {
+    const checks = fixes.map((fix) => ({
+      ok: false,
+      title: fix.title,
+      fix: fix.detail,
+      action: fix.action?.label ?? 'Open levels',
+      run: fix.action?.run ?? beforePlay.onLevels,
+    }));
+    if (beforePlay.storage)
+      checks.push({
+        ok: beforePlay.storage === 'locked',
+        title: `System storage is ${beforePlay.storage}`,
+        fix: 'Changes take effect after restarting the device.',
+        action: 'System storage',
+        run: beforePlay.onStorage,
+      });
+    if (live && monitor?.stream)
+      checks.push({
+        ok: true,
+        title: `Audio: ${monitor.stream.input.period_frames} frames at ${monitor.stream.input.sample_rate / 1000} kHz`,
+        fix: 'The audio engine is reporting live readings.',
+        action: 'Audio setup',
+        run: onAudioSetup,
+      });
+    return (
+      <>
+        {loading && <p role="status">Reading device checks…</p>}
+        {error && <p role="status">{error}</p>}
+        <ReadinessList
+          title="Before you play"
+          caption="What needs a look is first"
+          checks={checks.sort((a, b) => Number(a.ok) - Number(b.ok))}
+          onAction={(item) => checks.find((c) => c === item)?.run()}
+        />
+      </>
+    );
+  }
 
   return (
     <section className="sound-check" aria-label="Levels">
@@ -304,7 +350,7 @@ export function SoundCheck({
         className="px-0"
         onSelect={(id) => {
           if (sections.includes(id as LevelsSection))
-            setView(id as LevelsSection);
+            leaveScreen(() => setView(id as LevelsSection));
         }}
       >
         <header className="sound-check-intro">
@@ -340,6 +386,14 @@ export function SoundCheck({
         )}
         {view === 'overview' && (
           <div className="sound-check-tab-panel">
+            <section
+              aria-label="Output controls"
+              className="grid gap-3 rounded-lg border border-border bg-card p-4"
+            >
+              <h3>Output</h3>
+              <MasterLevel disabled={!connected} />
+              <VenueEq connected={connected} />
+            </section>
             <div
               className="sound-check-meters"
               role="group"

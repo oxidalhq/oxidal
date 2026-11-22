@@ -34,11 +34,15 @@ export const BrowserAudition: StoryObj = {
     );
     const measure = canvas.getByRole('button', { name: 'Measure pair' });
     await expect(measure).toBeDisabled();
-    await userEvent.selectOptions(canvas.getByLabelText('Reamp A'), 'clean');
+    const first = canvas.getByLabelText('Reamp A');
+    const clean = await within(first).findByRole('option', {
+      name: /^Short phrase · Clean/,
+    });
+    await userEvent.selectOptions(first, clean);
     await userEvent.selectOptions(canvas.getByLabelText('Reamp B'), 'lead');
     await userEvent.click(measure);
     await expect(
-      canvas.getByText('B · -18.0 dBFS RMS · -6.0 dB browser trim'),
+      await canvas.findByText('B · -18.0 dBFS RMS · -6.0 dB browser trim'),
     ).toBeVisible();
     await userEvent.click(
       canvas.getByRole('checkbox', { name: 'Match browser playback' }),

@@ -245,13 +245,20 @@ export function TunerProvider({
   );
 }
 
-export function TunerTool({ onStart }: { onStart: () => void }) {
+export function TunerTool({
+  onStart,
+  stage = false,
+}: {
+  onStart: () => void;
+  stage?: boolean;
+}) {
   const owner = useContext(TunerContext);
   if (!owner) return null;
   const { state, pitch, error, a4, look, monitor, listening } = owner;
   return (
     <>
       <TunerFace
+        size={stage ? 'lg' : 'md'}
         note={listening ? (pitch?.note ?? null) : null}
         cents={pitch?.cents ?? 0}
         frequency={pitch?.frequency}

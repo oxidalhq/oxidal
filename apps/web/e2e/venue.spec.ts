@@ -77,6 +77,36 @@ test.afterEach(async ({ request }) => {
   await resetVenue(request);
 });
 
+test('Levels overview exposes the output controls and guards an unsaved venue change', async ({
+  page,
+  request,
+}) => {
+  await page.goto('/#levels/overview');
+  const output = page.getByRole('region', { name: 'Output controls' });
+  await expect(
+    output.getByRole('button', { name: 'Mono', exact: true }),
+  ).toBeVisible();
+  const panel = output.getByRole('region', { name: 'Venue EQ' });
+  await panel.getByRole('button', { name: 'Raise Gain' }).click();
+  await expect(edited(panel)).toBeVisible();
+  await expect.poll(async () => (await venue(request)).preview).not.toBeNull();
+  const sidebar = page.getByRole('navigation', { name: 'Levels sections' });
+  if (await sidebar.isVisible()) {
+    await sidebar.getByRole('button', { name: 'Loudness' }).click();
+  } else {
+    await page.getByRole('combobox', { name: 'Levels section' }).click();
+    await page.getByRole('option', { name: 'Loudness' }).click();
+  }
+  await page
+    .getByRole('dialog', { name: 'Unsaved venue edit' })
+    .getByRole('button', { name: 'Revert and leave' })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Capture references' }),
+  ).toBeVisible();
+  await expect.poll(async () => (await venue(request)).preview).toBeNull();
+});
+
 test('venue EQ edits a starting point, saves it as a profile, reverts and bypasses', async ({
   page,
   request,
@@ -92,7 +122,9 @@ test('venue EQ edits a starting point, saves it as a profile, reverts and bypass
   // A step is audible at once as an owned, unsaved preview.
   await panel.getByRole('button', { name: 'Raise Gain' }).click();
   await expect(edited(panel)).toBeVisible();
-  await expect(panel.getByLabel('Gain value')).toHaveText('−2.5 dB');
+  await expect(
+    panel.getByRole('slider', { name: 'Low mid gain' }),
+  ).toHaveAttribute('aria-valuenow', '-2.5');
   await expect
     .poll(async () => (await venue(request)).preview !== null)
     .toBe(true);
@@ -113,7 +145,7 @@ test('venue EQ edits a starting point, saves it as a profile, reverts and bypass
   expect(saved.preview).toBeNull();
 
   // Drag the Mid handle up: the graph previews it, Revert drops it.
-  await panel.getByRole('button', { name: 'Mid', exact: true }).click();
+  await panel.getByRole('button', { name: /^M\s.*Mid$/ }).click();
   const handle = panel.getByRole('slider', {
     name: 'Mid handle',
     exact: true,
@@ -127,13 +159,19 @@ test('venue EQ edits a starting point, saves it as a profile, reverts and bypass
   await page.mouse.move(x + 8, y - 40, { steps: 6 });
   await page.mouse.up();
   await expect(edited(panel)).toBeVisible();
-  await expect(panel.getByLabel('Gain value')).toHaveText(/^\+\d+\.\d dB$/);
+  await expect(panel.getByRole('slider', { name: 'Mid gain' })).toHaveAttribute(
+    'aria-valuenow',
+    /^[1-9]\d*(\.\d+)?$/,
+  );
   await expect
     .poll(async () => (await venue(request)).preview?.eq.bands[3]?.gainDb ?? 0)
     .toBeGreaterThan(0);
   await panel.getByRole('button', { name: 'Revert' }).click();
   await expect(edited(panel)).toHaveCount(0);
-  await expect(panel.getByLabel('Gain value')).toHaveText('0.0 dB');
+  await expect(panel.getByRole('slider', { name: 'Mid gain' })).toHaveAttribute(
+    'aria-valuenow',
+    '0',
+  );
   expect((await venue(request)).preview).toBeNull();
 
   await panel.getByRole('button', { name: 'Bypass: Off' }).click();
@@ -315,7 +353,7 @@ test('venue EQ on e-paper edits with step buttons', async ({
   await openVenue(page);
   await setDisplayMode(page, 'epaper');
   const panel = page.getByRole('region', { name: 'Venue EQ' });
-  await panel.getByRole('button', { name: 'High-pass, off' }).click();
+  await panel.getByRole('button', { name: /^HP.*off.*High-pass$/ }).click();
   await panel.getByRole('button', { name: 'High-pass on' }).click();
   await expect(edited(panel)).toBeVisible();
   await panel.getByRole('button', { name: 'Raise Frequency' }).click();

@@ -136,11 +136,11 @@ it('shows the active profile, its notes and a headroom check', async () => {
   ).toBeDisabled();
   // Low mid is selected first: its fields show.
   expect(
-    within(panel).getByRole('button', { name: 'Low mid', pressed: true }),
+    within(panel).getByRole('button', { name: /^LM.*Low mid$/, pressed: true }),
   ).toBeVisible();
-  expect(within(panel).getByLabelText('Gain value')).toHaveTextContent(
-    '−3.0 dB',
-  );
+  expect(
+    within(panel).getByRole('slider', { name: 'Low mid gain' }),
+  ).toHaveAttribute('aria-valuenow', '-3');
   expect(within(panel).getByLabelText('Q value')).toHaveTextContent('1.40');
 });
 
@@ -172,9 +172,9 @@ it('previews a step at once and shows Edited with Save and Revert', async () => 
     command: { kind: 'preview', eq: raised },
   });
   expect(await within(panel).findByText('Edited · unsaved')).toBeVisible();
-  expect(within(panel).getByLabelText('Gain value')).toHaveTextContent(
-    '−2.5 dB',
-  );
+  expect(
+    within(panel).getByRole('slider', { name: 'Low mid gain' }),
+  ).toHaveAttribute('aria-valuenow', '-2.5');
   expect(within(panel).getByRole('button', { name: 'Save' })).toBeEnabled();
   expect(
     within(panel).getByText('Solid: what you hear · dashed: saved'),
@@ -215,7 +215,9 @@ it('previews a step at once and shows Edited with Save and Revert', async () => 
 
 it('turns pass filters on and off and picks their slope', async () => {
   const panel = await shown(state());
-  fireEvent.click(within(panel).getByRole('button', { name: 'Low-pass, off' }));
+  fireEvent.click(
+    within(panel).getByRole('button', { name: /^LP.*off.*Low-pass$/ }),
+  );
   expect(within(panel).getByRole('group', { name: 'Slope' })).toBeVisible();
   vi.mocked(venueCommand).mockImplementation(async (request) =>
     editing((request.command as { eq: VenueSettings }).eq),

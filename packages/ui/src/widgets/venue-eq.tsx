@@ -501,6 +501,7 @@ export function VenueEq({
             <span className="font-mono tabular-nums opacity-80">
               {b.enabled ? formatHz(b.freqHz) : 'off'}
             </span>
+            <span className="sr-only">{BANDS[i]!.name}</span>
           </button>
         ))}
       </div>

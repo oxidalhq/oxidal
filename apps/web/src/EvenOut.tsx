@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { PresetLoudnessChart } from '@oxidal/design-system/patterns/guitar-tools';
 
 import './Library.css';
 import {
@@ -64,6 +65,15 @@ export function EvenOut({ connected }: { connected: boolean }) {
     }
   }
   const { progress, entries, target_lufs } = state;
+  const presets = entries.map(({ key, name, lufs, offset_db }) => ({
+    key,
+    name,
+    lufs: lufs + offset_db,
+  }));
+  const levels = presets.map((preset) => preset.lufs);
+  const spread = levels.length
+    ? Math.max(...levels) - Math.min(...levels)
+    : null;
   const pending = (coverage?.stale ?? 0) + (coverage?.unmeasured ?? 0);
   const summary =
     target_lufs == null
@@ -81,7 +91,7 @@ export function EvenOut({ connected }: { connected: boolean }) {
             disabled={!connected}
             onClick={() => void send('run')}
           >
-            {pending ? `Even out ${pending} new or changed` : 'Even out'}
+            {pending ? `Even out ${pending} new or changed` : 'Even out all'}
           </Button>
         )}
       </div>
@@ -113,6 +123,15 @@ export function EvenOut({ connected }: { connected: boolean }) {
       ) : (
         <>
           <p className="caption">{summary}</p>
+          {spread != null && (
+            <>
+              <p>Loudest to quietest: {spread.toFixed(1)} dB</p>
+              <PresetLoudnessChart presets={presets} target={target_lufs} />
+              <p className="caption">
+                Estimated LUFS after stored level corrections.
+              </p>
+            </>
+          )}
           <details className="calibration-help">
             <summary>How it works</summary>
             <p className="caption">

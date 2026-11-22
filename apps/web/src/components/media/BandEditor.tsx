@@ -1,6 +1,8 @@
 import { Minus, Plus } from '@phosphor-icons/react';
+import type { ReactNode } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { NumberField } from '@oxidal/design-system/components/number-field';
 
 import type { VenueBand, VenueSettings } from '../../api';
 import {
@@ -28,7 +30,7 @@ function StepField({
   onStep,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   disabled: boolean;
   onStep: (direction: -1 | 1) => void;
 }) {
@@ -45,7 +47,11 @@ function StepField({
         >
           <Minus aria-hidden="true" weight="bold" />
         </Button>
-        <output aria-label={`${label} value`}>{value}</output>
+        {typeof value === 'string' ? (
+          <output aria-label={`${label} value`}>{value}</output>
+        ) : (
+          value
+        )}
         <Button
           variant="ghost"
           size="icon"
@@ -71,11 +77,13 @@ export function BandEditor({
   selected,
   locked,
   onSelect,
+  slow,
   onChange,
   onTrim,
 }: {
   eq: VenueSettings;
   selected: number;
+  slow: boolean;
   locked: boolean;
   onSelect: (index: number) => void;
   onChange: (index: number, change: Partial<VenueBand>) => void;
@@ -92,7 +100,6 @@ export function BandEditor({
             key={BANDS[index]!.short}
             variant="outline"
             aria-pressed={selected === index}
-            aria-label={`${BANDS[index]!.name}${item.enabled ? '' : ', off'}`}
             data-off={!item.enabled || undefined}
             onClick={() => onSelect(index)}
           >
@@ -107,6 +114,7 @@ export function BandEditor({
             ) : (
               <small>off</small>
             )}
+            <span className="sr-only">{BANDS[index]!.name}</span>
           </Button>
         ))}
       </div>
@@ -159,7 +167,25 @@ export function BandEditor({
         ) : (
           <StepField
             label="Gain"
-            value={formatDb(band.gainDb ?? 0)}
+            value={
+              slow ? (
+                formatDb(band.gainDb ?? 0)
+              ) : (
+                <NumberField
+                  label={info.name + ' gain'}
+                  value={band.gainDb ?? 0}
+                  min={-GAIN_LIMIT}
+                  max={GAIN_LIMIT}
+                  step={0.5}
+                  unit="dB"
+                  digits={1}
+                  disabled={locked}
+                  onChange={(gainDb) =>
+                    onChange(selected, { gainDb, enabled: true })
+                  }
+                />
+              )
+            }
             disabled={locked}
             onStep={(direction) =>
               onChange(selected, {

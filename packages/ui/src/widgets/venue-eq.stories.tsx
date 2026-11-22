@@ -21,17 +21,14 @@ export const Flat: StoryObj<typeof VenueEq> = {
   name: 'Flat, then boost the high mid',
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: /^HM/ }));
+    const input = userEvent.setup({ document: canvasElement.ownerDocument });
+    await input.click(canvas.getByRole('button', { name: /^HM/ }));
     const gain = canvas.getByRole('slider', { name: 'High mid gain' });
     gain.focus();
-    for (let i = 0; i < 6; i++) await userEvent.keyboard('{ArrowUp}');
-    await expect(canvas.getByRole('status')).toHaveTextContent(
-      /Peak boost \+3\.0 dB/,
-    );
-    await userEvent.click(canvas.getByRole('button', { name: 'Revert' }));
-    await expect(canvas.getByRole('status')).toHaveTextContent(
-      /Peak boost 0\.0 dB/,
-    );
+    for (let i = 0; i < 6; i++) await input.keyboard('{ArrowUp}');
+    await expect(await canvas.findByText(/Peak boost \+3\.0 dB/)).toBeVisible();
+    await input.click(canvas.getByRole('button', { name: 'Revert' }));
+    await expect(await canvas.findByText(/Peak boost 0\.0 dB/)).toBeVisible();
   },
 };
 

@@ -24,6 +24,7 @@ import { useMonitorFeed } from './monitorFeed';
 import { SoundCheck } from './SoundCheck';
 
 vi.mock('./api', () => ({
+  localModels: vi.fn(async () => ({ data: [], next: null })),
   boosts: vi.fn(),
   calibration: vi.fn(),
   calibrationCoverage: vi.fn(),
@@ -31,6 +32,9 @@ vi.mock('./api', () => ({
   unitLevels: vi.fn(),
 }));
 vi.mock('./monitorFeed', () => ({ useMonitorFeed: vi.fn() }));
+vi.mock('./components/media/VenueEq', () => ({
+  VenueEq: () => <section aria-label="Venue EQ" />,
+}));
 vi.mock('./EvenOut', () => ({
   EvenOut: () => <section aria-label="Even out">Even out controls</section>,
 }));

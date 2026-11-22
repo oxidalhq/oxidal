@@ -56,11 +56,12 @@ it('summarises the evened-out level, runs, and lists each offset', async () => {
   expect(
     screen.getByText(/2 presets and scenes evened out to -20\.0 LUFS/),
   ).toBeInTheDocument();
+  expect(screen.getByText('Loudest to quietest: 0.0 dB')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Levels' }));
   expect(
     screen.getByRole('list', { name: 'Measured levels' }),
   ).toHaveTextContent('Bogner Fullstack−6.0 dBDumble Spread+6.0 dB');
-  fireEvent.click(screen.getByRole('button', { name: 'Even out' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Even out all' }));
   await act(async () => {});
   expect(calibration).toHaveBeenCalledWith('run');
   expect(screen.getByRole('status')).toHaveTextContent(

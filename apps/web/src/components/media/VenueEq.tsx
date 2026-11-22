@@ -595,6 +595,7 @@ function VenueView({ owner }: { owner: Owner }) {
         onChange={editBand}
       />
       <BandEditor
+        slow={slow}
         eq={work}
         selected={selected}
         locked={disabled}

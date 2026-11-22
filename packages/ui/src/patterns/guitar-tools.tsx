@@ -159,14 +159,58 @@ export function LevelMatch({
 }
 
 export type PresetLoudness = {
+  key?: string;
   name: string;
   /** Loudness in LUFS, now. */
   lufs: number;
 };
 
+export function PresetLoudnessChart({
+  presets,
+  target,
+}: {
+  presets: PresetLoudness[];
+  target?: number | null;
+}) {
+  const position = (value: number) =>
+    Math.max(0, Math.min(100, ((value + 30) / 20) * 100));
+  return (
+    <ul aria-label="Preset loudness" className="m-0 grid list-none gap-1.5 p-0">
+      {presets.map(({ key, name, lufs: v }) => {
+        return (
+          <li
+            key={key ?? name}
+            className="grid grid-cols-[8rem_minmax(0,1fr)_auto] items-center gap-2 text-sm"
+          >
+            <span className="truncate">{name}</span>
+            <span
+              aria-hidden="true"
+              className="relative h-2 rounded-full bg-wire/30"
+            >
+              <span
+                className="absolute inset-y-0 left-0 rounded-full bg-foreground transition-[width] duration-300"
+                style={{ width: `${position(v)}%` }}
+              />
+              {target != null && (
+                <span
+                  className="absolute inset-y-[-3px] w-0.5 bg-brand"
+                  style={{ left: `${position(target)}%` }}
+                />
+              )}
+            </span>
+            <span className="font-mono text-xs tabular-nums">
+              {v.toFixed(1)}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 /**
  * Even out all: every preset and scene to the same loudness so switching
- * never jumps. Corrections are bounded (±6 dB); only new or changed presets
+ * never jumps. Corrections are bounded; only new or changed presets
  * are measured again.
  */
 export function EvenOut({
@@ -199,37 +243,7 @@ export function EvenOut({
           Loudest to quietest: {spread} dB
         </Caption>
       </CardHeader>
-      <ul
-        aria-label="Preset loudness"
-        className="m-0 grid list-none gap-1.5 p-0"
-      >
-        {presets.map(({ name, lufs: v }) => {
-          return (
-            <li
-              key={name}
-              className="grid grid-cols-[8rem_minmax(0,1fr)_auto] items-center gap-2 text-sm"
-            >
-              <span className="truncate">{name}</span>
-              <span
-                aria-hidden="true"
-                className="relative h-2 rounded-full bg-wire/30"
-              >
-                <span
-                  className="absolute inset-y-0 left-0 rounded-full bg-foreground transition-[width] duration-300"
-                  style={{ width: `${((v + 30) / 20) * 100}%` }}
-                />
-                <span
-                  className="absolute inset-y-[-3px] w-0.5 bg-brand"
-                  style={{ left: `${((target + 30) / 20) * 100}%` }}
-                />
-              </span>
-              <span className="font-mono text-xs tabular-nums">
-                {v.toFixed(1)}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
+      <PresetLoudnessChart presets={presets} target={target} />
       {measuring && <Progress value={progress} label="Measuring presets" />}
       <div className="flex flex-wrap items-center gap-2">
         <Button disabled={measuring} onClick={onStart}>
@@ -239,7 +253,7 @@ export function EvenOut({
           {measuring
             ? `Measuring ${presets.length} presets and ${scenes} scenes…`
             : evened
-              ? 'Done. Corrections stay within ±6 dB; the oxide line is the target.'
+              ? 'Done. The vertical line marks the shared loudness target.'
               : `The oxide line is the shared loudness, ${target} LUFS.`}
         </Caption>
       </div>

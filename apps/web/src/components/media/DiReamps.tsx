@@ -1,12 +1,14 @@
-import { Play, Record, Stop } from '@phosphor-icons/react';
-import { useCallback, useEffect, useState } from 'react';
+import { Play } from '@phosphor-icons/react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { DialogFooter } from '@oxidal/design-system/components/dialog';
+import { RecordDiToggle } from '@oxidal/design-system/patterns/device-flows';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
   type CaptureJob,
+  type CaptureState,
   captureState,
   type MediaAsset,
   type ReampRequest,
@@ -28,19 +30,39 @@ import {
 import { DeleteDialog, RenameDialog } from './TrackDialogs';
 
 /** Keeps the current or last job in view; jobs outlive a closed page. */
-function useCaptureJob(): [CaptureJob | null, () => void] {
+function useCaptureJob() {
   const [job, setJob] = useState<CaptureJob | null>(null);
-  const refresh = useCallback(() => {
-    captureState()
-      .then((state) => setJob(state.job ?? null))
-      .catch(() => {});
+  const generation = useRef(0);
+  const [ready, setReady] = useState(false);
+  const apply = useCallback((next: CaptureState) => {
+    ++generation.current;
+    setReady(true);
+    setJob(next.job ?? null);
   }, []);
   useEffect(() => {
-    refresh();
-    const timer = window.setInterval(refresh, 1000);
-    return () => window.clearInterval(timer);
-  }, [refresh]);
-  return [job, refresh];
+    let mounted = true;
+    let pending = false;
+    const refresh = async () => {
+      if (pending) return;
+      pending = true;
+      const sequence = ++generation.current;
+      try {
+        const next = await captureState();
+        if (mounted && sequence === generation.current) apply(next);
+      } catch {
+        // Keep the most recent confirmed job until the device responds.
+      } finally {
+        pending = false;
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 1000);
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+    };
+  }, [apply]);
+  return { job, apply, ready };
 }
 
 const active = (job: CaptureJob | null) =>
@@ -55,7 +77,8 @@ export function DiReamps({ connected }: { connected: boolean }) {
   const media = useSessionMedia();
   const { library, player, send, refreshLibrary } = media;
   const protect = useProtect();
-  const [job, refresh] = useCaptureJob();
+  const { job, apply, ready } = useCaptureJob();
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [reamp, setReamp] = useState<MediaAsset | null>(null);
   const [dialog, setDialog] = useState<{
@@ -66,23 +89,27 @@ export function DiReamps({ connected }: { connected: boolean }) {
     (asset) => asset.kind !== 'backing',
   );
   const running = active(job);
-  const locked = protect || !connected || running;
+  const locked = protect || !connected || running || busy;
   const space = library?.space;
   const minutes = space
     ? Math.max(0, space.availableBytes - space.reserveBytes) / (48_000 * 4 * 60)
     : null;
 
+  const finished = job && !running ? job.id + job.phase : null;
   useEffect(() => {
-    if (job && !active(job)) refreshLibrary();
-  }, [job?.phase, job, refreshLibrary]);
+    if (finished) refreshLibrary();
+  }, [finished, refreshLibrary]);
 
-  async function act(work: () => Promise<unknown>, what: string) {
+  async function act(work: () => Promise<CaptureState>, what: string) {
+    if (busy) return;
+    setBusy(true);
     setError('');
     try {
-      await work();
-      refresh();
+      apply(await work());
     } catch (cause) {
       setError(deviceSentence(cause, what));
+    } finally {
+      setBusy(false);
     }
   }
   async function play(asset: MediaAsset) {
@@ -98,7 +125,6 @@ export function DiReamps({ connected }: { connected: boolean }) {
     <section className="media-backing" aria-label="DI and reamps">
       <div className="media-section-head">
         <div>
-          <h2>DI and reamps</h2>
           <p className="caption">
             Record the raw guitar, then reamp it through any sound later.
           </p>
@@ -106,6 +132,24 @@ export function DiReamps({ connected }: { connected: boolean }) {
       </div>
       {protect && <p className="caption">{PROTECT_REASON}</p>}
       <div className="media-card" aria-label="Record DI">
+        {(!running || job?.kind === 'di') && (
+          <RecordDiToggle
+            recording={running}
+            disabled={
+              !ready ||
+              busy ||
+              !connected ||
+              (protect && !running) ||
+              job?.phase === 'finishing'
+            }
+            onRecording={(on) =>
+              void act(
+                on ? recordDi : () => stopCapture(true),
+                on ? 'start recording' : 'stop the recording',
+              )
+            }
+          />
+        )}
         {job && running ? (
           <JobRunning
             job={job}
@@ -121,13 +165,6 @@ export function DiReamps({ connected }: { connected: boolean }) {
               {minutes !== null &&
                 ` Space for about ${Math.floor(minutes / 60)} h ${Math.floor(minutes % 60)} min.`}
             </p>
-            <Button
-              disabled={protect || !connected}
-              onClick={() => void act(recordDi, 'start recording')}
-            >
-              <Record aria-hidden="true" weight="fill" />
-              Record DI
-            </Button>
           </>
         )}
         {job && !running && <JobResult job={job} />}
@@ -214,8 +251,7 @@ export function DiReamps({ connected }: { connected: boolean }) {
           asset={reamp}
           onClose={() => setReamp(null)}
           onStart={async (request) => {
-            await startReamp(request);
-            refresh();
+            apply(await startReamp(request));
           }}
         />
       )}
@@ -243,10 +279,6 @@ function JobRunning({
         <span>
           ● Recording {elapsed} · input peak {Math.round(job.peakDbfs)} dBFS
         </span>
-        <Button onClick={() => onStop(true)}>
-          <Stop aria-hidden="true" weight="fill" />
-          Stop recording
-        </Button>
       </div>
     );
   const total = formatTime((job.totalFrames ?? job.frames) / job.rate);

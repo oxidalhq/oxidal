@@ -12,6 +12,7 @@ import { boosts, type GuitarProfiles, guitarProfiles, monitoring } from './api';
 import { gateFor, trimFor } from './useGuitars';
 vi.unmock('./GuitarSettings');
 vi.mock('./api', () => ({
+  localModels: vi.fn(async () => ({ data: [], next: null })),
   boosts: vi.fn(async () => null),
   guitarProfiles: vi.fn(),
   monitoring: vi.fn(),
