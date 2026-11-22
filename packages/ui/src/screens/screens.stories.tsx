@@ -43,8 +43,8 @@ RigPlaying.play = async ({ canvasElement }) => {
   ).toBeNull();
   const current = within(canvas.getByRole('group', { name: 'Switch preset' }));
   await expect(
-    current.getByRole('button', { name: 'Next preset' }),
-  ).toBeDisabled();
+    current.getByRole('button', { name: 'Next preset: Parallel amps' }),
+  ).toBeEnabled();
   await userEvent.click(
     current.getByRole('button', { name: 'Previous preset: Rhythm section' }),
   );

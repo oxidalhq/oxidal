@@ -19,6 +19,7 @@ import {
   CaptureReferencesDemo,
 } from '../widgets/capture-listening.demo';
 import { StereoMeter } from '../widgets/meter';
+import { ParallelListeningDemo } from '../widgets/parallel-listening.demo';
 import { VenueEq } from '../widgets/venue-eq';
 import { VENUE_PROFILES } from '../widgets/venue-eq.data';
 
@@ -188,6 +189,7 @@ export function Levels({
           <>
             <CaptureReferencesDemo />
             <BrowserListeningDemo />
+            <ParallelListeningDemo />
           </>
         )}
         {view === 'overview' && (

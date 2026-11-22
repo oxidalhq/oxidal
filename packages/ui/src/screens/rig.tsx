@@ -11,12 +11,13 @@ import { blocksOf } from '../lib/route';
 import { useRemembered } from '../lib/use-remembered';
 import { EFFECTS } from '../patterns/block-chooser.data';
 import { NamBlockToolsDemo } from '../patterns/nam-block.demo';
-import { SCENES, SERIAL_ROUTE } from '../patterns/rig.fixtures';
+import { PARALLEL_ROUTE, SCENES, SERIAL_ROUTE } from '../patterns/rig.fixtures';
 import { RigAudioUnavailable } from '../patterns/rig-audio-unavailable';
 import { RigSurface } from '../patterns/rig-surface';
 import { useModelDownloads } from '../patterns/swap.demo';
 import { BLOCK_TYPES, MODELS } from '../patterns/swap.fixtures';
 import { useRigDemo } from '../patterns/use-rig.demo';
+import { ParallelListeningDemo } from '../widgets/parallel-listening.demo';
 import { PresetNameButton, PresetSteps } from '../widgets/preset-steps';
 import {
   type StompAssignment,
@@ -29,7 +30,7 @@ import {
   CAPTURE_WET,
 } from './four-captures.fixtures';
 
-const PRESETS = ['Rhythm section', 'Echo lead'] as const;
+const PRESETS = ['Rhythm section', 'Echo lead', 'Parallel amps'] as const;
 
 /** The Rig screen: the rig surface, or the card that says why audio is not playing. */
 export function Rig({ audio = true }: { audio?: boolean }) {
@@ -44,7 +45,8 @@ export function Rig({ audio = true }: { audio?: boolean }) {
   const [assigning, setAssigning] = useState(false);
   const rhythm = useRigDemo(CAPTURE_ROUTE, CAPTURE_SCENES);
   const echo = useRigDemo(SERIAL_ROUTE);
-  const rig = position === 0 ? rhythm : echo;
+  const parallel = useRigDemo(PARALLEL_ROUTE);
+  const rig = [rhythm, echo, parallel][position]!;
   const store = useModelDownloads(MODELS);
   if (!audio) return <RigAudioUnavailable />;
   return (
@@ -105,46 +107,52 @@ export function Rig({ audio = true }: { audio?: boolean }) {
             </DialogContent>
           </Dialog>
           <PresetSteps
-            previous={position === 1 ? 'Rhythm section' : undefined}
-            next={position === 0 ? 'Echo lead' : undefined}
+            previous={PRESETS[position - 1]}
+            next={PRESETS[position + 1]}
             onStep={(dir) =>
-              setPosition((n) => Math.max(0, Math.min(1, n + dir)))
+              setPosition((n) =>
+                Math.max(0, Math.min(PRESETS.length - 1, n + dir)),
+              )
             }
           />
         </>
       }
       stompControls={
-        position === 0 && (
-          <div className="px-page">
-            <Button variant="outline" onClick={() => setAssigning(true)}>
-              {stomp
-                ? 'Edit ' + stomp.name + ' switch'
-                : 'Assign a stomp switch'}
-            </Button>
-            {assigning && (
-              <StompAssignmentDialog
-                initial={stomp ?? undefined}
-                blocks={blocksOf(rig.route).map((b) => ({
-                  id: b.id,
-                  name: b.label,
-                }))}
-                disabled={false}
-                onClose={() => setAssigning(false)}
-                onRemove={
-                  stomp
-                    ? () => {
-                        saveStomp(null);
-                        setAssigning(false);
-                      }
-                    : undefined
-                }
-                onSave={(name, nodes) => {
-                  saveStomp({ id: 'wet', name, nodes });
-                  setAssigning(false);
-                }}
-              />
-            )}
-          </div>
+        position === 2 ? (
+          <ParallelListeningDemo />
+        ) : (
+          position === 0 && (
+            <div className="px-page">
+              <Button variant="outline" onClick={() => setAssigning(true)}>
+                {stomp
+                  ? 'Edit ' + stomp.name + ' switch'
+                  : 'Assign a stomp switch'}
+              </Button>
+              {assigning && (
+                <StompAssignmentDialog
+                  initial={stomp ?? undefined}
+                  blocks={blocksOf(rig.route).map((b) => ({
+                    id: b.id,
+                    name: b.label,
+                  }))}
+                  disabled={false}
+                  onClose={() => setAssigning(false)}
+                  onRemove={
+                    stomp
+                      ? () => {
+                          saveStomp(null);
+                          setAssigning(false);
+                        }
+                      : undefined
+                  }
+                  onSave={(name, nodes) => {
+                    saveStomp({ id: 'wet', name, nodes });
+                    setAssigning(false);
+                  }}
+                />
+              )}
+            </div>
+          )
         )
       }
       playing
