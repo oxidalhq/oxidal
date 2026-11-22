@@ -1,16 +1,24 @@
 import { useEffect, useState } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
 import { PluginPanel } from '@oxidal/design-system/patterns/plugin-panel';
 
 import { installedLv2, type Lv2Plugin, type RigControl } from '../../api';
-import { liveLv2Controls, lv2PluginView } from '../../lv2PluginPanel';
+import {
+  liveLv2Controls,
+  lv2PluginView,
+  quickEffectLayout,
+} from '../../lv2PluginPanel';
+import { MomentMemoryNotice } from '../../MomentMemoryNotice';
 import { PluginSourceDetails } from '../../PluginSourceDetails';
 import { rigBusy } from './mixedRigViewModel';
+import { QuickLv2Panel } from './QuickLv2Panel';
 import type { RigViewProps } from './useMixedRigSession';
 
-/** Live LV2 controls in the shared panel, addressed by worker node and symbol. */
+/** Live controls addressed by worker node and symbol. @see docs/lv2.md */
 export function LiveLv2Panel({ rig, vm }: RigViewProps) {
-  const { connected, command, open } = rig;
+  const { connected, command, open, setControlsTogether } = rig;
+  const [expanded, setExpanded] = useState<string>();
   const { state, selected, selectedPluginUri, selectedView, visibleControls } =
     vm;
   const session = state.control?.session;
@@ -65,17 +73,72 @@ export function LiveLv2Panel({ rig, vm }: RigViewProps) {
     });
   };
   const controls = liveLv2Controls(plugin, live);
+  const panelKey = `${session}:${selected.id}:${selectedPluginUri}`;
+  const quick = quickEffectLayout(selectedPluginUri);
+  const canQuickEdit = !!(quick && bypass && controls.length);
+  const onControl = (symbol: string, value: number) =>
+    setControl(live.get(symbol), value);
+  const onToggle = (on: boolean) => setControl(bypass, on ? 0 : 1);
+  const onAdjust = (symbol: string) => {
+    const control = live.get(symbol);
+    if (control && !disabled) {
+      const name = controls.find((item) => item.symbol === symbol)?.name;
+      open(name ? { ...control, label: name } : control);
+    }
+  };
+  if (quick && bypass && canQuickEdit && expanded !== panelKey)
+    return (
+      <QuickLv2Panel
+        key={panelKey}
+        id={selected.id}
+        name={selectedView.label}
+        layout={quick}
+        controls={controls}
+        bypass={bypass}
+        disabled={disabled}
+        onControl={onControl}
+        onAdjust={onAdjust}
+        onToggle={onToggle}
+        onGesture={(values) => {
+          if (disabled) return;
+          const targets = values.flatMap(([symbol, value]) => {
+            const control = live.get(symbol);
+            return control && control.value !== value
+              ? [[control.target, value] as [RigControl['target'], number]]
+              : [];
+          });
+          if (targets.length)
+            void setControlsTogether(targets, {
+              restored:
+                'The change did not go through. The previous values were restored.',
+              partial:
+                'Only part of the change went through. Check the effect values before trying again.',
+            });
+        }}
+        onAll={() => setExpanded(panelKey)}
+      />
+    );
   return (
     <>
+      {canQuickEdit && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="w-fit"
+          onClick={() => setExpanded(undefined)}
+        >
+          Quick controls
+        </Button>
+      )}
       <PluginPanel
-        key={`${session}:${selected.id}:${selectedPluginUri}`}
+        key={panelKey}
         plugin={plugin ? lv2PluginView(plugin) : { name: selectedView.label }}
         controls={controls}
         mainCount={plugin ? undefined : controls.length}
         on={bypass?.value !== 1}
         toggleLabel={`${selectedView.label} on`}
-        onToggle={bypass && ((on) => setControl(bypass, on ? 0 : 1))}
-        onControl={(symbol, value) => setControl(live.get(symbol), value)}
+        onToggle={bypass && onToggle}
+        onControl={onControl}
         onRestoreDefaults={
           plugin && state.phase === 'running' && state.control
             ? () => {
@@ -91,24 +154,11 @@ export function LiveLv2Panel({ rig, vm }: RigViewProps) {
               }
             : undefined
         }
-        onAdjust={(symbol) => {
-          const control = live.get(symbol);
-          if (control && !disabled) {
-            const name = controls.find((item) => item.symbol === symbol)?.name;
-            open(name ? { ...control, label: name } : control);
-          }
-        }}
+        onAdjust={onAdjust}
         disabled={disabled}
       />
       {plugin && <PluginSourceDetails key={plugin.uri} plugin={plugin} />}
-      {selectedPluginUri?.startsWith('urn:oxidal:plugin:moment#') && (
-        <p className="text-sm text-muted-foreground">
-          The caught loop is memory only: it is not saved or exported and is
-          lost when this effect is removed or the device restarts. At full Clock
-          it holds four seconds. Mix at zero does not silence a caught loop;
-          turn Catch off to let it go.
-        </p>
-      )}
+      <MomentMemoryNotice uri={selectedPluginUri} />
     </>
   );
 }

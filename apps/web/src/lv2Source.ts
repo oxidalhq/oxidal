@@ -34,6 +34,7 @@ export function lv2Source(
   return {
     kind: 'lv2',
     title: plugin.name,
+    author: plugin.author ?? undefined,
     category: plugin.category ?? undefined,
     uri: plugin.uri,
     pack: {

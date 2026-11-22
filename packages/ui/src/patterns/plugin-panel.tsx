@@ -50,6 +50,7 @@ export type PluginView = {
   name: string;
   /** Such as "Delay" or "Compressor". */
   category?: string;
+  author?: string;
   /** What it does, in the maker's words (`rdfs:comment`). */
   description?: string;
   homepage?: string;
@@ -141,7 +142,9 @@ export function PluginPanel({
     );
     const heading = (
       <span className="flex min-w-0 items-center gap-1.5 small-caps text-xs text-muted-foreground">
-        <span className="truncate">{label}</span>
+        <span className={c.kind === 'toggle' ? 'leading-tight' : 'truncate'}>
+          {label}
+        </span>
         {dot}
       </span>
     );
@@ -215,18 +218,14 @@ export function PluginPanel({
       );
     if (onAdjust)
       return (
-        <div key={c.symbol} className="grid gap-1">
+        <div key={c.symbol} className="grid min-w-0 gap-1">
           {heading}
-          <Button
-            variant="outline"
-            className="min-h-touch justify-start font-mono tabular-nums"
+          <PluginAdjustValue
+            control={c}
+            large={large}
             disabled={disabled}
-            aria-label={`Adjust ${label}`}
-            aria-haspopup="dialog"
-            onClick={() => onAdjust(c.symbol)}
-          >
-            {c.display ?? c.value}
-          </Button>
+            onAdjust={onAdjust}
+          />
         </div>
       );
     return (
@@ -280,7 +279,15 @@ export function PluginPanel({
               {plugin.category}
             </span>
           )}
-          {plugin.origin && <SourceLine source={plugin.origin} />}
+          {plugin.origin ? (
+            <SourceLine source={plugin.origin} />
+          ) : (
+            plugin.author && (
+              <span className="text-xs text-muted-foreground">
+                {plugin.author}
+              </span>
+            )
+          )}
         </div>
         {onToggle && (
           <label
@@ -386,5 +393,42 @@ export function PluginPanel({
         )}
       </footer>
     </section>
+  );
+}
+
+/** Read a live value and open its host-owned adjustment dialog. @see PluginPanel */
+export function PluginAdjustValue({
+  control,
+  large,
+  disabled,
+  onAdjust,
+}: {
+  control: PluginControl;
+  large?: boolean;
+  disabled?: boolean;
+  onAdjust: (symbol: string) => void;
+}) {
+  const display = control.display ?? String(control.value);
+  const unitSuffix = control.unit ? ` ${control.unit}` : '';
+  const withUnit = Boolean(unitSuffix && display.endsWith(unitSuffix));
+  return (
+    <Button
+      variant="outline"
+      className={cn(
+        'min-h-touch min-w-0 justify-end gap-0.5 font-mono font-normal tabular-nums',
+        large && 'text-xl',
+      )}
+      disabled={disabled}
+      aria-label={`Adjust ${controlLabel(control)}`}
+      aria-haspopup="dialog"
+      onClick={() => onAdjust(control.symbol)}
+    >
+      <span className="min-w-0 truncate">
+        {withUnit ? display.slice(0, -unitSuffix.length) : display}
+      </span>
+      {withUnit && (
+        <span className="text-xs text-muted-foreground">{unitSuffix}</span>
+      )}
+    </Button>
   );
 }

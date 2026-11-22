@@ -34,13 +34,18 @@ const plugin = (ports: Port[], extra: Partial<Lv2Plugin> = {}): Lv2Plugin => ({
   ...extra,
 });
 
-it('uses the plugin name, kind and its own description', () => {
+it('uses the plugin name, kind, author and its own description', () => {
   const view = lv2PluginView(
-    plugin([], { category: 'Delay', comment: 'Line one.\nLine two.' }),
+    plugin([], {
+      category: 'Delay',
+      author: 'Example Audio',
+      comment: 'Line one.\nLine two.',
+    }),
   );
   expect(view).toEqual({
     name: 'Example',
     category: 'Delay',
+    author: 'Example Audio',
     description: 'Line one.\nLine two.',
   });
   expect(lv2PluginView(plugin([]))).toEqual({

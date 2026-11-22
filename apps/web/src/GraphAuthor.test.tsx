@@ -375,3 +375,33 @@ it('shows Protect refusal and immediate failed or stopped readback without leavi
   ).toBeVisible();
   expect(present).toHaveBeenLastCalledWith(true);
 });
+
+it('explains what happens to a caught loop in the effects-only Moment rig', async () => {
+  const rig: GraphSettings['rig'] = {
+    nodes: [
+      { id: 'in', kind: 'input', level: 1 },
+      { id: 'moment', kind: 'lv2', level: 1 },
+      { id: 'out', kind: 'output', level: 1 },
+    ],
+    edges: [
+      { from: 'in', to: 'moment' },
+      { from: 'moment', to: 'out' },
+    ],
+  };
+  vi.mocked(graphAudioState).mockResolvedValue({
+    ...running,
+    configured: {
+      ...configured,
+      rig,
+      bindings: [{ node: 'moment', uri: 'urn:oxidal:plugin:moment#stereo' }],
+    },
+    control: { ...running.control!, rig },
+  });
+  render(<GraphAuthor connected liveOnly />);
+  const notice = await screen.findByText(/the caught loop lives in memory/i);
+  expect(notice).toHaveTextContent('At full Clock, Moment holds four seconds.');
+  expect(notice).toHaveTextContent(
+    'Saving or exporting a preset keeps the control settings only.',
+  );
+  expect(graphAudioCommand).not.toHaveBeenCalled();
+});

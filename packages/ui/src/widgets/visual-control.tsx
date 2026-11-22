@@ -107,6 +107,7 @@ export function VisualControl({
   role,
   controls,
   onControl,
+  onCommit,
   disabled = false,
   className,
 }: {
@@ -114,13 +115,28 @@ export function VisualControl({
   role?: string;
   controls: BlockControl[];
   onControl: (control: string, value: number) => void;
+  /** Preview a drawing drag locally and commit both axes together on release. */
+  onCommit?: (controls: [string, number][]) => void;
   disabled?: boolean;
   className?: string;
 }) {
   const box = React.useRef<HTMLDivElement>(null);
   const [active, setActive] = React.useState<string | null>(null);
-  const byId = Object.fromEntries(controls.map((c) => [c.id, c]));
-  const values = Object.fromEntries(controls.map((c) => [c.id, c.value]));
+  const draftRef = React.useRef<[string, number][]>([]);
+  const [draft, setDraft] = React.useState<Record<string, number>>({});
+  const byId = Object.fromEntries(
+    controls.map((c) => [c.id, { ...c, value: draft[c.id] ?? c.value }]),
+  );
+  const values = Object.fromEntries(
+    Object.values(byId).map((c) => [c.id, c.value]),
+  );
+  const finish = (commit: boolean) => {
+    const values = draftRef.current;
+    draftRef.current = [];
+    setDraft({});
+    setActive(null);
+    if (commit && values.length > 0) onCommit?.(values);
+  };
   const handles = (HANDLES[role ?? kind] ?? HANDLES[kind] ?? []).filter(
     (h) => (!h.x || byId[h.x.control]) && (!h.y || byId[h.y.control]),
   );
@@ -130,16 +146,23 @@ export function VisualControl({
     if (!rect) return;
     const ux = (clientX - rect.left) / rect.width;
     const uy = 1 - (clientY - rect.top) / rect.height;
+    const next: [string, number][] = [];
     if (handle.x)
-      onControl(
+      next.push([
         handle.x.control,
         fromUnit(byId[handle.x.control]!, ux, handle.x.log),
-      );
+      ]);
     if (handle.y)
-      onControl(
+      next.push([
         handle.y.control,
         fromUnit(byId[handle.y.control]!, uy, handle.y.log),
-      );
+      ]);
+    if (onCommit) {
+      draftRef.current = next;
+      setDraft(Object.fromEntries(next));
+    } else {
+      for (const [id, value] of next) onControl(id, value);
+    }
   };
 
   const nudge = (
@@ -202,8 +225,11 @@ export function VisualControl({
                 active === handle.id &&
                 move(handle, event.clientX, event.clientY)
               }
-              onPointerUp={() => setActive(null)}
-              onPointerCancel={() => setActive(null)}
+              onPointerUp={() => finish(true)}
+              onPointerCancel={() => finish(false)}
+              onLostPointerCapture={() => {
+                if (draftRef.current.length) finish(false);
+              }}
               onKeyDown={(event) => {
                 const fine = event.shiftKey;
                 if (event.key === 'ArrowRight')

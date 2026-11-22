@@ -22,6 +22,7 @@ export function lv2PluginView(plugin: Lv2Plugin): PluginView {
     name: plugin.name,
     category: plugin.category ?? undefined,
     description: plugin.comment ?? undefined,
+    ...(plugin.author ? { author: plugin.author } : {}),
     ...(plugin.artwork
       ? {
           artwork: `/api/v1/plugins/lv2/artwork?uri=${encodeURIComponent(plugin.uri)}`,
@@ -129,4 +130,18 @@ export function liveLv2Controls(
       },
     ];
   });
+}
+
+const effectLayouts = {
+  echo: { role: 'delay', main: ['time', 'feedback', 'mix', 'tone'] },
+  bloom: { role: 'reverb', main: ['decay', 'mix', 'size', 'tone'] },
+  motion: { role: 'mod', main: ['rate', 'depth', 'mix', 'feedback'] },
+} as const;
+
+/** Only known port identities enter a drawing. @see docs/lv2.md */
+export function quickEffectLayout(uri: string | undefined) {
+  const effect = /^urn:oxidal:plugin:(echo|bloom|motion)#(?:mono|stereo)$/.exec(
+    uri ?? '',
+  )?.[1] as keyof typeof effectLayouts | undefined;
+  return effect ? effectLayouts[effect] : undefined;
 }

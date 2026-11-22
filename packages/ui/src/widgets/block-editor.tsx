@@ -80,6 +80,7 @@ export function BlockQuickEditor({
   onSwap,
   visual,
   renderSlider,
+  renderValue,
   disabled,
   layout = 'popover',
   className,
@@ -98,6 +99,7 @@ export function BlockQuickEditor({
    */
   visual?: React.ReactNode;
   renderSlider?: (control: BlockControl) => React.ReactNode;
+  renderValue?: (control: BlockControl) => React.ReactNode;
   disabled?: boolean;
   layout?: 'popover' | 'sheet';
   className?: string;
@@ -195,19 +197,24 @@ export function BlockQuickEditor({
               >
                 {control.label}
               </Label>
-              <NumberField
-                size="sm"
-                className="w-full"
-                label={`${block.label} ${control.label}`}
-                value={control.value}
-                min={control.min}
-                max={control.max}
-                step={control.step ?? 0.5}
-                fine={(control.step ?? 0.5) / 5}
-                unit={control.unit}
-                digits={control.step && control.step >= 1 ? 0 : 1}
-                onChange={(value) => onControl(control.id, value)}
-              />
+              {renderValue ? (
+                renderValue(control)
+              ) : (
+                <NumberField
+                  size="sm"
+                  className="w-full"
+                  label={`${block.label} ${control.label}`}
+                  value={control.value}
+                  min={control.min}
+                  max={control.max}
+                  step={control.step ?? 0.5}
+                  fine={(control.step ?? 0.5) / 5}
+                  unit={control.unit}
+                  digits={control.step && control.step >= 1 ? 0 : 1}
+                  onChange={(value) => onControl(control.id, value)}
+                  disabled={disabled}
+                />
+              )}
             </div>
           ))}
         </div>

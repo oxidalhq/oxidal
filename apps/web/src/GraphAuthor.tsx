@@ -37,6 +37,7 @@ import { deviceSentence, friendlyError } from './lib/friendlyError';
 import { lv2Control } from './lv2Control';
 import { liveLv2Controls, lv2PluginView } from './lv2PluginPanel';
 import { ModelPicker } from './ModelPicker';
+import { MomentMemoryNotice } from './MomentMemoryNotice';
 import { oxidalEffectControls } from './oxidalEffectLabels';
 import { PluginSourceDetails } from './PluginSourceDetails';
 import { blockKind } from './rigChain';
@@ -845,6 +846,7 @@ export function GraphAuthor({
                 {plugin && (
                   <PluginSourceDetails key={plugin.uri} plugin={plugin} />
                 )}
+                <MomentMemoryNotice uri={binding?.uri} />
                 {parameters.some((p) => !p.writable) && (
                   <dl className="grid gap-1" aria-label="Plugin readings">
                     {parameters
