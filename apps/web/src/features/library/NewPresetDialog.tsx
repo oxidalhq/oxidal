@@ -8,7 +8,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
-import { PresetStartOptions } from '@oxidal/design-system/patterns/preset-dialogs';
+import {
+  playingPresetCaption,
+  PresetStartOptions,
+} from '@oxidal/design-system/patterns/preset-dialogs';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
@@ -247,7 +250,7 @@ export function NewPresetDialog({
               id: 'playing',
               title: 'A copy of what is playing',
               caption: playing
-                ? `Include the confirmed edits from ${playingName ?? 'the current rig'}.`
+                ? playingPresetCaption(playingName ?? 'the current rig')
                 : 'Start a sound in Rig to copy it here.',
               disabled: !connected || !playing,
             },

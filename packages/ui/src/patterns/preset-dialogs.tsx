@@ -21,13 +21,17 @@ import {
 import { Caption, Eyebrow } from '../components/ui/text';
 import { PoweredByTone3000 } from './credits';
 
+export function playingPresetCaption(name: string) {
+  return `Copy ${name} with its current edits.`;
+}
+
 const starts = (playing: string) =>
   [
     ['empty', 'Empty', 'Input straight to output; add blocks from there'],
     [
       'copy',
       'A copy of what is playing',
-      `${playing}, with its scenes and versions`,
+      playingPresetCaption(playing),
     ],
     ['oxidal', 'An Oxidal sound', 'Finished presets that come with Oxidal'],
     ['tone3000', 'A TONE3000 tone', 'A capture you have, with a cab after it'],
