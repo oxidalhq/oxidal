@@ -66,7 +66,7 @@ export function PathLevel({
   };
   return (
     <div
-      className="path-mix [[data-display=epaper]_&_input[type=range]]:hidden"
+      className="grid gap-1 min-[641px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] min-[641px]:items-end min-[641px]:gap-3 [[data-display=epaper]_&_input[type=range]]:hidden"
       role="group"
       aria-label={`Path ${path} mix`}
     >

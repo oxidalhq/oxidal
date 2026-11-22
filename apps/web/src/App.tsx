@@ -670,7 +670,7 @@ function InstrumentApp() {
               )}
           </div>
           {view === 'rig' && developmentSimulator && !audioRunning && (
-            <div className="notice rig-status">
+            <div className="notice mb-2 flex flex-wrap items-center gap-2 border border-border bg-transparent px-2.5 py-1 text-muted-foreground [&>button]:ml-auto">
               <WarningCircle size={18} aria-hidden="true" />
               <span>
                 <strong>Development simulator · no audio.</strong>
@@ -781,7 +781,7 @@ function InstrumentApp() {
               {developmentSimulator && !audioRunning && (
                 <>
                   <section
-                    className="panel chain-panel"
+                    className="panel chain-panel mb-0 rounded-b-none bg-background text-foreground shadow-none [&_.section-heading]:mb-3 [&_h2]:font-mono"
                     aria-label="Signal chain"
                   >
                     <div className="section-heading">
@@ -820,7 +820,7 @@ function InstrumentApp() {
                           ?.scrollIntoView({ block: 'nearest' });
                       }}
                     />
-                    <details className="routing-details">
+                    <details className="[&>summary]:justify-end [&>summary]:text-xs [&>summary]:text-muted-foreground">
                       <summary>Routing details</summary>
                       <p className="caption">
                         {parallel
@@ -832,7 +832,7 @@ function InstrumentApp() {
                     </details>
                   </section>
                   <section
-                    className="panel controls-panel"
+                    className="panel rounded-t-none border-t-0 [&_.section-heading]:mb-2"
                     aria-label="Rig controls"
                   >
                     <div className="section-heading">
@@ -850,10 +850,10 @@ function InstrumentApp() {
                         </strong>
                       </span>
                     </div>
-                    <div className="parameters">
+                    <div className="grid grid-cols-2 gap-2 min-[680px]:grid-cols-4">
                       {state.parameters.map((parameter) => (
                         <div
-                          className="parameter"
+                          className="grid min-w-0 gap-1.5 rounded-md border border-border bg-card p-2 data-[selected=true]:border-foreground [&_output]:font-mono [&_output]:tabular-nums"
                           key={parameter.id}
                           id={`control-${parameter.id}`}
                           data-selected={parameter.id.startsWith(
@@ -865,9 +865,7 @@ function InstrumentApp() {
                             )
                           }
                         >
-                          <span className="parameter-name">
-                            {parameter.label}
-                          </span>
+                          <span className="text-base">{parameter.label}</span>
                           <ControlEditor
                             parameter={parameter}
                             state={state}

@@ -233,7 +233,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
       )}
       {editingScene && (
         <details
-          className="scene-context"
+          className="min-w-0 border-y border-border [&+details]:border-t-0 [&>.caption]:mx-1 [&>.caption]:mb-2.5 [&>summary]:min-w-0 [&>summary]:gap-2 [&>summary]:px-1 [&>summary>:first-child]:shrink-0 [&>summary>:first-child]:font-semibold"
           open={changed || pending > 0 || undefined}
         >
           <summary>
@@ -247,7 +247,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
               <Badge>Updated · not saved</Badge>
             ) : (
               !!sceneMix.length && (
-                <span className="scene-context-mix">
+                <span className="min-w-0 truncate text-xs font-normal text-muted-foreground max-sm:hidden">
                   {sceneMix
                     .filter((branch) => branch.value !== 0)
                     .map(
@@ -267,7 +267,10 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
             whole-preset edits.
           </p>
           {!!sceneMix.length && (
-            <div className="scene-context-levels" aria-label="Scene mix">
+            <div
+              className="flex flex-wrap gap-2 px-1 pb-3"
+              aria-label="Scene mix"
+            >
               {sceneMix.map((branch) => (
                 <Badge
                   key={branch.name}
@@ -286,7 +289,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
             </p>
           )}
           {changed && (
-            <div className="scene-context-actions">
+            <div className="flex flex-wrap items-center gap-2.5 px-1 pb-3 [&_.caption]:m-0">
               <Button
                 variant="outline"
                 disabled={waiting}
@@ -473,7 +476,10 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
             </AdjustmentDialog>
           )}
           {(pending > 0 || changed) && (
-            <div className="scene-context-actions" aria-label="Scene edits">
+            <div
+              className="flex flex-wrap items-center gap-2.5 px-1 pb-3 [&_.caption]:m-0"
+              aria-label="Scene edits"
+            >
               <span className="caption" role="status">
                 {pending === 0
                   ? 'The mix you hear is not saved in a scene yet.'

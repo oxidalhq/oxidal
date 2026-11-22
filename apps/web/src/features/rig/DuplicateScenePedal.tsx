@@ -187,7 +187,7 @@ export function DuplicateScenePedal({
           ))}
         </select>
       </label>
-      <div className="editor-actions">
+      <div className="mt-2 flex flex-wrap gap-2 [&>button]:min-h-[48px] [&>button]:min-w-[48px]">
         <Button variant="outline" disabled={saving} onClick={onClose}>
           Cancel
         </Button>

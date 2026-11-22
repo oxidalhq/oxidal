@@ -116,13 +116,13 @@ export function ControlEditor({
     state.edit?.owner === owner && state.edit.target === parameter.id;
   const unavailable = !connected || busy || !owned;
   return (
-    <div className="control-editor">
+    <div className="grid min-w-0 gap-2 [&_legend]:wrap-anywhere [&>button]:w-full [&>fieldset]:min-w-0 [&>fieldset]:rounded-sm">
       <Button
         type="button"
         variant="outline"
         className={
           appearance === 'dial'
-            ? 'parameter-touch'
+            ? 'relative grid min-h-[88px] w-full min-w-20 cursor-pointer place-items-center rounded-md border-0 bg-transparent p-1.5 text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-default disabled:opacity-45 [&>output]:absolute [&>output]:font-mono [&>output]:font-semibold'
             : 'w-full justify-start font-mono tabular-nums'
         }
         disabled={!connected || busy || !!state.edit}
@@ -132,16 +132,16 @@ export function ControlEditor({
       >
         {appearance === 'dial' && (
           <svg
-            className="parameter-dial"
+            className="size-[76px] -rotate-90 [&>circle]:fill-none [&>circle]:stroke-4"
             viewBox="0 0 64 64"
             aria-hidden="true"
           >
-            <circle cx="32" cy="32" r="26" className="dial-track" />
+            <circle cx="32" cy="32" r="26" className="stroke-border" />
             <circle
               cx="32"
               cy="32"
               r="26"
-              className="dial-value"
+              className="stroke-foreground [stroke-linecap:round]"
               pathLength="100"
               strokeDasharray={`${Math.max(0, Math.min(100, ((parameter.value - parameter.min) / (parameter.max - parameter.min)) * 100))} 100`}
             />
@@ -178,7 +178,7 @@ export function ControlEditor({
               onChange={preview}
               format={formatValue}
             />
-            <details className="exact-entry">
+            <details className="[&_.field]:mb-2 [&>summary]:flex [&>summary]:items-center [&>summary]:text-base">
               <summary>Enter value</summary>
               <label className="field">
                 Draft {parameter.label}
@@ -208,7 +208,7 @@ export function ControlEditor({
                 />
               </label>
             </details>
-            <div className="editor-actions">
+            <div className="mt-2 flex flex-wrap gap-2 [&>button]:min-h-[48px] [&>button]:min-w-[48px]">
               <Button
                 disabled={
                   unavailable ||

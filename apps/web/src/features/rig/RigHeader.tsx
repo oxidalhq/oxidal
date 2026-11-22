@@ -269,7 +269,12 @@ export function RigHeader({ rig, vm }: RigViewProps) {
         )}
       </RigHeading>
       {performSwitching && (
-        <div className="rig-switching" role="status" aria-live="polite">
+        <div
+          data-rig-switching
+          className="flex min-h-48 items-center justify-center gap-3 rounded-md border border-border bg-card p-6 [&_small]:text-muted-foreground [&>span]:grid [&>span]:gap-0.5 [&>svg]:size-6 motion-safe:[&>svg]:animate-spin [[data-display=epaper]_&>svg]:animate-none"
+          role="status"
+          aria-live="polite"
+        >
           <ArrowsClockwise aria-hidden="true" />
           <span>
             <strong>Preparing preset…</strong>

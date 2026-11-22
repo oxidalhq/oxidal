@@ -1465,7 +1465,7 @@ export function LiveRig({
     );
   return (
     <section
-      className="instrument-surface live-rig space-y-2 py-0 [&>[data-slot=rig-heading]]:-mx-page"
+      className="instrument-surface live-rig landscape:max-h-[500px]:p-0 space-y-2 py-0 max-[600px]:p-0 [&_.caption]:my-2 [&>[data-slot=rig-heading]]:-mx-page [&>details]:border-t [&>details]:border-border [&>details]:py-1 [&>details[open]>summary]:mb-2 [&>details[open]>summary]:text-foreground"
       aria-label="Sounding rig"
     >
       <RigHeading
@@ -1568,15 +1568,21 @@ export function LiveRig({
         {busy ? 'Applying…' : state.modified ? 'Unsaved edits' : 'Saved'}
       </span>
       {error && !adjusting && (
-        <div className="error rig-recovery" role="alert">
+        <div
+          className="error flex flex-wrap items-center gap-2 [&>p]:m-0 [&>p]:min-w-48 [&>p]:flex-1"
+          role="alert"
+        >
           <p>{error}</p>
           <Button variant="outline" onClick={() => setError('')}>
             Acknowledge and refresh
           </Button>
         </div>
       )}
-      <div className="rig-workspace gap-3" data-inspecting={!!selectedBlock}>
-        <div className="rig-chain-column">
+      <div
+        className="rig-workspace grid grid-cols-[minmax(0,1fr)] items-start gap-3"
+        data-inspecting={!!selectedBlock}
+      >
+        <div className="rig-chain-column min-w-0 space-y-3">
           {editingChain && (
             <div className="flex min-h-touch flex-wrap items-center gap-0.5 [&>h3]:mr-auto [&>h3]:font-semibold">
               <h3>Chain</h3>
@@ -1792,7 +1798,7 @@ export function LiveRig({
               lanes={chainLanes}
             />
           ) : (
-            <div className="-mx-page" data-chain-view={chainView}>
+            <div className="native-signal-route" data-chain-view={chainView}>
               {chainLanes.map((lane) => (
                 <div key={lane.id}>
                   {chainLanes.length > 1 && (
@@ -1984,7 +1990,7 @@ export function LiveRig({
           )}
         </div>
         <div
-          className="rig-inspector-column"
+          className="rig-inspector-column min-w-0 scroll-mt-2 space-y-3 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
           ref={inspector}
           tabIndex={-1}
           aria-label="Sound controls"
@@ -1993,7 +1999,7 @@ export function LiveRig({
           {sharedEditor}
           {!selectedBlock && (
             <>
-              <div className="control-navigation" aria-label="Control groups">
+              <div className="flex" aria-label="Control groups">
                 {(
                   [
                     ['tone', 'Tone'],
@@ -2103,7 +2109,7 @@ export function LiveRig({
         </div>
       </div>
       {/* Output row under the chain (7.28). */}
-      <div className="rig-output-row">
+      <div className="grid gap-3 border-t border-border pt-3">
         {knobStrip}
         <MasterLevel
           extra={
@@ -2159,7 +2165,7 @@ export function LiveRig({
               adjustment.current?.preview(value);
             }}
           />
-          <div className="editor-actions">
+          <div className="mt-2 flex flex-wrap gap-2 [&>button]:min-h-[48px] [&>button]:min-w-[48px]">
             <Button
               disabled={disabled || draftStale}
               onClick={() => void finishAdjustment(false)}

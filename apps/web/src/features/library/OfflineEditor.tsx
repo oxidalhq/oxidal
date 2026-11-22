@@ -342,7 +342,7 @@ export function OfflineEditor({
         : [];
     return (
       <li key={block.id} className="offline-block">
-        <div className="offline-row">
+        <div className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-1">
           <strong>{block.name}</strong>
           <span className="caption">
             {block.kind === 'native'
@@ -459,12 +459,15 @@ export function OfflineEditor({
   }
   function split(step: RouteSplit) {
     return (
-      <li key={step.split} className="offline-split">
+      <li
+        key={step.split}
+        className="[&>ol]:border-l-2 [&>ol]:border-border [&>ol]:pl-3"
+      >
         <span className="caption">Split · {step.branches.length} paths</span>
-        <ol className="offline-paths">
+        <ol className="m-0 grid list-none gap-1 p-0 [&>li]:border-l-2 [&>li]:border-border [&>li]:pl-3">
           {step.branches.map((branch, path) => (
             <li key={path} aria-label={`Path ${path + 1}`}>
-              <div className="offline-row">
+              <div className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-1">
                 <span>Path {path + 1}</span>
                 {!branch.length && (
                   <span className="caption">Dry · no blocks</span>
@@ -504,7 +507,7 @@ export function OfflineEditor({
                     routePathMix(r, step.split, path, { ...mix, ...next }),
                   );
                 return (
-                  <div className="path-mix [[data-display=epaper]_&_input[type=range]]:hidden">
+                  <div className="grid gap-1 min-[641px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] min-[641px]:items-end min-[641px]:gap-3 [[data-display=epaper]_&_input[type=range]]:hidden">
                     <label className="field">
                       <span>
                         Path {path + 1} level · {Math.round(mix.level * 100)}%
@@ -564,7 +567,7 @@ export function OfflineEditor({
   function steps(list: Route) {
     if (!list.length) return null;
     return (
-      <ol className="offline-steps">
+      <ol className="m-0 grid list-none gap-1 p-0">
         {list.map((step, index) =>
           isSplit(step)
             ? split(step)
@@ -622,7 +625,7 @@ export function OfflineEditor({
               <ul className="offline-blocks">
                 {opened.chains.map(({ instance, block }) => (
                   <li key={block.id} className="offline-block">
-                    <div className="offline-row">
+                    <div className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-1">
                       <strong>{block.name}</strong>
                       <span className="caption">
                         {chainEdits[instance]
@@ -652,7 +655,7 @@ export function OfflineEditor({
             </div>
           ) : (
             <div aria-label="Routing" role="group">
-              <div className="offline-row">
+              <div className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="caption">Input</span>
               </div>
               {route.length ? (
@@ -660,7 +663,7 @@ export function OfflineEditor({
               ) : (
                 <p className="caption">Input straight to output.</p>
               )}
-              <div className="offline-row">
+              <div className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="caption">Output</span>
                 <span className="flex-1" />
                 {addEffect()}

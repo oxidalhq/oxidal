@@ -165,7 +165,7 @@ export function MixedRig(props: {
     );
   return (
     <section
-      className="panel rig-editor space-y-3"
+      className="panel rig-editor space-y-3 max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:shadow-none data-loading:[&>:not([data-slot=rig-heading]):not([data-rig-switching])]:hidden"
       aria-label="Sounding mixed rig"
       data-loading={performSwitching || undefined}
     >
@@ -188,7 +188,7 @@ export function MixedRig(props: {
       />
       <RigChainSurface rig={rig} vm={vm} />
       {/* Output row under the chain (7.28). */}
-      <div className="rig-output-row">
+      <div className="grid gap-3 border-t border-border pt-3">
         <MasterLevel
           extra={
             <>
@@ -218,11 +218,11 @@ export function MixedRig(props: {
           }
         />
         {!!state.control?.prepared?.length && (
-          <details className="ready-presets">
+          <details className="min-w-0 border-y border-border [&+details]:border-t-0 [&>.caption]:mx-1 [&>.caption]:mb-2.5 [&>summary]:min-w-0 [&>summary]:gap-2 [&>summary]:px-1 [&>summary>:first-child]:shrink-0 [&>summary>:first-child]:font-semibold">
             <summary>
               <span>Ready to switch</span>
               <Badge>{state.control.prepared.length + 1} presets</Badge>
-              <span className="ready-presets-state">
+              <span className="min-w-0 truncate text-xs font-normal text-muted-foreground">
                 {state.control.prepared.length + 1} loaded ·{' '}
                 {1 +
                   state.control.prepared.filter((preset) => preset.rendering)
@@ -236,11 +236,11 @@ export function MixedRig(props: {
               loaded but using no DSP. These are presets, not scenes.
             </p>
             <div
-              className="ready-presets-list"
+              className="flex flex-wrap gap-2 px-1 pb-3 [&>button]:gap-2"
               role="group"
               aria-label="Ready presets"
             >
-              <div className="ready-preset-current">
+              <div className="inline-flex min-h-touch items-center gap-1.5 rounded-md border border-foreground px-3 py-2">
                 <strong>{matching?.manifest.name ?? 'Current preset'}</strong>
                 <Badge>Playing</Badge>
                 <Badge>Processing</Badge>
@@ -335,7 +335,10 @@ export function MixedRig(props: {
       </MaybeSheet>
       <ControlAdjustDialog rig={rig} vm={vm} />
       {nativeLoad.engines > 0 && (
-        <div className="rig-load-summary" aria-label="Native processing load">
+        <div
+          className="flex flex-wrap gap-1.5"
+          aria-label="Native processing load"
+        >
           <Badge>
             {nativeLoad.engines}{' '}
             {nativeLoad.engines === 1 ? 'NAM block' : 'NAM blocks'}

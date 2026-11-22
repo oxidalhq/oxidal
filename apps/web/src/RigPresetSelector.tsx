@@ -482,7 +482,10 @@ export function RigPresetSelector({
         <CueLinkedMix preset={backingPreset} scope="rig" disabled={disabled} />
       )}
       {error && (
-        <div className="rig-preset-error" role="status">
+        <div
+          className="col-span-full flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground"
+          role="status"
+        >
           <span>{error}</span>
           <Button
             variant="ghost"

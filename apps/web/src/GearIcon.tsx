@@ -29,7 +29,7 @@ export function GearIcon({
   return (
     <BlockGlyph
       glyph={glyph ?? glyphFor(gear, name)}
-      className={`block-glyph ${className ?? ''}`}
+      className={`size-[1.25em] flex-none fill-none stroke-current stroke-[1.5] [stroke-linecap:square] [stroke-linejoin:miter] ${className ?? ''}`}
     />
   );
 }

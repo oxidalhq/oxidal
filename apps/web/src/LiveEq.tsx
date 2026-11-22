@@ -291,7 +291,7 @@ export function LiveEq<S extends EqSession>({
               queue.current?.preview(value);
             }}
           />
-          <div className="editor-actions">
+          <div className="mt-2 flex flex-wrap gap-2 [&>button]:min-h-[48px] [&>button]:min-w-[48px]">
             <Button
               disabled={locked || !!error}
               onClick={() => void finish(false)}

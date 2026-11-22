@@ -403,7 +403,7 @@ export function NativeEditor({
       )}
       {state?.loaded && (
         <div
-          className="native-parameter-grid"
+          className="native-parameter-grid grid grid-cols-[repeat(auto-fit,minmax(125px,1fr))] gap-2 [&>button]:min-h-[88px] [&>button]:min-w-0 [&>button]:justify-between [&>button]:whitespace-normal [&>button>span]:text-sm [&>button>strong]:font-mono [&>button>strong]:text-lg"
           role="group"
           aria-label="Draft tone controls"
         >
@@ -425,7 +425,7 @@ export function NativeEditor({
               <button
                 key={p.id}
                 type="button"
-                className="native-value-trigger"
+                className="flex h-auto flex-col items-start gap-1 rounded-md border border-border bg-card p-2.5 text-left text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-45 [&>*]:max-w-full [&>*]:wrap-anywhere"
                 aria-label={`Adjust draft ${p.label}`}
                 aria-haspopup="dialog"
                 disabled={blocked || !!state.edit}
@@ -493,7 +493,7 @@ export function NativeEditor({
           </label>
           <button
             type="button"
-            className="native-value-trigger"
+            className="flex h-auto flex-col items-start gap-1 rounded-md border border-border bg-card p-2.5 text-left text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-45 [&>*]:max-w-full [&>*]:wrap-anywhere"
             aria-label="Adjust native value"
             aria-haspopup="dialog"
             disabled={blocked || !state?.loaded || !target || !!state.edit}
@@ -541,7 +541,7 @@ export function NativeEditor({
               {error}
             </p>
           )}
-          <div className="native-touch">
+          <div className="col-span-full">
             <TouchAdjust
               key={`${state.session}:${target}`}
               label="native value"
@@ -564,7 +564,7 @@ export function NativeEditor({
               }}
             />
           </div>
-          <details className="exact-entry">
+          <details className="[&_.field]:mb-2 [&>summary]:flex [&>summary]:items-center [&>summary]:text-base">
             <summary>Enter value</summary>
             <label className="field">
               Normalized value (0–1)
@@ -593,7 +593,7 @@ export function NativeEditor({
               />
             </label>
           </details>
-          <div className="editor-actions">
+          <div className="mt-2 flex flex-wrap gap-2 [&>button]:min-h-[48px] [&>button]:min-w-[48px]">
             <Button
               disabled={blocked || !ours || !valid}
               onClick={() => void finish(false)}
@@ -610,7 +610,10 @@ export function NativeEditor({
           </div>
         </AdjustmentDialog>
       )}
-      <div className="editor-actions" aria-label="Draft history">
+      <div
+        className="mt-2 flex flex-wrap gap-2 [&>button]:min-h-[48px] [&>button]:min-w-[48px]"
+        aria-label="Draft history"
+      >
         <Button
           variant="secondary"
           disabled={blocked || !!state?.edit || !state?.can_undo}
@@ -645,7 +648,7 @@ export function NativeEditor({
         <details>
           <summary>Draft structure</summary>
           <div
-            className="editor-actions"
+            className="mt-2 flex flex-wrap gap-2 [&>button]:min-h-[48px] [&>button]:min-w-[48px]"
             role="group"
             aria-label="Draft structure"
           >
