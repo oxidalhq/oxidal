@@ -2,7 +2,7 @@
 
 Use the pinned Node 22.21.0, pnpm 10.32.1 and Rust 1.95.0 toolchains. `pnpm bootstrap` installs locked dependencies and local verification tools. `pnpm hooks:install` installs repository hooks without replacing a different existing hooks configuration.
 
-`pnpm check` runs Rust formatting, Clippy, tests, contract drift checks, web formatting/lint/type/unused checks, unit tests, production build, OS fixture checks, tooling tests, dependency checks and browser e2e. Stop any running preview/dev server first; tests own ports 3210 and 5173. Run `pnpm guardrails:prove` separately to verify negative lint/type/format/unused fixtures.
+`pnpm check` runs Rust formatting, Clippy, tests, contract drift checks, web formatting/lint/type/unused checks, unit tests, production build, OS fixture checks, tooling tests, dependency checks and browser e2e. Stop any running preview/dev server first; tests own ports 3210 and 5173. Run `pnpm guardrails:prove` separately to verify negative lint/type/format/unused fixtures. When a development server is already running, set `OXIDAL_E2E_API_PORT` and `OXIDAL_E2E_WEB_PORT` to two available local ports for the release check. Media tests exercise the real free-space reserve on the filesystem containing their temporary directory.
 
 Commits use a single Conventional Commit title, at most 100 characters, with no body. Use a GitHub noreply identity when personal email privacy is required. Stage and review only product files. Repository boundary checks reject private workspace paths and obvious credentials/local paths; they supplement review and are not a comprehensive secret detector.
 

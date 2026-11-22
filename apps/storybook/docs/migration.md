@@ -125,6 +125,8 @@ The shared entry point includes the theme and base styles used by Storybook. Pag
 
 ## Stylesheets
 
+The product now uses the shared stylesheet and Tailwind utilities. The table records the original migration inventory. The web stylesheet contains only the design-system import and source scan. [Product entry point](../../web/src/styles.css)
+
 The screen tables above name 141 of the 143 non-test TSX modules in the
 starting product tree. The remaining two are retained integration owners:
 `main.tsx` mounts the application, and
