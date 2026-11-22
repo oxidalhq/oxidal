@@ -232,13 +232,18 @@ function Maintenance() {
         </SettingRow>
         <SettingRow
           label="Backup"
-          caption="Presets, set lists and settings as one file."
+          caption="Presets, set lists, descriptions, MIDI maps and local NAM and IR files."
         >
           <Button size="sm" variant="outline">
             Download backup
           </Button>
-          <Button size="sm" variant="ghost">
-            Restore…
+        </SettingRow>
+        <SettingRow
+          label="Restore chord sheets"
+          caption="Open Songbook to review and restore a Songbook JSON backup."
+        >
+          <Button size="sm" variant="outline" asChild>
+            <a href="?id=patterns-songbook--connected-layout">Open Songbook</a>
           </Button>
         </SettingRow>
       </SettingGroup>

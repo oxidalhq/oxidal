@@ -1024,6 +1024,14 @@ function InstrumentApp() {
                         </a>
                       </Button>
                     </SettingRow>
+                    <SettingRow
+                      label="Restore chord sheets"
+                      caption="Open Songbook to review and restore a Songbook JSON backup."
+                    >
+                      <Button size="sm" variant="outline" asChild>
+                        <a href="#library/songbook">Open Songbook</a>
+                      </Button>
+                    </SettingRow>
                   </SettingGroup>
                   <StorageLock
                     connected={connected}

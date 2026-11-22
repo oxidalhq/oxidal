@@ -122,3 +122,32 @@ for (const target of ['locked', 'unlocked'] as const)
       ),
     ).toBe(true);
   });
+
+test('maintenance opens the Songbook JSON restore review', async ({ page }) => {
+  // An existing library on a shared test server must survive this workflow.
+  await page.route(/\/api\/v1\/media\/sheets(\?.*)?$/, (route) =>
+    route.fulfill({ json: { registry_revision: '', sheets: [] } }),
+  );
+  await page.route('**/api/v1/media/sheets/links', (route) =>
+    route.fulfill({ json: { registry_revision: '', links: [] } }),
+  );
+  await page.goto('/#settings/maintenance');
+  await expect(
+    page.getByRole('link', { name: 'Download backup' }),
+  ).toHaveAttribute('href', '/api/v1/backup/library');
+  await page.getByRole('link', { name: 'Open Songbook' }).click();
+  await expect(page).toHaveURL(/#library\/songbook$/);
+  const chooseFile = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Restore Songbook backup…' }).click();
+  await (
+    await chooseFile
+  ).setFiles({
+    name: 'chord-sheets.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({ schema: 1, sheets: [], links: [] })),
+  });
+  const review = page.getByRole('dialog', { name: 'Restore Songbook backup?' });
+  await expect(review).toContainText('0 songs and 0 links');
+  await review.getByRole('button', { name: 'Close dialog' }).click();
+  await expect(review).toHaveCount(0);
+});
