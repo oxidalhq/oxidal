@@ -3,78 +3,85 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix units: <http://lv2plug.in/ns/extensions/units#> .
 
+@prefix pg: <http://lv2plug.in/ns/ext/port-groups#> .
+@prefix moment: <urn:oxidal:moment:controls:> .
+
+moment:shared a pg:Group ; lv2:symbol "shared" ; lv2:name "Shared" .
+moment:loop a pg:Group ; lv2:symbol "loop" ; lv2:name "Loop" .
+moment:wet a pg:Group ; lv2:symbol "wet" ; lv2:name "Wet" .
+
 # @see docs/native-moment.md
 <urn:oxidal:plugin:moment#mono> a lv2:Plugin, lv2:DelayPlugin ;
     doap:name "Oxidal Moment (Mono)" ; doap:license <https://www.apache.org/licenses/LICENSE-2.0> ;
     rdfs:comment "Moment catches what you just played and turns it into a moving texture. The loop half records all the time: Catch keeps the most recent audio as a loop. Tape plays it at another speed or backwards, Stretch spreads it into slow overlapping slices, and Touch sticks on a slice while you play. Overdub adds to the loop and Fade sets how much of it stays on each pass. The wet half is Smear (separate echoes to a wash), Delay or Slip (a sliding pitch shift), with Chance letting sound in only some of the time and Freeze holding it. Route sends the input, the loop or both through the wet half, and the wet half is recorded while Catch is off. Clock sets the working sample rate of everything: lower is longer, deeper and darker; Grit makes it stepped and aliased. No latency." ;
-    lv2:minorVersion 0 ; lv2:microVersion 1 ; lv2:optionalFeature lv2:hardRTCapable ;
+    lv2:minorVersion 0 ; lv2:microVersion 2 ; lv2:optionalFeature lv2:hardRTCapable ;
     lv2:port
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 0 ; lv2:symbol "clock" ; lv2:name "Clock" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 100 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 1 ; lv2:symbol "steps" ; lv2:name "Steps" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 1 ; lv2:portProperty lv2:toggled, lv2:integer ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 2 ; lv2:symbol "grit" ; lv2:name "Grit" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 0 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 3 ; lv2:symbol "route" ; lv2:name "Route" ; lv2:minimum 0 ; lv2:maximum 2 ; lv2:default 1 ; lv2:portProperty lv2:integer, lv2:enumeration ;
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 0 ; pg:group moment:shared ; lv2:symbol "clock" ; lv2:name "Clock" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 100 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 1 ; pg:group moment:shared ; lv2:symbol "steps" ; lv2:name "Steps" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 1 ; lv2:portProperty lv2:toggled, lv2:integer ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 2 ; pg:group moment:shared ; lv2:symbol "grit" ; lv2:name "Grit" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 0 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 3 ; pg:group moment:shared ; lv2:symbol "route" ; lv2:name "Route" ; lv2:minimum 0 ; lv2:maximum 2 ; lv2:default 1 ; lv2:portProperty lv2:integer, lv2:enumeration ;
         lv2:scalePoint [ rdfs:label "Input" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 0 ], [ rdfs:label "Input and loop" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 1 ], [ rdfs:label "Loop" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 2 ] ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 4 ; lv2:symbol "balance" ; lv2:name "Balance" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 5 ; lv2:symbol "catch" ; lv2:name "Catch" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 0 ; lv2:portProperty lv2:toggled, lv2:integer ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 6 ; lv2:symbol "loopmode" ; lv2:name "Loop mode" ; lv2:minimum 0 ; lv2:maximum 2 ; lv2:default 0 ; lv2:portProperty lv2:integer, lv2:enumeration ;
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 4 ; pg:group moment:shared ; lv2:symbol "balance" ; lv2:name "Balance" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 5 ; pg:group moment:loop ; lv2:symbol "catch" ; lv2:name "Catch" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 0 ; lv2:portProperty lv2:toggled, lv2:integer ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 6 ; pg:group moment:loop ; lv2:symbol "loopmode" ; lv2:name "Loop mode" ; lv2:minimum 0 ; lv2:maximum 2 ; lv2:default 0 ; lv2:portProperty lv2:integer, lv2:enumeration ;
         lv2:scalePoint [ rdfs:label "Tape" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 0 ], [ rdfs:label "Stretch" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 1 ], [ rdfs:label "Touch" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 2 ] ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 7 ; lv2:symbol "length" ; lv2:name "Length" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 100 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 8 ; lv2:symbol "move" ; lv2:name "Move" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 71 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 9 ; lv2:symbol "overdub" ; lv2:name "Overdub" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 0 ; lv2:portProperty lv2:toggled, lv2:integer ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 10 ; lv2:symbol "fade" ; lv2:name "Fade" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 100 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 11 ; lv2:symbol "direct" ; lv2:name "Direct" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 0 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 12 ; lv2:symbol "wet" ; lv2:name "Wet on" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 1 ; lv2:portProperty lv2:toggled, lv2:integer ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 13 ; lv2:symbol "wetmode" ; lv2:name "Wet mode" ; lv2:minimum 0 ; lv2:maximum 2 ; lv2:default 0 ; lv2:portProperty lv2:integer, lv2:enumeration ;
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 7 ; pg:group moment:loop ; lv2:symbol "length" ; lv2:name "Length" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 100 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 8 ; pg:group moment:loop ; lv2:symbol "move" ; lv2:name "Move" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 71 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 9 ; pg:group moment:loop ; lv2:symbol "overdub" ; lv2:name "Overdub" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 0 ; lv2:portProperty lv2:toggled, lv2:integer ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 10 ; pg:group moment:loop ; lv2:symbol "fade" ; lv2:name "Fade" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 100 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 11 ; pg:group moment:loop ; lv2:symbol "direct" ; lv2:name "Direct" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 0 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 12 ; pg:group moment:wet ; lv2:symbol "wet" ; lv2:name "Wet on" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 1 ; lv2:portProperty lv2:toggled, lv2:integer ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 13 ; pg:group moment:wet ; lv2:symbol "wetmode" ; lv2:name "Wet mode" ; lv2:minimum 0 ; lv2:maximum 2 ; lv2:default 0 ; lv2:portProperty lv2:integer, lv2:enumeration ;
         lv2:scalePoint [ rdfs:label "Smear" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 0 ], [ rdfs:label "Delay" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 1 ], [ rdfs:label "Slip" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 2 ] ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 14 ; lv2:symbol "time" ; lv2:name "Time" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 15 ; lv2:symbol "shape" ; lv2:name "Shape" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 16 ; lv2:symbol "tone" ; lv2:name "Tone" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 70 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 17 ; lv2:symbol "chance" ; lv2:name "Chance" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 100 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 18 ; lv2:symbol "freeze" ; lv2:name "Freeze" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 0 ; lv2:portProperty lv2:toggled, lv2:integer ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 19 ; lv2:symbol "link" ; lv2:name "Link" ; lv2:minimum 0 ; lv2:maximum 3 ; lv2:default 0 ; lv2:portProperty lv2:integer, lv2:enumeration ;
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 14 ; pg:group moment:wet ; lv2:symbol "time" ; lv2:name "Time" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 15 ; pg:group moment:wet ; lv2:symbol "shape" ; lv2:name "Shape" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 16 ; pg:group moment:wet ; lv2:symbol "tone" ; lv2:name "Tone" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 70 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 17 ; pg:group moment:wet ; lv2:symbol "chance" ; lv2:name "Chance" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 100 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 18 ; pg:group moment:wet ; lv2:symbol "freeze" ; lv2:name "Freeze" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 0 ; lv2:portProperty lv2:toggled, lv2:integer ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 19 ; pg:group moment:shared ; lv2:symbol "link" ; lv2:name "Link" ; lv2:minimum 0 ; lv2:maximum 3 ; lv2:default 0 ; lv2:portProperty lv2:integer, lv2:enumeration ;
         lv2:scalePoint [ rdfs:label "Off" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 0 ], [ rdfs:label "Loop follows Time" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 1 ], [ rdfs:label "Time follows loop" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 2 ], [ rdfs:label "Tempo" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 3 ] ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 20 ; lv2:symbol "bpm" ; lv2:name "BPM" ; lv2:minimum 40 ; lv2:maximum 240 ; lv2:default 120 ; units:unit units:bpm ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 21 ; lv2:symbol "division" ; lv2:name "Division" ; lv2:minimum 0 ; lv2:maximum 12 ; lv2:default 2 ; lv2:portProperty lv2:integer, lv2:enumeration ;
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 20 ; pg:group moment:shared ; lv2:symbol "bpm" ; lv2:name "BPM" ; lv2:minimum 40 ; lv2:maximum 240 ; lv2:default 120 ; units:unit units:bpm ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 21 ; pg:group moment:shared ; lv2:symbol "division" ; lv2:name "Division" ; lv2:minimum 0 ; lv2:maximum 12 ; lv2:default 2 ; lv2:portProperty lv2:integer, lv2:enumeration ;
         lv2:scalePoint [ rdfs:label "4 bars" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 0 ], [ rdfs:label "2 bars" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 1 ], [ rdfs:label "1 bar" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 2 ], [ rdfs:label "1/2 dotted" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 3 ], [ rdfs:label "1/2" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 4 ], [ rdfs:label "1/4 dotted" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 5 ], [ rdfs:label "1/4" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 6 ], [ rdfs:label "1/8 dotted" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 7 ], [ rdfs:label "1/4 triplet" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 8 ], [ rdfs:label "1/8" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 9 ], [ rdfs:label "1/8 triplet" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 10 ], [ rdfs:label "1/16" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 11 ], [ rdfs:label "1/16 triplet" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 12 ] ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 22 ; lv2:symbol "width" ; lv2:name "Width" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 0 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 23 ; lv2:symbol "mix" ; lv2:name "Mix" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 22 ; pg:group moment:shared ; lv2:symbol "width" ; lv2:name "Width" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 0 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 23 ; pg:group moment:shared ; lv2:symbol "mix" ; lv2:name "Mix" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
       [ a lv2:InputPort, lv2:AudioPort ; lv2:index 24 ; lv2:symbol "in_l" ; lv2:name "Input" ],
       [ a lv2:OutputPort, lv2:AudioPort ; lv2:index 25 ; lv2:symbol "out_l" ; lv2:name "Output" ] .
 
 <urn:oxidal:plugin:moment#stereo> a lv2:Plugin, lv2:DelayPlugin ;
     doap:name "Oxidal Moment (Stereo)" ; doap:license <https://www.apache.org/licenses/LICENSE-2.0> ;
     rdfs:comment "Stereo Moment: each side has its own memory. Width 0 keeps the incoming stereo picture; higher values add each mode's own movement: Tape plays one side backwards, Stretch and Slip pan slowly, Touch pans while a slice is held, Smear scatters its taps and Delay crosses from side to side. All other controls work as in the mono plugin. No latency." ;
-    lv2:minorVersion 0 ; lv2:microVersion 1 ; lv2:optionalFeature lv2:hardRTCapable ;
+    lv2:minorVersion 0 ; lv2:microVersion 2 ; lv2:optionalFeature lv2:hardRTCapable ;
     lv2:port
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 0 ; lv2:symbol "clock" ; lv2:name "Clock" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 100 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 1 ; lv2:symbol "steps" ; lv2:name "Steps" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 1 ; lv2:portProperty lv2:toggled, lv2:integer ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 2 ; lv2:symbol "grit" ; lv2:name "Grit" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 0 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 3 ; lv2:symbol "route" ; lv2:name "Route" ; lv2:minimum 0 ; lv2:maximum 2 ; lv2:default 1 ; lv2:portProperty lv2:integer, lv2:enumeration ;
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 0 ; pg:group moment:shared ; lv2:symbol "clock" ; lv2:name "Clock" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 100 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 1 ; pg:group moment:shared ; lv2:symbol "steps" ; lv2:name "Steps" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 1 ; lv2:portProperty lv2:toggled, lv2:integer ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 2 ; pg:group moment:shared ; lv2:symbol "grit" ; lv2:name "Grit" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 0 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 3 ; pg:group moment:shared ; lv2:symbol "route" ; lv2:name "Route" ; lv2:minimum 0 ; lv2:maximum 2 ; lv2:default 1 ; lv2:portProperty lv2:integer, lv2:enumeration ;
         lv2:scalePoint [ rdfs:label "Input" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 0 ], [ rdfs:label "Input and loop" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 1 ], [ rdfs:label "Loop" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 2 ] ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 4 ; lv2:symbol "balance" ; lv2:name "Balance" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 5 ; lv2:symbol "catch" ; lv2:name "Catch" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 0 ; lv2:portProperty lv2:toggled, lv2:integer ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 6 ; lv2:symbol "loopmode" ; lv2:name "Loop mode" ; lv2:minimum 0 ; lv2:maximum 2 ; lv2:default 0 ; lv2:portProperty lv2:integer, lv2:enumeration ;
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 4 ; pg:group moment:shared ; lv2:symbol "balance" ; lv2:name "Balance" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 5 ; pg:group moment:loop ; lv2:symbol "catch" ; lv2:name "Catch" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 0 ; lv2:portProperty lv2:toggled, lv2:integer ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 6 ; pg:group moment:loop ; lv2:symbol "loopmode" ; lv2:name "Loop mode" ; lv2:minimum 0 ; lv2:maximum 2 ; lv2:default 0 ; lv2:portProperty lv2:integer, lv2:enumeration ;
         lv2:scalePoint [ rdfs:label "Tape" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 0 ], [ rdfs:label "Stretch" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 1 ], [ rdfs:label "Touch" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 2 ] ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 7 ; lv2:symbol "length" ; lv2:name "Length" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 100 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 8 ; lv2:symbol "move" ; lv2:name "Move" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 71 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 9 ; lv2:symbol "overdub" ; lv2:name "Overdub" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 0 ; lv2:portProperty lv2:toggled, lv2:integer ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 10 ; lv2:symbol "fade" ; lv2:name "Fade" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 100 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 11 ; lv2:symbol "direct" ; lv2:name "Direct" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 0 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 12 ; lv2:symbol "wet" ; lv2:name "Wet on" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 1 ; lv2:portProperty lv2:toggled, lv2:integer ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 13 ; lv2:symbol "wetmode" ; lv2:name "Wet mode" ; lv2:minimum 0 ; lv2:maximum 2 ; lv2:default 0 ; lv2:portProperty lv2:integer, lv2:enumeration ;
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 7 ; pg:group moment:loop ; lv2:symbol "length" ; lv2:name "Length" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 100 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 8 ; pg:group moment:loop ; lv2:symbol "move" ; lv2:name "Move" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 71 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 9 ; pg:group moment:loop ; lv2:symbol "overdub" ; lv2:name "Overdub" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 0 ; lv2:portProperty lv2:toggled, lv2:integer ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 10 ; pg:group moment:loop ; lv2:symbol "fade" ; lv2:name "Fade" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 100 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 11 ; pg:group moment:loop ; lv2:symbol "direct" ; lv2:name "Direct" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 0 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 12 ; pg:group moment:wet ; lv2:symbol "wet" ; lv2:name "Wet on" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 1 ; lv2:portProperty lv2:toggled, lv2:integer ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 13 ; pg:group moment:wet ; lv2:symbol "wetmode" ; lv2:name "Wet mode" ; lv2:minimum 0 ; lv2:maximum 2 ; lv2:default 0 ; lv2:portProperty lv2:integer, lv2:enumeration ;
         lv2:scalePoint [ rdfs:label "Smear" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 0 ], [ rdfs:label "Delay" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 1 ], [ rdfs:label "Slip" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 2 ] ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 14 ; lv2:symbol "time" ; lv2:name "Time" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 15 ; lv2:symbol "shape" ; lv2:name "Shape" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 16 ; lv2:symbol "tone" ; lv2:name "Tone" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 70 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 17 ; lv2:symbol "chance" ; lv2:name "Chance" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 100 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 18 ; lv2:symbol "freeze" ; lv2:name "Freeze" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 0 ; lv2:portProperty lv2:toggled, lv2:integer ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 19 ; lv2:symbol "link" ; lv2:name "Link" ; lv2:minimum 0 ; lv2:maximum 3 ; lv2:default 0 ; lv2:portProperty lv2:integer, lv2:enumeration ;
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 14 ; pg:group moment:wet ; lv2:symbol "time" ; lv2:name "Time" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 15 ; pg:group moment:wet ; lv2:symbol "shape" ; lv2:name "Shape" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 16 ; pg:group moment:wet ; lv2:symbol "tone" ; lv2:name "Tone" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 70 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 17 ; pg:group moment:wet ; lv2:symbol "chance" ; lv2:name "Chance" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 100 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 18 ; pg:group moment:wet ; lv2:symbol "freeze" ; lv2:name "Freeze" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 0 ; lv2:portProperty lv2:toggled, lv2:integer ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 19 ; pg:group moment:shared ; lv2:symbol "link" ; lv2:name "Link" ; lv2:minimum 0 ; lv2:maximum 3 ; lv2:default 0 ; lv2:portProperty lv2:integer, lv2:enumeration ;
         lv2:scalePoint [ rdfs:label "Off" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 0 ], [ rdfs:label "Loop follows Time" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 1 ], [ rdfs:label "Time follows loop" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 2 ], [ rdfs:label "Tempo" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 3 ] ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 20 ; lv2:symbol "bpm" ; lv2:name "BPM" ; lv2:minimum 40 ; lv2:maximum 240 ; lv2:default 120 ; units:unit units:bpm ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 21 ; lv2:symbol "division" ; lv2:name "Division" ; lv2:minimum 0 ; lv2:maximum 12 ; lv2:default 2 ; lv2:portProperty lv2:integer, lv2:enumeration ;
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 20 ; pg:group moment:shared ; lv2:symbol "bpm" ; lv2:name "BPM" ; lv2:minimum 40 ; lv2:maximum 240 ; lv2:default 120 ; units:unit units:bpm ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 21 ; pg:group moment:shared ; lv2:symbol "division" ; lv2:name "Division" ; lv2:minimum 0 ; lv2:maximum 12 ; lv2:default 2 ; lv2:portProperty lv2:integer, lv2:enumeration ;
         lv2:scalePoint [ rdfs:label "4 bars" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 0 ], [ rdfs:label "2 bars" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 1 ], [ rdfs:label "1 bar" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 2 ], [ rdfs:label "1/2 dotted" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 3 ], [ rdfs:label "1/2" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 4 ], [ rdfs:label "1/4 dotted" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 5 ], [ rdfs:label "1/4" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 6 ], [ rdfs:label "1/8 dotted" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 7 ], [ rdfs:label "1/4 triplet" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 8 ], [ rdfs:label "1/8" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 9 ], [ rdfs:label "1/8 triplet" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 10 ], [ rdfs:label "1/16" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 11 ], [ rdfs:label "1/16 triplet" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 12 ] ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 22 ; lv2:symbol "width" ; lv2:name "Width" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 0 ; units:unit units:pc ],
-      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 23 ; lv2:symbol "mix" ; lv2:name "Mix" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 22 ; pg:group moment:shared ; lv2:symbol "width" ; lv2:name "Width" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 0 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 23 ; pg:group moment:shared ; lv2:symbol "mix" ; lv2:name "Mix" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
       [ a lv2:InputPort, lv2:AudioPort ; lv2:index 24 ; lv2:symbol "in_l" ; lv2:name "Input left" ],
       [ a lv2:InputPort, lv2:AudioPort ; lv2:index 25 ; lv2:symbol "in_r" ; lv2:name "Input right" ],
       [ a lv2:OutputPort, lv2:AudioPort ; lv2:index 26 ; lv2:symbol "out_l" ; lv2:name "Output left" ],

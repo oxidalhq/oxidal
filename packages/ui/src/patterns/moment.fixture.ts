@@ -22,6 +22,8 @@ type Port = {
   maximum?: number;
   default?: number;
   unit?: string;
+  group?: string;
+  group_uri?: string;
   scale_points?: { value: number; label: string }[];
 };
 
@@ -40,6 +42,8 @@ export const MOMENT_CONTROLS: PluginControl[] = (
           value: p.default ?? p.minimum,
           integer: p.integer,
           unit: p.unit,
+          group: p.group,
+          groupId: p.group_uri,
           choices: p.enumeration ? p.scale_points : undefined,
         },
       ]

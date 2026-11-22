@@ -151,6 +151,12 @@ mod tests {
                     "{name} port {index} is not {}",
                     control.symbol
                 );
+                let group = match index {
+                    5..=11 => "loop",
+                    12..=18 => "wet",
+                    _ => "shared",
+                };
+                assert!(text.contains(&format!("pg:group moment:{group} ;")));
                 assert_eq!(number(&text, "lv2:minimum"), control.minimum);
                 assert_eq!(number(&text, "lv2:maximum"), control.maximum);
                 assert_eq!(number(&text, "lv2:default"), control.default);
