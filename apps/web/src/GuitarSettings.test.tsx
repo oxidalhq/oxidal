@@ -130,6 +130,58 @@ it('sets a trim by hand in 0.5 dB steps and resets it', async () => {
   expect(saved.guitars[0]!.trim_db).toBe(0);
 });
 
+it.each(['stale', 'disconnected'] as const)(
+  'keeps the saved noise and gate when input becomes %s',
+  async (failure) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval', 'performance'] });
+    saved = {
+      guitars: [
+        {
+          id: 'live',
+          name: 'Live',
+          trim_db: 0,
+          peak_dbfs: -10,
+          noise_dbfs: -68,
+          gate: false,
+        },
+      ],
+      reference: 'live',
+      active: 'live',
+    };
+    let sequence = 0;
+    let interrupted = false;
+    vi.mocked(monitoring).mockImplementation(async () => {
+      if (interrupted && failure === 'disconnected')
+        throw new Error('Disconnected');
+      return {
+        sequence: ++sequence,
+        audio_age_ms: interrupted ? 3000 : 100,
+        audio: { input: [{ peak_dbfs: -75 }] },
+      } as never;
+    });
+    try {
+      render(<GuitarSettings />);
+      await act(async () => {});
+      fireEvent.click(screen.getByRole('button', { name: 'Gate' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Measure noise' }));
+      await act(async () => vi.advanceTimersByTimeAsync(1000));
+      interrupted = true;
+      await act(async () => vi.advanceTimersByTimeAsync(8000));
+      expect(saved.guitars[0]).toMatchObject({ noise_dbfs: -68, gate: false });
+      expect(
+        screen.getByRole('button', { name: 'Measure noise' }),
+      ).toBeDisabled();
+      expect(
+        screen.getByText(
+          'Input readings stopped. Start audio and measure again.',
+        ),
+      ).toBeVisible();
+    } finally {
+      vi.useRealTimers();
+    }
+  },
+);
+
 it('matches a measured strum to the first guitar and gates muted-string noise', async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval', 'performance'] });
   saved = {
@@ -141,9 +193,14 @@ it('matches a measured strum to the first guitar and gates muted-string noise', 
     active: 'st',
   };
   let peak = -12.2;
+  let sequence = 0;
   vi.mocked(monitoring).mockImplementation(
     async () =>
-      ({ sequence: 1, audio: { input: [{ peak_dbfs: peak }] } }) as never,
+      ({
+        sequence: ++sequence,
+        audio_age_ms: 100,
+        audio: { input: [{ peak_dbfs: peak }] },
+      }) as never,
   );
   const wait = async () => {
     for (let i = 0; i < 8; i++)

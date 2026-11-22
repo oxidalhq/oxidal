@@ -103,9 +103,12 @@ export function GuitarSettings() {
     id: string;
     kind: 'strum' | 'noise';
     until: number;
-    peak: number;
+    peak: number | null;
   } | null>(null);
-  const [inputLevel, setInputLevel] = useState<number | null>(null);
+  const [input, setInput] = useState<{ ready: boolean; level: number | null }>({
+    ready: false,
+    level: null,
+  });
   const [note, setNote] = useState('');
   const current = useRef(listening);
   function listen(next: typeof listening) {
@@ -114,32 +117,43 @@ export function GuitarSettings() {
   }
   function start(id: string, kind: 'strum' | 'noise') {
     setNote('');
-    listen({ id, kind, until: performance.now() + LISTEN_MS, peak: -120 });
+    listen({ id, kind, until: performance.now() + LISTEN_MS, peak: null });
   }
 
   useMonitorReadings(1000, (feed) => {
     const snapshot = feed.snapshot;
-    const peaks =
-      snapshot?.audio?.input.flatMap((channel) =>
-        channel.peak_dbfs == null ? [] : [channel.peak_dbfs],
-      ) ?? [];
-    setInputLevel(
+    const channels = snapshot?.audio?.input ?? [];
+    const ready =
       !feed.disconnected &&
-        snapshot?.audio_age_ms != null &&
-        snapshot.audio_age_ms < 3000 &&
-        peaks.length
-        ? Math.max(...peaks)
-        : null,
+      snapshot?.audio_age_ms != null &&
+      snapshot.audio_age_ms < 3000 &&
+      channels.length > 0;
+    const peaks = channels.flatMap(({ peak_dbfs }) =>
+      peak_dbfs != null && Number.isFinite(peak_dbfs) ? [peak_dbfs] : [],
     );
+    const level = ready && peaks.length ? Math.max(...peaks) : null;
+    setInput({ ready, level });
     const run = current.current;
     if (!run || profiles == null || profiles === 'unsupported') return;
-    const input = feed.snapshot?.audio?.input ?? [];
-    const peak = Math.max(run.peak, ...input.map((c) => c.peak_dbfs ?? -120));
+    if (!ready) {
+      listen(null);
+      setNote('Input readings stopped. Start audio and measure again.');
+      return;
+    }
+    const peak = level == null ? run.peak : Math.max(run.peak ?? level, level);
     if (performance.now() < run.until) {
       if (peak !== run.peak) listen({ ...run, peak });
       return;
     }
     listen(null);
+    if (peak == null) {
+      setNote(
+        run.kind === 'noise'
+          ? 'No input level measured. Check the guitar input and measure again.'
+          : 'No guitar heard. Start audio, turn the guitar up and strum hard.',
+      );
+      return;
+    }
     const measured = Math.round(peak * 10) / 10;
     const update = (change: Partial<Guitar>, next?: Partial<GuitarProfiles>) =>
       void save({
@@ -149,10 +163,6 @@ export function GuitarSettings() {
           g.id === run.id ? { ...g, ...change } : g,
         ),
       });
-    if (!feed.snapshot?.audio) {
-      setNote('No input. Start audio and measure again.');
-      return;
-    }
     if (run.kind === 'noise') {
       if (peak > NOISE_CEILING_DB) {
         setNote(
@@ -243,14 +253,14 @@ export function GuitarSettings() {
         </CardHeader>
         <Meter
           label="Input"
-          value={inputLevel}
-          state={inputLevel == null ? 'unavailable' : 'live'}
+          value={input.level}
+          state={input.level == null ? 'unavailable' : 'live'}
           size="lg"
         />
         {active && (
           <CardFooter>
             <Button
-              disabled={busy || !!listening}
+              disabled={busy || !!listening || !input.ready}
               onClick={() => {
                 setEditing({ id: active.id, kind: 'trim' });
                 start(active.id, 'strum');
@@ -400,7 +410,7 @@ export function GuitarSettings() {
               <div className="action-row">
                 <Button
                   variant="outline"
-                  disabled={busy || !!listening}
+                  disabled={busy || !!listening || !input.ready}
                   onClick={() => start(open.id, 'strum')}
                 >
                   {listening?.id === open.id && listening.kind === 'strum'
@@ -442,7 +452,7 @@ export function GuitarSettings() {
               <div className="action-row">
                 <Button
                   variant="outline"
-                  disabled={busy || !!listening}
+                  disabled={busy || !!listening || !input.ready}
                   onClick={() => start(open.id, 'noise')}
                 >
                   {listening?.id === open.id && listening.kind === 'noise'
