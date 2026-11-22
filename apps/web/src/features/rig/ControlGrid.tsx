@@ -67,8 +67,8 @@ export function ControlGrid({ rig, vm }: RigViewProps) {
               }}
               aria-pressed={c.toggle ? c.value !== c.minimum : undefined}
               aria-haspopup={c.toggle ? undefined : 'dialog'}
-              aria-label={`Adjust ${controlLabel(c.label)}`}
             >
+              <span className="sr-only">Adjust</span>
               <span className="break-words">{controlLabel(c.label)}</span>
               <strong className="font-mono">{controlDisplay(c)}</strong>
             </Button>

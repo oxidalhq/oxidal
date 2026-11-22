@@ -191,10 +191,10 @@ export function LiveEq<S extends EqSession>({
         </Button>
         <Button
           variant="outline"
-          aria-label="EQ position"
           disabled={locked || !!draft}
           onClick={() => void apply({ kind: 'pre', value: !row.eq.pre })}
         >
+          <span className="sr-only">EQ position</span>
           {row.eq.pre ? 'Before model' : 'After model'}
         </Button>
         <Button
@@ -247,7 +247,6 @@ export function LiveEq<S extends EqSession>({
             key={field}
             type="button"
             className="grid h-auto min-h-touch min-w-0 justify-start gap-0.5 rounded-none border-b border-border px-0 py-1.5 text-left [&>span]:text-sm [&>span]:text-muted-foreground [&>strong]:font-mono [&>strong]:text-base [&>strong]:font-medium [&>strong]:tabular-nums"
-            aria-label={`Adjust EQ ${fields[field].label}`}
             aria-haspopup="dialog"
             disabled={
               locked ||
@@ -256,6 +255,7 @@ export function LiveEq<S extends EqSession>({
             }
             onClick={() => open(field)}
           >
+            <span className="sr-only">Adjust EQ</span>
             <span>{fields[field].label}</span>
             <strong>{display(field, band[field])}</strong>
           </Button>

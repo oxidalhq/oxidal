@@ -1420,9 +1420,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
     const eq = sounding.getByRole('region', { name: 'Block EQ' });
     await expect(eq).toBeVisible();
     const eqBefore = (await (await request.get('/api/v1/audio')).json()).eq[0];
-    await eq
-      .getByRole('button', { name: 'Adjust EQ Gain', exact: true })
-      .click();
+    await eq.getByRole('button', { name: /^Adjust EQ Gain / }).click();
     const eqDialog = eq.getByRole('dialog');
     await eqDialog
       .getByRole('slider', { name: 'Adjust EQ Gain' })
@@ -1441,9 +1439,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
           (await (await request.get('/api/v1/audio')).json()).eq[0].eq,
       )
       .toEqual(eqBefore.eq);
-    await eq
-      .getByRole('button', { name: 'Adjust EQ Gain', exact: true })
-      .click();
+    await eq.getByRole('button', { name: /^Adjust EQ Gain / }).click();
     await eq
       .getByRole('slider', { name: 'Adjust EQ Gain' })
       .press('ArrowRight');
@@ -2584,9 +2580,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
       (c) => JSON.stringify(c.target) === JSON.stringify(nativeGain.target),
     )!.value;
   const openingNative = await nativeValue();
-  await rig
-    .getByRole('button', { name: 'Adjust Output gain', exact: true })
-    .click();
+  await rig.getByRole('button', { name: /^Adjust Output gain / }).click();
   dialog = page.getByRole('dialog');
   await dialog.getByRole('slider').press('ArrowRight');
   await dialog.getByRole('slider').press('ArrowRight');
@@ -2722,7 +2716,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   const eq = rig.getByRole('region', { name: 'Block EQ' });
   await expect(eq).toBeVisible();
   const eqBefore = (await get()).control.eq;
-  await eq.getByRole('button', { name: 'Adjust EQ Gain', exact: true }).click();
+  await eq.getByRole('button', { name: /^Adjust EQ Gain / }).click();
   await page
     .getByRole('slider', { name: 'Adjust EQ Gain' })
     .press('ArrowRight');
@@ -2732,7 +2726,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     .getByRole('button', { name: 'Cancel', exact: true })
     .click();
   await expect.poll(async () => (await get()).control.eq).toEqual(eqBefore);
-  await eq.getByRole('button', { name: 'Adjust EQ Gain', exact: true }).click();
+  await eq.getByRole('button', { name: /^Adjust EQ Gain / }).click();
   await page
     .getByRole('slider', { name: 'Adjust EQ Gain' })
     .press('ArrowRight');
@@ -3870,9 +3864,7 @@ test('mixed rig authoring separates guarded amp/cab stages and saves their live 
     await expect.poll(value).toBeGreaterThan(selected.value);
     await dialog.getByRole('button', { name: 'Done', exact: true }).click();
     changes.push({ node, parameter, value: await value() });
-    await rig
-      .getByRole('button', { name: 'Adjust EQ Gain', exact: true })
-      .click();
+    await rig.getByRole('button', { name: /^Adjust EQ Gain / }).click();
     dialog = page.getByRole('dialog');
     const beforeEq = (await state()).control.eq.find(
       (e: { node: string }) => e.node === node,
