@@ -170,26 +170,6 @@ fn channel_of(message: Message) -> Option<u8> {
     }
 }
 
-fn is_playing(shared: &Shared, item: &ResolvedOccurrence) -> bool {
-    match item.entry.preset.kind {
-        LibraryKind::Owned => shared
-            .playback
-            .snapshot()
-            .configured
-            .as_ref()
-            .and_then(crate::library_removal::native_reference)
-            .is_some_and(|reference| {
-                reference.kind == item.entry.preset.kind && reference.id == item.content
-            }),
-        LibraryKind::Rig => shared
-            .rig_playback
-            .snapshot()
-            .configured
-            .is_some_and(|configured| configured.revision == item.content),
-        _ => false,
-    }
-}
-
 /// Where Previous or Next goes: the neighbour of the playing preset, or the
 /// list's first (Next) or last (Previous) preset when the playing one is not
 /// in it.
@@ -279,14 +259,36 @@ fn owner_session(shared: &Shared, kind: LibraryKind) -> String {
 }
 
 fn playing_index(shared: &Shared, items: &[ResolvedOccurrence]) -> Option<usize> {
+    let native = shared.playback.snapshot();
+    let (session, preset) = if native.phase == AudioPhase::Running {
+        (
+            native.session,
+            crate::library_removal::native_reference(native.configured.as_ref()?)?,
+        )
+    } else {
+        let rig = shared.rig_playback.snapshot();
+        if rig.phase != AudioPhase::Running {
+            return None;
+        }
+        let preset = oxidal_presets::LibraryReference {
+            kind: LibraryKind::Rig,
+            id: rig.configured?.revision,
+        };
+        (rig.session, preset)
+    };
+    let matches_sound =
+        |row: &ResolvedOccurrence| row.entry.preset.kind == preset.kind && row.content == preset.id;
+    let entries = || {
+        items
+            .iter()
+            .enumerate()
+            .filter(|(_, row)| matches_sound(row))
+    };
     let last = shared.set_position.lock().ok()?.clone();
-    last.filter(|p| p.session == owner_session(shared, p.row.entry.preset.kind))
-        .and_then(|playing| {
-            items
-                .iter()
-                .position(|r| r.entry.id == playing.row.entry.id && is_playing(shared, r))
-        })
-        .or_else(|| items.iter().position(|r| is_playing(shared, r)))
+    last.filter(|position| position.session == session)
+        .and_then(|position| entries().find(|(_, row)| row.entry.id == position.row.entry.id))
+        .or_else(|| entries().next())
+        .map(|(index, _)| index)
 }
 
 pub(crate) async fn position(shared: &Arc<Shared>) -> Result<MidiPosition, String> {

@@ -1847,6 +1847,9 @@ async fn repeated_set_entry_confirms_its_scene_before_replacing_the_playing_rig(
     );
 
     apply(&c, &url, json!({"kind":"stop"})).await;
+    let stopped_position = get(&c, &url, "midi/position").await;
+    assert!(stopped_position["index"].is_null());
+    assert!(stopped_position["occurrence"].is_null());
     let already_playing = apply(
         &c,
         &url,
