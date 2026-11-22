@@ -762,6 +762,27 @@ export async function rigLibrary(after?: string): Promise<RigPage> {
   return body;
 }
 
+const blockSettingsValidator = ajv.compile<Contract['block_settings']>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/BlockSettingsLibrary',
+});
+export async function blockSettings(
+  command?: Contract['block_settings_command'],
+) {
+  const response = await fetch(
+    '/api/v1/presets/block-settings',
+    command && {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(command),
+    },
+  );
+  const body = await presetResponse(response);
+  if (!blockSettingsValidator(body))
+    throw new Error('Incompatible block settings library');
+  return body;
+}
+
 /** Copies one TONE3000 file of a saved preset into the library (7.3). */
 export async function importRigResource(
   revision: string,

@@ -37,6 +37,12 @@
     "audio_state": {
       "$ref": "#/$defs/AudioState"
     },
+    "block_settings": {
+      "$ref": "#/$defs/BlockSettingsLibrary"
+    },
+    "block_settings_command": {
+      "$ref": "#/$defs/BlockSettingsCommand"
+    },
     "boost_update": {
       "$ref": "#/$defs/BoostUpdate"
     },
@@ -484,6 +490,8 @@
     "native_defaults_update",
     "rig_document",
     "rig_library",
+    "block_settings",
+    "block_settings_command",
     "rig_publish",
     "capture_rig_request",
     "rig_sleep_plan",
@@ -2863,6 +2871,100 @@
           "type": "string",
           "const": "native"
         }
+      ]
+    },
+    "BlockSettingsCommand": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "entry": {
+              "$ref": "#/$defs/NamedBlockSettings"
+            },
+            "kind": {
+              "type": "string",
+              "const": "create"
+            },
+            "revision": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "revision",
+            "entry"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "entry": {
+              "$ref": "#/$defs/NamedBlockSettings"
+            },
+            "kind": {
+              "type": "string",
+              "const": "replace"
+            },
+            "revision": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "revision",
+            "entry"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "delete"
+            },
+            "revision": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "revision",
+            "id"
+          ]
+        }
+      ]
+    },
+    "BlockSettingsLibrary": {
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NamedBlockSettings"
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "entries"
       ]
     },
     "BoostState": {
@@ -9137,6 +9239,34 @@
           ]
         }
       }
+    },
+    "NamedBlockSettings": {
+      "type": "object",
+      "properties": {
+        "controls": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "format": "float"
+          }
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "plugin": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "plugin",
+        "controls"
+      ]
     },
     "NativeDefaultSettings": {
       "type": "object",

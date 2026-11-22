@@ -523,6 +523,28 @@ export function routeControl(
   return next;
 }
 
+/** Recalls all parameters into the same block in one draft change. */
+export function routeBlockSettings(
+  route: Route,
+  id: string,
+  plugin: string,
+  controls: Record<string, number>,
+): Route {
+  const next = clone(route);
+  const at = locate(next, id);
+  const block = at?.list[at.index];
+  if (
+    !block ||
+    isSplit(block) ||
+    block.kind !== 'lv2' ||
+    block.plugin.uri !== plugin
+  ) {
+    throw new Error('The selected effect changed. Open its settings again.');
+  }
+  block.controls = { ...controls };
+  return next;
+}
+
 /** A path's level (0–4), pan (−1 left … 1 right) and polarity (7.26). */
 export type PathMix = { level: number; pan: number; invert: boolean };
 

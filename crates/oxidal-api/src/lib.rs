@@ -6,6 +6,7 @@ mod audit;
 mod background;
 mod backup;
 mod blends;
+mod block_settings;
 mod boosts;
 mod calibration;
 mod capture;
@@ -205,6 +206,8 @@ pub struct Contract {
     pub native_defaults_update: oxidal_tone3000::preferences::Update,
     pub rig_document: rig_library::RigDocument,
     pub rig_library: rig_library::RigPage,
+    pub block_settings: block_settings::BlockSettingsLibrary,
+    pub block_settings_command: block_settings::BlockSettingsCommand,
     pub rig_publish: rig_library::RigPublish,
     pub capture_rig_request: capture_rig::CaptureRigRequest,
     pub rig_sleep_plan: oxidal_presets::manifest::RigSleepPlan,
@@ -648,6 +651,12 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         )
         .route("/plugins/lv2", get(plugins::catalog))
         .route("/plugins/lv2/artwork", get(plugins::artwork))
+        .route(
+            "/presets/block-settings",
+            get(block_settings::list)
+                .post(block_settings::change)
+                .layer(DefaultBodyLimit::max(32768)),
+        )
         .route("/presets/rig-sources", get(rig_library::native_sources))
         .route("/presets/graphs", get(presets::graphs))
         .route(

@@ -698,7 +698,7 @@ impl Plugin {
                     return Err("Duplicate LV2 control identity".into());
                 }
                 let value = port.default.ok_or("Missing LV2 factory default")?;
-                Self::validate_value(port, value, true)?;
+                port.validate_value(value, true)?;
                 Ok((port.index, value))
             })
             .collect::<Result<Vec<_>, String>>()?;
@@ -723,19 +723,6 @@ impl Plugin {
         !self.failed
     }
 
-    fn validate_value(port: &crate::Port, value: f32, exact_enum: bool) -> Result<(), String> {
-        port.normalize(value)?;
-        if (port.integer && value.fract() != 0.0)
-            || (port.toggled && Some(value) != port.minimum && Some(value) != port.maximum)
-            || (exact_enum
-                && port.enumeration
-                && !port.scale_points.iter().any(|p| p.value == value))
-        {
-            return Err("Expected discrete native value".into());
-        }
-        Ok(())
-    }
-
     fn write_controls(
         &mut self,
         values: &[(u32, f32)],
@@ -753,7 +740,7 @@ impl Plugin {
             if port.index != index || values[..i].iter().any(|(other, _)| *other == index) {
                 return Err("Invalid or duplicate LV2 control port".into());
             }
-            Self::validate_value(port, value, exact_enum)?;
+            port.validate_value(value, exact_enum)?;
             *prior = self.channel_values(index)?;
         }
 

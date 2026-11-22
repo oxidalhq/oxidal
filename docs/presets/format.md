@@ -555,3 +555,11 @@ the selected pointer. A newly staged payload stays hidden from Library until a
 committed default selects it. A non-default version remains accessible through
 its content digest. Keep the complete presets directory in the Library backup,
 including `version-staging`, `library.json` and the retained pre-version catalog.
+
+### Named Oxidal block settings
+
+In Library, open **Edit without playing**, open a bundled Oxidal effect’s Settings and choose **Named settings**. Save as new captures its writable parameters, including declared defaults. The Library keeps separate records for identical names and for each mono or stereo plugin URI. Replace selected and Delete selected act on the selected record. Apply to draft changes that one block. Undo recall restores the previous parameters while they still match the last recall. Save in the offline editor publishes the edited preset. Cancel can discard the draft.
+
+The device serves these records at `/api/v1/presets/block-settings`. GET returns the library revision and entries. POST accepts a create, replace or delete command with the revision read by the caller. Each entry has a stable ID, a name, the plugin URI and native scalar values keyed by port symbol. The device checks the installed writable ports before saving. An outdated revision returns HTTP 409. Records live under `presets/block-settings-v1.json` and travel with a Library backup.
+
+This version supports Bloom, Echo, Motion, Sustain and Moment in the offline mixed-rig editor. Routing, bypass, scene assignments and captured audio stay with their existing owners.

@@ -213,7 +213,7 @@ fn valid_revision(s: &str) -> bool {
         && s.bytes()
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
-async fn job<F, T>(shared: Arc<Shared>, read_only: bool, operation: F) -> Response
+pub(crate) async fn job<F, T>(shared: Arc<Shared>, read_only: bool, operation: F) -> Response
 where
     F: FnOnce(PathBuf) -> Result<T, Error> + Send + 'static,
     T: Serialize + Send + 'static,

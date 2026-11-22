@@ -43,6 +43,7 @@ import {
   type Route,
   routeAddPath,
   routeAppend,
+  routeBlockSettings,
   routeControl,
   routePath,
   routePathMix,
@@ -53,6 +54,8 @@ import {
 } from '../../rigRoute';
 import { keepScenes } from '../../sceneEdit';
 import { readScenes } from '../../sceneFormat';
+import { NamedSettings } from './NamedSettings';
+import { supportsNamedSettings } from './namedSettingValues';
 import { presetNameError } from './newPreset';
 
 /** The scan rate for plugin metadata; nothing is processed here. */
@@ -407,6 +410,17 @@ export function OfflineEditor({
           <details>
             <summary>Settings</summary>
             <div className="control-stack">
+              {supportsNamedSettings(block.plugin.uri) && (
+                <NamedSettings
+                  block={block}
+                  disabled={!connected || busy}
+                  onApply={(values) =>
+                    change((r) =>
+                      routeBlockSettings(r, block.id, block.plugin.uri, values),
+                    )
+                  }
+                />
+              )}
               {ports.map((p) => (
                 <label key={p.symbol} className="field">
                   <span>

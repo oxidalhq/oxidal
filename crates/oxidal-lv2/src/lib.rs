@@ -134,6 +134,20 @@ pub fn scalar_state_complete(info: &PluginInfo) -> bool {
 }
 
 impl Port {
+    /// Checks a native writable value against the declared range and discrete choices.
+    pub fn validate_value(&self, value: f32, exact_enum: bool) -> Result<(), String> {
+        self.normalize(value)?;
+        if (self.integer && value.fract() != 0.0)
+            || (self.toggled && Some(value) != self.minimum && Some(value) != self.maximum)
+            || (exact_enum
+                && self.enumeration
+                && !self.scale_points.iter().any(|p| p.value == value))
+        {
+            return Err("Expected discrete native value".into());
+        }
+        Ok(())
+    }
+
     /// The scale-point name for an exact native value, else three decimals.
     pub fn display(&self, value: f32) -> String {
         self.scale_points

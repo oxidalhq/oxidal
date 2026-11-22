@@ -473,6 +473,22 @@ export type InputMode = "stereo" | "left" | "right" | "dual";
 export type Phase2 = "idle" | "listening" | "done" | "timeout";
 export type ModelPhase = "verifying" | "preparing" | "ready" | "applying" | "applied" | "failed" | "cancelled";
 export type AudioPhase = "unavailable" | "stopped" | "starting" | "running" | "stopping" | "failed";
+export type BlockSettingsCommand =
+  | {
+      entry: NamedBlockSettings;
+      kind: "create";
+      revision: number;
+    }
+  | {
+      entry: NamedBlockSettings;
+      kind: "replace";
+      revision: number;
+    }
+  | {
+      id: string;
+      kind: "delete";
+      revision: number;
+    };
 export type CalibrationAction = "run" | "run_all" | "cancel" | "reset";
 export type CaptureRole = "amp" | "full_rig";
 export type CaptureKind = "di" | "reamp";
@@ -1248,6 +1264,8 @@ export interface Contract {
   audio_probe: AudioProbe;
   audio_probe_result: AudioProbeResult;
   audio_state: AudioState;
+  block_settings: BlockSettingsLibrary;
+  block_settings_command: BlockSettingsCommand;
   boost_update: BoostUpdate;
   boosts: BoostState;
   calibration: CalibrationState;
@@ -1951,6 +1969,18 @@ export interface ModelProgress {
 export interface NativeSlot {
   position: SlotPosition;
   target: string;
+}
+export interface BlockSettingsLibrary {
+  entries: NamedBlockSettings[];
+  revision: number;
+}
+export interface NamedBlockSettings {
+  controls: {
+    [k: string]: number;
+  };
+  id: string;
+  name: string;
+  plugin: string;
 }
 /**
  * Sets one boost; 0 dB removes it.

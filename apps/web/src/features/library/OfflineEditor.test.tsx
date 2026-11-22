@@ -4,11 +4,13 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import {
+  blockSettings,
   importRigResource,
   installedLv2,
   libraryCatalog,
@@ -45,6 +47,7 @@ vi.mock('../../NativeEditor', () => ({
   ),
 }));
 vi.mock('../../api', () => ({
+  blockSettings: vi.fn(),
   installedLv2: vi.fn(),
   libraryCatalog: vi.fn(),
   publishRig: vi.fn(),
@@ -89,10 +92,21 @@ const verb: Lv2Plugin = {
 };
 const fx = (id: string) => ({ ...lv2Effect(verb), id, name: id });
 
-function open(origin: 'mine' | 'oxidal_example' = 'mine', scenes = false) {
+function open(
+  origin: 'mine' | 'oxidal_example' = 'mine',
+  scenes = false,
+  plugin = verb,
+) {
   const manifest = JSON.parse(
-    buildRoute('preset-id', 'Two verbs', [fx('first'), fx('second')], 'prof')
-      .manifest_json,
+    buildRoute(
+      'preset-id',
+      'Two verbs',
+      [
+        { ...fx('first'), plugin },
+        { ...fx('second'), plugin },
+      ],
+      'prof',
+    ).manifest_json,
   );
   if (scenes)
     manifest.extensions['urn:oxidal:scenes:1'] = {
@@ -100,7 +114,7 @@ function open(origin: 'mine' | 'oxidal_example' = 'mine', scenes = false) {
       branches: [{ id: 'first' }],
     };
   vi.mocked(rigDocument).mockResolvedValue({ revision: 'rev', manifest });
-  vi.mocked(installedLv2).mockResolvedValue([verb]);
+  vi.mocked(installedLv2).mockResolvedValue([plugin]);
   vi.mocked(rigLibrary).mockResolvedValue({
     native_profile: 'prof',
     presets: [],
@@ -436,4 +450,67 @@ it('changes block settings of a scene-chain preset and keeps its graph and scene
   expect(request.resources).toMatchObject({
     [manifest.tone3000.instances[0].preset]: edited.source,
   });
+});
+
+it('recalls named block settings into one draft block and undoes the recall before publishing', async () => {
+  const plugin = { ...verb, uri: 'urn:oxidal:plugin:echo#stereo' };
+  vi.mocked(blockSettings).mockResolvedValue({
+    revision: 4,
+    entries: [
+      { id: 'lead', name: 'Lead', plugin: plugin.uri, controls: { mix: 7 } },
+    ],
+  });
+  open('mine', false, plugin);
+  const summaries = await screen.findAllByText('Settings', {
+    selector: 'summary',
+  });
+  fireEvent.click(summaries[0]!);
+  const named = screen.getAllByText('Named settings', {
+    selector: 'summary',
+  })[0]!;
+  fireEvent.click(named);
+  const panel = within(named.closest('details')!);
+  const picker = await screen.findByLabelText('Saved settings for first');
+  await waitFor(() => expect(picker).toHaveTextContent('Lead'));
+  fireEvent.change(picker, { target: { value: 'lead' } });
+  fireEvent.click(panel.getByRole('button', { name: 'Apply to draft' }));
+  expect(screen.getByLabelText('first mix')).toHaveValue('7');
+  const duplicate = {
+    id: 'independent-settings',
+    name: 'Other lead',
+    plugin: plugin.uri,
+    controls: { mix: 7 },
+  };
+  vi.mocked(blockSettings).mockResolvedValueOnce({
+    revision: 5,
+    entries: [duplicate],
+  });
+  fireEvent.change(panel.getByLabelText('New settings name'), {
+    target: { value: 'Other lead' },
+  });
+  fireEvent.click(panel.getByRole('button', { name: 'Save as new settings' }));
+  await waitFor(() =>
+    expect(blockSettings).toHaveBeenCalledWith({
+      kind: 'create',
+      revision: 4,
+      entry: { ...duplicate, id: expect.stringMatching(/^[0-9a-f]{32}$/) },
+    }),
+  );
+  await waitFor(() => expect(picker).toHaveTextContent('Other lead'));
+  fireEvent.change(picker, { target: { value: duplicate.id } });
+  expect(screen.getByLabelText('second mix')).toHaveValue('1');
+  expect(publishRig).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Undo recall' }));
+  expect(screen.getByLabelText('first mix')).toHaveValue('1');
+  fireEvent.click(panel.getByRole('button', { name: 'Apply to draft' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(publishRig).toHaveBeenCalledOnce());
+  const manifest = JSON.parse(
+    vi.mocked(publishRig).mock.calls[0]![0].manifest_json,
+  );
+  expect(
+    manifest.oxidal.lv2.map(
+      (effect: { controls: { mix: number } }) => effect.controls.mix,
+    ),
+  ).toEqual([7, 1]);
 });
