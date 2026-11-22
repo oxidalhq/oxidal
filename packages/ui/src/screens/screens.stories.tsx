@@ -124,7 +124,7 @@ export const LibraryMineFavourites = libraryStory(
 LibraryMineFavourites.play = async ({ canvasElement }) => {
   const canvas = within(canvasElement);
   const page = within(canvasElement.ownerDocument.body);
-  await userEvent.click(canvas.getByRole('button', { name: /Recently used/ }));
+  await userEvent.click(canvas.getByRole('button', { name: /Library order/ }));
   await userEvent.click(page.getByRole('menuitemcheckbox', { name: 'Name' }));
   const stars = () => canvas.getAllByRole('button', { name: /^Favourite / });
   const names = stars().map((b) => b.getAttribute('aria-label') ?? '');

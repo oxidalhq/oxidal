@@ -7513,6 +7513,15 @@
     "LibraryCatalog": {
       "type": "object",
       "properties": {
+        "added_at": {
+          "description": "Milliseconds since the Unix epoch when a preset first joined this device catalog.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
         "created": {
           "description": "The preset a `duplicate` made, in Mine and not in the set list.",
           "anyOf": [

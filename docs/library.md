@@ -21,6 +21,8 @@ sounds.
 **Mine** is one list of your presets, including saved TONE3000 chains. It is
 searchable. Your search and category survive a reload. Clear returns focus to the search field. Each row shows its topology,
 scenes and whether it is ready, with **In set list #N** or **Not in set list**.
+**Newest** puts presets with a recorded date first, including matches on later pages. Older presets whose date is unknown follow in alphabetical order. Editing a preset keeps its original date.
+
 **Play** starts the preset, **Details** shows its description and the **More**
 menu holds the occasional actions:
 

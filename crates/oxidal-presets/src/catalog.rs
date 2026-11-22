@@ -115,6 +115,9 @@ pub struct LibraryItem {
 pub struct LibraryCatalog {
     pub revision: String,
     pub items: Vec<LibraryItem>,
+    /// Milliseconds since the Unix epoch when a preset first joined this device catalog.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub added_at: BTreeMap<String, u64>,
     /// The starter set list was added or declined on this unit; it is offered
     /// at most once automatically.
     #[serde(default)]
@@ -173,6 +176,9 @@ pub struct LibraryUpdate {
 #[serde(deny_unknown_fields)]
 #[derive(Clone)]
 struct Preferences {
+    /// Absent until the existing inventory has been observed once.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    added_at: Option<BTreeMap<String, u64>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     keep_ready: Option<KeepReady>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -241,7 +247,9 @@ impl CatalogStore {
         for item in unseen {
             candidate.order.push(item.kind.key(&item.id)?);
         }
-        if candidate.order != self.preferences.order {
+        let first_inventory = candidate.added_at.is_none() && self.preferences.order.is_empty();
+        candidate.added_at.get_or_insert_with(BTreeMap::new);
+        if first_inventory || candidate.order != self.preferences.order {
             if candidate.order.len() > 4096 {
                 return Err(Error::Invalid("Set list exceeds library capacity"));
             }
@@ -296,6 +304,13 @@ impl CatalogStore {
             return Ok(());
         }
         self.move_keep_ready(candidate, &old, &new)?;
+        if let Some(dates) = candidate.added_at.as_mut() {
+            if let Some(original) = dates.remove(&old) {
+                dates.insert(new.clone(), original);
+            } else {
+                dates.remove(&new);
+            }
+        }
         candidate.order.retain(|key| key != &new);
         match candidate.order.iter().position(|key| key == &old) {
             Some(place) => candidate.order[place] = new.clone(),
@@ -395,6 +410,13 @@ impl CatalogStore {
                         .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
             })
         };
+        if preferences
+            .added_at
+            .as_ref()
+            .is_some_and(|dates| dates.len() > 4096 || dates.keys().any(|key| !valid_key(key)))
+        {
+            return Err(Error::Invalid("Invalid catalog publication dates"));
+        }
         if preferences.labels.iter().any(|(k, v)| {
             !valid_key(k)
                 || v.trim() != v
@@ -481,6 +503,7 @@ impl CatalogStore {
         Ok(LibraryCatalog {
             revision: self.revision.clone(),
             items,
+            added_at: self.preferences.added_at.clone().unwrap_or_default(),
             starter_offered: self.preferences.starter_offered,
             created: None,
         })
@@ -847,7 +870,35 @@ impl CatalogStore {
         order.insert(place, key);
         Ok(())
     }
-    fn persist(&mut self, candidate: Preferences) -> Result<()> {
+    fn persist(&mut self, mut candidate: Preferences) -> Result<()> {
+        if self.preferences.added_at.is_some() || !self.preferences.order.is_empty() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .ok()
+                .and_then(|elapsed| u64::try_from(elapsed.as_millis()).ok());
+            let dates = candidate.added_at.get_or_insert_with(BTreeMap::new);
+            let inventory: BTreeSet<_> = candidate.order.iter().collect();
+            dates.retain(|key, _| inventory.contains(key));
+            for key in &candidate.order {
+                if self.positions.contains_key(key)
+                    || candidate.superseded.contains(key)
+                    || dates.contains_key(key)
+                {
+                    continue;
+                }
+                // Versions keep the original catalog date, including unknown legacy dates.
+                if let Some(now) = now
+                    && !candidate.families.values().any(|family| {
+                        family
+                            .versions
+                            .iter()
+                            .any(|v| family.kind.key(&v.content).is_ok_and(|id| id == *key))
+                    })
+                {
+                    dates.insert(key.clone(), now);
+                }
+            }
+        }
         let revision = candidate.revision()?;
         let bytes = serde_json::to_vec(&candidate)
             .map_err(|_| Error::Invalid("Invalid library preferences"))?;
@@ -933,6 +984,67 @@ impl CatalogStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn catalog_addition_dates_survive_restart_reorder_and_version_saves() {
+        let root =
+            std::env::temp_dir().join(format!("oxidal-catalog-dates-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let row = |letter: &str| LibraryItem {
+            kind: LibraryKind::Rig,
+            id: letter.repeat(64),
+            name: letter.into(),
+            source_name: letter.into(),
+            origin: LibraryOrigin::Mine,
+            archived: false,
+            superseded: false,
+            in_set_list: false,
+        };
+        let legacy = row("a");
+        let fresh = row("b");
+        let saved = row("c");
+        let legacy_saved = row("d");
+        let key = |item: &LibraryItem| item.kind.key(&item.id).unwrap();
+        let mut store = CatalogStore::open(root.clone()).unwrap();
+        assert!(
+            store
+                .reconcile(vec![legacy.clone()])
+                .unwrap()
+                .added_at
+                .is_empty()
+        );
+        let stale = store.revision.clone();
+        let both = vec![legacy.clone(), fresh.clone()];
+        let catalog = store.reconcile(both.clone()).unwrap();
+        let added = catalog.added_at[&key(&fresh)];
+        assert!(added > 0);
+        assert!(!catalog.added_at.contains_key(&key(&legacy)));
+        let move_up = |revision| LibraryUpdate {
+            expected_revision: revision,
+            entry_kind: fresh.kind,
+            id: fresh.id.clone(),
+            action: LibraryAction::Move { up: true },
+        };
+        assert!(store.update(both.clone(), move_up(stale)).is_err());
+        assert_eq!(
+            store
+                .update(both, move_up(catalog.revision))
+                .unwrap()
+                .added_at[&key(&fresh)],
+            added
+        );
+        store.supersede(fresh.kind, &fresh.id, &saved.id).unwrap();
+        store
+            .supersede(legacy.kind, &legacy.id, &legacy_saved.id)
+            .unwrap();
+        let mut reopened = CatalogStore::open(root.clone()).unwrap();
+        let catalog = reopened
+            .reconcile(vec![legacy, fresh, saved.clone(), legacy_saved.clone()])
+            .unwrap();
+        assert_eq!(catalog.added_at[&key(&saved)], added);
+        assert!(!catalog.added_at.contains_key(&key(&legacy_saved)));
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn saving_again_keeps_the_place_name_and_hides_the_earlier_revision() {
         let root = std::env::temp_dir().join(format!("oxidal-supersede-{}", std::process::id()));

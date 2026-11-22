@@ -56,17 +56,13 @@ export type LibraryItem = {
   chain?: { kind: BlockKind; label: string }[];
   /** Plain facts for the details: label and value. */
   facts?: [string, string][];
-  /** For sorting: when it was last used, how often, when it was added (any increasing numbers). */
-  lastUsed?: number;
-  plays?: number;
+  /** Device publication time, when known. */
   added?: number;
 };
 
 const SORTS = [
   { id: 'library', label: 'Library order' },
-  { id: 'recent', label: 'Recently used' },
   { id: 'name', label: 'Name' },
-  { id: 'plays', label: 'Most played' },
   { id: 'added', label: 'Newest' },
 ] as const;
 type SortId = (typeof SORTS)[number]['id'];
@@ -74,13 +70,14 @@ type SortId = (typeof SORTS)[number]['id'];
 function sortItems(items: LibraryItem[], sort: SortId) {
   const by = (pick: (i: LibraryItem) => number) =>
     [...items].sort(
-      (a, b) => pick(b) - pick(a) || a.title.localeCompare(b.title),
+      (a, b) =>
+        pick(b) - pick(a) ||
+        a.title.localeCompare(b.title) ||
+        a.id.localeCompare(b.id),
     );
   if (sort === 'library') return items;
   if (sort === 'name')
     return [...items].sort((a, b) => a.title.localeCompare(b.title));
-  if (sort === 'recent') return by((i) => i.lastUsed ?? 0);
-  if (sort === 'plays') return by((i) => i.plays ?? 0);
   return by((i) => i.added ?? 0);
 }
 
@@ -304,7 +301,7 @@ function ItemDetail({
  * Nothing hides behind a menu.
  *
  * Sorted libraries (everything but the set list) are not dragged: the Sort
- * menu orders them by Recently used, Name, Most played or Newest, and the
+ * menu orders them by Library order, Name or Newest, and the
  * star keeps favourites one tap away with the Favourites filter.
  */
 export function LibraryList({
@@ -332,6 +329,7 @@ export function LibraryList({
   sortable = true,
   onFavourite,
   sortOptions,
+  onSortChange,
   renderRow,
   toolbar,
   className,
@@ -370,6 +368,7 @@ export function LibraryList({
   onFavourite?: (id: string, on: boolean) => void;
   /** Only offer orders supported by the underlying catalog. */
   sortOptions?: readonly SortId[];
+  onSortChange?: (sort: SortId) => void;
   /** Rows in a list with their own details, play and management actions. */
   renderRow?: (
     item: LibraryItem,
@@ -381,9 +380,7 @@ export function LibraryList({
   const searchInput = React.useRef<HTMLInputElement>(null);
   const wide = useMedia('(min-width: 72rem)');
   const [sheet, setSheet] = React.useState(false);
-  const [sort, setSort] = React.useState<SortId>(
-    sortOptions?.[0] ?? (items.some((i) => i.lastUsed) ? 'recent' : 'name'),
-  );
+  const [sort, setSort] = React.useState<SortId>(sortOptions?.[0] ?? 'library');
   const [favouritesOnly, setFavouritesOnly] = React.useState(false);
   const filtered = items.filter(
     (item) =>
@@ -436,7 +433,7 @@ export function LibraryList({
             onChange={(event) => onQuery(event.target.value)}
             // The field's own frame shows focus; the input inside must not add a second ring.
             style={{ outline: 'none' }}
-            className="min-w-0 flex-1 bg-transparent text-sm placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
+            className="min-h-touch min-w-0 flex-1 bg-transparent text-sm placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
           />
           {query && (
             <button
@@ -507,7 +504,10 @@ export function LibraryList({
                     <DropdownMenuCheckboxItem
                       key={s.id}
                       checked={sort === s.id}
-                      onSelect={() => setSort(s.id)}
+                      onSelect={() => {
+                        setSort(s.id);
+                        onSortChange?.(s.id);
+                      }}
                     >
                       {s.label}
                     </DropdownMenuCheckboxItem>

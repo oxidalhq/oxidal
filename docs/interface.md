@@ -88,3 +88,5 @@ acknowledge the setting, audio stops with an error instead of leaving an
 unprotected MIDI path running.
 
 In **Settings → MIDI → Guided setup**, choose a controller and layout, then check each switch. A received switch indicates a new message from the selected input. You can name and save a layout before connecting a pedal. For an expression pedal, assign CC 11 to a continuous preset control, set the heel and toe positions and select a response curve.
+
+In Library, **Newest** sorts by when a preset first joined the device catalog. Renaming a preset, moving its set-list entry and saving another revision preserve that date. Presets from before dates were recorded appear below dated entries in name order.

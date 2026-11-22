@@ -382,3 +382,45 @@ it('returns focus to Mine search after clearing a query', async () => {
   expect(search).toHaveFocus();
   expect(screen.getByText('Factory 1')).toBeVisible();
 });
+
+it('sorts the full paged Library by device addition date and leaves older undated rows last', async () => {
+  const row = (revision: string, name: string) => ({
+    revision,
+    name,
+    origin: 'mine',
+    scenes: [],
+    topology: 'serial',
+    native_instances: 0,
+    lv2_instances: 0,
+  });
+  vi.mocked(rigLibrary)
+    .mockResolvedValueOnce({
+      presets: [row(revisions[0]!, 'A unknown'), row(revisions[1]!, 'B older')],
+      next: 'second',
+    } as never)
+    .mockResolvedValueOnce({
+      presets: [row(revisions[2]!, 'C newest')],
+      next: null,
+    } as never);
+  vi.mocked(libraryCatalog).mockResolvedValueOnce({
+    revision: 'catalog',
+    items: [],
+    added_at: { [`rig:${revisions[1]}`]: 10, [`rig:${revisions[2]}`]: 20 },
+  } as never);
+  render(<SavedRigs connected onOpenRig={() => {}} />);
+  await screen.findByText('A unknown');
+  await userEvent.click(screen.getByRole('button', { name: /Library order/ }));
+  await userEvent.click(
+    screen.getByRole('menuitemcheckbox', { name: 'Newest' }),
+  );
+  const newest = await screen.findByText('C newest');
+  const older = screen.getByText('B older');
+  const unknown = screen.getByText('A unknown');
+  expect(
+    newest.compareDocumentPosition(older) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(
+    older.compareDocumentPosition(unknown) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(rigAudioCommand).not.toHaveBeenCalled();
+});

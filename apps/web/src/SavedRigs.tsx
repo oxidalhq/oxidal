@@ -151,10 +151,14 @@ export function SavedRigs({
   /** Rigs in the set list (Add to / Remove from set list in the menu). */
   const [members, setMembers] = useState<Map<string, number> | null>(null);
   const [notice, setNotice] = useState('');
+  const [addedAt, setAddedAt] = useState<Record<string, number | undefined>>(
+    {},
+  );
   function readMembers() {
     return libraryCatalog()
       .then((catalog) => {
-        if (alive.current)
+        if (alive.current) {
+          setAddedAt(catalog.added_at ?? {});
           setMembers(
             new Map(
               catalog.items
@@ -162,6 +166,7 @@ export function SavedRigs({
                 .map((i, index) => [`${i.kind}:${i.id}`, index + 1]),
             ),
           );
+        }
       })
       .catch(() => {});
   }
@@ -269,7 +274,7 @@ export function SavedRigs({
       .then((saved) => alive.current && setPreparedState(saved))
       .catch(() => {});
     void readRig();
-    if (origin === 'mine') void readMembers();
+    void readMembers();
     return () => {
       alive.current = false;
     };
@@ -303,23 +308,30 @@ export function SavedRigs({
       }
     }
   }
-  async function more() {
-    if (!next) return;
+  async function more(all = false) {
+    if (!next || busy) return;
     setBusy(true);
     clear();
     try {
-      const page = await rigLibrary(next);
-      if (alive.current) {
+      let cursor: string | null = next;
+      const visited = new Set<string>();
+      do {
+        if (visited.has(cursor))
+          throw new Error('The device repeated a Library page');
+        visited.add(cursor);
+        const page: RigPage = await rigLibrary(cursor);
+        if (!alive.current) return;
         setItems((old) => [
           ...old,
           ...page.presets.filter(
             (p) => !old.some((o) => o.revision === p.revision),
           ),
         ]);
-        setNext(page.next ?? null);
-      }
+        cursor = page.next ?? null;
+        setNext(cursor);
+      } while (all && cursor !== null);
     } catch (cause) {
-      if (alive.current) fail(cause, 'load more presets', () => void more());
+      if (alive.current) fail(cause, 'load more presets', () => void more(all));
     } finally {
       if (alive.current) setBusy(false);
     }
@@ -436,6 +448,7 @@ export function SavedRigs({
             title: item.name,
             searchText: presetSearchText(item.name, details[id]),
             favourite: favourites.includes(id),
+            added: addedAt[id],
           };
         })}
         query={query}
@@ -455,7 +468,11 @@ export function SavedRigs({
             : 'Loading presets…',
         }}
         emptyContent={loaded && !category && !next && empty}
-        sortOptions={['library', 'name']}
+        sortable={loaded}
+        sortOptions={['library', 'name', 'added']}
+        onSortChange={(sort) => {
+          if (sort === 'added') void more(true);
+        }}
         primary={primary}
         toolbar={toolbar}
         onOpen={() => {}}

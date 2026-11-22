@@ -2718,6 +2718,12 @@ export interface Inspection {
 }
 export interface LibraryCatalog {
   /**
+   * Milliseconds since the Unix epoch when a preset first joined this device catalog.
+   */
+  added_at?: {
+    [k: string]: number;
+  };
+  /**
    * The preset a `duplicate` made, in Mine and not in the set list.
    */
   created?: LibraryReference | null;
