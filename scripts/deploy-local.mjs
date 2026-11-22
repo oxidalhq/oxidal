@@ -452,6 +452,11 @@ if (wanted.has('lv2')) {
     '--target-dir',
     '/target/lv2',
   ]);
+  docker([
+    'bash',
+    '-lc',
+    'make -C /src/thirdparty/lv2/littlefly/LittleFly nogui',
+  ]);
   const stage = join(work, 'lv2');
   rmSync(stage, { recursive: true, force: true });
   for (const effect of effects) {
@@ -466,6 +471,23 @@ if (wanted.has('lv2')) {
       copyFileSync(join(crate, 'lv2', file), join(bundle, file));
     copyFileSync(join(crate, 'NOTICE'), join(bundle, 'NOTICE'));
   }
+  const littlefly = join(stage, 'littlefly.lv2');
+  mkdirSync(littlefly, { recursive: true });
+  const littleflySource = join(root, 'thirdparty/lv2/littlefly');
+  for (const file of ['manifest.ttl', 'LittleFly.ttl'])
+    copyFileSync(
+      join(littleflySource, 'LittleFly/plugin', file),
+      join(littlefly, file),
+    );
+  copyFileSync(
+    join(littleflySource, 'LittleFly/LittleFly.so'),
+    join(littlefly, 'LittleFly.so'),
+  );
+  copyFileSync(join(littleflySource, 'LICENSE'), join(littlefly, 'LICENSE'));
+  copyFileSync(
+    join(littleflySource, 'README.md'),
+    join(littlefly, 'README.md'),
+  );
   pack(stage, join(work, 'oxidal-lv2.tgz'));
   install('lv2', join(work, 'oxidal-lv2.tgz'));
 }

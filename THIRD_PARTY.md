@@ -52,6 +52,15 @@ their upstream MIT notices:
 - [`native/swell/NOTICE`](native/swell/NOTICE)
 - [`crates/oxidal-nam/NOTICE`](crates/oxidal-nam/NOTICE)
 
+## LittleFly LV2 bundle
+
+Oxidal bundles the DSP-only LittleFly LV2 plugin from
+[brummer10/LittleFly.lv2](https://github.com/brummer10/LittleFly.lv2), pinned at
+`d1d30aeb97de2134e44101eee89ab3f5697fb74f`. Its upstream 0BSD licence is kept
+in [`thirdparty/lv2/littlefly/LICENSE`](thirdparty/lv2/littlefly/LICENSE). The
+optional X11 UI is not included in the appliance bundle; the LV2 DSP binary and
+its upstream Turtle metadata are unchanged.
+
 Rust, JavaScript and system dependencies retain their own licences. The locked
 dependency checks and release process must remain green before distribution.
 

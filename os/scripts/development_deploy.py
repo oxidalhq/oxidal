@@ -87,6 +87,18 @@ HTTP_CERTIFICATE_ROUTES = '''    # Oxidal public certificate: hotspot bootstrap 
 # daemon's LV2_PATH reads. Nothing temporary may sit in that directory: the
 # LV2 host loads every bundle it finds there, hidden ones included.
 LV2_EFFECTS = ('bloom', 'sustain', 'echo', 'motion', 'moment', 'fuzz', 'wah')
+LV2_BUNDLE_FILES = {
+    **{
+        f'oxidal-{effect}.lv2': {
+            'manifest.ttl',
+            f'{effect}.ttl',
+            f'oxidal_{effect}.so',
+            'NOTICE',
+        }
+        for effect in LV2_EFFECTS
+    },
+    'littlefly.lv2': {'manifest.ttl', 'LittleFly.ttl', 'LittleFly.so', 'LICENSE', 'README.md'},
+}
 LV2_DIRECTORY = Path('/usr/local/lib/lv2')
 MAX_FILES = 4096
 MAX_BYTES = 128 * 1024 * 1024
@@ -117,7 +129,7 @@ def splitter_mode(name):
 
 def lv2_bundle_files(effect):
     """The exact files of one effect's bundle."""
-    return {'manifest.ttl', 'NOTICE', f'{effect}.ttl', f'oxidal_{effect}.so'}
+    return LV2_BUNDLE_FILES.get(f'oxidal-{effect}.lv2', set())
 
 
 def lv2_file_allowed(name):
@@ -125,12 +137,7 @@ def lv2_file_allowed(name):
     parts = PurePosixPath(name).parts
     if len(parts) != 2:
         return False
-    match = re.fullmatch(r'oxidal-([a-z]+)\.lv2', parts[0])
-    return bool(
-        match
-        and match[1] in LV2_EFFECTS
-        and parts[1] in lv2_bundle_files(match[1])
-    )
+    return parts[0] in LV2_BUNDLE_FILES and parts[1] in LV2_BUNDLE_FILES[parts[0]]
 
 
 def archive_digest(path):
@@ -197,8 +204,8 @@ def read_archive(path, expected, mode):
         device_binary(files['oxidal-device-service'])
     if mode == 'lv2':
         for bundle in {PurePosixPath(name).parts[0] for name in files}:
-            effect = bundle.removeprefix('oxidal-').removesuffix('.lv2')
-            if any(f'{bundle}/{name}' not in files for name in lv2_bundle_files(effect)):
+            required = LV2_BUNDLE_FILES.get(bundle, set())
+            if any(f'{bundle}/{name}' not in files for name in required):
                 raise ValueError('LV2 archive has an incomplete bundle')
     return files
 

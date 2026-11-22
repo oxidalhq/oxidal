@@ -31,6 +31,11 @@ export const STACK_CREDITS: Credit[] = [
   { role: 'Shown in', name: 'Storybook', href: 'https://storybook.js.org' },
   { role: 'Plugins', name: 'LV2', href: 'https://lv2plug.in' },
   {
+    role: 'Bundled plugin',
+    name: 'LittleFly.lv2',
+    href: 'https://github.com/brummer10/LittleFly.lv2',
+  },
+  {
     role: 'Built with',
     name: 'AgenticFlowX',
     href: 'https://github.com/AgenticFlowX/afx',

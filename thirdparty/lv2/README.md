@@ -18,3 +18,8 @@ they are not silently bundled. The actual bundle must carry its upstream
 
 Oxidal's own Fuzz and Wah are not third-party ports: they are original Rust
 effects in `crates/oxidal-fuzz` and `crates/oxidal-wah`.
+
+LittleFly is pinned in `littlefly/` at upstream commit
+`d1d30aeb97de2134e44101eee89ab3f5697fb74f`, with its 0BSD licence retained.
+Oxidal ships its DSP bundle without the optional X11 UI so the Pi host has no
+GUI dependency.
