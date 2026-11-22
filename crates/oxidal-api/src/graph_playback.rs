@@ -62,12 +62,32 @@ impl Worker {
             .map_err(|e| e.to_string())
     }
 }
+fn forward_midi(
+    previous: &mut Option<oxidal_audio::midi::Status>,
+    next: Option<oxidal_audio::midi::Status>,
+    sender: &mpsc::Sender<crate::midi_recall::Event>,
+) {
+    if let Some(status) = &next {
+        for seen in status.unseen(previous.as_ref().map_or(0, |s| s.events)) {
+            let _ = sender.try_send(crate::midi_recall::Event {
+                message: seen.message,
+                source: seen.source,
+                received_ms: seen.received_ms,
+                local_program: false,
+            });
+        }
+    }
+    *previous = next;
+}
 struct Owner {
     protect: Arc<crate::protect::Protect>,
     change: Arc<Change>,
     levels: Arc<crate::levels::Levels>,
     boot: Arc<Policy>,
     midi_enabled: bool,
+    midi_map: Arc<oxidal_presets::MidiMapStore>,
+    midi_events: mpsc::Sender<crate::midi_recall::Event>,
+    midi_generation: Option<u64>,
     executable: Option<PathBuf>,
     /// Passed to workers so they read renders from the daemon's media store.
     media_dir: Option<PathBuf>,
@@ -195,6 +215,7 @@ impl Owner {
         self.publish();
     }
     fn readback(&mut self, reply: WorkerReply) {
+        forward_midi(&mut self.state.midi, reply.midi, &self.midi_events);
         if self.state.control.as_ref().is_none_or(|old| {
             old.session != reply.control.session || old.revision != reply.control.revision
         }) {
@@ -238,6 +259,8 @@ impl Owner {
         }
         let reserved = worker._permit.take();
         self.worker = None;
+        self.midi_generation = None;
+        self.state.midi = None;
         Ok(reserved)
     }
     async fn fault(&mut self, error: String) -> String {
@@ -656,6 +679,16 @@ impl Owner {
             return Err("Graph worker unavailable".into());
         }
         match command.action {
+            GraphAudioAction::MidiLearn { on } => {
+                if self.state.midi.is_none() {
+                    return Err("Effects MIDI input is unavailable".into());
+                }
+                let reply = self.exchange(&WorkerRequest::MidiLearn { on }).await?;
+                if let Some(error) = reply.error.clone() {
+                    return Err(error);
+                }
+                self.readback(reply);
+            }
             GraphAudioAction::HostUtility { command } => {
                 if self.state.phase != AudioPhase::Running {
                     return Err("Effects audio is not running".into());
@@ -1048,8 +1081,25 @@ impl Owner {
             }
             return;
         }
-        match self.exchange(&WorkerRequest::Status).await {
-            Ok(reply) if reply.error.is_none() => self.readback(reply),
+        let generation = self.midi_map.generation();
+        let refresh = self.state.midi.is_some() && self.midi_generation != Some(generation);
+        let request = if refresh {
+            // A graph has device-wide controls. Its graph parameter bindings use
+            // a separate target format and are not part of this input map.
+            match self.midi_map.settings(None) {
+                Ok(settings) => WorkerRequest::MidiInput { settings },
+                Err(_) => WorkerRequest::MidiInput { settings: None },
+            }
+        } else {
+            WorkerRequest::Status
+        };
+        match self.exchange(&request).await {
+            Ok(reply) if reply.error.is_none() => {
+                if refresh {
+                    self.midi_generation = Some(generation);
+                }
+                self.readback(reply);
+            }
             Ok(_) => {
                 self.fault("Invalid graph status reply".into()).await;
             }
@@ -1102,6 +1152,8 @@ impl GraphPlayback {
         policy: Arc<Policy>,
         levels: Arc<crate::levels::Levels>,
         context: OwnerContext,
+        midi_map: Arc<oxidal_presets::MidiMapStore>,
+        midi_events: mpsc::Sender<crate::midi_recall::Event>,
     ) -> Result<Self, String> {
         let OwnerContext {
             library_access,
@@ -1119,6 +1171,7 @@ impl GraphPlayback {
         let recovery_error = recovery.as_ref().err().cloned();
         let recovered = recovery.ok().flatten();
         let initial = GraphAudioState {
+            midi: None,
             start_on_boot: policy.enabled(Role::Effects),
             waiting_for_device: false,
             telemetry: None,
@@ -1155,6 +1208,9 @@ impl GraphPlayback {
             levels,
             boot: policy.clone(),
             midi_enabled: config.simulator,
+            midi_map,
+            midi_events,
+            midi_generation: None,
             executable: config.graph_worker.clone(),
             media_dir: config.media_dir.clone(),
             preset_root: config.preset_dir.join("graphs"),
@@ -1335,5 +1391,46 @@ pub(super) async fn command(
     match shared.graph_playback.dispatch(command).await {
         Ok(state) => Json(state).into_response(),
         Err(e) => failure(StatusCode::CONFLICT, &e),
+    }
+}
+
+#[cfg(test)]
+mod midi_tests {
+    use super::*;
+    use oxidal_audio::midi::{Message, Status};
+
+    #[test]
+    fn graph_forwards_each_source_message_once_across_polls_learn_and_restart() {
+        let (sender, mut events) = mpsc::channel(8);
+        let mut previous = None;
+        let mut status = Status::default();
+        let cc = |value| Message::Control {
+            channel: 2,
+            controller: 28,
+            value,
+        };
+        status.observe(1, cc(127));
+        status.observe(1, cc(0));
+        for _ in 0..2 {
+            forward_midi(&mut previous, Some(status.clone()), &sender);
+        }
+        let press = events.try_recv().unwrap();
+        assert_eq!(
+            (press.source, press.message, press.local_program),
+            (1, cc(127), false)
+        );
+        assert_eq!(events.try_recv().unwrap().message, cc(0));
+        status.learning = true;
+        status.observe(0, cc(127));
+        forward_midi(&mut previous, Some(status.clone()), &sender);
+        status.learning = false;
+        forward_midi(&mut previous, Some(status), &sender);
+        assert!(events.try_recv().is_err());
+        forward_midi(&mut previous, None, &sender);
+        let mut restarted = Status::default();
+        restarted.observe(0, cc(127));
+        forward_midi(&mut previous, Some(restarted), &sender);
+        assert_eq!(events.try_recv().unwrap().source, 0);
+        assert!(events.try_recv().is_err());
     }
 }

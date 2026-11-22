@@ -497,6 +497,8 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             boot.clone(),
             levels.clone(),
             audio_context(),
+            midi_map.clone(),
+            midi_events.clone(),
         )?,
         rig_playback: rig_playback::RigPlayback::new(
             &config,

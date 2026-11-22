@@ -24,7 +24,11 @@ pub fn dispatch(
         .iter()
         .find(|c| c.target == *parameter)
         .ok_or("MIDI parameter is unavailable")?;
-    let Some(value) = control.midi_descriptor().midi_value(binding.mode, raw)? else {
+    let descriptor = control.midi_descriptor();
+    if binding.expression.is_some() && descriptor.toggle {
+        return Err("Expression pedals need a continuous MIDI target".into());
+    }
+    let Some(value) = descriptor.midi_value(binding.mode, raw)? else {
         return Ok(true);
     };
     if value as f32 != control.value {

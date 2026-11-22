@@ -1009,6 +1009,7 @@ pub fn qualify_scenes(bundle: &Bundle, root: &Path, world: &World) -> Result<()>
             bindings: vec![],
             branch_bindings: vec![],
             parameter_bindings: vec![ParameterBinding {
+                expression: None,
                 target: target.clone(),
                 controller: 21,
                 mode: ControlMode::Absolute,
@@ -1047,6 +1048,7 @@ pub fn qualify_scenes(bundle: &Bundle, root: &Path, world: &World) -> Result<()>
             bindings: vec![],
             branch_bindings: vec![],
             parameter_bindings: vec![ParameterBinding {
+                expression: None,
                 target: Target::Native {
                     node: "removed-node".into(),
                     parameter: "deleted-control".into(),
@@ -1071,6 +1073,7 @@ pub fn qualify_scenes(bundle: &Bundle, root: &Path, world: &World) -> Result<()>
         extra_inputs: vec![],
         branch_bindings: vec![],
         parameter_bindings: vec![ParameterBinding {
+            expression: None,
             target: native_target,
             controller: 21,
             mode: ControlMode::Absolute,

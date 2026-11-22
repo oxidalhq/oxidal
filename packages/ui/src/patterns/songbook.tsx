@@ -21,7 +21,7 @@ import {
 import { Eyebrow } from '../components/ui/text';
 import { parseSong, type Song, type SongFormat } from '../lib/song';
 import { useMedia } from '../lib/use-media';
-import { SheetViewer } from '../widgets/sheet-viewer';
+import { SheetViewer, type SubscribeSheetMidi } from '../widgets/sheet-viewer';
 import { LibraryList } from './library-list';
 
 export type SongbookItem = { id: string; title: string; caption?: string };
@@ -46,6 +46,7 @@ export function Songbook({
   onSize,
   speed,
   onSpeed,
+  subscribeMidi,
   linked,
   notice,
   more,
@@ -67,6 +68,7 @@ export function Songbook({
   onSize: (size: number) => void;
   speed: number;
   onSpeed: (speed: number) => void;
+  subscribeMidi?: SubscribeSheetMidi;
   linked?: string[];
   notice?: ReactNode;
   more?: ReactNode;
@@ -156,6 +158,7 @@ export function Songbook({
               size={size}
               onSize={onSize}
               speed={speed}
+              subscribeMidi={subscribeMidi}
               onSpeed={onSpeed}
               linked={linked}
               className="min-h-0"

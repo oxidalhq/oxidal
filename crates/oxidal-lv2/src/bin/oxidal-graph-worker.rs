@@ -40,6 +40,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             })
             .collect::<Result<_, _>>()?;
         Ok(WorkerReply {
+            midi: None,
             telemetry,
             control,
             native_values,
@@ -107,13 +108,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         reader_stop.store(true, Ordering::Release);
     });
-    let (responses, output) = mpsc::sync_channel::<WorkerReply>(1);
+    enum MidiUpdate {
+        Configure(Option<oxidal_audio::midi::Settings>),
+        Learn(bool),
+    }
+    let (responses, output) = mpsc::sync_channel::<(WorkerReply, Option<MidiUpdate>)>(1);
     let writer_stop = stop.clone();
     std::thread::spawn(move || {
         oxidal_audio::realtime::leave();
         let result = (|| -> Result<(), Box<dyn std::error::Error>> {
             let mut stdout = std::io::stdout().lock();
-            while let Ok(response) = output.recv() {
+            // ALSA discovery, reconnect and MIDI reads belong to this non-realtime
+            // thread. Only the process holding the audio reservation owns these ports.
+            let mut midi = oxidal_audio::midi::Connection::new(None);
+            let mut configured = None;
+            loop {
+                let (mut response, update) = match output.recv_timeout(Duration::from_millis(10)) {
+                    Ok(item) => item,
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        midi.poll(|_, _| Ok(false));
+                        continue;
+                    }
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                };
+                match update {
+                    Some(MidiUpdate::Configure(settings)) if configured != settings => {
+                        let previous_events = midi.status.events;
+                        midi.configure(settings.clone());
+                        midi.status.events = previous_events;
+                        configured = settings;
+                    }
+                    Some(MidiUpdate::Learn(on)) => midi.learn(on),
+                    _ => (),
+                }
+                midi.poll(|_, _| Ok(false));
+                response.midi = Some(midi.status.clone());
                 let mut bytes = serde_json::to_vec(&response)?;
                 if bytes.len() >= REPLY_LIMIT {
                     return Err("Worker reply too large".into());
@@ -175,7 +204,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         settings.stream.input.period_frames * (settings.stream.output.periods - 1),
                     )
             {
-                responses.try_send(reply(&graph, processed, stream.telemetry(), None)?)?;
+                responses.try_send((reply(&graph, processed, stream.telemetry(), None)?, None))?;
                 ready = true;
             }
             if null {
@@ -193,7 +222,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 expiry = Instant::now();
             }
             if let Ok(request) = received.try_recv() {
+                let mut midi_update = None;
                 let error = match request {
+                    WorkerRequest::MidiInput { settings } => {
+                        midi_update = Some(MidiUpdate::Configure(settings));
+                        None
+                    }
+                    WorkerRequest::MidiLearn { on } => {
+                        midi_update = Some(MidiUpdate::Learn(on));
+                        None
+                    }
                     WorkerRequest::HostUtility { command } => {
                         stream.host_utility(command);
                         None
@@ -220,7 +258,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .unwrap_or_else(|| "Effects graph failed".into())
                         .into());
                 }
-                responses.try_send(reply(&graph, processed, stream.telemetry(), error)?)?;
+                responses.try_send((
+                    reply(&graph, processed, stream.telemetry(), error)?,
+                    midi_update,
+                ))?;
             }
         }
     }

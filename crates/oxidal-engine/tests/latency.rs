@@ -1127,6 +1127,7 @@ fn decoded_parameter_cc_uses_confirmed_controls_and_rejects_latency_edits() {
         bindings: vec![],
         branch_bindings: vec![],
         parameter_bindings: vec![ParameterBinding {
+            expression: None,
             target: Target::Merge {
                 node: "merge".into(),
                 port: 0,
@@ -1167,10 +1168,32 @@ fn decoded_parameter_cc_uses_confirmed_controls_and_rejects_latency_edits() {
     let applied = session.snapshot().revision;
     feed(&mut session, &settings, &[0xb1, 20, 127]).unwrap();
     assert_eq!(session.snapshot().revision, applied); // repeated value is not a new edit
+    // A calibrated pedal reaches the same confirmed merge control through decoded CC11.
+    settings.parameter_bindings[0].controller = 11;
+    settings.parameter_bindings[0].expression = Some(oxidal_audio::midi::ExpressionPedal {
+        heel_input: 100,
+        toe_input: 20,
+        heel_output: 0,
+        toe_output: 127,
+        curve: oxidal_audio::midi::ExpressionCurve::SlowStart,
+    });
+    session.snapshot().validate_midi(&settings).unwrap();
+    for (pedal, normalized) in [(110, 0), (60, 32), (15, 127)] {
+        feed(&mut session, &settings, &[0xb1, 11, pedal]).unwrap();
+        let confirmed = control(&session, &target);
+        let expected = confirmed
+            .midi_value(ControlMode::Absolute, normalized)
+            .unwrap()
+            .unwrap();
+        assert!((confirmed.value - expected).abs() < 1e-5);
+    }
+    settings.parameter_bindings[0].controller = 20;
+    settings.parameter_bindings[0].expression = None;
     settings.parameter_bindings[0].mode = ControlMode::RelativeTwosComplement;
     feed(&mut session, &settings, &[0xb1, 20, 127]).unwrap();
     assert!(control(&session, &target).value < control(&session, &target).maximum);
     settings.parameter_bindings[0] = ParameterBinding {
+        expression: None,
         target: Target::Bypass { node: "fx".into() },
         controller: 20,
         mode: ControlMode::Toggle,
@@ -1181,6 +1204,7 @@ fn decoded_parameter_cc_uses_confirmed_controls_and_rejects_latency_edits() {
         1.0
     );
     settings.parameter_bindings[0] = ParameterBinding {
+        expression: None,
         target: Target::Lv2 {
             node: "fx".into(),
             symbol: "delay".into(),

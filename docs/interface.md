@@ -27,9 +27,9 @@ of the page.
 
 ## MIDI defaults
 
-Open **Settings → MIDI** to review or learn controller assignments. A new map starts with CC 7 for master output, CC 16–23 for the eight-scene template, CC 24/25 for previous/next preset, CC 26 for the tuner, CC 27 for tap tempo, CC 28 for a temporary instrument boost, and CC 29 for Protect. CC 80–85 control backing playback. The master uses the same taper as the on-screen fader. Boost adds 3 dB within the existing gain limit and clears when the audio stream closes.
+Open **Settings → MIDI** to review or learn controller assignments. A new map starts with CC 7 for master output, CC 16–23 for the eight-scene template, CC 24/25 for previous/next preset, CC 26 for the tuner, CC 27 for tap tempo, CC 28 for a temporary instrument boost, and CC 29 for Protect. CC 80–85 control backing playback. CC 86 toggles chord-sheet scrolling or advances a page in E-paper and reduced-motion modes. CC 87 sets the scrolling speed. The master uses the same taper as the on-screen fader. Boost adds 3 dB within the existing gain limit and clears when the audio stream closes.
 
-**Reset to default MIDI controls** shows the previous and proposed assignments and identifies conflicts before applying. Existing maps keep their assignments when the software is updated. The review also identifies controls that require a preset-specific target. Native and mixed playback receive hardware MIDI. Effects-only playback exposes its supported controls through the app. [Backing tracks and tempo](media.md)
+**Reset to default MIDI controls** shows the previous and proposed assignments and identifies conflicts before applying. Existing maps keep their assignments when the software is updated. New Mine Rigs inherit the first eight Tone3000 or LV2 bypass switches in graph order (CC 48–55) and the first eight named scene branches in declaration order (CC 56–63). A device-wide assignment takes priority and leaves that slot unassigned inside the rig. Explicitly applying the template to a saved rig replaces its assignments after review. Native and mixed playback receive device-wide actions and assignments for the playing preset. The effects-only worker receives the selected controller inputs for device-wide actions and passive Learn. Its effect parameters remain available in Rig. [Backing tracks and tempo](media.md)
 
 ## Fullscreen and screen timeout
 
@@ -86,3 +86,5 @@ inherits the saved setting, and MIDI reconnection or reconfiguration keeps it.
 Wait for audio preparation to finish before changing Protect. If a worker cannot
 acknowledge the setting, audio stops with an error instead of leaving an
 unprotected MIDI path running.
+
+In **Settings → MIDI → Guided setup**, choose a controller and layout, then check each switch. A received switch indicates a new message from the selected input. You can name and save a layout before connecting a pedal. For an expression pedal, assign CC 11 to a continuous preset control, set the heel and toe positions and select a response curve.

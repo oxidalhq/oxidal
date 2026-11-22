@@ -359,19 +359,12 @@ async fn duplicate(shared: Arc<Shared>, request: oxidal_presets::LibraryUpdate) 
             },
         );
         oxidal_presets::DetailsStore::new(root.clone()).inherit(to.clone(), from.clone())?;
-        let scenes = oxidal_presets::BundleStore::new(root.join("bundles"))
-            .manifest(&made.revision)?
-            .scenes()?
-            .map(|s| {
-                s.scenes
-                    .into_iter()
-                    .map(|scene| scene.id)
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
+        let manifest =
+            oxidal_presets::BundleStore::new(root.join("bundles")).manifest(&made.revision)?;
+        let targets = oxidal_presets::MidiTemplateTargets::from_manifest(&manifest)?;
         let midi = oxidal_presets::MidiMapStore::new(root.clone());
-        if !midi.follow(&from, &to, &scenes)? && !scenes.is_empty() {
-            midi.inherit_template(to.clone(), &scenes)?;
+        if !midi.follow(&from, &to, &targets.scenes)? {
+            midi.inherit_template(to.clone(), &targets)?;
         }
         // Levels are a convenience: the copy itself is already saved.
         let _ = boosts.copy_preset(&made.source_id, &made.id);

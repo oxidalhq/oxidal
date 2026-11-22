@@ -160,6 +160,12 @@ pub struct PluginDefaultsCommand {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkerRequest {
+    MidiInput {
+        settings: Option<oxidal_audio::midi::Settings>,
+    },
+    MidiLearn {
+        on: bool,
+    },
     Tempo {
         bpm: Option<f32>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -190,6 +196,8 @@ pub struct NativeValue {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkerReply {
+    #[serde(default)]
+    pub midi: Option<oxidal_audio::midi::Status>,
     pub telemetry: oxidal_audio::meter::Snapshot,
     pub control: Snapshot,
     pub native_values: Vec<NativeValue>,
@@ -199,6 +207,8 @@ pub struct WorkerReply {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct GraphAudioState {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub midi: Option<oxidal_audio::midi::Status>,
     /// Startup or a lost session is waiting for its audio interface to be
     /// connected; audio starts by itself when it appears (Sprint 07).
     #[serde(default)]
@@ -220,6 +230,9 @@ pub struct GraphAudioState {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum GraphAudioAction {
+    MidiLearn {
+        on: bool,
+    },
     RestorePluginDefaults {
         command: PluginDefaultsCommand,
     },

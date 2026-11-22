@@ -146,6 +146,7 @@ pub fn graph(action: &GraphAudioAction, phase: AudioPhase) -> bool {
     match action {
         GraphAudioAction::HostUtility { command } => utility(command),
         GraphAudioAction::CopyPlaying { .. } | GraphAudioAction::SaveCopy { .. } => true,
+        GraphAudioAction::MidiLearn { on } => !on,
         GraphAudioAction::Restart => phase == AudioPhase::Failed,
         _ => false,
     }

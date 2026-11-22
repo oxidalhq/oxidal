@@ -602,14 +602,16 @@ async fn new_scene_rigs_inherit_the_unit_midi_template() {
                 "nodes": [
                     {"id":"in","kind":"input","audioInputs":0,"audioOutputs":1},
                     {"id":"scene-gain","kind":"gain","audioInputs":1,"audioOutputs":1,"inputGains":[1.0]},
+                    {"id":"echo","kind":"lv2","audioInputs":1,"audioOutputs":1,"instance":"echo","bypassed":false},
                     {"id":"out","kind":"output","audioInputs":1,"audioOutputs":0}
                 ],
                 "edges": [
                     {"from":{"node":"in","port":0},"to":{"node":"scene-gain","port":0}},
-                    {"from":{"node":"scene-gain","port":0},"to":{"node":"out","port":0}}
+                    {"from":{"node":"scene-gain","port":0},"to":{"node":"echo","port":0}},
+                    {"from":{"node":"echo","port":0},"to":{"node":"out","port":0}}
                 ]
             },
-            "lv2": [],
+            "lv2": [{"id":"echo","pluginUri":"urn:test:echo","controls":{},"assets":[],"requiredFeatures":[]}],
             "recall": {"tails":"cut"}
         },
         "resources": [],
@@ -617,6 +619,7 @@ async fn new_scene_rigs_inherit_the_unit_midi_template() {
             "urn:oxidal:gain:1": {},
             "urn:oxidal:scenes:1": {
                 "fade_ms": 10,
+                "branches":[{"id":"wet","name":"Wet","gains":[{"node":"scene-gain","port":0,"value":1.0}]}],
                 "scenes": [
                     {"id":"clean","name":"Clean","gains":[{"node":"scene-gain","port":0,"value":1.0}]},
                     {"id":"lead","name":"Lead","gains":[{"node":"scene-gain","port":0,"value":0.0}]}
@@ -661,6 +664,72 @@ async fn new_scene_rigs_inherit_the_unit_midi_template() {
         .unwrap();
     assert_eq!(reapplied.status(), 200);
     assert_ne!(configured["revision"], inherited["revision"]);
+    assert_eq!(inherited["entries"][0]["branch_bindings"], json!([]));
+    assert_eq!(inherited["entries"][0]["parameter_bindings"], json!([]));
+    let reset: Value = client.post(format!("{url}/midi/map")).json(&json!({
+        "expected_revision":inherited["revision"],"input":null,"channel":1,
+        "template":initial["template"],"navigation":initial["navigation"],"entries":inherited["entries"]
+    })).send().await.unwrap().error_for_status().unwrap().json().await.unwrap();
+    assert_eq!(reset["entries"], inherited["entries"]);
+    let mapped: Value = client
+        .post(format!("{url}/midi/template"))
+        .json(&json!({
+            "expected_revision":reset["revision"],"entry":inherited["entries"][0]["entry"]
+        }))
+        .send()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        mapped["entries"][0]["parameter_bindings"],
+        json!([{"target":{"kind":"bypass","node":"echo"},"controller":48,"mode":"toggle"}])
+    );
+    assert_eq!(
+        mapped["entries"][0]["branch_bindings"],
+        json!([{"branch":"wet","controller":56,"mode":"toggle"}])
+    );
+    let mut fresh = manifest;
+    fresh["id"] = json!("21915afb-b95b-4b74-a88c-537f06d3594b");
+    fresh["name"] = json!("New default rig");
+    let published: Value = client
+        .post(format!("{url}/presets/rigs"))
+        .json(&json!({
+            "manifest_json":fresh.to_string(),"resources":{}
+        }))
+        .send()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let updated: Value = client
+        .get(format!("{url}/midi/map"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let entry = updated["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["entry"]["id"] == published["revision"])
+        .unwrap();
+    assert_eq!(
+        entry["parameter_bindings"],
+        mapped["entries"][0]["parameter_bindings"]
+    );
+    assert_eq!(
+        entry["branch_bindings"],
+        mapped["entries"][0]["branch_bindings"]
+    );
     task.abort();
     let _ = std::fs::remove_file(&mapping);
     let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));

@@ -603,6 +603,7 @@ mod tests {
             extra_inputs: vec![],
             branch_bindings: vec![],
             parameter_bindings: vec![oxidal_audio::midi::ParameterBinding {
+                expression: None,
                 target: oxidal_engine::protocol::Target::Native {
                     node: "amp".into(),
                     parameter: "toneBass".into(),
@@ -725,6 +726,7 @@ mod tests {
             extra_inputs: vec![],
             branch_bindings: vec![],
             parameter_bindings: vec![oxidal_audio::midi::ParameterBinding {
+                expression: None,
                 target: oxidal_engine::protocol::Target::Native {
                     node: "amp".into(),
                     parameter: "toneBass".into(),

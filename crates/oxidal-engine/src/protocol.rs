@@ -887,6 +887,9 @@ impl Snapshot {
                 }
                 return Err("MIDI binding refers to an unavailable control".into());
             };
+            if binding.expression.is_some() && control.toggle {
+                return Err("Expression pedals need a continuous MIDI target".into());
+            }
             control.midi_value(binding.mode, 127)?;
         }
         Ok(())

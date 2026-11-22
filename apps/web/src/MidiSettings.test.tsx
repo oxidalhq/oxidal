@@ -18,6 +18,7 @@ import {
 import { MidiSettings } from './MidiSettings';
 vi.mock('./api', () => ({
   playbackState: vi.fn(),
+  graphAudioState: vi.fn(),
   playbackCommand: vi.fn(),
   rigAudioState: vi.fn(),
   rigAudioCommand: vi.fn(),

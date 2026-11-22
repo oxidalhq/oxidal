@@ -3099,6 +3099,7 @@ fn qualify_live_gestures() -> Result<(), Box<dyn Error>> {
             bindings: vec![],
             branch_bindings: vec![],
             parameter_bindings: vec![ParameterBinding {
+                expression: None,
                 target: ControlTarget::Native {
                     node: "native".into(),
                     parameter: "inputLevel".into(),

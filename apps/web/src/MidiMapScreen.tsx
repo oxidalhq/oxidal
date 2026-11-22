@@ -24,6 +24,7 @@ import { StateNotice } from '@oxidal/design-system/components/states';
 import {
   applyMidiTemplate,
   type AudioState,
+  type GraphAudioState,
   type LibraryCatalog,
   libraryCatalog,
   type MidiAction,
@@ -199,11 +200,13 @@ export function MidiMapScreen({
   connected,
   native,
   mixed,
+  graph,
   onMapApplied,
 }: {
   connected: boolean;
   native: AudioState | null;
   mixed: RigAudioState | null;
+  graph?: GraphAudioState | null;
   onMapApplied: (map: MidiMap) => Promise<void>;
 }) {
   const { failure: recoverFailure, fail: recoverFail } = useFailure();
@@ -244,7 +247,9 @@ export function MidiMapScreen({
       ? native.midi
       : mixed?.phase === 'running'
         ? mixed.control?.midi
-        : null;
+        : graph?.phase === 'running'
+          ? graph.midi
+          : null;
   const activeControl = mixed?.phase === 'running' ? mixed.control : null;
 
   useEffect(() => {
@@ -636,7 +641,7 @@ export function MidiMapScreen({
         status,
         navLearning.after,
         learnSource,
-        navLearning.key === 'output_level'
+        navLearning.key === 'output_level' || navLearning.key === 'sheet_speed'
           ? (message) => message.kind === 'control'
           : isSwitchPress,
       )
@@ -645,7 +650,8 @@ export function MidiMapScreen({
     if (!navLearning || !navMessage || !map) return;
     const key = navLearning.key;
     const trigger =
-      key === 'output_level' && navMessage.kind === 'control'
+      (key === 'output_level' || key === 'sheet_speed') &&
+      navMessage.kind === 'control'
         ? navMessage.controller
         : navMessage.kind === 'program'
           ? { program: navMessage.program, controller: null }
@@ -807,7 +813,9 @@ export function MidiMapScreen({
     (item) => (item.source ?? 0) === learnSource,
   );
   const hasMidiOwner =
-    native?.phase === 'running' || mixed?.phase === 'running';
+    native?.phase === 'running' ||
+    mixed?.phase === 'running' ||
+    (graph?.phase === 'running' && !!graph.midi);
   const canLearn = sourceReady && !busy && !navLearning && !backingLearning;
   const templateChanged =
     templateButtons !== (map.template?.scene_buttons ?? 0) ||
@@ -903,7 +911,7 @@ export function MidiMapScreen({
               {!map.input
                 ? 'MIDI is off'
                 : !hasMidiOwner
-                  ? 'Play a native or mixed rig to receive hardware MIDI.'
+                  ? 'Play a rig with MIDI input to receive controller messages.'
                   : status?.connected
                     ? 'Primary controller connected'
                     : 'Primary controller disconnected'}
@@ -1642,7 +1650,7 @@ export function MidiMapScreen({
                     mappingRow(
                       `parameter:${index}:${targetKey(binding.target)}`,
                       `Control · ${controlNames.get(targetKey(binding.target)) ?? targetFallback(binding.target)}`,
-                      `CC ${binding.controller} · ${words(binding.mode ?? 'absolute')}`,
+                      `CC ${binding.controller} · ${binding.expression ? 'Expression pedal' : words(binding.mode ?? 'absolute')}`,
                       { kind: 'parameter', index },
                       false,
                       (numberUse.get(`cc:${binding.controller}`)?.size ?? 0) >

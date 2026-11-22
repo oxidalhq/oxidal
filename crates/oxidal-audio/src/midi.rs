@@ -135,8 +135,53 @@ impl MappedControl {
 pub struct ParameterBinding {
     pub target: ControlTarget,
     pub controller: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expression: Option<ExpressionPedal>,
     #[serde(default)]
     pub mode: ControlMode,
+}
+/// Pedal travel and target positions are measured in MIDI units (0–127).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ExpressionPedal {
+    pub heel_input: u8,
+    pub toe_input: u8,
+    pub heel_output: u8,
+    pub toe_output: u8,
+    pub curve: ExpressionCurve,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ExpressionCurve {
+    Linear,
+    SlowStart,
+    FastStart,
+}
+impl ExpressionPedal {
+    fn valid(&self) -> bool {
+        self.heel_input != self.toe_input
+            && [
+                self.heel_input,
+                self.toe_input,
+                self.heel_output,
+                self.toe_output,
+            ]
+            .into_iter()
+            .all(|v| v <= 127)
+    }
+    fn position(&self, raw: u8) -> u8 {
+        let travel = ((f64::from(raw) - f64::from(self.heel_input))
+            / (f64::from(self.toe_input) - f64::from(self.heel_input)))
+        .clamp(0., 1.);
+        let shaped = match self.curve {
+            ExpressionCurve::Linear => travel,
+            ExpressionCurve::SlowStart => travel * travel,
+            ExpressionCurve::FastStart => travel.sqrt(),
+        };
+        (f64::from(self.heel_output)
+            + shaped * (f64::from(self.toe_output) - f64::from(self.heel_output)))
+        .round() as u8
+    }
 }
 impl ControlTarget {
     pub fn valid(&self) -> bool {
@@ -283,6 +328,14 @@ impl Settings {
         }
         for (index, binding) in self.parameter_bindings.iter().enumerate() {
             if !binding.target.valid()
+                || binding.expression.as_ref().is_some_and(|pedal| {
+                    !pedal.valid()
+                        || binding.mode != ControlMode::Absolute
+                        || matches!(
+                            binding.target,
+                            ControlTarget::Bypass { .. } | ControlTarget::StompGroup { .. }
+                        )
+                })
                 || (matches!(binding.target, ControlTarget::StompGroup { .. })
                     && binding.mode != ControlMode::Toggle)
                 || binding.controller > 127
@@ -369,7 +422,14 @@ impl Settings {
         self.parameter_bindings
             .iter()
             .find(|b| b.controller == controller)
-            .map(|b| (b, value))
+            .map(|b| {
+                (
+                    b,
+                    b.expression
+                        .as_ref()
+                        .map_or(value, |pedal| pedal.position(value)),
+                )
+            })
     }
     pub fn scene(&self, message: Message) -> Option<&str> {
         let (channel, program, controller) = match message {
@@ -409,6 +469,9 @@ pub const LEARN_WINDOW: std::time::Duration = std::time::Duration::from_secs(30)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Observed {
+    /// Passive learning retains this message for UI readback and suppresses dispatch.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub learned: bool,
     /// Equals `Status::events` after this message; consecutive messages differ by one.
     pub seq: u64,
     pub message: Message,
@@ -458,7 +521,7 @@ impl Status {
         let from = if self.events < previous { 0 } else { previous };
         self.recent
             .iter()
-            .filter(|item| item.seq > from)
+            .filter(|item| item.seq > from && !item.learned)
             .copied()
             .collect()
     }
@@ -470,6 +533,7 @@ impl Status {
             self.recent.remove(0);
         }
         self.recent.push(Observed {
+            learned: self.learning,
             seq: self.events,
             message,
             source,
@@ -921,6 +985,45 @@ impl Connection {
 mod tests {
     use super::*;
     #[test]
+    fn expression_cc_uses_calibrated_travel_curve_and_target_range() {
+        let mut settings: Settings = serde_json::from_value(serde_json::json!({
+            "input":"hw:Controller,0,0","channel":2,"bindings":[],
+            "parameter_bindings":[{"controller":11,"target":{"kind":"native","node":"native","parameter":"toneBass"}}]
+        })).unwrap();
+        let cc = |value| Message::Control {
+            channel: 2,
+            controller: 11,
+            value,
+        };
+        assert_eq!(settings.parameter(cc(60)).unwrap().1, 60);
+        assert!(settings.parameter_bindings[0].expression.is_none());
+        for (curve, midway) in [
+            (ExpressionCurve::Linear, 45),
+            (ExpressionCurve::SlowStart, 65),
+            (ExpressionCurve::FastStart, 28),
+        ] {
+            settings.parameter_bindings[0].expression = Some(ExpressionPedal {
+                heel_input: 100,
+                toe_input: 20,
+                heel_output: 85,
+                toe_output: 5,
+                curve,
+            });
+            settings.validate().unwrap();
+            let restored: Settings =
+                serde_json::from_slice(&serde_json::to_vec(&settings).unwrap()).unwrap();
+            for (value, expected) in [(127, 85), (100, 85), (60, midway), (20, 5), (0, 5)] {
+                assert_eq!(restored.parameter(cc(value)).unwrap().1, expected);
+            }
+        }
+        settings.parameter_bindings[0]
+            .expression
+            .as_mut()
+            .unwrap()
+            .toe_input = 100;
+        assert!(settings.validate().is_err());
+    }
+    #[test]
     fn protect_filters_parameter_edits_before_dispatch_but_keeps_performance_actions() {
         let mut settings = Settings {
             extra_inputs: vec![],
@@ -958,6 +1061,7 @@ mod tests {
             },
         ] {
             settings.parameter_bindings = vec![ParameterBinding {
+                expression: None,
                 target,
                 controller: 21,
                 mode: ControlMode::Absolute,
@@ -1375,6 +1479,30 @@ mod tests {
         );
     }
 
+    #[test]
+    fn passive_events_stay_suppressed_after_learning_ends_between_owner_polls() {
+        let mut status = Status::default();
+        let cc = |value| Message::Control {
+            channel: 1,
+            controller: 28,
+            value,
+        };
+        status.observe(1, cc(127));
+        status.learning = true;
+        status.observe(0, cc(127));
+        status.learning = false;
+        status.observe(1, cc(0));
+        let events = status.unseen(0);
+        assert_eq!(
+            events
+                .iter()
+                .map(|e| (e.seq, e.source, e.message))
+                .collect::<Vec<_>>(),
+            vec![(1, 1, cc(127)), (3, 1, cc(0))]
+        );
+        assert!(status.unseen(status.events).is_empty());
+        assert_eq!(status.recent.len(), 3);
+    }
     #[test]
     fn recent_log_keeps_arrival_order_and_a_detectable_gap_when_full() {
         let mut status = Status::default();

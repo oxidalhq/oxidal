@@ -408,6 +408,8 @@ or conflicting saves keep your draft; read the latest saved text before
 choosing to replace it. A successful save is reported from the device's reply,
 even if the subsequent list refresh fails.
 
+With the default MIDI map, CC 86 toggles auto-scroll in an open chord sheet. In E-paper or reduced-motion mode, each press advances one page. CC 87 sets the scrolling speed from 1 to 10. Each connected viewer keeps its own position. Opening or reconnecting a viewer starts from its current state.
+
 The **Tools → Chord sheet** panel and Stage share the current sheet reader.
 The actual playing preset's link takes precedence over the cued backing
 track's link. Missing links and failed reads are explicit; previous text is

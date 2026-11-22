@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 
 import {
   type AudioState,
+  graphAudioState,
+  type GraphAudioState,
   type MidiMap,
   playbackCommand,
   playbackState,
@@ -19,6 +21,7 @@ import { MidiControls } from './SceneMidi';
 export function MidiSettings({ connected }: { connected: boolean }) {
   const { failure: recoverFailure, fail: recoverFail } = useFailure();
   const [native, setNative] = useState<AudioState | null>(null);
+  const [graph, setGraph] = useState<GraphAudioState | null>(null);
   const [mixed, setMixed] = useState<RigAudioState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -32,13 +35,22 @@ export function MidiSettings({ connected }: { connected: boolean }) {
       let nextDelay = 3000;
       const opening = generation.current;
       try {
-        const [a, b] = await Promise.all([playbackState(), rigAudioState()]);
+        const [a, b, g] = await Promise.all([
+          playbackState(),
+          rigAudioState(),
+          graphAudioState(),
+        ]);
         nextDelay =
           (a.phase === 'running' && a.midi?.connected) ||
-          (b.phase === 'running' && b.control?.midi?.connected)
+          (b.phase === 'running' && b.control?.midi?.connected) ||
+          (g?.phase === 'running' &&
+            !!g.midi &&
+            (g.midi.connected ||
+              g.midi.sources?.some((source) => source.connected)))
             ? 750
             : 3000;
         if (active && !sending.current && opening === generation.current) {
+          setGraph(g);
           setNative(a);
           setMixed(b);
           setError('');
@@ -84,6 +96,7 @@ export function MidiSettings({ connected }: { connected: boolean }) {
       ? {
           input: map.input,
           channel: map.channel,
+          extra_inputs: map.extra_inputs ?? [],
           bindings: entry?.bindings ?? [],
           branch_bindings: entry?.branch_bindings ?? [],
           parameter_bindings: entry?.parameter_bindings ?? [],
@@ -127,6 +140,7 @@ export function MidiSettings({ connected }: { connected: boolean }) {
         connected={connected && !busy && !error}
         native={native}
         mixed={mixed}
+        graph={graph}
         onMapApplied={syncPlayingMap}
       />
       <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
@@ -215,7 +229,9 @@ export function MidiSettings({ connected }: { connected: boolean }) {
           <p className="caption">
             {!native || !mixed
               ? 'Reading the playing preset…'
-              : 'Play a preset to add or edit its scene and control mappings.'}
+              : graph?.phase === 'running' && graph.midi
+                ? 'This effects rig receives device-wide MIDI controls.'
+                : 'Play a preset to add or edit its scene and control mappings.'}
           </p>
         )}
         {(activeNative || activeMixed) && (

@@ -12,6 +12,8 @@ export type NavigationKey =
   | 'tap'
   | 'boost'
   | 'protect'
+  | 'sheet_scroll'
+  | 'sheet_speed'
   | 'output_level';
 type Trigger = NonNullable<Navigation['previous']>;
 
@@ -25,6 +27,8 @@ const rows: [NavigationKey, string][] = [
   ['boost', 'Temporary boost'],
   ['protect', 'Protect'],
   ['output_level', 'Output level'],
+  ['sheet_scroll', 'Chord sheet scroll'],
+  ['sheet_speed', 'Chord sheet speed'],
 ];
 
 /** Shows both the friendly and the raw MIDI number so neither is guessed. */
@@ -79,7 +83,7 @@ export function PresetNavigation({
               <span className="midi-row-label">{label}</span>
               <code className="midi-address">
                 {active
-                  ? key === 'output_level'
+                  ? key === 'output_level' || key === 'sheet_speed'
                     ? 'Move the control…'
                     : 'Press the switch…'
                   : triggerText(assigned)}

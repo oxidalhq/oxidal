@@ -149,6 +149,62 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
     pending.abort();
     s = wait(&c, &url, "running").await;
     assert_eq!(s["device_owned"], true);
+    // Configure genuinely missing inputs on the running graph. Its readback must
+    // track durable map changes and passive Learn without touching DSP revision.
+    let map = get(&c, &url, "midi/map").await;
+    let response = c
+        .post(format!("{url}/midi/map"))
+        .json(&json!({
+            "expected_revision": map["revision"], "input":"hw:AbsentController,0,0",
+            "channel":1, "extra_inputs":[{"input":"hw:AbsentSecond,0,0","channel":2}],
+            "navigation":map["navigation"],"entries":[]
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            s = get(&c, &url, "graph-audio").await;
+            if s["midi"]["sources"]
+                .as_array()
+                .is_some_and(|v| v.len() == 1)
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(30)).await;
+        }
+    })
+    .await
+    .expect("worker acknowledged updated primary and second MIDI inputs");
+    assert_eq!(s["midi"]["connected"], false);
+    assert_eq!(s["midi"]["sources"][0]["connected"], false);
+    let revision = s["revision"].clone();
+    for on in [true, false] {
+        let response = c
+            .post(format!("{url}/midi/learn"))
+            .json(&json!({"on":on}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 204);
+        s = get(&c, &url, "graph-audio").await;
+        assert_eq!(s["midi"]["learning"], on);
+        assert_eq!(s["revision"], revision);
+    }
+    let map = get(&c, &url, "midi/map").await;
+    assert_eq!(
+        c.post(format!("{url}/midi/map"))
+            .json(&json!({
+                "expected_revision":map["revision"], "input":null,"channel":1,
+                "navigation":map["navigation"],"entries":[]
+            }))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
     let host_controls = s["control"].clone();
     for (path, key, enabled) in [
         ("mute", "output_muted", true),

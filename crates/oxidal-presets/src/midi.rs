@@ -288,6 +288,12 @@ pub struct Navigation {
     /// Toggle the device performance lock.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub protect: Option<Trigger>,
+    /// Toggle automatic scrolling in open chord-sheet viewers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sheet_scroll: Option<Trigger>,
+    /// Continuous CC for chord-sheet scrolling speed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sheet_speed: Option<u8>,
     /// Continuous CC for the unit master output level.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_level: Option<u8>,
@@ -364,6 +370,10 @@ pub enum DeviceAction {
     BackingPrevious,
     BackingSkipBack,
     BackingSkipForward,
+    SheetScroll,
+    SheetSpeed {
+        value: u8,
+    },
     BackingRepeat,
     BackingClick,
     /// The level CC moved to this value.
@@ -382,6 +392,8 @@ impl Navigation {
             && self.tap.is_none()
             && self.boost.is_none()
             && self.protect.is_none()
+            && self.sheet_scroll.is_none()
+            && self.sheet_speed.is_none()
             && self.output_level.is_none()
             && self.backing.is_empty()
     }
@@ -402,6 +414,8 @@ impl Navigation {
             Some(DeviceAction::TapTempo)
         } else if self.boost.is_some_and(|t| t.matches(message)) {
             Some(DeviceAction::BoostToggle)
+        } else if self.sheet_scroll.is_some_and(|t| t.matches(message)) {
+            Some(DeviceAction::SheetScroll)
         } else if self.protect.is_some_and(|t| t.matches(message)) {
             Some(DeviceAction::ProtectToggle)
         } else {
@@ -410,6 +424,11 @@ impl Navigation {
                     controller, value, ..
                 } if self.output_level == Some(controller) => {
                     Some(DeviceAction::OutputLevel { value })
+                }
+                Message::Control {
+                    controller, value, ..
+                } if self.sheet_speed == Some(controller) => {
+                    Some(DeviceAction::SheetSpeed { value })
                 }
                 _ => self.backing_action(message),
             }
@@ -453,6 +472,7 @@ impl Navigation {
             self.tap,
             self.boost,
             self.protect,
+            self.sheet_scroll,
         ]
         .into_iter()
         .chain(self.backing.triggers())
@@ -466,13 +486,18 @@ impl Navigation {
         {
             return Err(Error::Invalid("Invalid MIDI navigation control"));
         }
-        let knobs = [self.output_level, self.backing.level];
-        if (self.output_level.is_some() && self.output_level == self.backing.level)
+        let knobs = [self.output_level, self.backing.level, self.sheet_speed];
+        if knobs
+            .iter()
+            .enumerate()
+            .any(|(i, knob)| knob.is_some() && knobs[..i].contains(knob))
             || knobs.into_iter().flatten().any(|cc| {
                 cc > 127 || matches!(cc, 0 | 32) || all.iter().any(|t| t.controller == Some(cc))
             })
         {
-            return Err(Error::Invalid("Each level CC must be its own controller"));
+            return Err(Error::Invalid(
+                "Each continuous CC must be its own controller",
+            ));
         }
         let taken = |program: Option<u8>, controller: Option<u8>| {
             self.triggers().any(|t| {
@@ -554,6 +579,36 @@ fn saved_layouts_valid(layouts: &[SavedLayout]) -> Result<()> {
 pub struct MidiTemplate {
     pub scene_buttons: u8,
     pub first_controller: u8,
+    /// Also map bypassable blocks and named branches in each mixed rig.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub block_switches: bool,
+}
+
+/// Stable worker target identifiers in the preset's authored order.
+#[derive(Debug, Default)]
+pub struct MidiTemplateTargets {
+    pub scenes: Vec<String>,
+    blocks: Vec<String>,
+    branches: Vec<String>,
+}
+
+impl MidiTemplateTargets {
+    pub fn from_manifest(manifest: &crate::manifest::Manifest) -> Result<Self> {
+        use crate::manifest::NodeKind;
+        let mut targets = Self::default();
+        if let Some(set) = manifest.scenes()? {
+            targets.scenes = set.scenes.into_iter().map(|scene| scene.id).collect();
+            targets.branches = set.branches.into_iter().map(|branch| branch.id).collect();
+        }
+        targets.blocks = manifest
+            .oxidal
+            .iter()
+            .flat_map(|rig| &rig.graph.nodes)
+            .filter(|node| matches!(node.kind, NodeKind::Tone3000 | NodeKind::Lv2))
+            .map(|node| node.id.clone())
+            .collect();
+        Ok(targets)
+    }
 }
 
 impl MidiTemplate {
@@ -649,12 +704,21 @@ fn revision(book: &Book) -> Result<String> {
 
 #[derive(Debug)]
 pub struct MidiMapStore {
+    generation: AtomicU64,
     root: PathBuf,
 }
 
 impl MidiMapStore {
     pub fn new(root: PathBuf) -> Self {
-        Self { root }
+        Self {
+            root,
+            generation: AtomicU64::new(0),
+        }
+    }
+
+    /// Allows a running worker to refresh its input settings after a durable map change.
+    pub fn generation(&self) -> u64 {
+        self.generation.load(Ordering::Acquire)
     }
 
     fn read(&self) -> Result<Book> {
@@ -745,6 +809,7 @@ impl MidiMapStore {
             file.sync_all()?;
             fs::rename(&temporary, self.root.join("midi-map.json"))?;
             File::open(&self.root)?.sync_all()?;
+            self.generation.fetch_add(1, Ordering::Release);
             Ok(())
         })();
         if result.is_err() {
@@ -949,7 +1014,12 @@ impl MidiMapStore {
         self.snapshot()
     }
 
-    fn template_map(template: MidiTemplate, scenes: &[String]) -> Result<PresetMap> {
+    fn template_map(
+        template: MidiTemplate,
+        targets: &MidiTemplateTargets,
+        navigation: &Navigation,
+    ) -> Result<PresetMap> {
+        let scenes = &targets.scenes;
         template.validate()?;
         let mut unique = BTreeSet::new();
         if scenes.len() > 1024
@@ -959,7 +1029,7 @@ impl MidiMapStore {
         {
             return Err(Error::Invalid("Invalid MIDI template scene list"));
         }
-        Ok(PresetMap {
+        let mut mapping = PresetMap {
             disabled: vec![],
             bindings: scenes
                 .iter()
@@ -973,7 +1043,47 @@ impl MidiMapStore {
                 .collect(),
             branch_bindings: vec![],
             parameter_bindings: vec![],
-        })
+        };
+        if template.block_switches {
+            // Keep the original ordinal when a controller is already in use.
+            // A skipped switch must never silently operate the next block.
+            let mut reserved: BTreeSet<_> = navigation
+                .triggers()
+                .filter_map(|trigger| trigger.controller)
+                .chain(navigation.output_level)
+                .chain(navigation.sheet_speed)
+                .chain(navigation.backing.level)
+                .collect();
+            mapping
+                .bindings
+                .retain(|binding| binding.controller.is_none_or(|cc| !reserved.contains(&cc)));
+            reserved.extend(
+                mapping
+                    .bindings
+                    .iter()
+                    .filter_map(|binding| binding.controller),
+            );
+            mapping.parameter_bindings = (48..=55)
+                .zip(&targets.blocks)
+                .filter(|(controller, _)| !reserved.contains(controller))
+                .map(|(controller, node)| ParameterBinding {
+                    expression: None,
+                    target: ControlTarget::Bypass { node: node.clone() },
+                    controller,
+                    mode: oxidal_audio::midi::ControlMode::Toggle,
+                })
+                .collect();
+            mapping.branch_bindings = (56..=63)
+                .zip(&targets.branches)
+                .filter(|(controller, _)| !reserved.contains(controller))
+                .map(|(controller, branch)| BranchBinding {
+                    branch: branch.clone(),
+                    controller,
+                    mode: oxidal_audio::midi::BranchMode::Toggle,
+                })
+                .collect();
+        }
+        Ok(mapping)
     }
 
     /// Replace one preset's local assignments with the current unit template.
@@ -981,7 +1091,7 @@ impl MidiMapStore {
         &self,
         expected_revision: &str,
         entry: LibraryReference,
-        scenes: &[String],
+        targets: &MidiTemplateTargets,
     ) -> Result<MidiMap> {
         let key = entry.kind.key(&entry.id)?;
         let lock = self.lock()?;
@@ -992,12 +1102,13 @@ impl MidiMapStore {
         let template = book
             .template
             .ok_or(Error::Invalid("Choose a MIDI controller template first"))?;
-        let mapping = Self::template_map(template, scenes)?;
+        let mapping = Self::template_map(template, targets, &book.navigation)?;
         if mapping.empty() {
-            book.entries.remove(&key);
-        } else {
-            book.entries.insert(key, mapping);
+            return Err(Error::Invalid(
+                "No available targets for this MIDI template",
+            ));
         }
+        book.entries.insert(key, mapping);
         self.write(&book)?;
         drop(lock);
         self.snapshot()
@@ -1005,7 +1116,11 @@ impl MidiMapStore {
 
     /// Give a newly published scene preset the unit template once. Retrying a
     /// publication never overwrites an explicit map the musician already made.
-    pub fn inherit_template(&self, entry: LibraryReference, scenes: &[String]) -> Result<()> {
+    pub fn inherit_template(
+        &self,
+        entry: LibraryReference,
+        targets: &MidiTemplateTargets,
+    ) -> Result<()> {
         let key = entry.kind.key(&entry.id)?;
         let _lock = self.lock()?;
         let mut book = self.read()?;
@@ -1015,7 +1130,7 @@ impl MidiMapStore {
         let Some(template) = book.template else {
             return Ok(());
         };
-        let mapping = Self::template_map(template, scenes)?;
+        let mapping = Self::template_map(template, targets, &book.navigation)?;
         if !mapping.empty() {
             book.entries.insert(key, mapping);
             self.write(&book)?;
@@ -1276,6 +1391,7 @@ mod tests {
             mode: BranchMode::Toggle,
         };
         let parameter = |target, controller| ParameterBinding {
+            expression: None,
             target,
             controller,
             mode: ControlMode::Absolute,
@@ -1620,6 +1736,8 @@ mod tests {
             tap: None,
             boost: None,
             protect: None,
+            sheet_scroll: None,
+            sheet_speed: None,
             output_level: None,
         };
         let saved = store
@@ -1639,6 +1757,8 @@ mod tests {
                 tap: None,
                 boost: None,
                 protect: None,
+                sheet_scroll: None,
+                sheet_speed: None,
                 output_level: None,
             },
             // Mute may not reuse Previous either.
@@ -1652,6 +1772,8 @@ mod tests {
                 tap: None,
                 boost: None,
                 protect: None,
+                sheet_scroll: None,
+                sheet_speed: None,
                 output_level: None,
             },
             Navigation {
@@ -1667,6 +1789,8 @@ mod tests {
                 tap: None,
                 boost: None,
                 protect: None,
+                sheet_scroll: None,
+                sheet_speed: None,
                 output_level: None,
             },
             Navigation {
@@ -1682,6 +1806,8 @@ mod tests {
                 tap: None,
                 boost: None,
                 protect: None,
+                sheet_scroll: None,
+                sheet_speed: None,
                 output_level: None,
             },
         ] {
@@ -1819,6 +1945,7 @@ mod tests {
             template: Some(MidiTemplate {
                 scene_buttons: 2,
                 first_controller: 40,
+                block_switches: false,
             }),
             navigation: Navigation {
                 previous: Some(Trigger {
@@ -1833,6 +1960,8 @@ mod tests {
                 tap: None,
                 boost: None,
                 protect: None,
+                sheet_scroll: None,
+                sheet_speed: None,
                 output_level: None,
             },
         };
@@ -2015,6 +2144,72 @@ mod tests {
     }
 
     #[test]
+    fn block_defaults_use_fixed_slots_and_leave_other_assignments_in_place() {
+        let root = root("block-defaults");
+        let store = MidiMapStore::new(root.clone());
+        let mut book = store.read().unwrap();
+        let targets = MidiTemplateTargets {
+            scenes: vec!["scene".into()],
+            blocks: (0..10).map(|i| format!("block-{i}")).collect(),
+            branches: (0..10).map(|i| format!("path-{i}")).collect(),
+        };
+        book.navigation.mute = Some(Trigger {
+            program: None,
+            controller: Some(49),
+        });
+        book.navigation.backing.level = Some(57);
+        store.write(&book).unwrap();
+        let preset = entry('a');
+        store.inherit_template(preset.clone(), &targets).unwrap();
+        let initial = store.snapshot().unwrap();
+        let mapped = &initial.entries[0];
+        let cc = |number: u8| !matches!(number, 49 | 57);
+        let blocks: Vec<_> = (48..=55)
+            .filter(|n| cc(*n))
+            .map(|n| ParameterBinding {
+                expression: None,
+                controller: n,
+                target: ControlTarget::Bypass {
+                    node: format!("block-{}", n - 48),
+                },
+                mode: oxidal_audio::midi::ControlMode::Toggle,
+            })
+            .collect();
+        let branches: Vec<_> = (56..=63)
+            .filter(|n| cc(*n))
+            .map(|n| BranchBinding {
+                controller: n,
+                branch: format!("path-{}", n - 56),
+                mode: oxidal_audio::midi::BranchMode::Toggle,
+            })
+            .collect();
+        assert_eq!(mapped.parameter_bindings, blocks);
+        assert_eq!(mapped.branch_bindings, branches);
+        assert_eq!(mapped.bindings[0].controller, Some(16));
+        // Only explicit application can change a preset that already has a map.
+        let replacement = MidiTemplateTargets {
+            blocks: vec!["replacement".into()],
+            ..Default::default()
+        };
+        store
+            .inherit_template(preset.clone(), &replacement)
+            .unwrap();
+        assert_eq!(store.snapshot().unwrap(), initial);
+        let reset = store
+            .apply_template(&initial.revision, preset, &replacement)
+            .unwrap();
+        assert_eq!(
+            reset.entries[0].parameter_bindings[0].target,
+            ControlTarget::Bypass {
+                node: "replacement".into()
+            }
+        );
+        assert!(reset.entries[0].branch_bindings.is_empty());
+        assert_eq!(MidiMapStore::new(root.clone()).snapshot().unwrap(), reset);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn scene_template_applies_and_new_presets_inherit_once() {
         let root = root("template");
         let store = MidiMapStore::new(root.clone());
@@ -2030,6 +2225,7 @@ mod tests {
                 template: Some(MidiTemplate {
                     scene_buttons: 4,
                     first_controller: 40,
+                    block_switches: false,
                 }),
                 entries: vec![],
             })
@@ -2043,7 +2239,14 @@ mod tests {
         ];
         let first = entry('a');
         let applied = store
-            .apply_template(&configured.revision, first.clone(), &scenes)
+            .apply_template(
+                &configured.revision,
+                first.clone(),
+                &MidiTemplateTargets {
+                    scenes: scenes.clone(),
+                    ..Default::default()
+                },
+            )
             .unwrap();
         assert_eq!(applied.entries[0].bindings.len(), 4);
         assert_eq!(applied.entries[0].bindings[0].controller, Some(40));
@@ -2051,7 +2254,13 @@ mod tests {
 
         let second = entry('b');
         store
-            .inherit_template(second.clone(), &scenes[..2])
+            .inherit_template(
+                second.clone(),
+                &MidiTemplateTargets {
+                    scenes: scenes[..2].to_vec(),
+                    ..Default::default()
+                },
+            )
             .unwrap();
         assert_eq!(
             store
@@ -2064,7 +2273,15 @@ mod tests {
         );
         let manual = settings(9);
         store.configure(second.clone(), manual.clone()).unwrap();
-        store.inherit_template(second.clone(), &scenes).unwrap();
+        store
+            .inherit_template(
+                second.clone(),
+                &MidiTemplateTargets {
+                    scenes: scenes.clone(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
         assert_eq!(
             store.settings(Some(&second)).unwrap().unwrap().bindings,
             manual.bindings
@@ -2080,6 +2297,7 @@ mod tests {
             template: Some(MidiTemplate {
                 scene_buttons: 8,
                 first_controller: 28,
+                block_switches: false,
             }),
             entries: vec![],
         });
@@ -2165,6 +2383,7 @@ mod tests {
             (83, DeviceAction::BackingNext),
             (84, DeviceAction::BackingRepeat),
             (85, DeviceAction::BackingClick),
+            (86, DeviceAction::SheetScroll),
         ] {
             let message = |value| Message::Control {
                 channel: 1,
@@ -2177,7 +2396,15 @@ mod tests {
         let path = root.join("midi-map.json");
         assert!(!path.exists());
         let scenes: Vec<_> = (1..=9).map(|i| format!("scene-{i}")).collect();
-        store.inherit_template(entry('a'), &scenes).unwrap();
+        store
+            .inherit_template(
+                entry('a'),
+                &MidiTemplateTargets {
+                    scenes: scenes.clone(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
         let saved = MidiMapStore::new(root.clone()).snapshot().unwrap();
         assert_eq!(saved.navigation, initial.navigation);
         let bindings = &saved.entries[0].bindings;
@@ -2236,6 +2463,38 @@ mod tests {
         };
         assert!(clash.validate(&BTreeMap::new()).is_err());
     }
+    #[test]
+    fn sheet_controls_respect_existing_maps_and_reserved_ccs() {
+        let nav = Book::default().navigation;
+        let cc = |controller, value| Message::Control {
+            channel: 1,
+            controller,
+            value,
+        };
+        assert_eq!(nav.action(cc(86, 0)), None);
+        assert_eq!(
+            nav.action(cc(87, 0)),
+            Some(DeviceAction::SheetSpeed { value: 0 })
+        );
+        assert_eq!(
+            nav.action(cc(87, 126)),
+            Some(DeviceAction::SheetSpeed { value: 126 })
+        );
+        let old: Navigation = serde_json::from_str("{}").unwrap();
+        assert_eq!(old.action(cc(86, 127)), None);
+        assert_eq!(old.action(cc(87, 127)), None);
+        for shared_cc in [7, 24, 86, 32] {
+            assert!(
+                Navigation {
+                    sheet_speed: Some(shared_cc),
+                    ..nav
+                }
+                .validate(&BTreeMap::new())
+                .is_err()
+            );
+        }
+    }
+
     #[test]
     fn backing_loop_and_click_respond_only_to_their_assigned_presses() {
         let nav: Navigation = serde_json::from_value(serde_json::json!({

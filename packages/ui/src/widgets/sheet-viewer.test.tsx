@@ -1,9 +1,9 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 
 import { parseSong } from '../lib/song';
-import { SheetViewer } from './sheet-viewer';
+import { type SheetMidiCommand,SheetViewer } from './sheet-viewer';
 
 afterEach(() => {
   cleanup();
@@ -92,4 +92,33 @@ it('stops continuous scrolling on a display-mode change and does not resume on r
       screen.getByRole('button', { name: 'Start scrolling' }),
     ).toHaveAttribute('aria-pressed', 'false'),
   );
+});
+
+it('applies hardware scroll and speed to the mounted sheet and advances pages on E-paper', () => {
+  let command!: (value: SheetMidiCommand) => void;
+  const onSpeed = vi.fn();
+  const subscribe = (listener: typeof command) => {
+    command = listener;
+    return () => {};
+  };
+  const view = render(
+    <SheetViewer song={SONG} onSpeed={onSpeed} subscribeMidi={subscribe} />,
+  );
+  act(() => command({ presses: 1, speed: 10 }));
+  expect(onSpeed).toHaveBeenCalledWith(10);
+  expect(screen.getByRole('button', { name: 'Pause scrolling' })).toBeVisible();
+  act(() => command({ presses: 1 }));
+  expect(screen.getByRole('button', { name: 'Start scrolling' })).toBeVisible();
+  view.unmount();
+  document.documentElement.dataset.display = 'epaper';
+  render(
+    <SheetViewer song={SONG} onSpeed={onSpeed} subscribeMidi={subscribe} />,
+  );
+  const words = screen.getByRole('document');
+  Object.defineProperties(words, {
+    clientHeight: { value: 200 },
+    scrollHeight: { value: 1000 },
+  });
+  act(() => command({ presses: 2 }));
+  expect(words.scrollTop).toBe(360);
 });

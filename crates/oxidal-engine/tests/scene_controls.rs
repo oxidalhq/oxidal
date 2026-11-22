@@ -256,6 +256,7 @@ fn stomp_group_touch_and_midi_share_confirmed_bypass_without_touching_ts9() {
         }],
         branch_bindings: vec![],
         parameter_bindings: vec![ParameterBinding {
+            expression: None,
             target: Target::StompGroup {
                 group: "wet".into(),
             },

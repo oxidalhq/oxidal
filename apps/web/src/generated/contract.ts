@@ -278,6 +278,7 @@ export type CaptureCommand =
       seq: number;
     };
 export type BranchMode = "toggle" | "gate";
+export type ExpressionCurve = "linear" | "slow_start" | "fast_start";
 export type Target2 =
   | {
       kind: "native";
@@ -602,6 +603,10 @@ export type Command2 =
     };
 export type PackAction = "install" | "remove";
 export type GraphAudioAction =
+  | {
+      kind: "midi_learn";
+      on: boolean;
+    }
   | {
       command: PluginDefaultsCommand;
       kind: "restore_plugin_defaults";
@@ -1678,8 +1683,19 @@ export interface ExtraInput {
 }
 export interface ParameterBinding {
   controller: number;
+  expression?: ExpressionPedal | null;
   mode?: "absolute" | "toggle" | "relative_twos_complement" | "relative_offset64";
   target: Target2;
+}
+/**
+ * Pedal travel and target positions are measured in MIDI units (0–127).
+ */
+export interface ExpressionPedal {
+  curve: ExpressionCurve;
+  heel_input: number;
+  heel_output: number;
+  toe_input: number;
+  toe_output: number;
 }
 export interface StreamConfig {
   hear_yourself?: boolean;
@@ -1977,6 +1993,10 @@ export interface Status {
  * One received PC/CC message with its position in the input's event count.
  */
 export interface Observed {
+  /**
+   * Passive learning retains this message for UI readback and suppresses dispatch.
+   */
+  learned?: boolean;
   message: Message;
   /**
    * Device monotonic time at raw MIDI receipt. Older workers omit it.
@@ -2347,6 +2367,7 @@ export interface GraphAudioState {
   device_owned: boolean;
   error?: string | null;
   experimental: boolean;
+  midi?: Status1 | null;
   native_values: NativeValue[];
   phase: AudioPhase;
   processed_frames: number;
@@ -2417,6 +2438,26 @@ export interface Parameter {
   unit: string;
   value: number;
   writable: boolean;
+}
+export interface Status1 {
+  connected: boolean;
+  error?: string | null;
+  events: number;
+  last?: Message | null;
+  /**
+   * True while passive learning suppresses action dispatch.
+   */
+  learning?: boolean;
+  /**
+   * Oldest first, at most [`RECENT_LIMIT`]. A gap after the last `seq` a
+   * consumer processed means older events were overwritten; a lower `events`
+   * count means the worker restarted.
+   */
+  recent?: Observed[];
+  /**
+   * One entry per extra controller, in the order of `Settings::extra_inputs`.
+   */
+  sources?: SourceStatus[];
 }
 export interface NativeValue {
   target: string;
@@ -2973,6 +3014,15 @@ export interface MidiAction {
   message: string;
   ok: boolean;
   seq: number;
+  /**
+   * Changes remain observable when the watch channel coalesces rapid MIDI actions.
+   */
+  sheet_scroll_presses?: number;
+  sheet_speed?: SheetSpeed | null;
+}
+export interface SheetSpeed {
+  seq: number;
+  speed: number;
 }
 export interface Devices {
   available: boolean;
@@ -3051,6 +3101,14 @@ export interface Navigation {
    */
   protect?: Trigger | null;
   /**
+   * Toggle automatic scrolling in open chord-sheet viewers.
+   */
+  sheet_scroll?: Trigger | null;
+  /**
+   * Continuous CC for chord-sheet scrolling speed.
+   */
+  sheet_speed?: number | null;
+  /**
    * A device-stamped performance tempo tap.
    */
   tap?: Trigger | null;
@@ -3104,6 +3162,10 @@ export interface SavedLayout {
  * scenes inside the recalled preset.
  */
 export interface MidiTemplate {
+  /**
+   * Also map bypassable blocks and named branches in each mixed rig.
+   */
+  block_switches?: boolean;
   first_controller: number;
   scene_buttons: number;
 }
@@ -3828,7 +3890,7 @@ export interface Snapshot3 {
    * Reported algorithmic and alignment delay; excludes audio devices/transport.
    */
   latency_frames: number;
-  midi?: Status1;
+  midi?: Status2;
   model_change?: NodeModelChange | null;
   models?: NodeModels[];
   /**
@@ -3903,7 +3965,7 @@ export interface Control {
   toggle: boolean;
   value: number;
 }
-export interface Status1 {
+export interface Status2 {
   connected: boolean;
   error?: string | null;
   events: number;

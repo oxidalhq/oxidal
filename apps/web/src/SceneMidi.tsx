@@ -32,6 +32,16 @@ import {
 } from './midiNavigation';
 
 type Settings = NonNullable<NonNullable<RigAudioState['configured']>['midi']>;
+type ExpressionPedal = NonNullable<
+  NonNullable<Settings['parameter_bindings']>[number]['expression']
+>;
+const fullPedalTravel: ExpressionPedal = {
+  heel_input: 0,
+  toe_input: 127,
+  heel_output: 0,
+  toe_output: 127,
+  curve: 'linear',
+};
 type MidiView = Pick<
   NonNullable<RigAudioState['control']>,
   'controls' | 'scenes' | 'branches' | 'midi' | 'stomp_groups'
@@ -737,6 +747,7 @@ export function MidiControls({
                   <fieldset className="space-y-2">
                     <legend className="font-semibold">Parameters</legend>
                     {(draft?.parameter_bindings ?? []).map((binding, index) => {
+                      const expression = binding.expression;
                       const stomp = binding.target.kind === 'stomp_group';
                       const control = controls.find(
                         (c) =>
@@ -776,6 +787,9 @@ export function MidiControls({
                                 if (selected)
                                   change({
                                     target: selected.target,
+                                    expression: selected.toggle
+                                      ? undefined
+                                      : binding.expression,
                                     mode:
                                       selected.target.kind === 'stomp_group'
                                         ? 'toggle'
@@ -828,12 +842,20 @@ export function MidiControls({
                                 value={
                                   stomp
                                     ? 'toggle'
-                                    : (binding.mode ?? 'absolute')
+                                    : binding.expression
+                                      ? 'expression'
+                                      : (binding.mode ?? 'absolute')
                                 }
                                 disabled={disabled || stomp}
                                 onValueChange={(value) =>
                                   change({
-                                    mode: value as NonNullable<
+                                    expression:
+                                      value === 'expression'
+                                        ? fullPedalTravel
+                                        : undefined,
+                                    mode: (value === 'expression'
+                                      ? 'absolute'
+                                      : value) as NonNullable<
                                       typeof binding.mode
                                     >,
                                   })
@@ -856,6 +878,9 @@ export function MidiControls({
                                     </SelectItem>
                                   ) : (
                                     <>
+                                      <SelectItem value="expression">
+                                        Expression pedal
+                                      </SelectItem>
                                       <SelectItem value="relative_twos_complement">
                                         Encoder: two’s complement
                                       </SelectItem>
@@ -868,6 +893,84 @@ export function MidiControls({
                               </Select>
                             </label>
                           </div>
+                          {expression && (
+                            <fieldset
+                              disabled={disabled}
+                              className="grid gap-2"
+                            >
+                              <legend>Expression pedal calibration</legend>
+                              <p className="caption">
+                                Move the pedal to each end and enter the CC
+                                values shown under Last MIDI message. Set the
+                                target positions from 0 to 127.
+                              </p>
+                              {(
+                                [
+                                  'heel_input',
+                                  'toe_input',
+                                  'heel_output',
+                                  'toe_output',
+                                ] as const
+                              ).map((field) => (
+                                <label className="field" key={field}>
+                                  {
+                                    {
+                                      heel_input: 'Heel MIDI value',
+                                      toe_input: 'Toe MIDI value',
+                                      heel_output: 'Heel target position',
+                                      toe_output: 'Toe target position',
+                                    }[field]
+                                  }
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={127}
+                                    value={expression[field]}
+                                    onChange={(e) => {
+                                      const position =
+                                        e.currentTarget.valueAsNumber;
+                                      if (
+                                        Number.isInteger(position) &&
+                                        position >= 0 &&
+                                        position <= 127
+                                      )
+                                        change({
+                                          expression: {
+                                            ...expression,
+                                            [field]: position,
+                                          },
+                                        });
+                                    }}
+                                  />
+                                </label>
+                              ))}
+                              <label className="field">
+                                Response curve
+                                <select
+                                  value={expression.curve}
+                                  onChange={(e) =>
+                                    change({
+                                      expression: {
+                                        ...expression,
+                                        curve: e.target
+                                          .value as ExpressionPedal['curve'],
+                                      },
+                                    })
+                                  }
+                                >
+                                  <option value="linear">Linear</option>
+                                  <option value="slow_start">Slow start</option>
+                                  <option value="fast_start">Fast start</option>
+                                </select>
+                              </label>
+                              {expression.heel_input ===
+                                expression.toe_input && (
+                                <p role="alert">
+                                  Heel and toe MIDI values must differ.
+                                </p>
+                              )}
+                            </fieldset>
+                          )}
                           <div className="action-row">
                             <Button
                               variant="outline"
@@ -929,6 +1032,39 @@ export function MidiControls({
                         </div>
                       );
                     })}
+                    <Button
+                      variant="outline"
+                      disabled={
+                        disabled ||
+                        !draft ||
+                        !controls.some((c) => !c.toggle) ||
+                        (draft.parameter_bindings?.length ?? 0) >= 128 ||
+                        !!draft.parameter_bindings?.some(
+                          (b) => b.controller === 11 && b.expression,
+                        )
+                      }
+                      onClick={() => {
+                        const target = controls.find((c) => !c.toggle)?.target;
+                        if (target)
+                          setDraft(
+                            (old) =>
+                              old && {
+                                ...old,
+                                parameter_bindings: [
+                                  ...(old.parameter_bindings ?? []),
+                                  {
+                                    target,
+                                    controller: 11,
+                                    mode: 'absolute',
+                                    expression: fullPedalTravel,
+                                  },
+                                ],
+                              },
+                          );
+                      }}
+                    >
+                      Add expression pedal · CC 11
+                    </Button>
                     <Button
                       variant="outline"
                       disabled={
@@ -1028,6 +1164,11 @@ export function MidiControls({
                   disabled={
                     disabled ||
                     !!conflicts.length ||
+                    draft?.parameter_bindings?.some(
+                      ({ expression }) =>
+                        expression &&
+                        expression.heel_input === expression.toe_input,
+                    ) ||
                     !draft?.input ||
                     !devices?.inputs.some((input) => input.id === draft.input)
                   }

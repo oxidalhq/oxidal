@@ -27,6 +27,36 @@ pub struct MidiAction {
     pub seq: u64,
     pub ok: bool,
     pub message: String,
+    /// Changes remain observable when the watch channel coalesces rapid MIDI actions.
+    #[serde(default)]
+    pub sheet_scroll_presses: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sheet_speed: Option<SheetSpeed>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SheetSpeed {
+    pub seq: u64,
+    pub speed: u8,
+}
+
+impl MidiAction {
+    fn sheet_command(&mut self, speed_value: Option<u8>) {
+        self.seq += 1;
+        self.ok = true;
+        if let Some(value) = speed_value {
+            let speed = 1 + ((u16::from(value) * 9 + 63) / 127) as u8;
+            self.sheet_speed = Some(SheetSpeed {
+                seq: self.seq,
+                speed,
+            });
+            self.message = format!("Sheet scroll speed {speed}");
+        } else {
+            self.sheet_scroll_presses += 1;
+            self.message = "Sheet scroll requested".to_owned();
+        }
+    }
 }
 
 fn record(shared: &Shared, result: &Result<String, String>) {
@@ -145,6 +175,16 @@ pub(crate) fn start(shared: Weak<Shared>, mut events: mpsc::Receiver<Event>) {
                         let result = Ok("Tuner requested".to_owned());
                         record(&shared, &result);
                         result.ok()
+                    }
+                    DeviceAction::SheetScroll | DeviceAction::SheetSpeed { .. } => {
+                        let speed = match action {
+                            DeviceAction::SheetSpeed { value } => Some(value),
+                            _ => None,
+                        };
+                        shared
+                            .midi_action
+                            .send_modify(|status| status.sheet_command(speed));
+                        None
                     }
                     DeviceAction::GuitarNext => {
                         let result = crate::guitars::select_next(&shared).await;
@@ -857,6 +897,20 @@ async fn backing_action(shared: &Shared, action: DeviceAction) -> Result<String,
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn sheet_commands_preserve_press_count_and_latest_speed_across_coalesced_reads() {
+        let mut state = super::MidiAction::default();
+        state.sheet_command(None);
+        state.sheet_command(Some(0));
+        assert_eq!(state.sheet_speed.as_ref().unwrap().speed, 1);
+        state.sheet_command(Some(127));
+        state.sheet_command(None);
+        assert_eq!(state.seq, 4);
+        assert_eq!(state.sheet_scroll_presses, 2);
+        let speed = state.sheet_speed.unwrap();
+        assert_eq!((speed.seq, speed.speed), (3, 10));
+    }
+
     use super::*;
 
     fn event(message: Message) -> Event {

@@ -81,6 +81,11 @@ function Line({ line, chords }: { line: SongLine; chords: boolean }) {
   }
 }
 
+export type SheetMidiCommand = { presses: number; speed?: number };
+export type SubscribeSheetMidi = (
+  listener: (command: SheetMidiCommand) => void,
+) => () => void;
+
 /**
  * A lyrics and chord sheet, readable from the floor: the title in the
  * display face, the key, tempo and capo as small facts, sections as
@@ -99,6 +104,7 @@ export function SheetViewer({
   stage = false,
   initialScroll = 0,
   onScrollPosition,
+  subscribeMidi,
   chordsVisible,
   onChordsVisible,
   className,
@@ -116,6 +122,7 @@ export function SheetViewer({
   /** Viewer-owned position retained when moving between sheet, float and pin. */
   initialScroll?: number;
   onScrollPosition?: (top: number) => void;
+  subscribeMidi?: SubscribeSheetMidi;
   chordsVisible?: boolean;
   onChordsVisible?: (visible: boolean) => void;
   className?: string;
@@ -178,6 +185,16 @@ export function SheetViewer({
       ),
     );
   };
+  React.useEffect(
+    () =>
+      subscribeMidi?.(({ presses, speed: requestedSpeed }) => {
+        if (requestedSpeed !== undefined) onSpeed?.(requestedSpeed);
+        if (!presses) return;
+        if (!motion) stepPage(presses);
+        else if (presses % 2) setScrolling((on) => !on);
+      }),
+    [subscribeMidi, motion, onSpeed],
+  );
 
   const facts = [
     song.key && `Key ${song.key}`,

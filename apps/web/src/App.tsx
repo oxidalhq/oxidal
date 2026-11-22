@@ -81,6 +81,7 @@ import { MidiSettings } from './MidiSettings';
 import { refreshMonitorFeed } from './monitorFeed';
 import { NativeDefaults } from './NativeDefaults';
 import { NetworkSettings } from './NetworkSettings';
+import { publishSheetMidi } from './sheetMidi';
 import { SignalChain } from './SignalChain';
 import { StorageLock } from './StorageLock';
 import { Tone3000Account } from './Tone3000Account';
@@ -275,18 +276,20 @@ function InstrumentApp() {
           }
         }
       });
-      let lastMidiSequence: number | undefined;
+      let lastMidi: ReturnType<typeof parseMidiAction> | undefined;
       source.addEventListener('open', () => {
-        lastMidiSequence = undefined;
+        lastMidi = undefined;
       });
       source.addEventListener('midi-action', (event: MessageEvent<string>) => {
         if (!active || events !== source) return;
         try {
           const action = parseMidiAction(JSON.parse(event.data));
-          const previous = lastMidiSequence;
-          lastMidiSequence = action.seq;
-          if (previous === undefined || action.seq <= previous || !action.ok)
-            return;
+          const previous = lastMidi;
+          if (previous && action.seq <= previous.seq) return;
+          lastMidi = action;
+          if (!previous) return;
+          publishSheetMidi(previous, action);
+          if (!action.ok) return;
           if (action.message === 'Tuner requested') requestTuner();
           else if (action.message.startsWith('Guitar: '))
             window.dispatchEvent(new Event(GUITARS_CHANGED_EVENT));

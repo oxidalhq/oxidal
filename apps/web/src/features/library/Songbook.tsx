@@ -20,6 +20,7 @@ import {
 } from '../../api';
 import { friendlyError } from '../../lib/friendlyError';
 import { useSessionState } from '../../lib/sessionState';
+import { subscribeSheetMidi } from '../../sheetMidi';
 import { useWorkspaceState } from '../../workspaceMemory';
 import { useSongbook } from './useSongbook';
 
@@ -243,6 +244,7 @@ export function Songbook({ connected }: { connected: boolean }) {
         size={viewer.size}
         onSize={(size) => preference({ size })}
         speed={viewer.speed}
+        subscribeMidi={subscribeSheetMidi}
         onSpeed={(speed) => preference({ speed })}
         linked={ownLinks.map(
           (link) =>

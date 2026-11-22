@@ -616,20 +616,15 @@ pub async fn publish(
                 source,
             )?;
         }
-        if oxidal_presets::LibraryOrigin::from_manifest(&manifest)?
+        if !replaces && oxidal_presets::LibraryOrigin::from_manifest(&manifest)?
             == oxidal_presets::LibraryOrigin::Mine
-            && let Some(scenes) = manifest.scenes()?
         {
             oxidal_presets::MidiMapStore::new(root).inherit_template(
                 oxidal_presets::LibraryReference {
                     kind: oxidal_presets::LibraryKind::Rig,
                     id: revision.clone(),
                 },
-                &scenes
-                    .scenes
-                    .into_iter()
-                    .map(|scene| scene.id)
-                    .collect::<Vec<_>>(),
+                &oxidal_presets::MidiTemplateTargets::from_manifest(&manifest)?,
             )?;
         }
         Ok(RigDocument { revision, manifest })

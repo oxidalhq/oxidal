@@ -11,6 +11,7 @@ type Navigation = NonNullable<MidiMap['navigation']>;
 type Trigger = NonNullable<Navigation['previous']>;
 
 const device = {
+  sheet_scroll: 'sheet:scroll',
   previous: 'stage:previous',
   next: 'stage:next',
   tuner: 'stage:tuner',
@@ -88,6 +89,11 @@ export function MidiDefaults({
       before: { program: null, controller: nav?.output_level ?? null },
       after: { program: null, controller: defaults.navigation.output_level },
     },
+    {
+      target: 'sheet:speed',
+      before: { program: null, controller: nav?.sheet_speed ?? null },
+      after: { program: null, controller: defaults.navigation.sheet_speed },
+    },
     ...deviceRows,
     ...playerRows,
   ];
@@ -105,7 +111,10 @@ export function MidiDefaults({
     ['Forward 10 s', backing?.skip_forward?.controller],
     ['Backing level', backing?.level],
   ];
+  const reservedSlots: string[] = [];
   for (const [label, number] of retained) {
+    if (number != null && number >= 48 && number <= 63)
+      reservedSlots.push(`CC ${number} · ${label}`);
     if (
       number != null &&
       ((number >= first && number <= last) ||
@@ -132,9 +141,19 @@ export function MidiDefaults({
         ))}
       </ul>
       <p>
-        Expression and sheet scroll and speed have no device-wide MIDI default.
-        Block bypass and branch switches need a target in each preset.
+        Choose a continuous control in the preset’s MIDI assignments to use an
+        expression pedal on CC 11. New Rig presets map CC 48–55 to their first
+        eight bypassable blocks and CC 56–63 to their first eight named
+        branches. Each switch toggles on press. Assigned device controls keep
+        their numbers. Use Apply template on a saved Rig to replace its
+        assignments.
       </p>
+      {reservedSlots.length > 0 && (
+        <p>
+          These switches keep their device assignments and will be skipped in
+          new Rig presets: {reservedSlots.join(', ')}.
+        </p>
+      )}
       {conflicts.length > 0 && (
         <p role="alert">
           Clear or reassign these controls before resetting:{' '}
@@ -147,6 +166,7 @@ export function MidiDefaults({
           const navigation = {
             ...nav,
             output_level: defaults.navigation.output_level,
+            sheet_speed: defaults.navigation.sheet_speed,
             backing: { ...backing },
           };
           for (const row of deviceRows) navigation[row.key] = row.after;

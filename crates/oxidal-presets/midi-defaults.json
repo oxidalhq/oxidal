@@ -1,7 +1,8 @@
 {
   "template": {
     "scene_buttons": 8,
-    "first_controller": 16
+    "first_controller": 16,
+    "block_switches": true
   },
   "navigation": {
     "previous": {
@@ -54,6 +55,8 @@
         "controller": 85
       }
     },
+    "sheet_scroll": { "program": null, "controller": 86 },
+    "sheet_speed": 87,
     "output_level": 7
   }
 }

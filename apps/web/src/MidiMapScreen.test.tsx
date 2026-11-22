@@ -12,6 +12,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import {
   applyMidiTemplate,
   type AudioState,
+  type GraphAudioState,
   type LibraryCatalog,
   libraryCatalog,
   midiAction,
@@ -750,12 +751,41 @@ it('enables Learn only for the selected connected controller', async () => {
   ).toBeEnabled();
 });
 
+it('enables global Learn only from confirmed effects-worker input', async () => {
+  arrange();
+  const graph = {
+    phase: 'running',
+    midi: { connected: true, events: 2, last: null, error: null },
+  } as GraphAudioState;
+  const view = render(
+    <MidiMapScreen
+      connected
+      native={null}
+      mixed={null}
+      graph={graph}
+      onMapApplied={vi.fn()}
+    />,
+  );
+  const learn = await screen.findByRole('button', { name: 'Learn Tap tempo' });
+  expect(learn).toBeEnabled();
+  view.rerender(
+    <MidiMapScreen
+      connected
+      native={null}
+      mixed={null}
+      graph={{ ...graph, phase: 'stopped' }}
+      onMapApplied={vi.fn()}
+    />,
+  );
+  expect(learn).toBeDisabled();
+});
+
 it('explains hardware MIDI availability when neither supported rig owns playback', async () => {
   arrange();
   renderScreen({ ...rig(), phase: 'stopped' });
   expect(
     await screen.findByText(
-      'Play a native or mixed rig to receive hardware MIDI.',
+      'Play a rig with MIDI input to receive controller messages.',
     ),
   ).toBeVisible();
   expect(
@@ -858,7 +888,7 @@ it('reviews and explicitly resets supported defaults without replacing preset ma
     ...map,
     navigation: {
       previous: { program: 4 },
-      mute: { controller: 40 },
+      mute: { controller: 49 },
       backing: { level: 70 },
     },
   };
@@ -872,6 +902,7 @@ it('reviews and explicitly resets supported defaults without replacing preset ma
     name: 'Review default MIDI controls',
   });
   expect(review).toHaveTextContent('Program 5 → CC 24');
+  expect(review).toHaveTextContent('CC 49 · Mute output');
   await user.click(within(review).getByRole('button', { name: 'Cancel' }));
   expect(updateMidiMap).not.toHaveBeenCalled();
   await user.click(
@@ -891,7 +922,11 @@ it('reviews and explicitly resets supported defaults without replacing preset ma
       entries: map.entries,
       channel: map.channel,
       input: map.input,
-      template: { first_controller: 16, scene_buttons: 8 },
+      template: {
+        first_controller: 16,
+        scene_buttons: 8,
+        block_switches: true,
+      },
       navigation: {
         previous: trigger(24),
         next: trigger(25),
@@ -900,7 +935,9 @@ it('reviews and explicitly resets supported defaults without replacing preset ma
         boost: trigger(28),
         protect: trigger(29),
         output_level: 7,
-        mute: { controller: 40 },
+        sheet_scroll: trigger(86),
+        sheet_speed: 87,
+        mute: { controller: 49 },
         backing: {
           play_pause: trigger(80),
           stop: trigger(81),
@@ -919,10 +956,17 @@ it('names blocking preset and retained controller conflicts before a reset', asy
   arrange();
   vi.mocked(midiMap).mockResolvedValue({
     ...map,
-    navigation: { mute: { controller: 17 }, backing: { level: 83 } },
+    navigation: {
+      mute: { controller: 17 },
+      guitar: { controller: 86 },
+      backing: { level: 83 },
+    },
     entries: map.entries.map((item) => ({
       ...item,
-      branch_bindings: [{ branch: 'hold', controller: 26, mode: 'toggle' }],
+      branch_bindings: [
+        { branch: 'hold', controller: 26, mode: 'toggle' },
+        { branch: 'verse', controller: 87, mode: 'toggle' },
+      ],
     })),
   });
   renderScreen();
@@ -938,6 +982,8 @@ it('names blocking preset and retained controller conflicts before a reset', asy
   for (const conflict of [
     'CC 26 · Stage Rig',
     'CC 17 · Mute output',
+    'CC 86 · Next guitar',
+    'CC 87 · Stage Rig',
     'CC 83 · Backing level',
   ])
     expect(alert).toHaveTextContent(conflict);

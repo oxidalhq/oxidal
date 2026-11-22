@@ -5846,6 +5846,55 @@
         }
       ]
     },
+    "ExpressionCurve": {
+      "type": "string",
+      "enum": [
+        "linear",
+        "slow_start",
+        "fast_start"
+      ]
+    },
+    "ExpressionPedal": {
+      "description": "Pedal travel and target positions are measured in MIDI units (0–127).",
+      "type": "object",
+      "properties": {
+        "curve": {
+          "$ref": "#/$defs/ExpressionCurve"
+        },
+        "heel_input": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "heel_output": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "toe_input": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "toe_output": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "heel_input",
+        "toe_input",
+        "heel_output",
+        "toe_output",
+        "curve"
+      ]
+    },
     "ExtraInput": {
       "description": "One more controller: its own endpoint and channel filter (0 accepts all).",
       "type": "object",
@@ -5908,6 +5957,23 @@
     },
     "GraphAudioAction": {
       "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "midi_learn"
+            },
+            "on": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "on"
+          ]
+        },
         {
           "type": "object",
           "properties": {
@@ -6216,6 +6282,16 @@
         },
         "experimental": {
           "type": "boolean"
+        },
+        "midi": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Status"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "native_values": {
           "type": "array",
@@ -8283,6 +8359,23 @@
           "type": "integer",
           "format": "uint64",
           "minimum": 0
+        },
+        "sheet_scroll_presses": {
+          "description": "Changes remain observable when the watch channel coalesces rapid MIDI actions.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 0,
+          "minimum": 0
+        },
+        "sheet_speed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SheetSpeed"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -8686,6 +8779,10 @@
       "description": "Unit default for controllers whose buttons emit consecutive CC messages.\nProgram Change remains reserved for the Mine set-list; these buttons select\nscenes inside the recalled preset.",
       "type": "object",
       "properties": {
+        "block_switches": {
+          "description": "Also map bypassable blocks and named branches in each mixed rig.",
+          "type": "boolean"
+        },
         "first_controller": {
           "type": "integer",
           "format": "uint8",
@@ -9529,6 +9626,27 @@
             }
           ]
         },
+        "sheet_scroll": {
+          "description": "Toggle automatic scrolling in open chord-sheet viewers.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Trigger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sheet_speed": {
+          "description": "Continuous CC for chord-sheet scrolling speed.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
         "tap": {
           "description": "A device-stamped performance tempo tap.",
           "anyOf": [
@@ -9855,6 +9973,10 @@
       "description": "One received PC/CC message with its position in the input's event count.",
       "type": "object",
       "properties": {
+        "learned": {
+          "description": "Passive learning retains this message for UI readback and suppresses dispatch.",
+          "type": "boolean"
+        },
         "message": {
           "$ref": "#/$defs/Message"
         },
@@ -10305,6 +10427,16 @@
           "format": "uint8",
           "maximum": 255,
           "minimum": 0
+        },
+        "expression": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExpressionPedal"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "mode": {
           "$ref": "#/$defs/ControlMode",
@@ -14292,6 +14424,27 @@
       "required": [
         "registry_revision",
         "restored"
+      ]
+    },
+    "SheetSpeed": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "speed": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "seq",
+        "speed"
       ]
     },
     "SheetSummary": {

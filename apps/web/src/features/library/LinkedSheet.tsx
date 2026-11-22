@@ -21,6 +21,7 @@ import {
 import { useSessionMedia } from '../../components/media/sessionMedia';
 import { friendlyError } from '../../lib/friendlyError';
 import { useMonitorFeed } from '../../monitorFeed';
+import { subscribeSheetMidi } from '../../sheetMidi';
 import { resolveSheet, SHEETS_CHANGED } from './sheetResolution';
 
 type Reading = { document: SheetDocument; source: string };
@@ -274,6 +275,7 @@ export function LinkedSheet({ stage = false }: { stage?: boolean }) {
           size={shared.size}
           onSize={shared.setSize}
           speed={shared.speed}
+          subscribeMidi={subscribeSheetMidi}
           onSpeed={shared.setSpeed}
           chordsVisible={shared.chordsVisible}
           onChordsVisible={shared.setChordsVisible}

@@ -81,7 +81,7 @@ pub(super) async fn apply_template(
     if request.entry.kind != oxidal_presets::LibraryKind::Rig {
         return crate::failure(
             StatusCode::UNPROCESSABLE_ENTITY,
-            "Scene templates apply to presets with scenes",
+            "MIDI templates apply to saved Rig presets",
         )
         .into_response();
     }
@@ -98,19 +98,8 @@ pub(super) async fn apply_template(
                 .into_response();
         }
     };
-    let scenes = match manifest.scenes() {
-        Ok(Some(scenes)) => scenes
-            .scenes
-            .into_iter()
-            .map(|scene| scene.id)
-            .collect::<Vec<_>>(),
-        Ok(None) => {
-            return crate::failure(
-                StatusCode::UNPROCESSABLE_ENTITY,
-                "This preset has no scenes to map",
-            )
-            .into_response();
-        }
+    let targets = match oxidal_presets::MidiTemplateTargets::from_manifest(&manifest) {
+        Ok(targets) => targets,
         Err(error) => {
             return crate::failure(StatusCode::UNPROCESSABLE_ENTITY, &error.to_string())
                 .into_response();
@@ -118,7 +107,7 @@ pub(super) async fn apply_template(
     };
     match shared
         .midi_map
-        .apply_template(&request.expected_revision, request.entry, &scenes)
+        .apply_template(&request.expected_revision, request.entry, &targets)
     {
         Ok(map) => ([(header::CACHE_CONTROL, "no-store")], Json(map)).into_response(),
         Err(oxidal_presets::Error::Conflict(message)) => {
@@ -230,6 +219,19 @@ pub(super) async fn learn(
                 session: native.session,
                 expected_revision: native.revision,
                 action: oxidal_audio::lifecycle::AudioAction::MidiLearn { on: request.on },
+            })
+            .await
+            .map(|_| ())
+    } else if let graph = shared.graph_playback.snapshot()
+        && graph.phase == oxidal_audio::lifecycle::AudioPhase::Running
+        && graph.midi.is_some()
+    {
+        shared
+            .graph_playback
+            .dispatch(oxidal_lv2::protocol::GraphAudioCommand {
+                session: graph.session,
+                expected_revision: graph.revision,
+                action: oxidal_lv2::protocol::GraphAudioAction::MidiLearn { on: request.on },
             })
             .await
             .map(|_| ())

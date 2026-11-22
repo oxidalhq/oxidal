@@ -589,6 +589,9 @@ impl crate::midi::Settings {
                 }
                 return Err("MIDI parameter is unavailable".into());
             };
+            if binding.expression.is_some() && control.toggle {
+                return Err("Expression pedals need a continuous MIDI target".into());
+            }
             control.midi_descriptor().midi_value(binding.mode, 127)?;
         }
         Ok(())

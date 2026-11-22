@@ -415,3 +415,47 @@ it('keeps optional MIDI unconfigured when no controller exists', async () => {
   expect(screen.queryByLabelText('MIDI channel')).toBeNull();
   expect(command).not.toHaveBeenCalled();
 });
+
+it('sets calibrated expression on CC11 and keeps the previous parameter mapping', async () => {
+  const user = userEvent.setup();
+  const onCommand = vi.fn(async () => {});
+  render(<SceneMidi state={state()} disabled={false} onCommand={onCommand} />);
+  await open();
+  await user.click(
+    screen.getByRole('button', { name: 'Add expression pedal · CC 11' }),
+  );
+  const field = (label: string, value: string) =>
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  field('Heel MIDI value', '100');
+  field('Toe MIDI value', '100');
+  expect(screen.getByRole('button', { name: 'Apply MIDI' })).toBeDisabled();
+  field('Toe MIDI value', '20');
+  field('Heel target position', '85');
+  field('Toe target position', '5');
+  await user.selectOptions(
+    screen.getByLabelText('Response curve'),
+    'slow_start',
+  );
+  await user.click(screen.getByRole('button', { name: 'Apply MIDI' }));
+  expect(onCommand).toHaveBeenCalledWith(
+    expect.objectContaining({
+      settings: expect.objectContaining({
+        parameter_bindings: [
+          expect.objectContaining({ controller: 20, mode: 'absolute' }),
+          {
+            controller: 11,
+            mode: 'absolute',
+            target: { kind: 'lv2', node: 'fx', symbol: 'gain' },
+            expression: {
+              heel_input: 100,
+              toe_input: 20,
+              heel_output: 85,
+              toe_output: 5,
+              curve: 'slow_start',
+            },
+          },
+        ],
+      }),
+    }),
+  );
+});

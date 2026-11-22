@@ -537,6 +537,7 @@ mod tests {
                 .into_iter()
                 .enumerate()
                 .map(|(index, received_ms)| oxidal_audio::midi::Observed {
+                    learned: false,
                     seq: index as u64 + 1,
                     message,
                     source: 0,
