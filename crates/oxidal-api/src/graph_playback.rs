@@ -66,10 +66,12 @@ fn forward_midi(
     previous: &mut Option<oxidal_audio::midi::Status>,
     next: Option<oxidal_audio::midi::Status>,
     sender: &mpsc::Sender<crate::midi_recall::Event>,
+    origin: impl Fn(u8) -> Option<crate::switch_layout::Origin>,
 ) {
     if let Some(status) = &next {
         for seen in status.unseen(previous.as_ref().map_or(0, |s| s.events)) {
             let _ = sender.try_send(crate::midi_recall::Event {
+                origin: origin(seen.source),
                 message: seen.message,
                 source: seen.source,
                 received_ms: seen.received_ms,
@@ -88,6 +90,7 @@ struct Owner {
     midi_map: Arc<oxidal_presets::MidiMapStore>,
     midi_events: mpsc::Sender<crate::midi_recall::Event>,
     midi_generation: Option<u64>,
+    midi_inputs: Option<oxidal_audio::midi::Settings>,
     executable: Option<PathBuf>,
     /// Passed to workers so they read renders from the daemon's media store.
     media_dir: Option<PathBuf>,
@@ -215,7 +218,26 @@ impl Owner {
         self.publish();
     }
     fn readback(&mut self, reply: WorkerReply) {
-        forward_midi(&mut self.state.midi, reply.midi, &self.midi_events);
+        let id = self
+            .state
+            .configured
+            .as_ref()
+            .and_then(|p| p.library_id.as_ref())
+            .or(self.state.saved_copy.as_ref());
+        forward_midi(
+            &mut self.state.midi,
+            reply.midi,
+            &self.midi_events,
+            |source| {
+                crate::switch_layout::Origin::new(
+                    oxidal_presets::LibraryKind::Graph,
+                    id?,
+                    &reply.control.session,
+                    self.midi_inputs.as_ref(),
+                    source,
+                )
+            },
+        );
         if self.state.control.as_ref().is_none_or(|old| {
             old.session != reply.control.session || old.revision != reply.control.revision
         }) {
@@ -260,6 +282,7 @@ impl Owner {
         let reserved = worker._permit.take();
         self.worker = None;
         self.midi_generation = None;
+        self.midi_inputs = None;
         self.state.midi = None;
         Ok(reserved)
     }
@@ -1086,9 +1109,11 @@ impl Owner {
         let request = if refresh {
             // A graph has device-wide controls. Its graph parameter bindings use
             // a separate target format and are not part of this input map.
-            match self.midi_map.settings(None) {
-                Ok(settings) => WorkerRequest::MidiInput { settings },
-                Err(_) => WorkerRequest::MidiInput { settings: None },
+            let settings = self.midi_map.settings(None).unwrap_or_default();
+            if self.midi_generation.is_some() && settings == self.midi_inputs {
+                WorkerRequest::Status
+            } else {
+                WorkerRequest::MidiInput { settings }
             }
         } else {
             WorkerRequest::Status
@@ -1096,6 +1121,9 @@ impl Owner {
         match self.exchange(&request).await {
             Ok(reply) if reply.error.is_none() => {
                 if refresh {
+                    if let WorkerRequest::MidiInput { settings } = &request {
+                        self.midi_inputs.clone_from(settings);
+                    }
                     self.midi_generation = Some(generation);
                 }
                 self.readback(reply);
@@ -1211,6 +1239,7 @@ impl GraphPlayback {
             midi_map,
             midi_events,
             midi_generation: None,
+            midi_inputs: None,
             executable: config.graph_worker.clone(),
             media_dir: config.media_dir.clone(),
             preset_root: config.preset_dir.join("graphs"),
@@ -1412,7 +1441,7 @@ mod midi_tests {
         status.observe(1, cc(127));
         status.observe(1, cc(0));
         for _ in 0..2 {
-            forward_midi(&mut previous, Some(status.clone()), &sender);
+            forward_midi(&mut previous, Some(status.clone()), &sender, |_| None);
         }
         let press = events.try_recv().unwrap();
         assert_eq!(
@@ -1422,14 +1451,14 @@ mod midi_tests {
         assert_eq!(events.try_recv().unwrap().message, cc(0));
         status.learning = true;
         status.observe(0, cc(127));
-        forward_midi(&mut previous, Some(status.clone()), &sender);
+        forward_midi(&mut previous, Some(status.clone()), &sender, |_| None);
         status.learning = false;
-        forward_midi(&mut previous, Some(status), &sender);
+        forward_midi(&mut previous, Some(status), &sender, |_| None);
         assert!(events.try_recv().is_err());
-        forward_midi(&mut previous, None, &sender);
+        forward_midi(&mut previous, None, &sender, |_| None);
         let mut restarted = Status::default();
         restarted.observe(0, cc(127));
-        forward_midi(&mut previous, Some(restarted), &sender);
+        forward_midi(&mut previous, Some(restarted), &sender, |_| None);
         assert_eq!(events.try_recv().unwrap().source, 0);
         assert!(events.try_recv().is_err());
     }

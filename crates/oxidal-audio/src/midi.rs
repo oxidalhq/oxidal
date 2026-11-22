@@ -486,6 +486,9 @@ pub struct Observed {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Status {
+    /// Source order confirmed by this worker. Reconfiguring clears the observations with it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub input_ports: Vec<String>,
     pub connected: bool,
     pub events: u64,
     pub last: Option<Message>,
@@ -884,10 +887,18 @@ fn set_source_state(status: &mut Status, source: usize, connected: bool, error: 
 #[cfg(all(target_os = "linux", feature = "alsa"))]
 impl Connection {
     pub fn new(settings: Option<Settings>) -> Self {
+        let input_ports = settings
+            .iter()
+            .flat_map(|s| std::iter::once(&s.input).chain(s.extra_inputs.iter().map(|i| &i.input)))
+            .cloned()
+            .collect();
         Self {
             protected: std::env::var("OXIDAL_PROTECT").is_ok_and(|value| value == "1"),
             settings,
-            status: Status::default(),
+            status: Status {
+                input_ports,
+                ..Status::default()
+            },
             ports: Vec::new(),
             retry: Vec::new(),
             learn_until: None,

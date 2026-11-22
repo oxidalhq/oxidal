@@ -1,5 +1,6 @@
 //! Device-local MIDI map keyed by immutable preset identity.
 //! Portable tone and rig payloads never carry controller or device bindings.
+pub mod switches;
 use crate::{Error, LibraryKind, LibraryReference, Result};
 use oxidal_audio::midi::{
     Binding, BranchBinding, ControlTarget, ExtraInput, Message, ParameterBinding, Settings,
@@ -14,6 +15,7 @@ use std::{
     path::PathBuf,
     sync::atomic::{AtomicU64, Ordering},
 };
+use switches::SwitchLayout;
 
 /// What a saved revision still has, for [`MidiMapStore::follow_save`].
 struct Saved<'a> {
@@ -202,6 +204,8 @@ struct Book {
     saved_layouts: Vec<SavedLayout>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     extra_inputs: Vec<ExtraInput>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    switch_layouts: BTreeMap<String, SwitchLayout>,
     entries: BTreeMap<String, PresetMap>,
 }
 
@@ -226,6 +230,7 @@ impl Default for Book {
             navigation: DEFAULTS.navigation,
             saved_layouts: Vec::new(),
             extra_inputs: Vec::new(),
+            switch_layouts: BTreeMap::new(),
             entries: BTreeMap::new(),
         }
     }
@@ -790,6 +795,7 @@ impl MidiMapStore {
     }
 
     fn write(&self, book: &Book) -> Result<()> {
+        book.validate_switch_inputs()?;
         book.navigation.validate(&book.entries)?;
         let bytes = serde_json::to_vec(book).map_err(|_| Error::Invalid("Invalid MIDI map"))?;
         if bytes.len() as u64 > LIMIT {
@@ -998,6 +1004,7 @@ impl MidiMapStore {
             template: update.template,
             navigation: update.navigation,
             saved_layouts: update.saved_layouts,
+            switch_layouts: current.switch_layouts,
             extra_inputs: update.extra_inputs,
             entries,
         };
@@ -1267,10 +1274,31 @@ impl MidiMapStore {
         }
         let _lock = self.lock()?;
         let mut book = self.read()?;
+        let mut copied_layout = false;
+        if !book.switch_layouts.contains_key(&to)
+            && let Some(mut layout) = book.switch_layouts.get(&from).cloned()
+        {
+            if let Some(saved) = &saved {
+                layout.switches.retain(|s| match &s.action {
+                    switches::SwitchAction::Freeze { node, .. } => {
+                        saved.blocks.iter().any(|(id, _)| id == node)
+                    }
+                    _ => true,
+                });
+            }
+            book.switch_layouts.insert(to.clone(), layout);
+            copied_layout = true;
+        }
         let Some(mut mapping) = book.entries.get(&from).cloned() else {
-            return Ok(false);
+            if copied_layout {
+                self.write(&book)?;
+            }
+            return Ok(book.switch_layouts.contains_key(&to));
         };
         if book.entries.contains_key(&to) {
+            if copied_layout {
+                self.write(&book)?;
+            }
             return Ok(true);
         }
         let known = scenes.iter().collect::<BTreeSet<_>>();
@@ -1319,6 +1347,9 @@ impl MidiMapStore {
         if saved.is_some_and(|s| !s.retain_source) {
             book.entries.remove(&from);
         } else if mapping.empty() {
+            if copied_layout {
+                self.write(&book)?;
+            }
             return Ok(true);
         }
         if !mapping.empty() {
@@ -1332,7 +1363,8 @@ impl MidiMapStore {
         let key = kind.key(id)?;
         let _lock = self.lock()?;
         let mut book = self.read()?;
-        if book.entries.remove(&key).is_some() {
+        let removed_layout = book.switch_layouts.remove(&key).is_some();
+        if book.entries.remove(&key).is_some() || removed_layout {
             self.write(&book)?;
         }
         Ok(())

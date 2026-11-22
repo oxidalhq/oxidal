@@ -10,8 +10,9 @@ use oxidal_presets::{DeviceAction, LibraryKind, ResolvedOccurrence, SetOrder};
 use std::sync::{Arc, Weak};
 use tokio::sync::mpsc;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) struct Event {
+    pub origin: Option<crate::switch_layout::Origin>,
     pub message: Message,
     pub local_program: bool,
     /// Which controller sent it; bank state is kept per controller and channel.
@@ -127,6 +128,7 @@ impl BankState {
 pub(crate) fn start(shared: Weak<Shared>, mut events: mpsc::Receiver<Event>) {
     tokio::spawn(async move {
         let mut banks = BankState::default();
+        let mut layout = crate::switch_layout::PhysicalLayout::default();
         while let Some(event) = events.recv().await {
             let Some(shared) = shared.upgrade() else {
                 break;
@@ -134,6 +136,14 @@ pub(crate) fn start(shared: Weak<Shared>, mut events: mpsc::Receiver<Event>) {
             let Ok(map) = shared.midi_map.snapshot() else {
                 continue;
             };
+            if let Some(result) =
+                crate::switch_layout::physical(&shared, &map, &event, &mut layout).await
+            {
+                if let Err(error) = result {
+                    record(&shared, &Err(error));
+                }
+                continue;
+            }
             // Previous/Next are matched first and never fall through to a
             // Program recall. Each event is handled to completion before the
             // next, so quick taps stay in order.
@@ -204,10 +214,11 @@ pub(crate) fn start(shared: Weak<Shared>, mut events: mpsc::Receiver<Event>) {
                 };
                 continue;
             }
+            let source = event.source;
             let Some((channel, slot)) = banks.apply(event) else {
                 continue;
             };
-            if map.input.is_none() || !listens_on(&map, event.source, channel) {
+            if map.input.is_none() || !listens_on(&map, source, channel) {
                 continue;
             }
             if shared.captures.reamping() {
@@ -918,6 +929,7 @@ mod tests {
             message,
             local_program: false,
             source: 0,
+            origin: None,
             received_ms: None,
         }
     }
@@ -985,6 +997,7 @@ mod tests {
             message,
             local_program: false,
             source,
+            origin: None,
             received_ms: None,
         };
         let bank = |value| Message::Control {
@@ -1040,6 +1053,7 @@ mod tests {
                 },
                 local_program: true,
                 source: 0,
+                origin: None,
                 received_ms: None,
             }),
             None

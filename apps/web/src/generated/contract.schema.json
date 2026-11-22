@@ -247,6 +247,9 @@
     "rehearsal": {
       "$ref": "#/$defs/RehearsalReport"
     },
+    "release_switches": {
+      "$ref": "#/$defs/ReleaseSwitches"
+    },
     "removal_preview": {
       "$ref": "#/$defs/RemovalPreview"
     },
@@ -388,6 +391,15 @@
     "storage_state": {
       "$ref": "#/$defs/StorageState"
     },
+    "switch_layout_state": {
+      "$ref": "#/$defs/SwitchLayoutState"
+    },
+    "switch_layout_update": {
+      "$ref": "#/$defs/SwitchLayoutUpdate"
+    },
+    "switch_press": {
+      "$ref": "#/$defs/SwitchPress"
+    },
     "tempo_command": {
       "$ref": "#/$defs/TempoCommand"
     },
@@ -463,6 +475,10 @@
     "song_links",
     "song_link_update",
     "practice_timing",
+    "switch_layout_state",
+    "switch_layout_update",
+    "release_switches",
+    "switch_press",
     "tempo_state",
     "tempo_command",
     "player_snapshot",
@@ -5942,6 +5958,13 @@
       "enum": [
         "legacy",
         "current"
+      ]
+    },
+    "FreezeMode": {
+      "type": "string",
+      "enum": [
+        "toggle",
+        "gate"
       ]
     },
     "Gear": {
@@ -12425,6 +12448,18 @@
         "blocked"
       ]
     },
+    "ReleaseSwitches": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session"
+      ]
+    },
     "RemovalPreview": {
       "type": "object",
       "properties": {
@@ -15729,6 +15764,13 @@
           "format": "uint64",
           "minimum": 0
         },
+        "input_ports": {
+          "description": "Source order confirmed by this worker. Reconfiguring clears the observations with it.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "last": {
           "anyOf": [
             {
@@ -16274,6 +16316,89 @@
         }
       ]
     },
+    "SwitchAction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "tap_tempo"
+            },
+            "note": {
+              "$ref": "#/$defs/SwitchNote"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "note"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "freeze"
+            },
+            "mode": {
+              "$ref": "#/$defs/FreezeMode"
+            },
+            "node": {
+              "type": "string"
+            },
+            "symbol": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "node",
+            "symbol",
+            "mode"
+          ]
+        }
+      ]
+    },
+    "SwitchAssignment": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/SwitchAction"
+        },
+        "gesture": {
+          "$ref": "#/$defs/SwitchGesture"
+        },
+        "input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SwitchInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "position": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "profile": {
+          "$ref": "#/$defs/SwitchProfile"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "position",
+        "gesture",
+        "action"
+      ]
+    },
     "SwitchCommand": {
       "type": "object",
       "properties": {
@@ -16300,6 +16425,150 @@
         "expected_revision",
         "revision",
         "fade_frames"
+      ]
+    },
+    "SwitchGesture": {
+      "type": "string",
+      "enum": [
+        "tap",
+        "hold"
+      ]
+    },
+    "SwitchInput": {
+      "type": "object",
+      "properties": {
+        "channel": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "controller": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "port": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "port",
+        "channel",
+        "controller"
+      ]
+    },
+    "SwitchLayout": {
+      "type": "object",
+      "properties": {
+        "switches": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SwitchAssignment"
+          }
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "switches"
+      ]
+    },
+    "SwitchLayoutState": {
+      "type": "object",
+      "properties": {
+        "layout": {
+          "$ref": "#/$defs/SwitchLayout"
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "layout"
+      ]
+    },
+    "SwitchLayoutUpdate": {
+      "type": "object",
+      "properties": {
+        "expected_revision": {
+          "type": "string"
+        },
+        "layout": {
+          "$ref": "#/$defs/SwitchLayout"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "expected_revision",
+        "layout"
+      ]
+    },
+    "SwitchNote": {
+      "type": "string",
+      "enum": [
+        "quarter",
+        "dotted_eighth",
+        "eighth",
+        "triplet"
+      ]
+    },
+    "SwitchPress": {
+      "type": "object",
+      "properties": {
+        "gesture": {
+          "$ref": "#/$defs/SwitchGesture"
+        },
+        "performer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "position": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "pressed": {
+          "type": "boolean"
+        },
+        "profile": {
+          "$ref": "#/$defs/SwitchProfile"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "revision",
+        "profile",
+        "position",
+        "gesture",
+        "pressed"
+      ]
+    },
+    "SwitchProfile": {
+      "type": "string",
+      "enum": [
+        "four",
+        "ten"
       ]
     },
     "TapNote": {

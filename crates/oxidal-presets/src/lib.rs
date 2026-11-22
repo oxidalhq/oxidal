@@ -19,6 +19,7 @@ pub mod manifest;
 pub use bundle::{Bundle, BundleStore};
 pub use graph::{GraphPreset, GraphStore, SavedGraph};
 mod midi;
+pub use midi::switches;
 mod model;
 mod nam_info;
 pub use nam_info::{CaptureLevels, NamInfo};

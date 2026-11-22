@@ -2156,6 +2156,77 @@ async fn builds_four_capture_scenes_offline_and_reopens_with_a_conditional_cabin
     )
     .await;
     assert_eq!(active["control"]["scene"], "clean");
+    let path = format!("presets/switch-layout/rig/{revision}");
+    let empty = get(&c, &url, &path).await;
+    let set=c.post(format!("{url}/{path}")).json(&json!({"expected_revision":empty["revision"],"layout":{"version":1,"switches":[
+        {"profile":"four","position":2,"gesture":"tap","action":{"kind":"tap_tempo","note":"dotted_eighth"}},
+        {"profile":"four","position":2,"gesture":"hold","action":{"kind":"freeze","node":"bloom","symbol":"freeze","mode":"gate"}}
+    ]}})).send().await.unwrap();
+    assert!(set.status().is_success(), "{}", set.text().await.unwrap());
+    let layout = get(&c, &url, &path).await;
+    let session = active["control"]["session"].clone();
+    let press = |gesture: &str, pressed: bool, session: &Value| {
+        c.post(format!("{url}/{path}/action")).json(&json!({"profile":"four","position":2,"gesture":gesture,"pressed":pressed,"session":session,"revision":layout["revision"],"performer":"stage-test"})).send()
+    };
+    assert!(
+        press("tap", true, &session)
+            .await
+            .unwrap()
+            .status()
+            .is_success()
+    );
+    assert_eq!(get(&c, &url, "tempo").await["tap_note"], "dotted_eighth");
+    let freeze = |state: &Value| {
+        state["control"]["controls"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["target"]["node"] == "bloom" && c["target"]["symbol"] == "freeze")
+            .unwrap()["value"]
+            .as_f64()
+            .unwrap()
+    };
+    assert!(
+        press("hold", true, &session)
+            .await
+            .unwrap()
+            .status()
+            .is_success()
+    );
+    assert_eq!(freeze(&get(&c, &url, "rig-audio").await), 1.0);
+    assert_eq!(
+        press("hold", false, &json!("stale-worker"))
+            .await
+            .unwrap()
+            .status(),
+        409
+    );
+    assert_eq!(freeze(&get(&c, &url, "rig-audio").await), 1.0);
+    assert!(
+        press("hold", false, &session)
+            .await
+            .unwrap()
+            .status()
+            .is_success()
+    );
+    active = get(&c, &url, "rig-audio").await;
+    assert_eq!(freeze(&active), 0.0);
+    assert!(
+        press("hold", true, &session)
+            .await
+            .unwrap()
+            .status()
+            .is_success()
+    );
+    let released = c
+        .post(format!("{url}/{path}/release"))
+        .json(&json!({"session":session}))
+        .send()
+        .await
+        .unwrap();
+    assert!(released.status().is_success());
+    active = get(&c, &url, "rig-audio").await;
+    assert_eq!(freeze(&active), 0.0);
     for scene in ["crunch", "lead", "dirt", "clean"] {
         let command = json!({"kind":"scene","command":{"scene":scene,
             "session":active["control"]["session"],"expected_revision":active["control"]["revision"]}});

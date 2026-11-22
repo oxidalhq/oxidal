@@ -56,6 +56,7 @@ mod songs;
 mod split_jobs;
 mod stem_import;
 mod storage_lock;
+mod switch_layout;
 mod tempo;
 mod terminal;
 mod timing;
@@ -179,6 +180,10 @@ pub struct Contract {
     pub song_links: song_links::Links,
     pub song_link_update: song_links::Update,
     pub practice_timing: timing::Timing,
+    pub switch_layout_state: oxidal_presets::switches::SwitchLayoutState,
+    pub switch_layout_update: oxidal_presets::switches::SwitchLayoutUpdate,
+    pub release_switches: switch_layout::ReleaseSwitches,
+    pub switch_press: switch_layout::SwitchPress,
     pub tempo_state: tempo::TempoState,
     pub tempo_command: tempo::TempoCommand,
     pub player_snapshot: player::PlayerSnapshot,
@@ -354,6 +359,7 @@ struct Shared {
     sheet_write: std::sync::Mutex<()>,
     split_jobs: split_jobs::Jobs,
     player: player::Player,
+    switch_gates: tokio::sync::Mutex<switch_layout::Gates>,
     tempo: tempo::Tempo,
     venues: venues::Venues,
     captures: capture::Captures,
@@ -461,6 +467,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         sheet_write: std::sync::Mutex::new(()),
         split_jobs: split_jobs::Jobs::load(),
         player,
+        switch_gates: Default::default(),
         tempo: tempo::Tempo::load(config.preset_dir.join("tempo.json")),
         venues,
         captures: capture::Captures::new(protect.job_flag()),
@@ -750,6 +757,18 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/venues", get(venues::state))
         .route("/venues/commands", post(venues::command))
         .route("/venues/preview/keep", post(venues::keep))
+        .route(
+            "/presets/switch-layout/{kind}/{id}",
+            get(switch_layout::get).post(switch_layout::save),
+        )
+        .route(
+            "/presets/switch-layout/{kind}/{id}/action",
+            post(switch_layout::press),
+        )
+        .route(
+            "/presets/switch-layout/{kind}/{id}/release",
+            post(switch_layout::release),
+        )
         .route("/tempo", get(tempo::state).post(tempo::command))
         .route("/player", get(player::state))
         .route("/player/events", get(player::events))

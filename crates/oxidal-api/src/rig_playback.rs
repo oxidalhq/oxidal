@@ -168,6 +168,15 @@ impl Owner {
                         settings.for_source(seen.source).scene(message).is_some()
                     });
             let _ = self.midi_events.try_send(crate::midi_recall::Event {
+                origin: self.state.configured.as_ref().and_then(|p| {
+                    crate::switch_layout::Origin::from_settings(
+                        oxidal_presets::LibraryKind::Rig,
+                        &control.source_revision,
+                        &control.session,
+                        p.midi.as_ref(),
+                        &seen,
+                    )
+                }),
                 message,
                 local_program,
                 source: seen.source,

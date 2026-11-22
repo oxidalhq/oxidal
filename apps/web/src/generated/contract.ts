@@ -1205,6 +1205,21 @@ export type Scope = "rig" | "set_list";
  */
 export type StartupPolicy = "off" | "follow" | "pinned";
 export type StartupOwner = "native" | "mixed" | "effects";
+export type SwitchAction =
+  | {
+      kind: "tap_tempo";
+      note: SwitchNote;
+    }
+  | {
+      kind: "freeze";
+      mode: FreezeMode;
+      node: string;
+      symbol: string;
+    };
+export type SwitchNote = "quarter" | "dotted_eighth" | "eighth" | "triplet";
+export type FreezeMode = "toggle" | "gate";
+export type SwitchGesture = "tap" | "hold";
+export type SwitchProfile = "four" | "ten";
 export type TempoCommand =
   | {
       kind: "tap";
@@ -1379,6 +1394,7 @@ export interface Contract {
   protect_state: ProtectState;
   reamp_request: ReampRequest;
   rehearsal: RehearsalReport;
+  release_switches: ReleaseSwitches;
   removal_preview: RemovalPreview;
   removal_request: RemovalRequest;
   removal_result: RemovalResult;
@@ -1425,6 +1441,9 @@ export interface Contract {
   startup_update: StartupUpdate;
   storage_request: StorageRequest;
   storage_state: StorageState;
+  switch_layout_state: SwitchLayoutState;
+  switch_layout_update: SwitchLayoutUpdate;
+  switch_press: SwitchPress;
   tempo_command: TempoCommand;
   tempo_state: TempoState;
   terminal_command: TerminalCommand;
@@ -1973,6 +1992,10 @@ export interface Status {
   connected: boolean;
   error?: string | null;
   events: number;
+  /**
+   * Source order confirmed by this worker. Reconfiguring clears the observations with it.
+   */
+  input_ports?: string[];
   last?: Message | null;
   /**
    * True while passive learning suppresses action dispatch.
@@ -2443,6 +2466,10 @@ export interface Status1 {
   connected: boolean;
   error?: string | null;
   events: number;
+  /**
+   * Source order confirmed by this worker. Reconfiguring clears the observations with it.
+   */
+  input_ports?: string[];
   last?: Message | null;
   /**
    * True while passive learning suppresses action dispatch.
@@ -3731,6 +3758,9 @@ export interface RehearsalEntry {
   sound: string[];
   status: RehearsalStatus;
 }
+export interface ReleaseSwitches {
+  session: string;
+}
 export interface RemovalPreview {
   blocked?: string | null;
   embedded_bytes: number;
@@ -3984,6 +4014,10 @@ export interface Status2 {
   connected: boolean;
   error?: string | null;
   events: number;
+  /**
+   * Source order confirmed by this worker. Reconfiguring clears the observations with it.
+   */
+  input_ports?: string[];
   last?: Message | null;
   /**
    * True while passive learning suppresses action dispatch.
@@ -4577,6 +4611,39 @@ export interface StorageState {
   message: string;
   next_boot?: StorageMode | null;
   reboot_required: boolean;
+}
+export interface SwitchLayoutState {
+  layout: SwitchLayout;
+  revision: string;
+}
+export interface SwitchLayout {
+  switches: SwitchAssignment[];
+  version: number;
+}
+export interface SwitchAssignment {
+  action: SwitchAction;
+  gesture: SwitchGesture;
+  input?: SwitchInput | null;
+  position: number;
+  profile: SwitchProfile;
+}
+export interface SwitchInput {
+  channel: number;
+  controller: number;
+  port: string;
+}
+export interface SwitchLayoutUpdate {
+  expected_revision: string;
+  layout: SwitchLayout;
+}
+export interface SwitchPress {
+  gesture: SwitchGesture;
+  performer?: string | null;
+  position: number;
+  pressed: boolean;
+  profile: SwitchProfile;
+  revision: string;
+  session: string;
 }
 export interface TerminalState {
   available: boolean;

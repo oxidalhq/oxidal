@@ -245,7 +245,7 @@ impl Tempo {
         shared: &Shared,
         command: TempoCommand,
     ) -> Result<TempoState, String> {
-        self.command_at(shared, command, Instant::now()).await
+        self.command_at(shared, command, Instant::now(), None).await
     }
 
     pub(super) async fn midi_tap(
@@ -255,7 +255,31 @@ impl Tempo {
     ) -> Result<TempoState, String> {
         let now = Instant::now();
         let at = midi_received_at(now, oxidal_audio::realtime::monotonic_millis(), received_ms);
-        self.command_at(shared, TempoCommand::Tap, at).await
+        self.command_at(shared, TempoCommand::Tap, at, None).await
+    }
+
+    pub(super) async fn switch_tap(
+        &self,
+        shared: &Shared,
+        entry: &oxidal_presets::LibraryReference,
+        session: &str,
+        note: oxidal_presets::switches::SwitchNote,
+        received_ms: Option<u64>,
+    ) -> Result<TempoState, String> {
+        use oxidal_presets::switches::SwitchNote::*;
+        let note = match note {
+            Quarter => TapNote::Quarter,
+            DottedEighth => TapNote::DottedEighth,
+            Eighth => TapNote::Eighth,
+            Triplet => TapNote::EighthTriplet,
+        };
+        let at = midi_received_at(
+            Instant::now(),
+            oxidal_audio::realtime::monotonic_millis(),
+            received_ms,
+        );
+        self.command_at(shared, TempoCommand::Tap, at, Some((note, entry, session)))
+            .await
     }
 
     async fn command_at(
@@ -263,12 +287,25 @@ impl Tempo {
         shared: &Shared,
         command: TempoCommand,
         at: Instant,
+        switch: Option<(TapNote, &oxidal_presets::LibraryReference, &str)>,
     ) -> Result<TempoState, String> {
         let mut inner = self.inner.lock().await;
+        let engine = Engine::active(shared);
+        if let Some((_, entry, session)) = switch
+            && crate::switch_layout::session(shared, entry).as_deref() != Some(session)
+        {
+            return Err("The playing preset or session changed".into());
+        }
         let before = inner.saved;
         let prior_taps = inner.taps.clone();
         let saved = match command {
-            TempoCommand::Tap => inner.tap(at),
+            TempoCommand::Tap => {
+                let mut saved = inner.tap(at);
+                if let Some((note, _, _)) = switch {
+                    saved.tap_note = Some(note);
+                }
+                saved
+            }
             TempoCommand::SetTapNote {
                 tap_note,
                 expected_revision,
@@ -302,7 +339,7 @@ impl Tempo {
             }
             inner.saved = saved;
         }
-        self.refresh(shared, &mut inner).await;
+        self.refresh_engine(shared, &mut inner, engine).await;
         Ok(self.snapshot())
     }
 
@@ -319,7 +356,10 @@ impl Tempo {
     }
 
     async fn refresh(&self, shared: &Shared, inner: &mut Inner) {
-        let engine = Engine::active(shared);
+        self.refresh_engine(shared, inner, Engine::active(shared))
+            .await;
+    }
+    async fn refresh_engine(&self, shared: &Shared, inner: &mut Inner, engine: Option<Engine>) {
         let source = inner.saved.source;
         let mut bpm = match source {
             TempoSource::Tap => inner.saved.tap,

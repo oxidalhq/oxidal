@@ -935,6 +935,19 @@ impl Owner {
         self.state.midi = status;
         for seen in self.state.midi.unseen(previous_events) {
             let _ = self.midi_events.try_send(crate::midi_recall::Event {
+                origin: self.state.configured.as_ref().and_then(|p| {
+                    crate::switch_layout::Origin::from_settings(
+                        if p.owned {
+                            oxidal_presets::LibraryKind::Owned
+                        } else {
+                            oxidal_presets::LibraryKind::Original
+                        },
+                        &p.preset_id,
+                        &format!("{}:{}", self.state.session, self.state.revision),
+                        p.midi.as_ref(),
+                        &seen,
+                    )
+                }),
                 message: seen.message,
                 local_program: false,
                 source: seen.source,
