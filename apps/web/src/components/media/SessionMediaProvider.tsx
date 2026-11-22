@@ -198,7 +198,7 @@ export function SessionMediaProvider({ children }: { children: ReactNode }) {
       const request = {
         requestId: crypto.randomUUID(),
         origin: 'ui' as const,
-        expectedCue: cueBound.has(command.kind) ? (cue ?? null) : null,
+        expectedCue: cue,
         command,
       };
       try {
@@ -242,8 +242,12 @@ export function SessionMediaProvider({ children }: { children: ReactNode }) {
   );
   const drainingFields = useRef(false);
   const send = useCallback(
-    (command: PlayerCommand) => {
-      const cue = current.current?.track?.id ?? null;
+    (command: PlayerCommand, expectedCue?: string) => {
+      const cue =
+        expectedCue ??
+        (cueBound.has(command.kind)
+          ? (current.current?.track?.id ?? null)
+          : null);
       if (
         command.kind !== 'edit_stem' &&
         command.kind !== 'set_muted_part' &&

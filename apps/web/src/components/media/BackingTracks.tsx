@@ -85,7 +85,7 @@ export function BackingTracks({ connected }: { connected: boolean }) {
       const cued = await send({ kind: 'cue', asset: asset.id });
       if (!cued) return;
     }
-    await send({ kind: 'play' });
+    await send({ kind: 'play' }, asset.id);
   }
   async function move(asset: MediaAsset, by: -1 | 1) {
     const order = tracks.map((track) => track.id);
@@ -286,7 +286,8 @@ export function BackingTracks({ connected }: { connected: boolean }) {
                       <Button
                         variant="outline"
                         aria-label={`Pause ${track.title}`}
-                        onClick={() => void send({ kind: 'pause' })}
+                        disabled={!connected}
+                        onClick={() => void send({ kind: 'pause' }, track.id)}
                       >
                         <Pause aria-hidden="true" weight="fill" />
                         Pause

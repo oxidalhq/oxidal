@@ -346,7 +346,7 @@ it('Library lists tracks in Backing order; Play cues then plays; Protect locks e
     expect(value.send).toHaveBeenNthCalledWith(1, { kind: 'cue', asset: 't2' }),
   );
   await waitFor(() =>
-    expect(value.send).toHaveBeenNthCalledWith(2, { kind: 'play' }),
+    expect(value.send).toHaveBeenNthCalledWith(2, { kind: 'play' }, 't2'),
   );
   fireEvent.click(
     screen.getByRole('button', { name: 'More for Rehearsal 01' }),
@@ -368,6 +368,46 @@ it('Library lists tracks in Backing order; Play cues then plays; Protect locks e
   expect(
     screen.getByRole('button', { name: 'Play Rehearsal 01' }),
   ).toBeEnabled();
+});
+
+it('does not play the track a second viewer cued while a library row was opening', async () => {
+  vi.mocked(mediaLibrary).mockResolvedValue({
+    assets: tracks,
+    quarantined: [],
+    usedBytes: 0,
+  });
+  const initial = snapshot('ready');
+  const requested = snapshot('ready', 0, {
+    revision: 4,
+    track: { ...initial.track!, id: 't2', title: 'Rehearsal 02' },
+  });
+  vi.mocked(playerCommand)
+    .mockImplementationOnce(async () => {
+      publishPlayer({ ...initial, revision: 5 });
+      return requested;
+    })
+    .mockRejectedValueOnce(
+      new DeviceError(
+        'The cued track changed; check the player and try again',
+        'conflict',
+        409,
+      ),
+    );
+  render(
+    <SessionMediaProvider>
+      <BackingTracks connected />
+    </SessionMediaProvider>,
+  );
+  act(() => publishPlayer(initial));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Play Rehearsal 02' }),
+  );
+  await waitFor(() => expect(playerCommand).toHaveBeenCalledTimes(2));
+  expect(vi.mocked(playerCommand).mock.calls[1]![0]).toMatchObject({
+    expectedCue: 't2',
+    command: { kind: 'play' },
+  });
+  expect(await screen.findByText(/The cued track changed/)).toBeVisible();
 });
 
 it('provider: draws from the stream and sends one command path with IDs and the cue', async () => {

@@ -15,7 +15,7 @@ import {
   Trash,
   Warning,
 } from '@phosphor-icons/react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { useConfirm } from '@oxidal/design-system/components/confirm';
@@ -88,7 +88,7 @@ export function StemMixEditor({
   /** Open this saved mix (by mix or render ID) instead of the latest one. */
   initialMix?: string;
 }) {
-  const { player, send, refreshLibrary, refreshSplit, slow } =
+  const { player, send, refreshLibrary, refreshSplit, slow, refusal } =
     useSessionMedia();
   const sendMix = useStemMixSender();
   const { ask, dialog } = useConfirm();
@@ -111,6 +111,7 @@ export function StemMixEditor({
   const draft = history?.current;
   const recipe = draft?.recipe;
   const defaultTitle = `${source.title} mix`.slice(0, 120);
+  const currentDefaultTitle = useEffectEvent(() => defaultTitle);
   const dirty =
     !!draft &&
     (saved
@@ -154,7 +155,7 @@ export function StemMixEditor({
           setSaved(chosen ?? null);
           setHistory(
             freshHistory({
-              title: chosen?.title ?? `${source.title} mix`.slice(0, 120),
+              title: chosen?.title ?? currentDefaultTitle(),
               recipe: chosen?.recipe ?? blankRecipe(ready.mode),
             }),
           );
@@ -166,7 +167,7 @@ export function StemMixEditor({
     return () => {
       active = false;
     };
-  }, [source.id, source.title, initialMix]);
+  }, [source.id, initialMix]);
 
   useEffect(() => {
     if (!canSplit) return;
@@ -204,7 +205,7 @@ export function StemMixEditor({
             setSplitId(ready.id);
             setHistory(
               freshHistory({
-                title: `${source.title} mix`.slice(0, 120),
+                title: currentDefaultTitle(),
                 recipe: blankRecipe(ready.mode),
               }),
             );
@@ -226,7 +227,7 @@ export function StemMixEditor({
       current = false;
       window.clearTimeout(timer);
     };
-  }, [running, source.id, source.title, slow]);
+  }, [running, source.id, slow]);
 
   async function hear(next: Draft) {
     if (live && split && recipe && !sameRecipe(recipe, next.recipe))
@@ -289,7 +290,7 @@ export function StemMixEditor({
   async function playStems() {
     if (!split || !draft) return;
     if (live) {
-      await send({ kind: playing ? 'pause' : 'play' });
+      await send({ kind: playing ? 'pause' : 'play' }, player?.track?.id);
       return;
     }
     const other =
@@ -305,13 +306,18 @@ export function StemMixEditor({
       }))
     )
       return;
+    // The device keeps the cued render when switching splits of the same song.
+    const expectedCue =
+      player?.stems?.source === source.id
+        ? (player.track?.id ?? source.id)
+        : source.id;
     const cued = await send({
       kind: 'cue_stems',
       source: source.id,
       split: split.id,
       recipe: draft.recipe,
     });
-    if (cued) await send({ kind: 'play' });
+    if (cued) await send({ kind: 'play' }, expectedCue);
   }
 
   function edit(next: Draft) {
@@ -466,10 +472,10 @@ export function StemMixEditor({
             </span>
           </p>
         )}
-        {error && (
+        {(error || refusal) && (
           <p className="media-note" role="alert">
             <Warning aria-hidden="true" weight="bold" />
-            <span>{error}</span>
+            <span>{error || refusal}</span>
           </p>
         )}
         {!song && !error && <p role="status">Loading stems…</p>}

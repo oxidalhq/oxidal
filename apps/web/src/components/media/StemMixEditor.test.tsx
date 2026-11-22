@@ -316,6 +316,35 @@ function songFetch() {
   });
 }
 
+it('keeps the draft when another viewer renames its source track', async () => {
+  const fetch = songFetch();
+  vi.stubGlobal('fetch', fetch);
+  const view = render(
+    <StemMixEditor source={source} locked={false} onClose={() => {}} />,
+  );
+  const mute = await screen.findByRole('button', { name: 'Mute Guitar' });
+  fireEvent.click(mute);
+  const gain = screen.getByRole('slider', { name: 'Drums' });
+  fireEvent.keyDown(gain, { key: 'ArrowRight' });
+  expect(gain.closest('[data-slot="stem-strip"]')).toHaveTextContent('0.5');
+  view.rerender(
+    <StemMixEditor
+      source={{ ...source, title: 'New rehearsal title' }}
+      locked={false}
+      onClose={() => {}}
+    />,
+  );
+  expect(
+    await screen.findByRole('dialog', { name: 'New rehearsal title' }),
+  ).toBeVisible();
+  expect(mute).toHaveAttribute('aria-pressed', 'false');
+  expect(gain).toHaveAttribute('aria-valuenow', '0.5');
+  expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
+  expect(
+    fetch.mock.calls.filter(([url]) => url.endsWith('/songs/song')),
+  ).toHaveLength(1);
+});
+
 it('plays the stems live from the editor and sends each change as it is made', async () => {
   vi.stubGlobal('fetch', songFetch());
   const { send, wrap, value } = session(player());
@@ -325,7 +354,9 @@ it('plays the stems live from the editor and sends each change as it is made', a
   fireEvent.click(
     await screen.findByRole('button', { name: 'Play the stems' }),
   );
-  await waitFor(() => expect(send).toHaveBeenCalledWith({ kind: 'play' }));
+  await waitFor(() =>
+    expect(send).toHaveBeenCalledWith({ kind: 'play' }, source.id),
+  );
   expect(send).toHaveBeenCalledWith({
     kind: 'cue_stems',
     source: 'song',
@@ -488,7 +519,9 @@ it('lists songs with stems, plays a mix and offers only unsplit tracks to split'
   expect(screen.getByText(/0:01 · 4 stems · 6 stems/)).toBeVisible();
   expect(screen.getByText('Guitar muted')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Play No guitar' }));
-  await waitFor(() => expect(send).toHaveBeenCalledWith({ kind: 'play' }));
+  await waitFor(() =>
+    expect(send).toHaveBeenCalledWith({ kind: 'play' }, 'render'),
+  );
   expect(send).toHaveBeenCalledWith({ kind: 'cue', asset: 'render' });
   fireEvent.click(screen.getByRole('button', { name: /Split a track/ }));
   const picker = await screen.findByRole('dialog', { name: 'Split a track' });

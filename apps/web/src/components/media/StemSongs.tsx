@@ -67,7 +67,7 @@ export function StemSongs({ connected }: { connected: boolean }) {
   async function playMix(asset: string, title: string) {
     const cued = player?.track?.id === asset;
     if (cued && player.state === 'playing') {
-      await send({ kind: 'pause' });
+      await send({ kind: 'pause' }, asset);
       return;
     }
     if (
@@ -81,7 +81,7 @@ export function StemSongs({ connected }: { connected: boolean }) {
     )
       return;
     if (cued || (await send({ kind: 'cue', asset })))
-      await send({ kind: 'play' });
+      await send({ kind: 'play' }, asset);
   }
 
   return (
@@ -110,9 +110,9 @@ export function StemSongs({ connected }: { connected: boolean }) {
         </div>
       </div>
       {protect && <p className="caption">{PROTECT_REASON}</p>}
-      {error && (
+      {(error || media.refusal) && (
         <p role="alert" className="media-note">
-          {error}
+          {error || media.refusal}
         </p>
       )}
       {running && !songs.some(({ asset }) => asset.id === running.source) && (

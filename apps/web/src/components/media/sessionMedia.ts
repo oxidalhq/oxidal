@@ -66,7 +66,8 @@ export interface SessionMedia {
   clearRefusal: () => void;
   /** The one-shot notice of the newest snapshot (a preset gap). */
   notice: string;
-  send: (command: PlayerCommand) => Promise<boolean>;
+  /** Track-row transport stays bound to the asset the player selected. */
+  send: (command: PlayerCommand, expectedCue?: string) => Promise<boolean>;
   library: MediaLibrary | null;
   libraryError: string;
   refreshLibrary: () => void;

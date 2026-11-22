@@ -64,7 +64,7 @@ export function StemStrip({
           onChange({ ...controls, level: level ?? controls.level })
         }
         onValueCommit={onCommit}
-        readout={controls.level <= -60 ? '−∞' : controls.level.toFixed(0)}
+        readout={controls.level <= -60 ? '−∞' : String(controls.level)}
         disabled={disabled}
         className={cn(
           !heard && '[&_[data-slot=slider]>span]:text-muted-foreground',
@@ -77,7 +77,7 @@ export function StemStrip({
           pressed={controls.muted}
           disabled={disabled}
           onPressedChange={(muted) => onChange({ ...controls, muted })}
-          className="h-8 w-12 px-0"
+          className="h-8 w-12 px-0 pointer-coarse:min-h-touch"
         >
           <SpeakerSlash />
         </Toggle>
@@ -87,7 +87,7 @@ export function StemStrip({
           pressed={controls.solo}
           disabled={disabled}
           onPressedChange={(solo) => onChange({ ...controls, solo })}
-          className="h-8 w-12 px-0"
+          className="h-8 w-12 px-0 pointer-coarse:min-h-touch"
         >
           <Headphones />
         </Toggle>
