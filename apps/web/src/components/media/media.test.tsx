@@ -7,6 +7,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
@@ -348,7 +349,7 @@ it('Library lists tracks in Backing order; Play cues then plays; Protect locks e
   await waitFor(() =>
     expect(value.send).toHaveBeenNthCalledWith(2, { kind: 'play' }, 't2'),
   );
-  fireEvent.click(
+  await userEvent.click(
     screen.getByRole('button', { name: 'More for Rehearsal 01' }),
   );
   fireEvent.click(screen.getByRole('menuitem', { name: 'Move up' }));

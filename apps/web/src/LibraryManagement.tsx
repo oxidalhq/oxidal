@@ -4,7 +4,6 @@ import {
   ArrowDown,
   ArrowUp,
   DotsSixVertical,
-  DotsThree,
   DownloadSimple,
   Plus,
 } from '@phosphor-icons/react';
@@ -13,8 +12,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@oxidal/design-system/components/button';
 import { Loading } from '@oxidal/design-system/components/states';
 
-import './LibraryManagement.css';
 import { type LibraryCatalog, libraryCatalog, type LibraryUpdate } from './api';
+import { RowMenu } from './components/RowMenu';
 import { FailureNotice } from './FailureNotice';
 import {
   addSuggestedSet,
@@ -377,7 +376,7 @@ export function LibraryManagement({
         <p className="caption">No removed entries.</p>
       )}
       {catalog && !removed && notMembers.length > 0 && (
-        <section className="set-list-outside" aria-label="Not in the set list">
+        <section aria-label="Not in the set list">
           <div className="section-heading">
             <h3>Not in the set list ({notMembers.length})</h3>
             <Button
@@ -526,9 +525,9 @@ function LibraryRow({
           </>
         )}
         {menu && (
-          <SetListMenu
+          <RowMenu
             name={item.name}
-            actions={menu}
+            items={menu}
             disabled={disabled}
             note={note}
           />
@@ -562,73 +561,6 @@ function LibraryRow({
           {item.archived ? 'Restore' : 'Remove'}
         </Button>
       </div>
-    </div>
-  );
-}
-
-/** The ⋯ menu of a set-list row: Open · Duplicate · Remove from set list · MIDI. */
-function SetListMenu({
-  name,
-  actions,
-  disabled,
-  note,
-}: {
-  name: string;
-  actions: MenuAction[];
-  disabled: boolean;
-  note?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const close = (event: Event) => {
-      if (
-        event instanceof KeyboardEvent
-          ? event.key === 'Escape'
-          : !root.current?.contains(event.target as Node)
-      )
-        setOpen(false);
-    };
-    document.addEventListener('pointerdown', close);
-    document.addEventListener('keydown', close);
-    return () => {
-      document.removeEventListener('pointerdown', close);
-      document.removeEventListener('keydown', close);
-    };
-  }, [open]);
-  return (
-    <div className="row-menu" ref={root}>
-      <Button
-        variant="ghost"
-        size="icon"
-        disabled={disabled}
-        aria-label={`More for ${name}`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <DotsThree aria-hidden="true" weight="bold" />
-      </Button>
-      {open && (
-        <div className="row-menu-list" role="menu" aria-label={name}>
-          {actions.map((action) => (
-            <button
-              key={action.label}
-              type="button"
-              role="menuitem"
-              disabled={action.disabled}
-              onClick={() => {
-                setOpen(false);
-                action.onSelect();
-              }}
-            >
-              {action.label}
-            </button>
-          ))}
-          {note && <p className="caption row-menu-note">{note}</p>}
-        </div>
-      )}
     </div>
   );
 }

@@ -577,51 +577,6 @@
   top: 0;
   right: 0;
 }
-[data-slot='library-row']:has(.row-menu [aria-expanded='true']) {
-  z-index: 20;
-}
-.row-menu {
-  position: relative;
-}
-.row-menu-list {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 0.25rem);
-  z-index: 20;
-  display: grid;
-  min-width: 12rem;
-  padding: 0.25rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.16);
-}
-.row-menu-list > button,
-.row-menu-list > a {
-  display: flex;
-  align-items: center;
-  min-height: var(--touch-target);
-  padding: 0 0.75rem;
-  border: 0;
-  border-radius: calc(var(--radius) - 2px);
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  text-decoration: none;
-  cursor: pointer;
-}
-.row-menu-list > button:hover,
-.row-menu-list > a:hover,
-.row-menu-list > button:focus-visible,
-.row-menu-list > a:focus-visible {
-  background: var(--muted);
-  outline: none;
-}
-.row-menu-list > button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
 .discover-page,
 .library-import {
   display: grid;

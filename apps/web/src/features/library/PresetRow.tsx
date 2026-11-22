@@ -1,12 +1,10 @@
-import { DotsThree, MusicNotes, Play } from '@phosphor-icons/react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { MusicNotes, Play } from '@phosphor-icons/react';
+import type { ReactNode } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { LibraryRow } from '@oxidal/design-system/patterns/library-list';
 
-export type RowAction =
-  | { label: string; onSelect: () => void; disabled?: boolean }
-  | { label: string; href: string; download?: boolean };
+import { type RowAction,RowMenu } from '../../components/RowMenu';
 
 /**
  * One preset row everywhere in Library (7.2): the name and a one-line summary,
@@ -78,75 +76,9 @@ export function PresetRow({
               </span>
             </Button>
           )}
-          {actions.length > 0 && <RowMenu name={name} actions={actions} />}
+          {actions.length > 0 && <RowMenu name={name} items={actions} />}
         </>
       }
     />
-  );
-}
-
-function RowMenu({ name, actions }: { name: string; actions: RowAction[] }) {
-  const [open, setOpen] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const close = (event: Event) => {
-      if (
-        event instanceof KeyboardEvent
-          ? event.key === 'Escape'
-          : !root.current?.contains(event.target as Node)
-      )
-        setOpen(false);
-    };
-    document.addEventListener('pointerdown', close);
-    document.addEventListener('keydown', close);
-    return () => {
-      document.removeEventListener('pointerdown', close);
-      document.removeEventListener('keydown', close);
-    };
-  }, [open]);
-  return (
-    <div className="row-menu" ref={root}>
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label={`More for ${name}`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <DotsThree aria-hidden="true" weight="bold" />
-      </Button>
-      {open && (
-        <div className="row-menu-list" role="menu" aria-label={name}>
-          {actions.map((action) =>
-            'href' in action ? (
-              <a
-                key={action.label}
-                role="menuitem"
-                href={action.href}
-                download={action.download}
-                onClick={() => setOpen(false)}
-              >
-                {action.label}
-              </a>
-            ) : (
-              <button
-                key={action.label}
-                type="button"
-                role="menuitem"
-                disabled={action.disabled}
-                onClick={() => {
-                  setOpen(false);
-                  action.onSelect();
-                }}
-              >
-                {action.label}
-              </button>
-            ),
-          )}
-        </div>
-      )}
-    </div>
   );
 }

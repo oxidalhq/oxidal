@@ -396,58 +396,6 @@
     justify-content: flex-start;
   }
 }
-.media-more {
-  position: relative;
-}
-.media-menu {
-  position: absolute;
-  top: calc(100% + 0.25rem);
-  right: 0;
-  z-index: 40;
-  display: grid;
-  min-width: 12rem;
-  padding: 0.25rem;
-  border: 1px solid var(--foreground);
-  border-radius: var(--radius);
-  background: var(--popover);
-}
-.media-menu [role='menuitem'] {
-  display: flex;
-  align-items: center;
-  min-height: var(--touch-target);
-  padding: 0 0.75rem;
-  border: 0;
-  border-radius: var(--radius);
-  background: none;
-  color: var(--foreground);
-  font: inherit;
-  font-size: var(--text-base);
-  text-align: left;
-  text-decoration: none;
-  cursor: pointer;
-}
-.media-menu [role='menuitem']:hover,
-.media-menu [role='menuitem']:focus-visible {
-  background: var(--accent);
-  outline: none;
-}
-.media-menu [role='menuitem'][aria-disabled='true'] {
-  opacity: 0.45;
-  cursor: default;
-}
-.media-menu hr {
-  width: 100%;
-  margin: 0.25rem 0;
-  border: 0;
-  border-top: 1px solid var(--border);
-}
-@media (max-width: 599px) {
-  .media-menu {
-    right: auto;
-    left: 0;
-  }
-}
-
 /* Perform's backing row. */
 .media-perform {
   display: flex;

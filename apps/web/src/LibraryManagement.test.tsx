@@ -5,6 +5,7 @@ import {
   render,
   screen,
 } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { type LibraryCatalog, libraryCatalog } from './api';
@@ -217,9 +218,27 @@ it('lists only set-list members, numbered, and keeps the rest of Mine in its own
     action: { kind: 'set_list', member: true },
   });
 });
+it('returns focus to the set-list row after keyboard review without changing it', async () => {
+  await view();
+  const user = userEvent.setup();
+  const trigger = screen.getByRole('button', { name: 'More for Second rig' });
+  trigger.focus();
+  await user.keyboard('{ArrowDown}');
+  expect(screen.getByRole('menuitem', { name: 'Open' })).toHaveFocus();
+  await user.keyboard('{ArrowDown}');
+  expect(screen.getByRole('menuitem', { name: 'Duplicate' })).toHaveFocus();
+  await user.keyboard('{Escape}');
+  expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
+  expect(
+    vi.mocked(libraryCatalog).mock.calls.every(([update]) => !update),
+  ).toBe(true);
+});
 it('the ⋯ menu removes a preset from the set list and keeps it in Mine', async () => {
   await view();
-  fireEvent.click(screen.getByRole('button', { name: 'More for Second rig' }));
+  await userEvent.click(
+    screen.getByRole('button', { name: 'More for Second rig' }),
+  );
   expect(
     screen.getAllByRole('menuitem').map((item) => item.textContent),
   ).toEqual(['Open', 'Duplicate', 'Remove from set list', 'MIDI']);

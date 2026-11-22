@@ -1,124 +1,6 @@
-import { DotsThree } from '@phosphor-icons/react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 
-import { Button } from '@oxidal/design-system/components/button';
-
-export type MenuItem =
-  | {
-      label: string;
-      onSelect: () => void;
-      disabled?: boolean;
-    }
-  | { label: string; href: string; download: true }
-  | 'separator';
-
-/**
- * A small action menu: arrow keys move, Esc closes and returns focus, a
- * click outside closes it.
- */
-export function MoreMenu({
-  name,
-  items,
-  label = `More for ${name}`,
-}: {
-  name: string;
-  items: MenuItem[];
-  /** The trigger's and the menu's accessible name. */
-  label?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const trigger = useRef<HTMLButtonElement>(null);
-  const menu = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    menu.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
-    const outside = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (!menu.current?.contains(target) && !trigger.current?.contains(target))
-        setOpen(false);
-    };
-    document.addEventListener('pointerdown', outside);
-    return () => document.removeEventListener('pointerdown', outside);
-  }, [open]);
-  const close = () => {
-    setOpen(false);
-    trigger.current?.focus();
-  };
-  return (
-    <div className="media-more">
-      <Button
-        ref={trigger}
-        variant="outline"
-        size="icon"
-        aria-label={label}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        <DotsThree aria-hidden="true" weight="bold" />
-      </Button>
-      {open && (
-        <div
-          ref={menu}
-          className="media-menu"
-          role="menu"
-          aria-label={label}
-          onKeyDown={(event) => {
-            const entries = [
-              ...(menu.current?.querySelectorAll<HTMLElement>(
-                '[role="menuitem"]:not([aria-disabled="true"])',
-              ) ?? []),
-            ];
-            const index = entries.indexOf(
-              document.activeElement as HTMLElement,
-            );
-            if (event.key === 'Escape') {
-              event.preventDefault();
-              event.stopPropagation();
-              close();
-            } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-              event.preventDefault();
-              const step = event.key === 'ArrowDown' ? 1 : -1;
-              entries[
-                (index + step + entries.length) % entries.length
-              ]?.focus();
-            } else if (event.key === 'Tab') setOpen(false);
-          }}
-        >
-          {items.map((item, index) =>
-            item === 'separator' ? (
-              <hr key={`separator-${index}`} />
-            ) : 'href' in item ? (
-              <a
-                key={item.label}
-                role="menuitem"
-                href={item.href}
-                download
-                onClick={() => setOpen(false)}
-              >
-                {item.label}
-              </a>
-            ) : (
-              <button
-                key={item.label}
-                type="button"
-                role="menuitem"
-                aria-disabled={item.disabled || undefined}
-                onClick={() => {
-                  if (item.disabled) return;
-                  close();
-                  item.onSelect();
-                }}
-              >
-                {item.label}
-              </button>
-            ),
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+import { type MenuItem,RowMenu } from '../RowMenu';
 
 /**
  * One session-media file in a list: number, name with its state, a detail
@@ -155,7 +37,7 @@ export function MediaRow({
       </div>
       <div className="media-row-actions">
         {actions}
-        {menu && <MoreMenu name={name} items={menu} />}
+        {menu && <RowMenu name={name} items={menu} variant="outline" />}
       </div>
     </li>
   );

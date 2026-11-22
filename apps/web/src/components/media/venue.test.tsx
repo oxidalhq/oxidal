@@ -7,6 +7,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import {
@@ -150,7 +151,7 @@ it('labels built-ins as starting points', async () => {
     '“Small PA” is a starting point to tune by ear, not a measured correction. Saving makes your own copy.',
   );
   // A built-in can be duplicated but not renamed or deleted.
-  fireEvent.click(
+  await userEvent.click(
     within(panel).getByRole('button', { name: 'Profile actions' }),
   );
   const menu = screen.getByRole('menu', { name: 'Profile actions' });

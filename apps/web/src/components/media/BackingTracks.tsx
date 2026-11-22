@@ -12,7 +12,8 @@ import {
 } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
 import { formatTime } from '../../lib/playerClock';
-import { MediaRow, type MenuItem } from './MediaRow';
+import type { MenuItem } from '../RowMenu';
+import { MediaRow } from './MediaRow';
 import {
   canSplitBackingTrack,
   channelsLabel,

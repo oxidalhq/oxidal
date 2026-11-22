@@ -5,6 +5,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import {
@@ -232,7 +233,7 @@ it('shows one action menu for a Mine row and the empty state when nothing is sav
       onManage={manage}
     />,
   );
-  fireEvent.click(
+  await userEvent.click(
     await screen.findByRole('button', { name: 'More for My lead' }),
   );
   expect(
@@ -276,7 +277,7 @@ it('Duplicate makes "Name copy" in Mine, outside the set list, and opens it stop
   } as never);
   const edit = vi.fn();
   render(<SavedRigs connected onOpenRig={() => {}} onEdit={edit} />);
-  fireEvent.click(
+  await userEvent.click(
     await screen.findByRole('button', { name: 'More for My lead' }),
   );
   await waitFor(() =>

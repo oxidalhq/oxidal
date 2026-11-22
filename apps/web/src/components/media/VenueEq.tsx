@@ -38,9 +38,9 @@ import { setLeaveGuard } from '../../lib/leaveGuard';
 import { formatDb, headroom, withBand } from '../../lib/venueEq';
 import { onVenue } from '../../lib/venueFeed';
 import { PreviewThrottle } from '../../lib/venuePreview';
+import { RowMenu } from '../RowMenu';
 import { BandEditor } from './BandEditor';
 import { EqGraph, type GraphChange } from './EqGraph';
-import { MoreMenu } from './MediaRow';
 import { useProtect } from './sessionMedia';
 import {
   DeleteProfileDialog,
@@ -551,7 +551,8 @@ function VenueView({ owner }: { owner: Owner }) {
             Revert
           </Button>
           {!disabled && (
-            <MoreMenu
+            <RowMenu
+              variant="outline"
               name={active.name}
               label="Profile actions"
               items={
