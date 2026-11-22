@@ -5,6 +5,8 @@ Oxidal's own micro-looper and texture effect: it records all the time, so one sw
 - **Plugins:** `urn:oxidal:plugin:moment#mono`, `urn:oxidal:plugin:moment#stereo`.
 - **Bundle:** `oxidal-moment.lv2`, one binary `oxidal_moment.so`; shared layout, ports 0–23; latency 0.
 
+Mixed-rig scene bypass keeps Moment processing. With Catch on, bypassing the block and recalling an active scene plays the caught phrase again, even after the live input falls silent.
+
 The caught loop lives in memory only. It is not saved with a preset and is gone when the effect is removed or the unit restarts. For long recordings that are kept, use the looper.
 
 ## Controls

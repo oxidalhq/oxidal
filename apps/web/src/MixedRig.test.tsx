@@ -1460,3 +1460,37 @@ it('shows live symbol controls when discovery is unavailable', async () => {
   expect(within(panel).queryByText(/factory defaults/)).toBeNull();
   expect(rigAudioCommand).not.toHaveBeenCalled();
 });
+
+it('keeps live edits after saving an independent copy and reloads only on explicit Discard', async () => {
+  const state = setup();
+  state.control!.modified = true;
+  state.save = {
+    copy_id: 'independent-copy',
+    source_session: state.control!.session,
+    source_control_revision: state.control!.revision,
+    running: false,
+    saved_revision: 'c'.repeat(64),
+    error: null,
+  };
+  const menu = await screen.findByRole('button', { name: 'Preset actions' });
+  await waitFor(() => expect(menu).toBeEnabled());
+  const open = async () => {
+    fireEvent.click(menu);
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Discard live edits/ }),
+    );
+    return screen.findByRole('dialog', { name: 'Discard live edits?' });
+  };
+  const cancel = await open();
+  fireEvent.click(within(cancel).getByRole('button', { name: 'Keep editing' }));
+  expect(rigAudioCommand).not.toHaveBeenCalled();
+  const confirm = await open();
+  fireEvent.click(
+    within(confirm).getByRole('button', { name: 'Discard edits and reload' }),
+  );
+  await waitFor(() =>
+    expect(rigAudioCommand).toHaveBeenCalledExactlyOnceWith(state, {
+      kind: 'discard_changes',
+    }),
+  );
+});

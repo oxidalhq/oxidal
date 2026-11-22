@@ -123,3 +123,27 @@ it('asks before an Undo drops changes that are not saved', () => {
   fireEvent.click(within(confirm).getByRole('button', { name: 'Cancel' }));
   expect(setStepping).toHaveBeenCalledWith(null);
 });
+
+it('invalidates a reviewed discard when another viewer edits the same preset', () => {
+  const { view } = props();
+  const command = vi.fn();
+  const updated = (revision: number): RigViewProps => ({
+    rig: { ...view.rig, actionsOpen: true, setActionsOpen: vi.fn(), command },
+    vm: {
+      ...view.vm,
+      changed: true,
+      state: { ...view.vm.state, session: 'server', revision },
+    },
+  });
+  const header = render(<RigHeader {...updated(2)} />);
+  fireEvent.click(screen.getByRole('button', { name: /Discard live edits/ }));
+  const reload = screen.getByRole('button', {
+    name: 'Discard edits and reload',
+  });
+  expect(reload).toBeEnabled();
+  header.rerender(<RigHeader {...updated(3)} />);
+  expect(reload).toBeDisabled();
+  expect(screen.getByText(/Reopen Discard/)).toBeVisible();
+  fireEvent.click(reload);
+  expect(command).not.toHaveBeenCalled();
+});

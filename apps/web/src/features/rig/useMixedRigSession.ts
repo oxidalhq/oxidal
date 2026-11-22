@@ -523,7 +523,11 @@ export function useMixedRigSession({
   /** One confirmed command. An edit of an Oxidal sound or a TONE3000 chain
    * then makes its copy in Mine, unless `promote` is false because the caller
    * sends more commands that belong to the same change and promotes after. */
-  async function command(action: RigAudioAction, promote = true) {
+  async function command(
+    action: RigAudioAction,
+    promote = true,
+    opening?: RigAudioState,
+  ) {
     if (!current.current || sending.current) return;
     const control = current.current.control;
     if (action.kind === 'branch' && control?.scene)
@@ -579,7 +583,7 @@ export function useMixedRigSession({
         });
         accept(next);
       } else {
-        next = await rigAudioCommand(current.current, action);
+        next = await rigAudioCommand(opening ?? current.current, action);
         accept(next);
       }
       if (

@@ -197,14 +197,16 @@ export function mixedRigViewModel({
     return c;
   });
   const currentSave =
-    state.save?.source_session === state.control?.session ? state.save : null;
+    !state.save?.copy_id &&
+    state.save?.source_session === state.control?.session
+      ? state.save
+      : null;
   const changed =
     !!state.control &&
     state.control.modified &&
     !(
-      state.save?.saved_revision &&
-      state.save.source_session === state.control.session &&
-      state.save.source_control_revision === state.control.revision
+      currentSave?.saved_revision &&
+      currentSave.source_control_revision === state.control.revision
     );
   const nativeLoad = (() => {
     const engines = state.control?.authoring ?? [];

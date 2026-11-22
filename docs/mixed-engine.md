@@ -19,6 +19,12 @@ finished update appears in the rig's confirmed controls and is included in the
 next explicit Save. The saved preset and any stored scene settings keep their
 values until explicitly edited and saved.
 
+From **Preset actions → Discard live edits**, confirm **Discard edits and reload**
+to reopen the playing preset version with its saved values. Audio restarts and
+releases any caught loop. The device keeps the stream configuration and MIDI
+mapping. If another viewer edits the rig during confirmation, reopen Discard to
+review the current state.
+
 ## The rig canvas
 
 Rig draws every topology with one renderer: a straight chain, any routing tree

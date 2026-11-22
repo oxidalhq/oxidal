@@ -31,7 +31,7 @@ async fn apply(c: &Client, url: &str, action: Value) -> Value {
         assert!(status.is_success(), "{status}: {body}");
         if matches!(
             action["kind"].as_str(),
-            Some("start" | "restart" | "reconfigure")
+            Some("start" | "restart" | "reconfigure" | "discard_changes")
         ) {
             assert_eq!(body["phase"], "starting");
             return phase(c, url, "running").await;
@@ -321,6 +321,28 @@ async fn scene_bypass_survives_mixed_worker_restart_and_independent_save() {
         store.read(&published).unwrap().manifest().name,
         "Sounding scene revision"
     );
+    let gain = json!({"kind":"lv2","node":"amp","symbol":"gain"});
+    let before_edit = get(&client, &url, "rig-audio").await;
+    let edited = apply(&client, &url, set(&before_edit, gain.clone(), -15.0)).await;
+    assert_eq!(control(&edited, &gain), -15.0);
+    assert_eq!(
+        post(
+            &client,
+            &url,
+            &before_edit,
+            json!({"kind":"discard_changes"})
+        )
+        .await
+        .status(),
+        409
+    );
+    let restored = apply(&client, &url, json!({"kind":"discard_changes"})).await;
+    assert_eq!(control(&restored, &gain), -6.0);
+    assert_eq!(control(&restored, &bypass), 1.0);
+    assert_eq!(restored["control"]["modified"], false);
+    assert_eq!(restored["control"]["source_revision"], saved);
+    assert_ne!(restored["control"]["session"], edited["control"]["session"]);
+    assert_eq!(restored["configured"]["midi"], edited["configured"]["midi"]);
     let mut revision_manifest = manifest;
     revision_manifest["name"] = json!("Same rig with a changed name");
     let revised = client

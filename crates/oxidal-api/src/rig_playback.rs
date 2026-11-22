@@ -673,6 +673,14 @@ impl Owner {
         if restoring {
             self.keep_previous_stream();
         }
+        self.replace_configuration(next, (!restoring).then_some(previous))
+            .await
+    }
+    async fn replace_configuration(
+        &mut self,
+        next: StartRig,
+        rollback: Option<StartRig>,
+    ) -> Result<(), String> {
         self.phase(AudioPhase::Stopping, None);
         let reserved = match self.release_reserved().await {
             Ok(permit) => permit,
@@ -681,7 +689,7 @@ impl Owner {
                 return Err(error);
             }
         };
-        self.rollback = if restoring { None } else { Some(previous) };
+        self.rollback = rollback;
         self.restored_error = None;
         if let Err(error) = self.start_reserved(next, reserved).await {
             self.preparation_failed(error).await;
@@ -1270,6 +1278,41 @@ impl Owner {
                     return Err(e);
                 }
                 self.phase(AudioPhase::Stopped, None);
+            }
+            RigAudioAction::DiscardChanges => {
+                if self
+                    .state
+                    .telemetry
+                    .as_ref()
+                    .and_then(|s| s.monitoring)
+                    .is_some_and(|host| {
+                        host.capture.is_some_and(|job| job.running || !job.finished)
+                            || host.backing.is_some_and(|backing| backing.playing)
+                    })
+                {
+                    return Err(
+                        "Stop the recording or backing playback before reloading the rig".into(),
+                    );
+                }
+                if self.state.phase != AudioPhase::Running
+                    || !self
+                        .state
+                        .control
+                        .as_ref()
+                        .is_some_and(|c| c.modified && !c.scene_transitioning)
+                {
+                    return Err("Wait for a changed, running rig before discarding edits".into());
+                }
+                self.check_trial_admission()?;
+                self.flush_trial_history().await?;
+                let previous = self
+                    .state
+                    .configured
+                    .clone()
+                    .ok_or("Missing mixed configuration")?;
+                let mut saved = previous.clone();
+                saved.recall = None;
+                self.replace_configuration(saved, Some(previous)).await?;
             }
             RigAudioAction::Restart => {
                 if self.state.phase == AudioPhase::Starting {

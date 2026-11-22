@@ -8,12 +8,13 @@ import {
   Play,
   Stop,
 } from '@phosphor-icons/react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { RigHeading } from '@oxidal/design-system/patterns/rig-heading';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
+import type { RigAudioState } from '../../api';
 import { WAITING_FOR_DEVICE } from '../../lib/deviceWait';
 import { requestMidiAssignments } from '../../midiNavigation';
 import { choiceKey } from '../../presetChoices';
@@ -37,6 +38,9 @@ export function RigHeader({ rig, vm }: RigViewProps) {
   const waiting = rigBusy(vm, rig);
   const { redoTarget, setStepping, stepHistory, stepping, undoTarget } = rig;
   const drafts = vm.draftCount;
+  const [discardOpening, setDiscardOpening] = useState<RigAudioState | null>(
+    null,
+  );
   // Scene updates belong to this version; Save or discard them first.
   const historyBlocked = waiting || !rig.connected || drafts > 0;
   const canUndo = !!undoTarget && !historyBlocked;
@@ -203,6 +207,27 @@ export function RigHeader({ rig, vm }: RigViewProps) {
             <div className="menu-list">
               <button
                 type="button"
+                disabled={
+                  !changed ||
+                  disabled ||
+                  waiting ||
+                  !!draftCount ||
+                  !!copyOnEdit ||
+                  !!state.save?.running ||
+                  !!state.control?.scene_transitioning
+                }
+                onClick={() => {
+                  setActionsOpen(false);
+                  setDiscardOpening(state);
+                }}
+              >
+                Discard live edits…
+                <span className="caption">
+                  Reload this saved preset version
+                </span>
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   setActionsOpen(false);
                   requestMidiAssignments();
@@ -319,6 +344,49 @@ export function RigHeader({ rig, vm }: RigViewProps) {
               {stepping < 0 ? 'Undo' : 'Redo'}
             </Button>
           </div>
+        </AdjustmentDialog>
+      )}
+      {discardOpening && (
+        <AdjustmentDialog
+          title="Discard live edits?"
+          onCancel={() => setDiscardOpening(null)}
+        >
+          <p>
+            Reload the saved version of{' '}
+            {matching?.manifest.name ?? 'this preset'}. Audio will restart and
+            release any caught loop.
+          </p>
+          <div className="action-row">
+            <Button variant="outline" onClick={() => setDiscardOpening(null)}>
+              Keep editing
+            </Button>
+            <Button
+              disabled={
+                waiting ||
+                disabled ||
+                !!draftCount ||
+                !!state.save?.running ||
+                state.session !== discardOpening.session ||
+                state.revision !== discardOpening.revision
+              }
+              onClick={() => {
+                setDiscardOpening(null);
+                void command(
+                  { kind: 'discard_changes' },
+                  false,
+                  discardOpening,
+                );
+              }}
+            >
+              Discard edits and reload
+            </Button>
+          </div>
+          {(state.session !== discardOpening.session ||
+            state.revision !== discardOpening.revision) && (
+            <p role="status">
+              The rig changed. Reopen Discard to review the current version.
+            </p>
+          )}
         </AdjustmentDialog>
       )}
       {discarding && (

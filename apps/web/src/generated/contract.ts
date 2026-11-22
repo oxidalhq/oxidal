@@ -1038,6 +1038,9 @@ export type RigAudioAction =
       kind: "restart";
     }
   | {
+      kind: "discard_changes";
+    }
+  | {
       kind: "reconfigure";
       stream: StreamConfig;
     }

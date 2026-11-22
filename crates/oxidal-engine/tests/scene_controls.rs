@@ -651,3 +651,71 @@ fn switching_scenes_with_a_delay_time_difference_produces_no_discontinuity() {
         "the instant step is the audible click: {step}"
     );
 }
+
+#[test]
+#[ignore = "requires the actual built stereo Moment LV2 bundle"]
+fn moment_keeps_the_caught_phrase_through_bypassed_and_active_scenes() {
+    use oxidal_presets::manifest::SCENES_BYPASS_EXTENSION;
+
+    let bundle = std::env::var_os("OXIDAL_MOMENT_LV2_BUNDLE").expect("Moment test bundle");
+    let world = World::bundle(std::path::Path::new(&bundle)).unwrap();
+    let mut manifest: Value =
+        serde_json::from_slice(&bypass_only(0.0, false).manifest().encode().unwrap()).unwrap();
+    manifest["oxidal"]["lv2"][0]["pluginUri"] = json!("urn:oxidal:plugin:moment#stereo");
+    let info = world
+        .plugins(RATE)
+        .unwrap()
+        .into_iter()
+        .find(|p| p.uri == "urn:oxidal:plugin:moment#stereo")
+        .unwrap();
+    let controls: BTreeMap<_, _> = info
+        .ports
+        .into_iter()
+        .filter(|p| p.input && p.control)
+        .map(|p| (p.symbol, p.default.unwrap()))
+        .collect();
+    let settings = &mut manifest["oxidal"]["lv2"][0]["controls"];
+    *settings = json!(controls);
+    settings["route"] = json!(2);
+    settings["wet"] = json!(0);
+    settings["mix"] = json!(100);
+    let scene = |id, catch: i32, bypass| {
+        json!({
+            "id":id,"name":id,"gains":[],
+            "controls":[{"node":"fx","symbol":"catch","value":catch}],
+            "bypass":[{"node":"fx","value":bypass}]
+        })
+    };
+    manifest["extensions"][SCENES_BYPASS_EXTENSION]["scenes"] = json!([
+        scene("listen", 0, false),
+        scene("caught", 1, false),
+        scene("bypassed", 1, true)
+    ]);
+    let preset =
+        Bundle::from_parts(serde_json::to_vec(&manifest).unwrap(), BTreeMap::new()).unwrap();
+    let mut session = Session::new(preset, &world, RATE, FRAMES, 1 << 20).unwrap();
+    let mut clock = 0;
+    for _ in 0..3200 {
+        render(&mut session, |i| (i as f32 * 0.031).sin() * 0.4, &mut clock);
+    }
+    // From this point the live input is silent. Only Moment's memory can supply a signal.
+    for (id, bypass) in [("caught", false), ("bypassed", true), ("caught", false)] {
+        select(&mut session, id).unwrap();
+        for _ in 0..32 {
+            render(&mut session, |_| 0.0, &mut clock);
+        }
+        let state = session.snapshot();
+        assert_eq!(state.scene.as_deref(), Some(id));
+        assert!(!state.scene_transitioning);
+        assert_eq!(control(&state, "fx", "catch"), 1.0);
+        let peak = (0..128)
+            .flat_map(|_| render(&mut session, |_| 0.0, &mut clock))
+            .map(f32::abs)
+            .fold(0.0, f32::max);
+        if bypass {
+            assert_eq!(peak, 0.0);
+        } else {
+            assert!(peak > 0.05, "{id}: {peak}");
+        }
+    }
+}

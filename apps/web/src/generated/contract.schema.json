@@ -12476,6 +12476,20 @@
           ]
         },
         {
+          "description": "Reopen this immutable version without its working recall.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "discard_changes"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
           "type": "object",
           "properties": {
             "kind": {

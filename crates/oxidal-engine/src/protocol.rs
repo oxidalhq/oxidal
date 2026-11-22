@@ -678,6 +678,8 @@ pub enum RigAudioAction {
     },
     Stop,
     Restart,
+    /// Reopen this immutable version without its working recall.
+    DiscardChanges,
     Reconfigure {
         stream: oxidal_audio::StreamConfig,
     },
