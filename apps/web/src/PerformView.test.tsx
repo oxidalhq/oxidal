@@ -14,6 +14,7 @@ import {
   presetLibrary,
   rigLibrary,
 } from './api';
+import { StageFootswitches } from './features/stage/StageFootswitches';
 import { setPerform } from './performState';
 import { PerformView } from './PerformView';
 vi.mock('./api', () => ({
@@ -247,4 +248,44 @@ it('shows each neighbour with its readiness and mutes only from confirmed state'
   // The click alone does not claim Muted; only the confirmed reading does.
   await vi.waitFor(() => expect(mute).toBeEnabled());
   expect(mute).toHaveAttribute('aria-pressed', 'false');
+});
+
+it('uses the mapped block for a held switch and the scene for a tap', () => {
+  const onSelect = vi.fn();
+  const onToggle = vi.fn();
+  const blocks = ['echo', 'amp'].map((id) => ({ id, label: id, on: false }));
+  render(
+    <StageFootswitches
+      layout="four"
+      scenes={{
+        active: 'verse',
+        scenes: [
+          { id: 'verse', name: 'Verse' },
+          { id: 'chorus', name: 'Chorus' },
+        ],
+        onSelect,
+      }}
+      blocks={blocks}
+      disabled={false}
+      onStep={vi.fn()}
+      onToggle={onToggle}
+    />,
+  );
+  const pad = screen.getByRole('button', { name: 'B Chorus Hold · echo' });
+  vi.useFakeTimers();
+  try {
+    fireEvent.pointerDown(pad, { button: 0, isPrimary: true });
+    vi.advanceTimersByTime(500);
+    fireEvent.pointerUp(pad);
+    fireEvent.click(pad);
+    expect(onToggle).toHaveBeenCalledExactlyOnceWith('echo');
+    expect(onSelect).not.toHaveBeenCalled();
+    fireEvent.pointerDown(pad, { button: 0, isPrimary: true });
+    fireEvent.pointerUp(pad);
+    fireEvent.click(pad);
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith('chorus');
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.useRealTimers();
+  }
 });

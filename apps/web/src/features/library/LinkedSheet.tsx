@@ -31,6 +31,7 @@ type SharedSheet = {
   loading: boolean;
   error: string;
   missing: boolean;
+  entryOwnsMedia: boolean;
   refresh: () => void;
   size: number;
   setSize: (size: number) => void;
@@ -101,7 +102,11 @@ export function LinkedSheetProvider({
   const [links, setLinks] = useState<SheetLinks>();
   const [reading, setReading] = useState<Reading>();
   const [linkError, setLinkError] = useState('');
-  const [documentError, setDocumentError] = useState('');
+  const [documentError, setDocumentError] = useState<{
+    source: string;
+    sheet: string;
+    message: string;
+  }>();
   const [loading, setLoading] = useState(false);
   const [retry, setRetry] = useState(0);
   const [viewer, setViewer] = useState(readViewer);
@@ -158,7 +163,9 @@ export function LinkedSheetProvider({
     };
   }, [connected, retry]);
   const link = resolveSheet(links?.links ?? [], preset, track);
-  const sheet = occurrence?.entry.settings.sheet ?? link?.sheet;
+  const settings = occurrence?.entry.settings;
+  const sheet =
+    settings?.sheet ?? (settings?.own_media ? undefined : link?.sheet);
   useEffect(() => {
     if (!connected || !sheet) return;
     let active = true;
@@ -169,11 +176,15 @@ export function LinkedSheetProvider({
         const document = await chordSheet(sheet);
         if (active) {
           setReading({ document, source });
-          setDocumentError('');
+          setDocumentError(undefined);
         }
       } catch (cause) {
         if (active)
-          setDocumentError(friendlyError(cause, 'read the linked song'));
+          setDocumentError({
+            source,
+            sheet,
+            message: friendlyError(cause, 'read the linked song'),
+          });
       } finally {
         if (active) setLoading(false);
       }
@@ -192,8 +203,13 @@ export function LinkedSheetProvider({
         error:
           !connected || monitor.disconnected
             ? 'Connection lost. Showing the previous reading.'
-            : linkError || documentError,
+            : (!settings?.own_media && linkError) ||
+              (documentError?.sheet === sheet &&
+              documentError?.source === source
+                ? documentError.message
+                : ''),
         missing: !sheet,
+        entryOwnsMedia: !!settings?.own_media,
         refresh: () => setRetry((n) => n + 1),
         size,
         setSize,
@@ -218,7 +234,8 @@ export function LinkedSheetProvider({
 /** Stage and the dock share selected source and viewer preferences. */
 export function LinkedSheet({ stage = false }: { stage?: boolean }) {
   const shared = useContext(LinkedSheetContext);
-  const document = shared?.reading?.document;
+  const document =
+    shared?.missing && !shared.error ? undefined : shared?.reading?.document;
   const song = useMemo(
     () =>
       document && parseSong(document.source, document.format, document.title),
@@ -239,7 +256,9 @@ export function LinkedSheet({ stage = false }: { stage?: boolean }) {
               (shared.loading
                 ? 'Reading the linked song…'
                 : shared.missing
-                  ? 'No chord sheet is linked to this preset or cued track. Add a link in Library → Songbook.'
+                  ? shared.entryOwnsMedia
+                    ? 'This set entry has no chord sheet. Choose one in Library → Set list.'
+                    : 'No chord sheet is linked to this preset or cued track. Add a link in Library → Songbook.'
                   : 'Reading the current song…')}
           </p>
           {song && <p>Previous sheet: {song.title}</p>}
@@ -261,7 +280,11 @@ export function LinkedSheet({ stage = false }: { stage?: boolean }) {
           stage={stage}
           linked={
             current && !shared.error
-              ? ['Current preset or cued track']
+              ? [
+                  shared.entryOwnsMedia
+                    ? 'Current set entry'
+                    : 'Current preset or cued track',
+                ]
               : ['Previous sheet']
           }
           initialScroll={shared.scrollPosition(document!.id)}

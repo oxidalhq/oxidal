@@ -569,7 +569,9 @@ export function PerformView({
             </div>
           ) : mode === 'presets' ? (
             <div className="perform-section perform-fill">{selector}</div>
-          ) : (
+          ) : null}
+          <LinkedSheet stage />
+          {!switching && mode === 'play' && (
             <>
               {scenes}
               {layout !== 'pads' && (
@@ -611,7 +613,6 @@ export function PerformView({
                 ))}
             </>
           )}
-          <LinkedSheet stage />
           <div className="flex flex-wrap items-end justify-center gap-x-6 gap-y-2 border-t border-border pt-2">
             <PerformanceTempo />
             <GuitarSwitch layout="compact" />

@@ -45,6 +45,11 @@ export function StageFootswitches({
     ['ready', 'paused', 'playing', 'stalled', 'ended'].includes(media.shown);
   const profile = CONTROLLERS.find((item) => item.id === layout)!;
   const liveScenes = scenes?.scenes ?? [];
+  function mappedBlock(key: string): SwitchAction | undefined {
+    const block =
+      blocks.find((item) => item.id === key) ?? blocks[key === 'ts9' ? 0 : 1];
+    return block ? { kind: 'block', block: block.id } : undefined;
+  }
   const mapped = {
     ...profile,
     switches: profile.switches.map((item) => {
@@ -54,10 +59,8 @@ export function StageFootswitches({
         const scene = liveScenes['abcd'.indexOf(tap.scene)];
         tap = scene ? { kind: 'scene', scene: scene.id } : unassigned;
       }
-      if (tap.kind === 'block') {
-        const block = blocks[tap.block === 'ts9' ? 0 : 1];
-        tap = block ? { kind: 'block', block: block.id } : unassigned;
-      }
+      if (tap.kind === 'block') tap = mappedBlock(tap.block) ?? unassigned;
+      if (hold?.kind === 'block') hold = mappedBlock(hold.block);
       if (
         tap.kind === 'boost' ||
         (tap.kind === 'tap' && !tempo) ||
@@ -65,8 +68,7 @@ export function StageFootswitches({
       )
         tap = unassigned;
       if (hold?.kind === 'tap' && !tempo) hold = undefined;
-      if (hold && ['boost', 'block', 'loop'].includes(hold.kind))
-        hold = undefined;
+      if (hold && ['boost', 'loop'].includes(hold.kind)) hold = undefined;
       return { ...item, tap, hold };
     }),
   };

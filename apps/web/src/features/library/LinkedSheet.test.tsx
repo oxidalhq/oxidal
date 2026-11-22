@@ -19,11 +19,14 @@ import { resolveSheet, SHEETS_CHANGED } from './sheetResolution';
 const live = vi.hoisted(() => ({
   preset: { kind: 'rig' as const, id: 'a'.repeat(64) },
   track: 'track-one',
+  occurrence: null as {
+    entry: { id: string; settings: { own_media: boolean; sheet?: string } };
+  } | null,
 }));
 vi.mock('../../api', () => ({ chordSheet: vi.fn(), chordSheetLinks: vi.fn() }));
 vi.mock('../../monitorFeed', () => ({
   useMonitorFeed: () => ({
-    snapshot: { preset: live.preset },
+    snapshot: { preset: live.preset, set_entry: live.occurrence },
     disconnected: false,
   }),
 }));
@@ -61,6 +64,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
   live.preset.id = 'a'.repeat(64);
+  live.occurrence = null;
   vi.mocked(chordSheetLinks).mockResolvedValue(links());
   vi.mocked(chordSheet).mockImplementation(async (id) =>
     sheet(id, id === 'one' ? 'First' : 'Second'),
@@ -139,4 +143,27 @@ it('labels the previous sheet when a changed link cannot be read', async () => {
   fireEvent(window, new Event(SHEETS_CHANGED));
   await screen.findByText('Previous sheet: First');
   expect(screen.getByText('Previous sheet')).toBeVisible();
+});
+
+it('respects an explicitly empty sheet on a repeated set entry in Stage and the dock', async () => {
+  const view = () => (
+    <LinkedSheetProvider connected>
+      <LinkedSheet />
+      <LinkedSheet stage />
+    </LinkedSheetProvider>
+  );
+  const rendered = render(view());
+  await screen.findAllByRole('heading', { name: 'First' });
+  live.occurrence = { entry: { id: 'repeat', settings: { own_media: true } } };
+  rendered.rerender(view());
+  expect(screen.queryByRole('document')).toBeNull();
+  expect(
+    screen.getAllByRole('region', { name: 'Linked chord sheet' }),
+  ).toHaveLength(1);
+  expect(chordSheet).toHaveBeenCalledTimes(1);
+  live.occurrence.entry.settings.sheet = 'two';
+  rendered.rerender(view());
+  await waitFor(() =>
+    expect(screen.getAllByRole('heading', { name: 'Second' })).toHaveLength(2),
+  );
 });
