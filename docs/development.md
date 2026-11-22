@@ -12,6 +12,14 @@ Release-please prepares separate core (`.`), UI (`apps/web`) and OS (`os`) versi
 
 Physical audio, gapless switching/trails, real MIDI transport, target-phone performance, image boot and recovery require independent qualification. Use a fresh SD card for Pi tests and preserve any existing working installation.
 
+## Dependency ownership
+
+The app and Storybook use `@oxidal/design-system` from `packages/ui`. Radix primitives, the shared Tailwind theme and class utilities belong to that package. The app declares its own direct imports, including React, Phosphor icons, Recharts, Ajv and xterm. The workspace locks the JavaScript packages in `pnpm-lock.yaml`.
+
+The LV2 crate uses `url` for plugin resource URLs. Its Linux worker feature enables the device crate and Tokio alongside ALSA support. Rust versions and features are recorded in the crate manifests and `Cargo.lock`.
+
+`node scripts/dependencies.mjs` runs the Rust advisory and licence checks, checks for unused Rust dependencies, and audits the pnpm lockfile at the high-severity threshold. The root check runs this before the browser suite. [Third-party licensing](../THIRD_PARTY.md)
+
 ## Automatic Markdown formatting
 
 Prettier 3.9.10 formats Markdown and tables consistently. `pnpm format:md` formats the documentation tree; `pnpm format:md:check` checks it. The aggregate `pnpm check` includes Markdown formatting checks.

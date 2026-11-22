@@ -482,3 +482,5 @@ Song and Preset use the authored division. Motion and Moment keep their own
 divisions. These listening settings preserve the preset’s BPM and control values. A
 scene recall retains Tap. Stopping backing returns Song to Preset and leaves
 guitar audio running. Stopping backing while Tap is selected leaves Tap active.
+
+On a new MIDI map, CC 80 toggles backing playback, CC 81 stops it, CC 82 and 83 choose the previous and next track, CC 84 toggles track Repeat, and CC 85 toggles Click. Repeat preserves the practice A–B range. Turning Click back on for the same cue restores its last settings. Each press runs once on the device and connected viewers read the same result.

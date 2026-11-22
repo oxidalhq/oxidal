@@ -25,6 +25,12 @@ If a screen cannot download, its recovery message offers **Reload interface**.
 Navigation and device readback remain available. Device audio runs independently
 of the page.
 
+## MIDI defaults
+
+Open **Settings → MIDI** to review or learn controller assignments. A new map starts with CC 7 for master output, CC 16–23 for the eight-scene template, CC 24/25 for previous/next preset, CC 26 for the tuner, CC 27 for tap tempo, CC 28 for a temporary instrument boost, and CC 29 for Protect. CC 80–85 control backing playback. The master uses the same taper as the on-screen fader. Boost adds 3 dB within the existing gain limit and clears when the audio stream closes.
+
+**Reset to default MIDI controls** shows the previous and proposed assignments and identifies conflicts before applying. Existing maps keep their assignments when the software is updated. The review also identifies controls that require a preset-specific target. Native and mixed playback receive hardware MIDI. Effects-only playback exposes its supported controls through the app. [Backing tracks and tempo](media.md)
+
 ## Fullscreen and screen timeout
 
 Open **Settings → Display** to choose Default, Night, Sunlight or E-paper. The

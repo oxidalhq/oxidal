@@ -15,23 +15,14 @@ an approved feature from the completed product.
 
 ## How the product connects
 
-Two lines in `apps/web/src/styles.css`:
+The web app loads the shared stylesheet and scans the package source for utility classes in `apps/web/src/styles.css`.
 
 ```css
-@import '@oxidal/design-system/styles/theme.css'; /* in place of ./theme.css */
-@source '../../../packages/ui/src'; /* so Tailwind sees the design system's classes */
+@import '@oxidal/design-system/styles/index.css';
+@source '../../../packages/ui/src';
 ```
 
-Checked on 2026-11-18: with those two lines and three patterns imported
-(`tool-dock`, `plugin-panel`, `sound-browser`), `pnpm --dir apps/web build`
-succeeds and the built CSS contains the design system's classes. The design
-system's theme has every token the product's `theme.css` has (99 of 99, same
-names); three default values differ (`--popover`, `--panel-radius`,
-`--display-radius`), so those surfaces change slightly when the theme is
-swapped.
-
-Both sides already share React 19, Tailwind 4, Radix, Recharts and Phosphor
-at the same versions.
+The shared entry point includes the theme and base styles used by Storybook. Page routes inherit the same raised popover surface and four-pixel panel and display radius in each display mode. The product and Storybook use the workspace package declared in their manifests. [Development and dependency checks](../../../docs/development.md)
 
 ## Rules for every wave
 
