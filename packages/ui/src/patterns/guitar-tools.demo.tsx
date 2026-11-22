@@ -68,9 +68,9 @@ export function LevelMatchDemo() {
       : m.done
         ? {
             step: 'measured',
-            before: '−13.8 LUFS',
-            target: '−18.0 LUFS',
-            level: '−4.2 dB',
+            before: '−13.8 dBFS',
+            target: '−18.0 dBFS',
+            level: '−4.0 dB',
           }
         : { step: 'ready', kept };
   return (

@@ -88,12 +88,14 @@ export function LevelMatch({
   onStart,
   onKeep,
   onUndo,
+  disabled = false,
 }: {
   preset: string;
   state: LevelMatchState;
   onStart: () => void;
   onKeep: () => void;
   onUndo: () => void;
+  disabled?: boolean;
 }) {
   return (
     <Card>
@@ -109,7 +111,11 @@ export function LevelMatch({
             Play the way you normally do for eight seconds. Oxidal sets this
             preset's Output level to the shared loudness.
           </Caption>
-          <Button className="justify-self-start" onClick={onStart}>
+          <Button
+            className="justify-self-start"
+            disabled={disabled}
+            onClick={onStart}
+          >
             Start listening
           </Button>
           {state.kept !== undefined && (
@@ -147,7 +153,9 @@ export function LevelMatch({
             ))}
           </dl>
           <div className="flex gap-2">
-            <Button onClick={onKeep}>Keep</Button>
+            <Button disabled={disabled} onClick={onKeep}>
+              Keep
+            </Button>
             <Button variant="outline" onClick={onUndo}>
               Undo
             </Button>

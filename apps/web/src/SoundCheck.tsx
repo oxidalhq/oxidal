@@ -262,6 +262,16 @@ export function SoundCheck({
       detail:
         'Presets and scenes have not been measured against one target yet. Use Even out below.',
     });
+  if (live && inputClips === 0 && inputPeak !== null && inputPeak >= -3)
+    fixes.push({
+      title: `Input peaks at ${dbfs(inputPeak)}`,
+      detail:
+        'Turn the interface gain down a little. Aim for −12 dBFS when you play hard.',
+      action: {
+        label: 'Show input meter',
+        run: () => document.getElementById('sound-check-meters')?.focus(),
+      },
+    });
   if (inputClips > 0)
     fixes.push({
       title: 'Reduce interface input gain',
@@ -395,6 +405,8 @@ export function SoundCheck({
               <VenueEq connected={connected} />
             </section>
             <div
+              id="sound-check-meters"
+              tabIndex={-1}
               className="sound-check-meters"
               role="group"
               aria-label="Live levels"
@@ -461,39 +473,44 @@ export function SoundCheck({
                 }
               />
             </div>
-            <section className="sound-check-fixes" aria-label="Fix next">
-              <div className="sound-check-section-heading">
-                <h2>Fix next</h2>
-                <span>Highest-value checks first</span>
-              </div>
-              {loading ? (
-                <StateNotice
-                  kind="loading"
-                  title="Reading instrument health…"
-                />
-              ) : fixes.length ? (
-                fixes.slice(0, 5).map((fix) => (
-                  <ToolRow
-                    key={fix.title}
-                    title={fix.title}
-                    detail={fix.detail}
-                    inline
-                  >
-                    {fix.action && (
-                      <Button variant="outline" onClick={fix.action.run}>
-                        {fix.action.label}
-                      </Button>
-                    )}
-                  </ToolRow>
-                ))
-              ) : (
-                <p className="sound-check-clear">
-                  <CheckCircle aria-hidden="true" /> No current software
-                  warning. Keep listening: this does not replace physical gain,
-                  cable, speaker or room checks.
-                </p>
-              )}
-            </section>
+            {loading ? (
+              <StateNotice kind="loading" title="Reading instrument health…" />
+            ) : (
+              <ReadinessList
+                title="Fix next"
+                checks={[
+                  ...fixes.map((fix) => ({
+                    ok: false,
+                    title: fix.title,
+                    fix: fix.detail,
+                    action: fix.action?.label,
+                  })),
+                  ...(live && monitor?.xruns === 0 && deadlineMisses === 0
+                    ? [
+                        {
+                          ok: true,
+                          title: 'No dropouts this session',
+                          fix: 'No xruns or missed processing deadlines reported.',
+                        },
+                      ]
+                    : []),
+                  ...(entries.length >= 2 &&
+                  correctedSpread !== null &&
+                  correctedSpread <= 1.5
+                    ? [
+                        {
+                          ok: true,
+                          title: `Presets are within ${correctedSpread.toFixed(1)} dB of each other`,
+                          fix: 'Estimated from the measured loudness and saved offsets.',
+                        },
+                      ]
+                    : []),
+                ]}
+                onAction={(item) =>
+                  fixes.find((fix) => fix.title === item.title)?.action?.run()
+                }
+              />
+            )}
 
             <div className="sound-check-grid">
               <ToolSection

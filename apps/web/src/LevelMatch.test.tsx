@@ -74,10 +74,9 @@ it('measures while playing, removes the master level and proposes the preset tri
   fireEvent.click(screen.getByRole('button', { name: 'Start listening' }));
   await tick(9000);
   // Output −24 dBFS with Level at −6 dB → the preset itself plays at −18: no change.
-  expect(screen.getByRole('status')).toHaveTextContent(
-    'This preset plays at −18.0 dB on average. Output level 0.0 dB → 0.0 dB.',
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+  expect(screen.getAllByText('−18.0 dBFS')).toHaveLength(2);
+  expect(screen.getByText('0.0 dB')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Keep' }));
   await act(async () => {});
   expect(apply).toHaveBeenCalledWith(0.5);
 });
@@ -97,4 +96,40 @@ it('refuses a match when nobody played', async () => {
   expect(screen.getByRole('alert')).toHaveTextContent(
     'Not enough playing heard',
   );
+});
+
+it('shows a refusal until the device confirms the level', async () => {
+  const apply = vi.fn().mockResolvedValue(false);
+  render(
+    <LevelMatch
+      output={{ value: 0.5 }}
+      disabled={false}
+      onApply={apply}
+      onClose={() => {}}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Start listening' }));
+  await tick(9000);
+  fireEvent.click(screen.getByRole('button', { name: 'Keep' }));
+  await act(async () => {});
+  expect(screen.getByRole('alert')).toHaveTextContent('did not confirm');
+  expect(screen.queryByText(/Output level kept/)).toBeNull();
+});
+
+it('prevents keeping a measurement after the sounding rig changes', async () => {
+  const apply = vi.fn();
+  const props = {
+    output: { value: 0.5 },
+    disabled: false,
+    onApply: apply,
+    onClose: () => {},
+  };
+  const view = render(<LevelMatch {...props} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Start listening' }));
+  await tick(9000);
+  expect(screen.getByRole('button', { name: 'Keep' })).toBeVisible();
+  view.rerender(<LevelMatch {...props} stale />);
+  expect(screen.getByRole('alert')).toHaveTextContent('playing rig changed');
+  expect(screen.queryByRole('button', { name: 'Keep' })).toBeNull();
+  expect(apply).not.toHaveBeenCalled();
 });

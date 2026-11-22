@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { LevelMatch as MatchPanel } from '@oxidal/design-system/patterns/guitar-tools';
 
 import { unitLevels } from './api';
 import {
@@ -26,18 +27,24 @@ type Result = { measured: number; from: number; to: number };
  */
 export function LevelMatch({
   output,
+  preset = 'Current preset',
+  stale = false,
   disabled,
   onApply,
   onClose,
 }: {
   output: { value: number } | undefined;
   disabled: boolean;
-  onApply: (value: number) => Promise<void> | void;
+  preset?: string;
+  stale?: boolean;
+  onApply: (value: number) => Promise<boolean | void> | boolean | void;
   onClose: () => void;
 }) {
   const [phase, setPhase] = useState<'idle' | 'listening' | 'done'>('idle');
   const [result, setResult] = useState<Result | null>(null);
   const [note, setNote] = useState('');
+  const [progress, setProgress] = useState(0);
+  const [kept, setKept] = useState<boolean>();
   const run = useRef<{ until: number; readings: number[] } | null>(null);
 
   async function finish(readings: number[]) {
@@ -78,8 +85,18 @@ export function LevelMatch({
 
   useMonitorReadings(1000, (feed) => {
     const r = run.current;
-    if (!r) return;
-    const audio = feed.snapshot?.audio;
+    if (!r || stale) return;
+    setProgress(
+      Math.min(
+        100,
+        Math.max(0, 100 * (1 - (r.until - performance.now()) / LISTEN_MS)),
+      ),
+    );
+    const snapshot = feed.snapshot;
+    const audio =
+      !feed.disconnected && (snapshot?.audio_age_ms ?? 0) < 3000
+        ? snapshot?.audio
+        : undefined;
     const input = Math.max(
       ...(audio?.input ?? []).map((c) => c.peak_dbfs ?? -120),
       -120,
@@ -95,52 +112,66 @@ export function LevelMatch({
     }
   });
 
-  const fmt = (db: number) =>
-    `${db > 0 ? '+' : db < 0 ? '−' : ''}${Math.abs(db).toFixed(1)} dB`;
+  const fmt = (db: number, unit = 'dB') =>
+    `${db > 0 ? '+' : db < 0 ? '−' : ''}${Math.abs(db).toFixed(1)} ${unit}`;
   return (
     <div className="control-stack" aria-label="Match preset level">
-      <p>
-        Play the way you would on stage for eight seconds. Oxidal sets this
-        preset’s Output level so it sits at the same loudness as your other
-        matched presets. Save the preset to keep it.
-      </p>
-      {phase === 'listening' && <p role="status">Listening… keep playing.</p>}
-      {result && (
-        <p role="status">
-          This preset plays at {fmt(result.measured)} on average. Output level{' '}
-          {fmt(result.from)} → {fmt(result.to)}.
+      <MatchPanel
+        preset={preset}
+        disabled={disabled || !output || stale}
+        state={
+          stale
+            ? { step: 'ready' }
+            : phase === 'listening'
+              ? { step: 'listening', progress }
+              : result
+                ? {
+                    step: 'measured',
+                    before: fmt(result.measured, 'dBFS'),
+                    target: fmt(MATCH_TARGET_DBFS, 'dBFS'),
+                    level: fmt(result.to),
+                  }
+                : { step: 'ready', kept }
+        }
+        onStart={() => {
+          setNote('');
+          setResult(null);
+          setKept(undefined);
+          setProgress(0);
+          setPhase('listening');
+          run.current = { until: performance.now() + LISTEN_MS, readings: [] };
+        }}
+        onKeep={async () => {
+          if (!result || stale || disabled) return;
+          const confirmed = await onApply(outputValue(result.to));
+          if (confirmed === false) {
+            setNote(
+              'The device did not confirm the output level. Close and reopen Level match to try again.',
+            );
+            return;
+          }
+          setKept(true);
+          setResult(null);
+          setPhase('idle');
+          setNote('');
+        }}
+        onUndo={() => {
+          setResult(null);
+          setKept(false);
+          setPhase('idle');
+          setNote('');
+        }}
+      />
+      {stale ? (
+        <p role="alert">
+          The playing rig changed. Reopen Level match to measure this version.
         </p>
+      ) : (
+        note && <p role="alert">{note}</p>
       )}
-      {note && <p role="alert">{note}</p>}
       <div className="action-row">
-        {result ? (
-          <Button
-            disabled={disabled}
-            onClick={async () => {
-              await onApply(outputValue(result.to));
-              onClose();
-            }}
-          >
-            Apply
-          </Button>
-        ) : (
-          <Button
-            disabled={disabled || phase === 'listening' || !output}
-            onClick={() => {
-              setNote('');
-              setResult(null);
-              setPhase('listening');
-              run.current = {
-                until: performance.now() + LISTEN_MS,
-                readings: [],
-              };
-            }}
-          >
-            {phase === 'done' ? 'Listen again' : 'Start listening'}
-          </Button>
-        )}
         <Button variant="ghost" onClick={onClose}>
-          Cancel
+          {kept ? 'Close' : 'Cancel'}
         </Button>
       </div>
     </div>

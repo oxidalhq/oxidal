@@ -28,11 +28,9 @@ export const MatchOne: StoryObj = {
       canvas.getByRole('button', { name: 'Start listening' }),
     );
     await userEvent.click(
-      await canvas.findByRole('button', { name: 'Keep' }, { timeout: 4000 }),
+      await canvas.findByRole('button', { name: 'Keep' }, { timeout: 12000 }),
     );
-    await expect(canvas.getByRole('status')).toHaveTextContent(
-      'Output level kept',
-    );
+    await expect(await canvas.findByText(/Output level kept/)).toBeVisible();
   },
 };
 
