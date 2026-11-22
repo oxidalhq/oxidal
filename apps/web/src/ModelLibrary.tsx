@@ -3,20 +3,21 @@ import {
   ArrowRight,
   CloudArrowDown,
   FolderOpen,
-  MagnifyingGlass,
   Trash,
   UploadSimple,
-  X,
 } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { ListRow } from '@oxidal/design-system/components/list-row';
+import { EmptyState } from '@oxidal/design-system/components/states';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import type { LocalModel } from './api';
 import { type LocalModelPage, localModels, uploadLocalModel } from './api';
 import { CaptureRigBuilder } from './features/library/CaptureRigBuilder';
 import { DeleteSoundDialog } from './features/library/DeleteSoundDialog';
+import { LibrarySearch } from './features/library/LibrarySearch';
 import { GearLabel } from './GearIcon';
 import { groupIrs } from './irPresentation';
 import { errorDetails, friendlyError } from './lib/friendlyError';
@@ -184,47 +185,23 @@ export function ModelLibrary({
     }
   }
   return (
-    <section className="asset-library" aria-label={`${label} library`}>
+    <section className="grid min-w-0 gap-2" aria-label={`${label} library`}>
       <h2 className="sr-only">{label}</h2>
-      <div className="library-search asset-library-search">
-        <label className="relative min-w-0 flex-1">
-          <span className="sr-only">Search {label}</span>
-          <MagnifyingGlass
-            aria-hidden="true"
-            size={18}
-            className="library-search-icon"
-          />
-          <input
-            ref={searchInput}
-            type="search"
-            className="library-search-input"
-            value={query}
-            maxLength={256}
-            placeholder={format === 'nam' ? 'Find a NAM model…' : 'Find an IR…'}
-            onChange={(e) => {
-              setCursors([null]);
-              setQuery(e.target.value);
-            }}
-          />
-        </label>
-        {query && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="asset-search-clear"
-            aria-label={`Clear ${label} search`}
-            onClick={() => {
-              setCursors([null]);
-              setQuery('');
-              searchInput.current?.focus();
-            }}
-          >
-            <X aria-hidden="true" />
-          </Button>
-        )}
-      </div>
-      <div className="library-bar asset-library-bar">
-        <div className="asset-library-actions">
+      <LibrarySearch
+        label={`Search ${label}`}
+        clearLabel={`Clear ${label} search`}
+        inputRef={searchInput}
+        placeholder={format === 'nam' ? 'Find a NAM model…' : 'Find an IR…'}
+        value={query}
+        maxLength={256}
+        onChange={(value) => {
+          setCursors([null]);
+          setQuery(value);
+        }}
+      />
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-1">
           {format === 'nam' && (
             <Button
               variant="outline"
@@ -252,7 +229,7 @@ export function ModelLibrary({
             <CloudArrowDown aria-hidden="true" /> TONE3000
           </Button>
         </div>
-        <span className="caption asset-library-count">
+        <span className="caption text-xs">
           {loading
             ? 'Loading…'
             : data
@@ -263,8 +240,11 @@ export function ModelLibrary({
         </span>
       </div>
       {progress && (
-        <div className="asset-import-progress" aria-label="Import progress">
-          <div className="library-bar">
+        <div
+          className="grid gap-2 border-t border-border py-3"
+          aria-label="Import progress"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <p role="status">
               {importing
                 ? 'Importing'
@@ -286,7 +266,7 @@ export function ModelLibrary({
             max={progress.total}
             value={progress.complete}
           />
-          <div className="library-bar caption">
+          <div className="caption flex flex-wrap items-center justify-between gap-2">
             <span className="min-w-0 break-words">
               {progress.current ||
                 (progress.cancelled
@@ -322,40 +302,46 @@ export function ModelLibrary({
           </Button>
         </div>
       )}
-      <div className="asset-library-list" aria-busy={loading}>
+      <div className="grid min-w-0 gap-3" aria-busy={loading}>
         {!loading && data?.data.length === 0 && (
-          <div className="asset-library-empty">
-            <FolderOpen size={28} aria-hidden="true" />
-            <p>{query.trim() ? 'No matching files' : `No ${label} yet`}</p>
-            <p className="caption">
-              {query.trim()
-                ? 'Try another name or clear the search.'
-                : `Import ${format === 'nam' ? 'NAM' : 'WAV'} files or download from TONE3000.`}
-            </p>
-          </div>
+          <EmptyState
+            icon={<FolderOpen aria-hidden="true" />}
+            title={query.trim() ? 'No matching files' : `No ${label} yet`}
+          >
+            {query.trim()
+              ? 'Try another name or clear the search.'
+              : `Import ${format === 'nam' ? 'NAM' : 'WAV'} files or download from TONE3000.`}
+          </EmptyState>
         )}
         {format === 'ir' ? (
           groupIrs(data?.data ?? []).map((group) => (
             <section
               key={group.key}
-              className="ir-cabinet"
+              className="grid min-w-0 gap-1 border-t border-border pt-2"
               aria-label={group.cabinet}
             >
-              <header className="ir-cabinet-heading">
+              <header className="grid gap-1">
                 <h3>{group.cabinet}</h3>
                 {group.collection && (
-                  <p className="library-meta">{group.collection}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {group.collection}
+                  </p>
                 )}
               </header>
               {group.files.map(({ model, title, technical }) => (
-                <details key={model.id} className="ir-capture">
+                <details
+                  key={model.id}
+                  className="grid min-w-0 border-b border-border [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:py-2"
+                >
                   <summary>
-                    <span className="ir-capture-label">
-                      <h4 className="library-name">{title}</h4>
-                      <span className="library-meta">{technical}</span>
+                    <span className="inline-grid min-w-0 gap-1 align-middle">
+                      <h4 className="font-semibold break-words">{title}</h4>
+                      <span className="text-sm text-muted-foreground">
+                        {technical}
+                      </span>
                     </span>
                   </summary>
-                  <dl className="ir-file-details">
+                  <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 p-2 text-sm [&>dd]:break-words [&>dt]:font-semibold">
                     <dt>File</dt>
                     <dd>{model.name}</dd>
                     {model.folder && (
@@ -382,62 +368,72 @@ export function ModelLibrary({
         ) : (
           <div>
             {data?.data.map((model) => (
-              <article
+              <ListRow
                 key={model.id}
-                className="asset-library-file nam-library-file"
-              >
-                <div className="nam-library-picture">
-                  <ModelPicture model={model} />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="library-name">
-                    <button
-                      className="asset-preview-trigger"
-                      onClick={() => setPreview(model)}
-                      aria-label={`Preview ${model.title}`}
-                    >
-                      {model.nam?.name || model.title}
-                    </button>
-                  </h3>
-                  {model.name
-                    .replace(/\.(nam|wav)$/i, '')
-                    .toLocaleLowerCase() !==
-                    model.title.toLocaleLowerCase() && (
-                    <p className="library-meta break-words">{model.name}</p>
-                  )}
-                  <p className="library-meta asset-library-meta">
-                    {model.tone_id ? 'TONE3000' : 'Uploaded'}
-                    {model.folder && (
-                      <span title={model.folder}>
-                        {' · '}
-                        {folderLabel(model.folder)}
-                      </span>
+                role="article"
+                leading={
+                  <span className="grid size-12 place-items-center overflow-hidden rounded-md bg-muted text-muted-foreground [&_img]:size-full [&_img]:object-cover [&_svg]:size-5">
+                    <ModelPicture model={model} />
+                  </span>
+                }
+                className="[&>span:first-child]:pointer-events-none [&>span:nth-child(2)>span]:whitespace-normal"
+                title={
+                  <button
+                    type="button"
+                    className="text-left after:absolute after:inset-0 focus-visible:after:outline-2 focus-visible:after:outline-ring"
+                    onClick={() => setPreview(model)}
+                    aria-label={`Preview ${model.title}`}
+                  >
+                    {model.nam?.name || model.title}
+                  </button>
+                }
+                caption={
+                  <>
+                    {model.name
+                      .replace(/\.(nam|wav)$/i, '')
+                      .toLocaleLowerCase() !==
+                      model.title.toLocaleLowerCase() && (
+                      <span className="block break-words">{model.name}</span>
                     )}
-                    {model.gear && (
-                      <>
-                        {' '}
-                        · <GearLabel gear={model.gear} />
-                      </>
-                    )}
-                  </p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="relative z-10 ml-auto"
-                  disabled={!connected}
-                  onClick={() => setDeleting(model)}
-                  aria-label={`Delete ${model.nam?.name || model.title}`}
-                >
-                  <Trash aria-hidden="true" />
-                </Button>
-              </article>
+                    <span className="block break-words">
+                      {model.tone_id ? 'TONE3000' : 'Uploaded'}
+                      {model.folder && (
+                        <span title={model.folder}>
+                          {' · '}
+                          {folderLabel(model.folder)}
+                        </span>
+                      )}
+                      {model.gear && (
+                        <>
+                          {' '}
+                          · <GearLabel gear={model.gear} />
+                        </>
+                      )}
+                    </span>
+                  </>
+                }
+                trailing={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="relative z-10 ml-auto"
+                    disabled={!connected}
+                    onClick={() => setDeleting(model)}
+                    aria-label={`Delete ${model.nam?.name || model.title}`}
+                  >
+                    <Trash aria-hidden="true" />
+                  </Button>
+                }
+              />
             ))}
           </div>
         )}
       </div>
       {(data?.next || cursors.length > 1) && (
-        <nav className="asset-library-pages" aria-label={`${label} pages`}>
+        <nav
+          className="flex items-center justify-between gap-2"
+          aria-label={`${label} pages`}
+        >
           <Button
             variant="ghost"
             disabled={loading || cursors.length === 1}

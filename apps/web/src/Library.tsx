@@ -1,4 +1,4 @@
-import { MagnifyingGlass, Plus, X } from '@phosphor-icons/react';
+import { Plus } from '@phosphor-icons/react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
@@ -17,7 +17,6 @@ import { StateNotice } from '@oxidal/design-system/components/states';
 import { LIBRARY_SECTIONS } from '@oxidal/design-system/patterns/library-sections';
 import { Workspace } from '@oxidal/design-system/patterns/workspace';
 
-import './Library.css';
 import {
   type AudioState,
   importPreset,
@@ -34,6 +33,7 @@ import { BackingTracks } from './components/media/BackingTracks';
 import { DiReamps } from './components/media/DiReamps';
 import { StemSongs } from './components/media/StemSongs';
 import { CreatedPreset } from './features/library/CreatedPreset';
+import { LibrarySearch } from './features/library/LibrarySearch';
 import { MineDialogs, type MineTarget } from './features/library/MineDialogs';
 import { NewPresetDialog } from './features/library/NewPresetDialog';
 import { OfflineEditor } from './features/library/OfflineEditor';
@@ -467,38 +467,16 @@ export function Library({
     extra?: ReactNode,
   ) {
     return (
-      <div className="library-search-row">
-        <div className="library-search-field">
-          <label className="relative block min-w-0">
-            <span className="sr-only">Search presets</span>
-            <MagnifyingGlass
-              aria-hidden="true"
-              size={18}
-              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
-            />
-            <input
-              ref={toneSearch}
-              type="search"
-              className="h-touch w-full min-w-0 rounded-md border border-input bg-card pr-touch pl-10"
-              placeholder={placeholder}
-              value={value}
-              onChange={(event) => set(event.target.value)}
-            />
-          </label>
-          {value && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="library-search-clear"
-              aria-label="Clear preset search"
-              onClick={() => {
-                set('');
-                toneSearch.current?.focus();
-              }}
-            >
-              <X aria-hidden="true" />
-            </Button>
-          )}
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <div className="relative min-w-0 flex-[1_1_12rem]">
+          <LibrarySearch
+            label="Search presets"
+            clearLabel="Clear preset search"
+            inputRef={toneSearch}
+            placeholder={placeholder}
+            value={value}
+            onChange={set}
+          />
         </div>
         {extra}
       </div>
@@ -714,7 +692,10 @@ export function Library({
                 )}
               </ul>
             )}
-            <section className="library-import" aria-label="Import a preset">
+            <section
+              className="mt-4 grid gap-3 border-t border-border py-4"
+              aria-label="Import a preset"
+            >
               <h2 className="text-base">Import a TONE3000 preset file</h2>
               <p className="caption">
                 Importing does not change what is playing. The original file is

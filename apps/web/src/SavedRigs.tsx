@@ -351,7 +351,7 @@ export function SavedRigs({
   // Selected but not loaded beside the playing preset: needs a restart.
   const pending = prepared.some((id) => id !== playing && !ready.includes(id));
   return (
-    <section className="library-scenes" aria-label="Saved rigs">
+    <section className="mb-6" aria-label="Saved rigs">
       <div className="section-heading">
         {title && <h2>{title}</h2>}
         <Button
@@ -555,7 +555,7 @@ export function SavedRigs({
               ]}
               extra={
                 choosing && (
-                  <label className="library-ready">
+                  <label className="inline-flex min-h-touch items-center gap-2 px-2 text-sm [&_input]:size-5">
                     <Checkbox
                       aria-label={`Keep ${p.name} ready`}
                       checked={prepared.includes(p.revision)}

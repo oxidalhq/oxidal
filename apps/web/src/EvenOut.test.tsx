@@ -67,7 +67,10 @@ it('summarises the evened-out level, runs, and lists each offset', async () => {
   expect(screen.getByRole('status')).toHaveTextContent(
     'Measuring 2 of 3: Heavy…',
   );
-  expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '1');
+  expect(screen.getByRole('progressbar')).toHaveAttribute(
+    'aria-valuetext',
+    '1 of 3',
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Stop measuring' }));
   expect(calibration).toHaveBeenLastCalledWith('cancel');
 });

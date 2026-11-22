@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Progress } from '@oxidal/design-system/components/states';
 import { PresetLoudnessChart } from '@oxidal/design-system/patterns/guitar-tools';
 
-import './Library.css';
 import {
   calibration,
   type CalibrationCoverage,
@@ -82,7 +82,7 @@ export function EvenOut({ connected }: { connected: boolean }) {
         ? `${entries.length} measured at ${target_lufs.toFixed(1)} LUFS; ${pending} new or changed ${pending === 1 ? 'sound needs' : 'sounds need'} Even Out.`
         : `${entries.length} presets and scenes evened out to ${target_lufs.toFixed(1)} LUFS.`;
   return (
-    <section className="even-out" aria-label="Even out all">
+    <section className="grid gap-3" aria-label="Even out all">
       <div className="section-heading">
         <h2>Even out all</h2>
         {!running && (
@@ -102,20 +102,15 @@ export function EvenOut({ connected }: { connected: boolean }) {
             {progress.total}
             {progress.current ? `: ${progress.current}` : ''}…
           </p>
-          <div
-            className="even-out-bar"
-            role="progressbar"
-            aria-label="Evening out"
-            aria-valuemin={0}
-            aria-valuemax={progress.total}
-            aria-valuenow={progress.done}
-          >
-            <span
-              style={{
-                width: `${progress.total ? (100 * progress.done) / progress.total : 0}%`,
-              }}
-            />
-          </div>
+          <Progress
+            label="Evening out"
+            value={
+              progress.total
+                ? (100 * progress.done) / progress.total
+                : undefined
+            }
+            aria-valuetext={`${progress.done} of ${progress.total}`}
+          />
           <Button variant="outline" onClick={() => void send('cancel')}>
             Stop measuring
           </Button>
@@ -132,7 +127,7 @@ export function EvenOut({ connected }: { connected: boolean }) {
               </p>
             </>
           )}
-          <details className="calibration-help">
+          <details className="grid gap-1 text-sm [&>summary]:min-h-touch">
             <summary>How it works</summary>
             <p className="caption">
               Plays a built-in riff through each new or changed preset and scene
@@ -191,7 +186,10 @@ export function EvenOut({ connected }: { connected: boolean }) {
       {progress.error && <p role="alert">{progress.error}</p>}
       {error && <p role="alert">{error}</p>}
       {details && !running && (
-        <ul className="even-out-levels" aria-label="Measured levels">
+        <ul
+          className="grid list-none p-0 [&>li]:flex [&>li]:justify-between [&>li]:gap-4 [&>li]:border-b [&>li]:border-border [&>li]:py-1.5"
+          aria-label="Measured levels"
+        >
           {[...entries]
             .sort((a, b) => a.name.localeCompare(b.name))
             .map((e) => (

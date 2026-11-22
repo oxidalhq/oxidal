@@ -202,7 +202,10 @@ export function LibraryModelAudition({
     }
   }
   return (
-    <section className="library-audition" aria-label="Audio audition">
+    <section
+      className="grid gap-3 border-t border-border pt-4"
+      aria-label="Audio audition"
+    >
       <h3>Audio audition</h3>
       {loading ? (
         <p className="caption">Reading the playing preset…</p>

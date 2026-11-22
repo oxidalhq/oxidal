@@ -1329,9 +1329,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
     // Recall directly from Rig without returning to Library or audio settings.
     await page.getByRole('button', { name: /^Playing preset/ }).click();
     await page.getByRole('tab', { name: /TONE3000/ }).click();
-    await page
-      .locator(`.preset-picker-row[data-preset="original:${preset.sha256}"]`)
-      .click();
+    await page.locator(`[data-preset="original:${preset.sha256}"]`).click();
     await expect(
       page.getByRole('region', { name: 'Sounding rig' }),
     ).toBeVisible();
@@ -5288,7 +5286,7 @@ test('device portrait shared NAM and IR libraries import, search and page indepe
     preview.getByText('Start a native or mixed rig to audition this model.'),
   ).toBeVisible();
   const previewAccessibility = await new AxeBuilder({ page })
-    .include('.library-model-preview')
+    .include('[role="dialog"]')
     .analyze();
   expect(previewAccessibility.violations).toEqual([]);
   await page.screenshot({
@@ -5315,7 +5313,7 @@ test('device portrait shared NAM and IR libraries import, search and page indepe
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
   await expectWorkspaceSection(page, 'Library', 'Tones and IRs');
   const accessibility = await new AxeBuilder({ page })
-    .include('.asset-library')
+    .include('[aria-label="IRs library"]')
     .analyze();
   expect(accessibility.violations).toEqual([]);
   await page.screenshot({
@@ -5694,12 +5692,12 @@ test('device portrait set-list drag and keyboard order agree with picker and Per
     .poll(async () =>
       (
         await picker
-          .locator('.preset-picker-row > span:first-child')
+          .locator('[data-preset] > span:first-child')
           .allTextContents()
       ).slice(0, 2),
     )
     .toEqual([rigName, secondName]);
-  const pickerTitles = picker.locator('.preset-picker-row > span:first-child');
+  const pickerTitles = picker.locator('[data-preset] > span:first-child');
   for (let index = 0; index < 2; index += 1) {
     const box = await pickerTitles.nth(index).boundingBox();
     expect(box?.width).toBeGreaterThan(120);

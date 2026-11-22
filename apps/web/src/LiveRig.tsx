@@ -1465,7 +1465,7 @@ export function LiveRig({
     );
   return (
     <section
-      className="instrument-surface live-rig space-y-2 py-0"
+      className="instrument-surface live-rig space-y-2 py-0 [&>[data-slot=rig-heading]]:-mx-page"
       aria-label="Sounding rig"
     >
       <RigHeading
@@ -1792,7 +1792,7 @@ export function LiveRig({
               lanes={chainLanes}
             />
           ) : (
-            <div className="native-signal-route" data-chain-view={chainView}>
+            <div className="-mx-page" data-chain-view={chainView}>
               {chainLanes.map((lane) => (
                 <div key={lane.id}>
                   {chainLanes.length > 1 && (

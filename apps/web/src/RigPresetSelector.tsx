@@ -3,16 +3,22 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { Loading } from '@oxidal/design-system/components/states';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@oxidal/design-system/components/tabs';
 import { Title } from '@oxidal/design-system/components/text';
 import {
   PresetNameButton,
   PresetSteps,
 } from '@oxidal/design-system/widgets/preset-steps';
 
-import './PresetPicker.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { CueLinkedMix } from './components/media/SongLinkControls';
 import type { FactoryRecipe } from './factoryRecipes';
+import { LibrarySearch } from './features/library/LibrarySearch';
 import { builtName } from './features/library/oxidal/oxidalSounds.model';
 import {
   saveReadySound,
@@ -391,7 +397,7 @@ export function RigPresetSelector({
       className={
         heading
           ? 'inline-flex min-h-touch max-w-full items-center gap-2'
-          : 'preset-picker-name'
+          : 'inline-flex min-h-touch min-w-0 items-center gap-2 border-b border-foreground text-left focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 min-[760px]:border-0 [&_svg]:size-5'
       }
       disabled={disabled || preparing || (loading && !items.length)}
       onOpen={() => {
@@ -404,15 +410,17 @@ export function RigPresetSelector({
       ) : (
         <>
           {playingNumber > 0 && (
-            <span className="preset-picker-number">{playingNumber}</span>
+            <span className="min-w-[2ch] shrink-0 text-center font-mono text-sm tabular-nums">
+              {playingNumber}
+            </span>
           )}{' '}
-          <span className="preset-picker-text">
-            <span className="preset-picker-title">
-              <span className="preset-picker-label">{name}</span>{' '}
+          <span className="grid min-w-0 flex-1">
+            <span className="flex min-w-0 items-baseline gap-2 font-display text-xl font-semibold">
+              <span className="truncate">{name}</span>{' '}
               {playing.modified && (
-                <span className="preset-picker-edited">
+                <span className="inline-flex items-center gap-1 text-sm font-medium text-brand">
                   <span
-                    className="preset-modified"
+                    className="size-2 rounded-full bg-brand"
                     aria-hidden="true"
                     title="This playing sound has unsaved edits"
                   />
@@ -420,7 +428,7 @@ export function RigPresetSelector({
                 </span>
               )}
             </span>{' '}
-            <span className="preset-picker-meta">
+            <span className="truncate text-sm text-muted-foreground">
               {unconfirmed
                 ? preparing
                   ? 'Preparing sound…'
@@ -444,7 +452,14 @@ export function RigPresetSelector({
     </PresetNameButton>
   );
   return (
-    <div className="preset-picker" aria-label="Preset navigation">
+    <div
+      className={
+        heading
+          ? 'flex min-w-0 flex-wrap items-center gap-2'
+          : 'grid min-w-0 gap-1'
+      }
+      aria-label="Preset navigation"
+    >
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
         {heading ? (
           <Title size="md" className="truncate" aria-label={name}>
@@ -498,119 +513,136 @@ export function RigPresetSelector({
       {open && !preview && (
         <AdjustmentDialog
           title="Choose a preset"
-          className="preset-picker-dialog"
           onCancel={() => setOpen(false)}
         >
-          <input
-            type="search"
-            className="preset-picker-search"
-            aria-label="Find a preset"
+          <LibrarySearch
+            label="Find a preset"
+            clearLabel="Clear preset search"
             placeholder="Find a preset or sound…"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={setQuery}
           />
-          {!found && (
-            <div
-              className="preset-picker-sources"
-              role="tablist"
-              aria-label="Preset source"
-            >
-              {SOURCES.map(([origin, label]) => (
-                <button
-                  key={origin}
-                  type="button"
-                  role="tab"
-                  aria-selected={shownSource === origin}
-                  onClick={() => setSource(origin)}
-                >
-                  {label}{' '}
-                  <span className="preset-picker-count">
-                    {items.filter((item) => inSource(item, origin)).length +
-                      (origin === 'oxidal_example' ? unsaved.length : 0)}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-          <ul
-            className="preset-picker-group"
-            aria-label={
-              found
-                ? 'Matching presets'
-                : (SOURCES.find(([o]) => o === shownSource)?.[1] ?? '')
-            }
+
+          <Tabs
+            value={shownSource}
+            onValueChange={(id) => setSource(id as Source)}
           >
-            {shown.map((p) => {
-              const currentRow = key(p) === selected;
-              const playingRow = sounding && currentRow;
-              const n = number(p);
-              return (
-                <li key={key(p)} className="preset-picker-entry">
-                  <span className="preset-picker-number" aria-hidden="true">
-                    {n || ''}
-                  </span>
-                  <button
-                    type="button"
-                    className="preset-picker-row"
-                    data-preset={key(p)}
-                    aria-pressed={playingRow}
-                    disabled={disabled || loading}
-                    ref={(element) => {
-                      if (currentRow && element && !revealed.current) {
-                        revealed.current = true;
-                        element.scrollIntoView({ block: 'center' });
-                      }
-                    }}
-                    onClick={() => {
-                      setOpen(false);
-                      if (!playingRow) choose(p);
-                    }}
-                  >
-                    <span>{p.name}</span>
-                    <span
-                      className={
-                        playingRow
-                          ? 'preset-picker-playing'
-                          : 'preset-picker-scenes'
-                      }
-                    >
-                      {playingRow ? 'Playing · ' : ''}
-                      {choiceSummary(p)}
-                      {found && ` · ${choiceSource(p)}`}
+            {!found && (
+              <TabsList aria-label="Preset source">
+                {SOURCES.map(([origin, label]) => (
+                  <TabsTrigger key={origin} value={origin}>
+                    {label}{' '}
+                    <span className="font-mono text-xs tabular-nums">
+                      {items.filter((item) => inSource(item, origin)).length +
+                        (origin === 'oxidal_example' ? unsaved.length : 0)}
                     </span>
-                  </button>
-                  <Button
-                    variant="ghost"
-                    className="shrink-0 px-2"
-                    aria-label={`Details: ${p.name}`}
-                    onClick={() => setPreview(p)}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            )}
+            <TabsContent
+              value={shownSource}
+              {...(found
+                ? {
+                    role: 'region',
+                    'aria-label': 'Matching presets',
+                    'aria-labelledby': undefined,
+                  }
+                : {})}
+            >
+              <ul
+                className="grid min-w-0 list-none border-t border-border p-0"
+                aria-label={
+                  found
+                    ? 'Matching presets'
+                    : (SOURCES.find(([o]) => o === shownSource)?.[1] ?? '')
+                }
+              >
+                {shown.map((p) => {
+                  const currentRow = key(p) === selected;
+                  const playingRow = sounding && currentRow;
+                  const n = number(p);
+                  return (
+                    <li
+                      key={key(p)}
+                      className="flex min-w-0 items-center gap-2 border-b border-border"
+                    >
+                      <span
+                        className="min-w-[2ch] shrink-0 text-center font-mono text-sm tabular-nums"
+                        aria-hidden="true"
+                      >
+                        {n || ''}
+                      </span>
+                      <Button
+                        variant={playingRow ? 'default' : 'ghost'}
+                        className="grid h-auto min-w-0 flex-1 grid-cols-[minmax(0,1fr)] justify-stretch justify-items-start gap-1 p-2 text-left whitespace-normal [&>span:first-child]:w-full [&>span:first-child]:break-words"
+                        data-preset={key(p)}
+                        aria-pressed={playingRow}
+                        disabled={disabled || loading}
+                        ref={(element) => {
+                          if (currentRow && element && !revealed.current) {
+                            revealed.current = true;
+                            element.scrollIntoView({ block: 'center' });
+                          }
+                        }}
+                        onClick={() => {
+                          setOpen(false);
+                          if (!playingRow) choose(p);
+                        }}
+                      >
+                        <span>{p.name}</span>
+                        <span
+                          className={
+                            playingRow
+                              ? 'text-xs font-medium'
+                              : 'text-xs text-muted-foreground'
+                          }
+                        >
+                          {playingRow ? 'Playing · ' : ''}
+                          {choiceSummary(p)}
+                          {found && ` · ${choiceSource(p)}`}
+                        </span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="shrink-0 px-2"
+                        aria-label={`Details: ${p.name}`}
+                        onClick={() => setPreview(p)}
+                      >
+                        Details
+                      </Button>
+                    </li>
+                  );
+                })}
+                {unsavedShown.map((recipe) => (
+                  <li
+                    key={`unsaved:${recipe.id}`}
+                    className="flex min-w-0 items-center gap-2 border-b border-border"
                   >
-                    Details
-                  </Button>
-                </li>
-              );
-            })}
-            {unsavedShown.map((recipe) => (
-              <li key={`unsaved:${recipe.id}`} className="preset-picker-entry">
-                <span className="preset-picker-number" aria-hidden="true" />
-                <button
-                  type="button"
-                  className="preset-picker-row"
-                  data-preset={`unsaved:${recipe.id}`}
-                  disabled={disabled || loading || !!saving}
-                  onClick={() => void saveAndChoose(recipe)}
-                >
-                  <span>{builtName(recipe)}</span>
-                  <span className="preset-picker-scenes">
-                    {saving === recipe.id
-                      ? 'Saving…'
-                      : `${recipe.scenes.length} scenes · saved when chosen`}
-                    {found && ' · Oxidal sounds'}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+                    <span
+                      className="min-w-[2ch] shrink-0 text-center font-mono text-sm tabular-nums"
+                      aria-hidden="true"
+                    />
+                    <Button
+                      variant="ghost"
+                      className="grid h-auto min-w-0 flex-1 grid-cols-[minmax(0,1fr)] justify-stretch justify-items-start gap-1 p-2 text-left whitespace-normal [&>span:first-child]:w-full [&>span:first-child]:break-words"
+                      data-preset={`unsaved:${recipe.id}`}
+                      disabled={disabled || loading || !!saving}
+                      onClick={() => void saveAndChoose(recipe)}
+                    >
+                      <span>{builtName(recipe)}</span>
+                      <span className="text-xs text-wrap text-muted-foreground">
+                        {saving === recipe.id
+                          ? 'Saving…'
+                          : `${recipe.scenes.length} scenes · saved when chosen`}
+                        {found && ' · Oxidal sounds'}
+                      </span>
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </TabsContent>
+          </Tabs>
           {saveError && <p role="alert">{saveError}</p>}
           {!loading && !shown.length && !unsavedShown.length && (
             <p role="status">

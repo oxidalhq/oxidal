@@ -15,7 +15,6 @@ import {
   SoundSearch,
 } from '@oxidal/design-system/patterns/sound-browser';
 
-import './oxidal.css';
 import { factoryEngineLabels, factoryGenres } from '../../../factoryMetadata';
 import {
   setReturnTarget,
@@ -141,7 +140,7 @@ export function OxidalSounds({
   );
 
   return (
-    <section className="oxidal-sounds" aria-label="Oxidal sounds">
+    <section className="grid min-w-0 gap-3" aria-label="Oxidal sounds">
       {connected && starterOffer}
       <SoundBrowserStatus
         status={
@@ -190,7 +189,7 @@ export function OxidalSounds({
           />
         </div>
       </div>
-      <div className="oxidal-summary">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p role="status">
           {offline
             ? shown.length === unit.items.length
@@ -198,7 +197,7 @@ export function OxidalSounds({
               : `${shown.length} of ${unit.items.length} sounds`
             : summaryLine(shown.length, [...states.values()])}
         </p>
-        <div className="oxidal-summary-actions">
+        <div className="flex flex-wrap items-center gap-2">
           <SegmentedControl
             value={filters.groupBy}
             aria-label="Group by"
@@ -248,9 +247,9 @@ export function OxidalSounds({
             <section
               key={group.label}
               aria-label={group.label}
-              className="oxidal-group"
+              className="grid gap-2"
             >
-              <div className="oxidal-group-head">
+              <div className="flex items-baseline justify-between border-b border-border pb-1">
                 <h3>{group.label}</h3>
                 <span className="caption">{group.items.length}</span>
               </div>

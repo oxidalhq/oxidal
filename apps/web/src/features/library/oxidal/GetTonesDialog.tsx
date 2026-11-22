@@ -10,7 +10,6 @@ import {
   SelectValue,
 } from '@oxidal/design-system/components/select';
 
-import './oxidal.css';
 import { AdjustmentDialog } from '../../../AdjustmentDialog';
 import { downloadVoice, tone3000Models, tone3000Tone } from '../../../api';
 import { type FactoryRole, factoryRoles } from '../../../factoryRecipes';
@@ -332,7 +331,7 @@ export function GetTonesDialog({
               at a time. A tone already downloaded in Tones and IRs is added
               without downloading it again.
             </p>
-            <ul className="oxidal-tone-list">
+            <ul className="grid list-none gap-2 p-0">
               {initial.map((tone) => {
                 const capture = captureOf(tone);
                 const info = capture ? infos[keyOf(capture)] : undefined;
@@ -342,12 +341,12 @@ export function GetTonesDialog({
                 return (
                   <li
                     key={tone.role}
-                    className="oxidal-tone-row"
+                    className="group flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border py-2 last:border-0"
                     data-state={row?.state ?? (kept ? 'kept' : 'needed')}
                   >
                     {capture ? (
                       <>
-                        <div className="oxidal-tone-what">
+                        <div className="grid min-w-0 gap-0.5">
                           <span className="caption">
                             For: {roleLabel(tone.role)}
                           </span>
@@ -372,7 +371,7 @@ export function GetTonesDialog({
                                   : 'First model of the tone'}
                           </span>
                           <span
-                            className="caption oxidal-tone-status"
+                            className="caption group-data-[state=done]:font-semibold group-data-[state=failed]:text-danger-ink"
                             role={
                               row?.state === 'failed' ||
                               (info?.state === 'error' && kept === undefined)
@@ -572,12 +571,15 @@ export function GetTonesDialog({
               From your TONE3000 account and this unit. Pick one with a similar
               sound.
             </p>
-            <ul className="oxidal-tone-list">
+            <ul className="grid list-none gap-2 p-0">
               {isFactoryVoice(phase.role) &&
                 factoryVoices[phase.role].captures.slice(1).map((capture) => {
                   const info = infos[keyOf(capture)];
                   return (
-                    <li key={keyOf(capture)} className="oxidal-tone-row">
+                    <li
+                      key={keyOf(capture)}
+                      className="group flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border py-2 last:border-0"
+                    >
                       <span>
                         {info?.state === 'ok'
                           ? `${info.title} · ${info.size}`

@@ -7,7 +7,6 @@ import {
   SoundRecipeRow,
 } from '@oxidal/design-system/patterns/sound-browser';
 
-import './oxidal.css';
 import { recipeEffects } from '../../../factoryRecipes';
 import { type CardHandlers, cardLine, primaryFor } from './cardActions';
 import {

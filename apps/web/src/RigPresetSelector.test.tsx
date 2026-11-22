@@ -5,6 +5,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import {
@@ -102,7 +103,7 @@ it('selects original and owned identities without optimistically changing the so
     screen.getByRole('button', { name: /^Amp A\s*Playing · NAM chain$/ }),
   ).toHaveAttribute('aria-pressed', 'true');
   expect(screen.getByText(/editing one saves a copy/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('tab', { name: /Mine/ }));
+  await userEvent.click(screen.getByRole('tab', { name: /Mine/ }));
   fireEvent.click(screen.getByRole('button', { name: /^My A\s*NAM chain$/ }));
   expect(select).toHaveBeenCalledWith(tone('a', true));
   expect(picker).toHaveAccessibleName(/^Playing preset: (?:\d+ )?Amp A(?: |$)/);
@@ -406,7 +407,7 @@ it('lists presets with scenes first, tagged by scene count, and plays them as on
   expect(
     screen.getAllByRole('tab').map((t) => t.textContent?.replace(/\s+/g, ' ')),
   ).toEqual(['Set list 1', 'Mine 2', 'Oxidal sounds 0', 'TONE3000 2']);
-  fireEvent.click(screen.getByRole('tab', { name: /Set list/ }));
+  await userEvent.click(screen.getByRole('tab', { name: /Set list/ }));
   const row = screen.getByRole('button', {
     name: /^Clean to heavy\s*3 scenes · 3 NAM$/,
   });
@@ -572,7 +573,9 @@ it('offers ready Oxidal sounds that are not saved yet, and saves one before play
   });
   await waitFor(() => expect(picker).toBeEnabled());
   fireEvent.click(picker);
-  fireEvent.click(await screen.findByRole('tab', { name: /Oxidal sounds 1/ }));
+  await userEvent.click(
+    await screen.findByRole('tab', { name: /Oxidal sounds 1/ }),
+  );
   const row = screen.getByRole('button', { name: /saved when chosen/ });
   expect(row).toHaveTextContent(recipe.name);
   fireEvent.click(row);

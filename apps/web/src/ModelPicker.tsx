@@ -66,12 +66,12 @@ type Gear = NonNullable<ToneQuery['gear']>;
 function ToneThumb({ id, gear }: { id: number; gear: string }) {
   const [failed, setFailed] = useState(false);
   return failed ? (
-    <span className="catalog-gear">
+    <span className="grid size-14 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground group-data-[view=pictures]:aspect-square group-data-[view=pictures]:h-auto group-data-[view=pictures]:w-full [&_svg]:size-7">
       <GearIcon gear={gear} />
     </span>
   ) : (
     <img
-      className="catalog-picture"
+      className="size-14 shrink-0 rounded-md bg-muted object-cover group-data-[view=pictures]:aspect-square group-data-[view=pictures]:h-auto group-data-[view=pictures]:w-full"
       src={toneImage(id)}
       alt=""
       loading="lazy"
@@ -383,7 +383,7 @@ export function ModelPicker({
         )}
         {showLocal && (
           <section aria-label="On this device" className="space-y-3">
-            <details className="local-upload">
+            <details className="[&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:font-semibold">
               <summary>Add a file from this device</summary>
               <div className="space-y-3">
                 <label htmlFor="local-model-file">NAM / IR file</label>
@@ -435,28 +435,28 @@ export function ModelPicker({
                       <Button
                         key={m.id}
                         variant="outline"
-                        className="catalog-tone"
+                        className="group h-auto min-h-20 w-full justify-start gap-3 p-3 text-left whitespace-normal data-[view=pictures]:flex-col data-[view=pictures]:items-stretch data-[view=pictures]:gap-2 data-[view=pictures]:p-2 data-[view=pictures]:[&>svg]:hidden"
                         disabled={locked}
                         onClick={() => void auditionLocal(m.id)}
                       >
                         {m.tone_id ? (
                           <ToneThumb id={m.tone_id} gear={m.gear ?? ''} />
                         ) : (
-                          <span className="catalog-gear">
+                          <span className="grid size-14 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground group-data-[view=pictures]:aspect-square group-data-[view=pictures]:h-auto group-data-[view=pictures]:w-full [&_svg]:size-7">
                             <GearIcon
                               gear={m.gear || (m.format === 'ir' ? 'ir' : '')}
                             />
                           </span>
                         )}
-                        <span className="catalog-description">
+                        <span className="grid min-w-0 flex-1 gap-1 [overflow-wrap:anywhere] [&>span]:text-xs [&>span]:font-normal [&>span]:text-muted-foreground">
                           <strong>{m.title}</strong>
-                          <span className="catalog-meta">
+                          <span className="font-mono">
                             {m.gear ? <GearLabel gear={m.gear} /> : 'File'} ·{' '}
                             {m.format === 'nam' ? 'NAM' : 'IR'}
                             {m.name && m.name !== m.title ? ` · ${m.name}` : ''}
                           </span>
                         </span>
-                        <span className="model-audition">
+                        <span className="flex shrink-0 items-center gap-1 [&_svg]:size-4">
                           <Play aria-hidden="true" /> Audition
                         </span>
                       </Button>
@@ -535,7 +535,7 @@ export function ModelPicker({
                     </SelectContent>
                   </Select>
                 </label>
-                <div className="catalog-filters">
+                <div className="flex flex-wrap justify-between gap-x-4 gap-y-1">
                   <SegmentedControl
                     value={query.gear ?? 'all'}
                     disabled={locked}
@@ -598,7 +598,7 @@ export function ModelPicker({
                 )}
               </>
             ) : (
-              <div className="catalog-tone-header">
+              <div className="flex min-w-0 items-center gap-3">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -612,9 +612,9 @@ export function ModelPicker({
                   <ArrowLeft aria-hidden="true" />
                 </Button>
                 <ToneThumb id={tone.id} gear={tone.gear} />
-                <div className="catalog-description">
+                <div className="grid min-w-0 flex-1 gap-1 [overflow-wrap:anywhere] [&>span]:text-xs [&>span]:font-normal [&>span]:text-muted-foreground">
                   <strong>{tone.title}</strong>
-                  <span className="catalog-meta">
+                  <span className="font-mono">
                     <GearLabel gear={tone.gear} /> ·{' '}
                     {tone.user.profile_url ? (
                       <a
@@ -634,19 +634,29 @@ export function ModelPicker({
               </div>
             )}
             <div
-              className="space-y-2"
+              className={
+                !tone && view === 'pictures'
+                  ? 'grid grid-cols-[repeat(auto-fill,minmax(min(9rem,100%),1fr))] gap-2'
+                  : 'space-y-2'
+              }
               aria-label={tone ? 'Available models' : 'TONE3000 tones'}
               data-view={tone ? undefined : view}
               aria-busy={loading || locked}
             >
               {loading && !appending ? (
-                <p className="catalog-empty" role="status">
+                <p
+                  className="col-span-full px-4 py-8 text-center text-muted-foreground"
+                  role="status"
+                >
                   Searching TONE3000…
                 </p>
               ) : catalogueError && !appending ? null : tone ? (
                 <>
                   {!models?.data.length && (
-                    <p className="catalog-empty" role="status">
+                    <p
+                      className="col-span-full px-4 py-8 text-center text-muted-foreground"
+                      role="status"
+                    >
                       {format === 'nam' ? 'No A2 models' : 'No IR files'}{' '}
                       available for this tone.
                     </p>
@@ -670,7 +680,7 @@ export function ModelPicker({
                           {m.name}
                           {m.size ? ` · ${m.size}` : ''}
                         </span>
-                        <span className="model-audition">
+                        <span className="flex shrink-0 items-center gap-1 [&_svg]:size-4">
                           {playing ? (
                             <Check aria-hidden="true" />
                           ) : intent === 'download' ? (
@@ -691,7 +701,10 @@ export function ModelPicker({
               ) : (
                 <>
                   {!tones?.data.some((t) => t.format === format) && (
-                    <p className="catalog-empty" role="status">
+                    <p
+                      className="col-span-full px-4 py-8 text-center text-muted-foreground"
+                      role="status"
+                    >
                       No {format === 'nam' ? 'NAM tones' : 'IRs'} in{' '}
                       {query.collection === 'latest'
                         ? 'the latest feed'
@@ -708,7 +721,7 @@ export function ModelPicker({
                       <Button
                         key={t.id}
                         variant="outline"
-                        className="catalog-tone"
+                        className="group h-auto min-h-20 w-full justify-start gap-3 p-3 text-left whitespace-normal data-[view=pictures]:flex-col data-[view=pictures]:items-stretch data-[view=pictures]:gap-2 data-[view=pictures]:p-2 data-[view=pictures]:[&>svg]:hidden"
                         data-view={view}
                         onClick={() => {
                           setTone(t);
@@ -719,14 +732,14 @@ export function ModelPicker({
                         {view === 'pictures' ? (
                           <ToneThumb id={t.id} gear={t.gear} />
                         ) : (
-                          <span className="catalog-gear">
+                          <span className="grid size-14 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground group-data-[view=pictures]:aspect-square group-data-[view=pictures]:h-auto group-data-[view=pictures]:w-full [&_svg]:size-7">
                             <GearIcon gear={t.gear} />
                           </span>
                         )}
-                        <span className="catalog-description">
+                        <span className="grid min-w-0 flex-1 gap-1 [overflow-wrap:anywhere] [&>span]:text-xs [&>span]:font-normal [&>span]:text-muted-foreground">
                           <strong>{t.title}</strong>
                           <span>{t.user.display_name || t.user.username}</span>
-                          <span className="catalog-meta">
+                          <span className="font-mono">
                             <GearLabel gear={t.gear} /> · {t.models_count}{' '}
                             {t.models_count === 1 ? 'model' : 'models'}
                           </span>
@@ -831,10 +844,7 @@ export function ModelPicker({
     </>
   );
   return inline ? (
-    <section
-      className="model-picker discover-tone3000"
-      aria-label="TONE3000 sounds"
-    >
+    <section className="mx-auto w-full max-w-2xl" aria-label="TONE3000 sounds">
       {body}
     </section>
   ) : (

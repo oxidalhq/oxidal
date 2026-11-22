@@ -83,7 +83,10 @@ function ArtworkContent({
   if (tile) {
     const item = shown.find((entry) => entry.key && entry.cached) ?? shown[0];
     return (
-      <span className="signal-artwork" aria-hidden="true">
+      <span
+        className="block aspect-[4/3] w-full overflow-hidden bg-muted [&>img]:size-full [&>img]:rounded-none [&>img]:border-0 [&>img]:object-cover [&>span]:size-full [&>span]:place-content-center [&>span]:border-0 [&>span_svg]:size-10"
+        aria-hidden="true"
+      >
         <ArtworkImage
           key={`${item?.block_id}-${item?.key}-${item?.cached}`}
           src={
@@ -102,9 +105,19 @@ function ArtworkContent({
   const pictured = shown.filter((item) => item.key);
   const missing = shown.filter((item) => !item.key);
   const entry = (item: AssetArtwork) => (
-    <figure key={item.block_id} className="artwork-entry">
+    <figure
+      key={item.block_id}
+      className="m-0 flex max-w-full min-w-0 items-center gap-2"
+    >
       {item.key && (
-        <div className="artwork-thumb" data-artwork-image>
+        <div
+          className={
+            compact
+              ? 'w-9 shrink-0 [[data-chain-view=artwork]_&]:w-16'
+              : 'w-14 shrink-0 [[data-chain-view=artwork]_&]:w-16'
+          }
+          data-artwork-image
+        >
           <ArtworkImage
             key={`${item.block_id}-${item.key}-${item.cached}`}
             src={
@@ -115,9 +128,9 @@ function ArtworkContent({
           />
         </div>
       )}
-      <figcaption>
-        <strong>{item.title}</strong>
-        <span>
+      <figcaption className="grid min-w-0 text-xs [overflow-wrap:anywhere] [[data-chain-view=artwork]_&]:text-2xs">
+        {!compact && <strong>{item.title}</strong>}
+        <span className="text-muted-foreground">
           <GearLabel gear={item.gear} /> ·{' '}
           {item.cached
             ? 'Saved offline'
@@ -130,12 +143,12 @@ function ArtworkContent({
   );
   return (
     <div
-      className="artwork-deck"
+      className="grid min-w-0 gap-2 [&>button]:max-w-full [&>button]:justify-self-start"
       aria-label="Asset artwork"
       data-artwork-density={compact ? 'compact' : 'gallery'}
     >
       {pictured.length > 0 && (
-        <div className="artwork-list">{pictured.map(entry)}</div>
+        <div className="flex flex-wrap gap-2">{pictured.map(entry)}</div>
       )}
       {missing.length > 0 && !compact && (
         <details className="control-help">
@@ -143,7 +156,7 @@ function ArtworkContent({
             {missing.length} {missing.length === 1 ? 'asset' : 'assets'} without
             artwork
           </summary>
-          <div className="artwork-list">{missing.map(entry)}</div>
+          <div className="flex flex-wrap gap-2">{missing.map(entry)}</div>
         </details>
       )}
 
@@ -188,7 +201,7 @@ function ArtworkImage({
     />
   ) : (
     <span
-      className="artwork-placeholder"
+      className="grid place-items-center gap-1 rounded-md border border-dashed border-border p-1 text-center text-2xs break-words [&>svg]:size-6"
       aria-label={`${title}: image unavailable`}
     >
       <GearIcon gear={gear} />

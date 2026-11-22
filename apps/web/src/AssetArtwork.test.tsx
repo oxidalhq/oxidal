@@ -93,7 +93,7 @@ it('renders only the selected block image in a tile and falls back without downl
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
   fireEvent.error(view.container.querySelector('img')!);
   expect(
-    view.container.querySelector('.artwork-placeholder'),
+    view.container.querySelector('[aria-label$="image unavailable"]'),
   ).toBeInTheDocument();
   expect(saveArtwork).not.toHaveBeenCalled();
 });

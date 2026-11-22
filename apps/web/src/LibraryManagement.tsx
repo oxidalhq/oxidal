@@ -388,16 +388,18 @@ export function LibraryManagement({
             </Button>
           </div>
           {outside && (
-            <ul className="preset-library">
+            <ul className="grid list-none gap-1 p-0">
               {notMembers.map((item) => (
                 <li
                   key={`${item.kind}:${item.id}`}
-                  className="library-row preset-row"
+                  className="preset-row grid min-w-0 gap-2 border-b border-border py-2 sm:grid-cols-[minmax(0,1fr)_auto]"
                   data-outside-entry={item.id}
                 >
                   <div className="preset-row-text min-w-0">
-                    <span className="library-name">{item.name}</span>
-                    <span className="library-meta">
+                    <span className="font-semibold break-words">
+                      {item.name}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
                       {item.kind === 'owned' ? 'Mine · saved tone' : 'Mine'}
                     </span>
                   </div>
@@ -455,7 +457,7 @@ function LibraryRow({
   const movable = !item.archived && (item.in_set_list || item.kind === 'graph');
   return (
     <div
-      className="set-list-row border-b border-border py-3"
+      className="grid gap-2 border-b border-border py-3 data-[drop-before=true]:shadow-[0_-2px_var(--foreground)] data-[moving=true]:opacity-65 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
       data-library-entry={item.id}
       data-library-kind={item.kind}
       data-drop-before={drag.before === `${item.kind}:${item.id}` || undefined}
@@ -465,7 +467,7 @@ function LibraryRow({
         {movable && item.kind !== 'graph' && (
           <Button
             variant="ghost"
-            className="set-list-handle"
+            className="cursor-grab touch-none active:cursor-grabbing"
             disabled={disabled}
             aria-label={`Drag ${item.name}`}
             onPointerDown={(e) => drag.start(e, item)}

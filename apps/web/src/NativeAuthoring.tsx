@@ -149,7 +149,10 @@ export function NativeAuthoring({
   return (
     <>
       {variants.length > 1 && (
-        <div className="variant-selector" aria-label="Model comparison">
+        <div
+          className="grid grid-cols-[var(--touch-target)_minmax(0,1fr)_var(--touch-target)] items-end gap-2 [&>button]:min-h-touch [&>button]:px-0"
+          aria-label="Model comparison"
+        >
           <Button
             variant="outline"
             aria-label="Previous model variant"

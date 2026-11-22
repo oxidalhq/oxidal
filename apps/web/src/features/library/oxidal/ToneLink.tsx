@@ -19,7 +19,7 @@ export function ToneLink({
 }) {
   return (
     <a
-      className="oxidal-tone-link"
+      className="inline-flex min-h-touch items-center gap-1 break-words underline underline-offset-2 [&_svg]:size-3.5 [&_svg]:shrink-0"
       href={toneLink({ id: tone, url: url ?? '' })}
       target="_blank"
       rel="noreferrer noopener"

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import { Card, CardTitle } from '@oxidal/design-system/components/card';
 import {
   Sheet,
   SheetBody,
@@ -8,7 +9,6 @@ import {
   SheetHeader,
 } from '@oxidal/design-system/components/sheet';
 
-import './oxidal.css';
 import { libraryCatalog } from '../../../api';
 import { factoryRoles, factoryTopologySummary } from '../../../factoryRecipes';
 import { isFactoryVoice, primaryCapture } from '../../../factoryVoices';
@@ -141,7 +141,7 @@ export function SoundDetails({
       <section aria-label="How to play it">
         <h3>How to play it</h3>
         {item.meta.performance && <p>{item.meta.performance}</p>}
-        <ol className="oxidal-scenes">
+        <ol className="ml-5 list-decimal">
           {(guide.length
             ? guide
             : item.sceneNames.map((name) => ({ name, detail: '' }))
@@ -153,7 +153,7 @@ export function SoundDetails({
           ))}
         </ol>
       </section>
-      <dl className="oxidal-facts">
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 [&>dd]:break-words [&>dt]:font-semibold">
         {item.recipe && (
           <>
             <dt>Chain</dt>
@@ -178,7 +178,7 @@ export function SoundDetails({
           <>
             <dt>Tones</dt>
             <dd>
-              <ul className="oxidal-tone-refs">
+              <ul className="grid list-none gap-1.5 p-0 [&>li]:grid">
                 {tones.map(({ role, capture }) => (
                   <li key={role}>
                     <span>{roleLabel(role)}</span>
@@ -218,13 +218,13 @@ export function SoundDetails({
   );
   if (inline)
     return (
-      <section
+      <Card
         aria-label={`About ${item.name}`}
-        className="sticky top-4 grid max-h-[calc(100dvh-6rem)] min-w-0 gap-3 overflow-auto rounded-lg border border-border bg-card p-4"
+        className="sticky top-4 max-h-[calc(100dvh-6rem)] min-w-0 overflow-auto"
       >
-        <h2 className="m-0 font-display text-xl font-semibold">{item.name}</h2>
+        <CardTitle>{item.name}</CardTitle>
         {content}
-      </section>
+      </Card>
     );
   return (
     <Sheet open onOpenChange={(open) => !open && onClose()}>

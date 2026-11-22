@@ -87,7 +87,7 @@ export function LibraryModelPreview({
     <AdjustmentDialog
       title="Model preview"
       onCancel={onClose}
-      className="library-model-preview"
+      className="min-w-0 break-words"
     >
       <div className="space-y-4">
         {toneId ? (
@@ -96,20 +96,26 @@ export function LibraryModelPreview({
             initialTone={model.provider_tone ?? undefined}
           />
         ) : (
-          <div className="local-model-details">
-            <div className="local-model-placeholder">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="grid size-20 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground [&_svg]:size-8">
               <GearIcon gear={model.gear || 'experimental'} />
             </div>
             <div className="min-w-0">
               <p className="font-semibold">{model.nam?.name || model.title}</p>
               {model.nam?.author && (
-                <p className="library-meta">By {model.nam.author}</p>
+                <p className="text-sm text-muted-foreground">
+                  By {model.nam.author}
+                </p>
               )}
               {model.nam?.gear && (
-                <p className="library-meta">{model.nam.gear}</p>
+                <p className="text-sm text-muted-foreground">
+                  {model.nam.gear}
+                </p>
               )}
               {model.nam?.trainer && (
-                <p className="library-meta">Trained with {model.nam.trainer}</p>
+                <p className="text-sm text-muted-foreground">
+                  Trained with {model.nam.trainer}
+                </p>
               )}
               <p className="caption">
                 Uploaded NAM
@@ -129,7 +135,9 @@ export function LibraryModelPreview({
             </div>
           </div>
         )}
-        <p className="library-meta break-words">File: {model.name}</p>
+        <p className="text-sm break-words text-muted-foreground">
+          File: {model.name}
+        </p>
         <ModelLevels id={model.id} />
         <LibraryModelAudition asset={model.id} onOpenRig={onOpenRig} />
       </div>
