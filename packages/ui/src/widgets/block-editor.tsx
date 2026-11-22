@@ -19,7 +19,6 @@ import {
   Sheet,
   SheetBody,
   SheetContent,
-  SheetFooter,
   SheetHeader,
 } from '../components/ui/sheet';
 import { Slider } from '../components/ui/slider';
@@ -29,6 +28,7 @@ import { Caption, Label, Title } from '../components/ui/text';
 import { Toggle } from '../components/ui/toggle';
 import { cn } from '../lib/cn';
 import { useVerticalRig } from '../lib/use-media';
+import { DockableSheet } from '../patterns/tool-dock';
 import type { BlockSource } from './block-source';
 import { SourceLine } from './block-source';
 import type { ChainBlockModel } from './chain';
@@ -449,37 +449,34 @@ export function BlockEditor({
           </PopoverContent>
         </Popover>
       )}
-      <Sheet open={full} onOpenChange={setFull}>
-        <SheetContent onOpenChange={setFull}>
-          <SheetHeader
-            title={block.label}
-            description={block.caption ?? block.kind}
-          >
-            <div className="mt-1 flex gap-1">
-              {!block.on && <Badge tone="warning">Off</Badge>}
-              {block.unsaved && <Badge tone="warning">Unsaved</Badge>}
-            </div>
-          </SheetHeader>
-          <SheetBody>
-            <BlockFullEditor
-              block={block}
-              visual={fullVisual}
-              renderSlider={renderSlider}
-              disabled={disabled}
-              details={details}
-              onControl={(control, value) =>
-                onControl(block.id, control, value)
-              }
-              onReset={onReset ? () => onReset(block.id) : undefined}
-            />
-          </SheetBody>
-          <SheetFooter>
-            <Button variant="outline" onClick={() => setFull(false)}>
-              Done
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+      <DockableSheet
+        id="block-controls"
+        title={block.label}
+        description={block.caption ?? block.kind}
+        open={full}
+        onOpenChange={setFull}
+        footer={
+          <Button variant="outline" onClick={() => setFull(false)}>
+            Done
+          </Button>
+        }
+      >
+        {(!block.on || block.unsaved) && (
+          <div className="flex gap-1">
+            {!block.on && <Badge tone="warning">Off</Badge>}
+            {block.unsaved && <Badge tone="warning">Unsaved</Badge>}
+          </div>
+        )}
+        <BlockFullEditor
+          block={block}
+          visual={fullVisual}
+          renderSlider={renderSlider}
+          disabled={disabled}
+          details={details}
+          onControl={(control, value) => onControl(block.id, control, value)}
+          onReset={onReset ? () => onReset(block.id) : undefined}
+        />
+      </DockableSheet>
     </>
   );
 }

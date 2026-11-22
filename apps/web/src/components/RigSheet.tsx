@@ -1,5 +1,7 @@
 import { CaretDown, CaretUp, X } from '@phosphor-icons/react';
-import { type ReactNode, useEffect, useRef } from 'react';
+import { type ReactNode, useRef } from 'react';
+
+import { DockableSheet } from '@oxidal/design-system/patterns/tool-dock';
 
 import './RigSheet.css';
 import { useSessionState } from '../lib/sessionState';
@@ -28,66 +30,77 @@ export function RigSheet({
   children: ReactNode;
 }) {
   const [open, setOpen] = useSessionState('rig-sheet-open', true);
-  const body = useRef<HTMLDivElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const sheet = body.current?.parentElement;
-    const close = (event: KeyboardEvent) => {
-      // A dialog opened from the sheet handles its own Esc first.
-      if (event.key !== 'Escape' || event.defaultPrevented) return;
-      const focused = document.activeElement;
-      if (!sheet?.contains(focused)) return;
-      if (focused?.closest('dialog, [role="dialog"]')) return;
-      setOpen(false);
-      toggle.current?.focus();
-    };
-    document.addEventListener('keydown', close);
-    return () => document.removeEventListener('keydown', close);
-  }, [open, setOpen]);
   return (
-    <section
-      className="rig-sheet"
-      data-open={open || undefined}
-      data-closable={onClose ? true : undefined}
-      aria-label="Block controls"
-    >
-      <header className="rig-sheet-header">
-        <span className="rig-sheet-handle" aria-hidden="true" />
-        <div className="rig-sheet-title">
-          <strong title={title}>{title}</strong>
-          {detail && <span className="caption">{detail}</span>}
-        </div>
-        {open && actions}
-        <button
-          ref={toggle}
-          type="button"
-          className="rig-sheet-toggle"
-          aria-expanded={open}
-          aria-label={open ? 'Hide controls' : `Show controls: ${title}`}
-          onClick={() => setOpen(!open)}
+    <DockableSheet
+      id="block-controls"
+      title={title}
+      open
+      onOpenChange={(next) => {
+        if (!next) onClose?.();
+      }}
+      renderSheet={(placement) => (
+        <section
+          className="rig-sheet"
+          data-open={open || undefined}
+          data-closable={onClose ? true : undefined}
+          aria-label="Block controls"
+          onKeyDown={(event) => {
+            if (!open || event.key !== 'Escape' || event.defaultPrevented)
+              return;
+            const target = event.target as HTMLElement;
+            if (
+              !event.currentTarget.contains(target) ||
+              target.closest('dialog, [role="dialog"]')
+            )
+              return;
+            setOpen(false);
+            toggle.current?.focus();
+          }}
         >
-          {open ? (
-            <CaretDown aria-hidden="true" />
-          ) : (
-            <CaretUp aria-hidden="true" />
-          )}
-        </button>
-        {onClose && (
-          <button
-            type="button"
-            className="rig-sheet-toggle"
-            aria-label="Close block panel"
-            onClick={onClose}
-          >
-            <X aria-hidden="true" />
-          </button>
-        )}
-      </header>
-      <div ref={body} className="rig-sheet-body" hidden={!open}>
-        {children}
-      </div>
-    </section>
+          <header className="rig-sheet-header">
+            <span className="rig-sheet-handle" aria-hidden="true" />
+            <div className="rig-sheet-title">
+              <strong title={title}>{title}</strong>
+              {detail && <span className="caption">{detail}</span>}
+            </div>
+            {open && actions}
+            <button
+              ref={toggle}
+              type="button"
+              className="rig-sheet-toggle"
+              aria-expanded={open}
+              aria-label={open ? 'Hide controls' : `Show controls: ${title}`}
+              onClick={() => setOpen(!open)}
+            >
+              {open ? (
+                <CaretDown aria-hidden="true" />
+              ) : (
+                <CaretUp aria-hidden="true" />
+              )}
+            </button>
+            {onClose && (
+              <button
+                type="button"
+                className="rig-sheet-toggle"
+                aria-label="Close block panel"
+                onClick={onClose}
+              >
+                <X aria-hidden="true" />
+              </button>
+            )}
+          </header>
+          {open && placement}
+          <div className="rig-sheet-body" hidden={!open}>
+            {children}
+          </div>
+        </section>
+      )}
+    >
+      {detail && <p className="caption">{detail}</p>}
+      {actions}
+      {children}
+    </DockableSheet>
   );
 }
 

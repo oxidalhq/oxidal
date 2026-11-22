@@ -164,7 +164,7 @@ export function ToolDock({
   const dock: Dock = {
     tablet,
     wide,
-    placeOf,
+    preferredPlace: (id) => places[id] ?? lastPlaces?.[id] ?? 'sheet',
     put,
     slots: { left, right, float },
     spotOf: (id) => {
@@ -337,6 +337,8 @@ export function DockableSheet({
   id,
   title,
   description,
+  closeLabel,
+  renderSheet,
   icon,
   open,
   onOpenChange,
@@ -348,6 +350,9 @@ export function DockableSheet({
   id: string;
   title: string;
   description?: React.ReactNode;
+  closeLabel?: string;
+  /** An in-page sheet can keep its own collapse and focus behavior. */
+  renderSheet?: (placement: React.ReactNode) => React.ReactNode;
   icon?: React.ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -357,7 +362,7 @@ export function DockableSheet({
   children: React.ReactNode;
 }) {
   const dock = React.useContext(DockContext);
-  const kept = dock?.placeOf(id) ?? 'sheet';
+  const kept = dock?.preferredPlace(id) ?? 'sheet';
   const place: ToolPlace =
     !dock || !dock.tablet || kept === 'closed' || kept === 'sheet'
       ? 'sheet'
@@ -386,22 +391,24 @@ export function DockableSheet({
         )
       : null;
 
+  const placement = dock && (
+    <WindowControls
+      title={title}
+      place="sheet"
+      dock={dock}
+      onPlace={(next) => dock.put(id, next)}
+    />
+  );
+  if (renderSheet) return open ? renderSheet(placement) : null;
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent onOpenChange={onOpenChange} className={className}>
         <SheetHeader
           title={title}
           description={description}
-          actions={
-            dock && (
-              <WindowControls
-                title={title}
-                place="sheet"
-                dock={dock}
-                onPlace={(next) => dock.put(id, next)}
-              />
-            )
-          }
+          closeLabel={closeLabel}
+          actions={placement}
         />
         <SheetBody className="grid content-start gap-3">{children}</SheetBody>
         {footer && <SheetFooter>{footer}</SheetFooter>}

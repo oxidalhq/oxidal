@@ -30,7 +30,15 @@ function readPreferences(): Preferences {
       localStorage.getItem(STORAGE_KEY) ?? 'null',
     );
     if (!parsed || typeof parsed !== 'object') return result;
-    for (const id of ['chords', 'backing', 'venue', 'tuner']) {
+    for (const id of [
+      'chords',
+      'backing',
+      'venue',
+      'tuner',
+      'scenes',
+      'block-controls',
+      'change',
+    ]) {
       if (
         'last' in parsed &&
         parsed.last &&

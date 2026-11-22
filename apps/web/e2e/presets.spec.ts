@@ -4684,6 +4684,19 @@ test('live model comparison stays open, waits for application and rejects a chan
   await expect(
     picker.getByRole('button', { name: /Clean fixture/ }),
   ).toHaveAttribute('aria-pressed', 'false');
+  if ((page.viewportSize()?.width ?? 0) >= 1024) {
+    await picker
+      .getByRole('button', { name: 'Pin left: Choose model' })
+      .click();
+    const pinned = page.getByRole('region', { name: 'Choose model tool' });
+    await expect(pinned.getByRole('status')).toContainText(
+      'Auditioning Drive fixture',
+    );
+    await pinned
+      .getByRole('button', { name: 'Open as a sheet: Choose model' })
+      .click();
+    expect(assignments).toBe(2);
+  }
   audio = { ...audio, session: 'replacement-session' };
   await expect(
     picker.getByRole('button', { name: /Clean fixture/ }),

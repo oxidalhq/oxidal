@@ -92,6 +92,7 @@ export function SheetHeader({
   title,
   description,
   actions,
+  closeLabel = 'Close',
   children,
   ...props
 }: React.ComponentProps<'header'> & {
@@ -99,6 +100,7 @@ export function SheetHeader({
   description?: React.ReactNode;
   /** Small controls beside Close, such as where to keep the sheet. */
   actions?: React.ReactNode;
+  closeLabel?: string;
 }) {
   return (
     <header
@@ -126,7 +128,7 @@ export function SheetHeader({
       <div className="flex items-center gap-0.5">
         {actions}
         <DialogPrimitive.Close asChild>
-          <Button variant="ghost" size="icon-sm" aria-label="Close">
+          <Button variant="ghost" size="icon-sm" aria-label={closeLabel}>
             <X />
           </Button>
         </DialogPrimitive.Close>

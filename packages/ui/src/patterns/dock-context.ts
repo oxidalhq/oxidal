@@ -17,7 +17,7 @@ export type Dock = {
   tablet: boolean;
   /** Wide enough to pin. */
   wide: boolean;
-  placeOf: (id: string) => ToolPlace;
+  preferredPlace: (id: string) => ToolPlace;
   put: (id: string, place: ToolPlace) => void;
   /** Where pinned and floating panels are drawn. */
   slots: {

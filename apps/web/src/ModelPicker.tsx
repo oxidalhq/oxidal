@@ -23,8 +23,8 @@ import {
 } from '@oxidal/design-system/components/select';
 import { Loading } from '@oxidal/design-system/components/states';
 import { CatalogueNotice } from '@oxidal/design-system/patterns/model-browser';
+import { DockableSheet } from '@oxidal/design-system/patterns/tool-dock';
 
-import { AdjustmentDialog } from './AdjustmentDialog';
 import {
   type LocalModelPage,
   localModels,
@@ -838,8 +838,17 @@ export function ModelPicker({
       {body}
     </section>
   ) : (
-    <AdjustmentDialog title={title} onCancel={close} className="model-picker">
+    <DockableSheet
+      id="change"
+      title={title}
+      closeLabel="Close dialog"
+      open
+      onOpenChange={(open) => {
+        if (!open) close();
+      }}
+      className="md:w-[min(52rem,100vw)]"
+    >
       {body}
-    </AdjustmentDialog>
+    </DockableSheet>
   );
 }

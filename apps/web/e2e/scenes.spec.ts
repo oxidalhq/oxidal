@@ -1008,6 +1008,24 @@ test('mixed rig authoring: scene grid saves block On/Off in version 3 and reopen
     await expect(
       grid.getByRole('button', { name: 'Echo in Lead', exact: true }),
     ).toHaveAttribute('aria-pressed', 'true');
+    const pin = grid.getByRole('button', { name: 'Pin right: Edit scenes' });
+    if (await pin.isVisible()) {
+      await pin.click();
+      const panel = page.getByRole('region', { name: 'Edit scenes tool' });
+      await expect(panel).toHaveAttribute('data-place', 'right');
+      await expect(
+        panel.getByRole('button', { name: 'Echo in Clean' }),
+      ).toHaveAttribute('aria-pressed', 'false');
+      await panel.getByRole('button', { name: 'Close Edit scenes' }).click();
+      await page
+        .getByRole('button', { name: 'Edit scenes', exact: true })
+        .click();
+      await expect(panel).toHaveAttribute('data-place', 'right');
+      await panel
+        .getByRole('button', { name: 'Open as a sheet: Edit scenes' })
+        .click();
+      await expect(cleanEcho).toHaveAttribute('aria-pressed', 'false');
+    }
     const saveScenes = grid.getByRole('button', {
       name: 'Save scenes',
       exact: true,
