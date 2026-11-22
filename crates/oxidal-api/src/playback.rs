@@ -688,16 +688,31 @@ impl Owner {
                 return Err(error);
             }
         };
-        if let Some(error) = error {
-            self.state.authoring = Some(authoring);
-            self.state.controls = controls.clone();
-            self.state.eq = eq.clone();
-            self.state.slots = slots;
-            self.resume_controls = Some(controls);
-            self.resume_eq = Some(eq);
-            self.updates.send_replace(self.state.clone());
-            return Err(error);
+        let was_adjusting = self
+            .state
+            .authoring
+            .as_ref()
+            .is_some_and(|s| s.gesture.is_some());
+        let adjusting = authoring.gesture.is_some();
+        // The worker owns live previews. Keep the opening values for recovery
+        // until it commits, cancels or expires the gesture.
+        if adjusting && !was_adjusting {
+            self.resume_controls = Some(self.state.controls.clone());
+            self.resume_eq = Some(self.state.eq.clone());
         }
+        let (previous_controls, previous_eq) = if was_adjusting {
+            (
+                self.resume_controls
+                    .as_ref()
+                    .unwrap_or(&self.state.controls),
+                self.resume_eq.as_ref().unwrap_or(&self.state.eq),
+            )
+        } else {
+            (&self.state.controls, &self.state.eq)
+        };
+        let scalar_changed = !adjusting
+            && (serde_json::to_vec(previous_controls).ok() != serde_json::to_vec(&controls).ok()
+                || previous_eq != &eq);
         let mutating = mutating
             || authoring.working
                 != self
@@ -705,32 +720,34 @@ impl Owner {
                     .configured
                     .as_ref()
                     .and_then(|s| s.working.clone());
-        if mutating {
-            self.state
-                .configured
-                .as_mut()
-                .ok_or("Missing configured native session")?
-                .working = authoring.working.clone();
-            self.state.models.clear();
-            self.state.model_change = None;
-            self.state.modified = true;
-            self.state.saved_copy = None;
-            self.schedule_recovery();
+        if error.is_none() {
+            if mutating {
+                self.state
+                    .configured
+                    .as_mut()
+                    .ok_or("Missing configured native session")?
+                    .working = authoring.working.clone();
+                self.state.models.clear();
+                self.state.model_change = None;
+            }
+            if mutating || scalar_changed {
+                self.state.modified = true;
+                self.state.saved_copy = None;
+                self.schedule_recovery();
+            }
         }
-        let scalar_changed = serde_json::to_vec(&self.state.controls).ok()
-            != serde_json::to_vec(&controls).ok()
-            || self.state.eq != eq;
-        if scalar_changed {
-            self.state.modified = true;
-            self.state.saved_copy = None;
-            self.schedule_recovery();
+        if !adjusting {
+            self.resume_controls = Some(controls.clone());
+            self.resume_eq = Some(eq.clone());
         }
         self.state.authoring = Some(authoring);
         self.state.slots = slots;
-        self.state.controls = controls.clone();
-        self.state.eq = eq.clone();
-        self.resume_controls = Some(controls);
-        self.resume_eq = Some(eq);
+        self.state.controls = controls;
+        self.state.eq = eq;
+        if let Some(error) = error {
+            self.updates.send_replace(self.state.clone());
+            return Err(error);
+        }
         if utility_poll && !mutating {
             self.updates.send_replace(self.state.clone());
         } else {
@@ -745,10 +762,11 @@ impl Owner {
         // The tuner and measurements need fast readings. An open adjustment only
         // needs its 120 s expiry checked, so it polls once a second: every poll
         // runs between audio blocks on the worker's realtime thread.
+        let was_adjusting = status.gesture.is_some();
         let fast = status.tools.active();
         if self.state.phase != AudioPhase::Running
             || self.model_pending()
-            || !(fast || status.gesture.is_some())
+            || !(fast || was_adjusting)
             || (!fast && self.last_tool_poll.elapsed() < Duration::from_secs(1))
         {
             return;
@@ -764,6 +782,15 @@ impl Owner {
             let _ = self.authoring_command(AuthoringAction::Inspect).await;
             self.state.error = Some(error);
             self.updates.send_replace(self.state.clone());
+        } else if was_adjusting
+            && self
+                .state
+                .authoring
+                .as_ref()
+                .is_some_and(|s| s.gesture.is_none())
+            && let Err(error) = self.promote_original_edit().await
+        {
+            self.publish(self.state.phase, Some(error));
         }
     }
     async fn host_utility(
@@ -1608,7 +1635,15 @@ impl Owner {
         let Some(source) = self.state.configured.clone() else {
             return Ok(());
         };
-        if source.owned || source.draft || !self.state.modified || self.state.copy_on_edit.is_some()
+        if source.owned
+            || source.draft
+            || !self.state.modified
+            || self.state.copy_on_edit.is_some()
+            || self
+                .state
+                .authoring
+                .as_ref()
+                .is_some_and(|s| s.gesture.is_some())
         {
             return Ok(());
         }

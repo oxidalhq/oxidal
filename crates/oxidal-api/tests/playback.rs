@@ -90,15 +90,17 @@ async fn protect_reaches_native_worker_and_keeps_tuner_and_saved_pin_available()
         409
     );
     state = get(&client, &url, "audio").await;
-    let changed = send(
-        &client,
-        &url,
-        &state,
-        json!({"kind":"set_control","target":"toneBass","value":0.25}),
-    )
-    .await;
-    assert_eq!(changed.status(), 200);
-    state = changed.json().await.unwrap();
+    let original = state["configured"]["preset_id"].clone();
+    let opening = state["eq"].clone();
+    state = first_edit_eq(&client, &url, state, false).await;
+    assert_eq!(state["eq"], opening);
+    assert_eq!(state["configured"]["preset_id"], original);
+    assert!(state["copy_on_edit"].is_null());
+    assert_eq!(state["modified"], false);
+    state = first_edit_eq(&client, &url, state, true).await;
+    assert_eq!(state["configured"]["owned"], true);
+    assert_ne!(state["configured"]["preset_id"], original);
+    assert_eq!(state["eq"][0]["eq"]["bands"][1]["gainDb"], 3.0);
     // Originals create a saved copy immediately, but the player must still
     // resolve Keep/Discard before that copy may become a startup selection.
     assert!(state["copy_on_edit"].is_object());
@@ -126,6 +128,11 @@ async fn protect_reaches_native_worker_and_keeps_tuner_and_saved_pin_available()
     .await;
     assert_eq!(resolved.status(), 200);
     state = resolved.json().await.unwrap();
+    let owned = state["configured"]["preset_id"].clone();
+    let opening = state["eq"].clone();
+    state = first_edit_eq(&client, &url, state, false).await;
+    assert_eq!(state["eq"], opening);
+    assert_eq!(state["configured"]["preset_id"], owned);
     let edited = send(
         &client,
         &url,
@@ -1145,6 +1152,51 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     task.abort();
     stopped.wait().await.unwrap();
     std::fs::remove_dir_all(root).unwrap();
+}
+/// Preview two changes on the same worker. Only the final commit may create a Mine copy.
+async fn first_edit_eq(
+    client: &reqwest::Client,
+    url: &str,
+    mut state: Value,
+    commit: bool,
+) -> Value {
+    let source = state["configured"]["preset_id"].clone();
+    let token = if commit { "eq-done" } else { "eq-cancel" };
+    let target = format!(
+        "eq:{}:1:gainDb",
+        state["eq"][0]["block_id"].as_str().unwrap()
+    );
+    let terminal = if commit {
+        json!({"phase":"commit","sequence":3,"value":3.0})
+    } else {
+        json!({"phase":"cancel"})
+    };
+    for mut edit in [
+        json!({"phase":"begin","target":target}),
+        json!({"phase":"preview","sequence":1,"value":1.5}),
+        json!({"phase":"preview","sequence":2,"value":2.5}),
+        terminal,
+    ] {
+        edit["owner"] = json!("eq");
+        edit["token"] = json!(token);
+        let reply = send(
+            client,
+            url,
+            &state,
+            json!({"kind":"authoring","action":{"kind":"gesture","edit":edit}}),
+        )
+        .await;
+        let status = reply.status();
+        state = reply.json().await.unwrap();
+        assert!(status.is_success(), "{state}");
+        if edit["phase"] == "preview" {
+            assert_eq!(state["eq"][0]["eq"]["bands"][1]["gainDb"], edit["value"]);
+            assert_eq!(state["authoring"]["gesture"]["token"], token);
+            assert_eq!(state["configured"]["preset_id"], source);
+            assert!(state["copy_on_edit"].is_null());
+        }
+    }
+    state
 }
 async fn get(client: &reqwest::Client, url: &str, path: &str) -> Value {
     let response = client.get(format!("{url}/{path}")).send().await.unwrap();
