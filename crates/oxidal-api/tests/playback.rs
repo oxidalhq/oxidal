@@ -101,6 +101,26 @@ async fn protect_reaches_native_worker_and_keeps_tuner_and_saved_pin_available()
     assert_eq!(state["configured"]["owned"], true);
     assert_ne!(state["configured"]["preset_id"], original);
     assert_eq!(state["eq"][0]["eq"]["bands"][1]["gainDb"], 3.0);
+    let restored = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"resolve_copy","keep":false}),
+    )
+    .await;
+    assert_eq!(restored.status(), 200);
+    state = restored.json().await.unwrap();
+    assert_eq!(state["configured"]["preset_id"], original);
+    assert_eq!(state["eq"], opening);
+    let changed = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"set_control","target":"toneBass","value":0.25}),
+    )
+    .await;
+    assert_eq!(changed.status(), 200);
+    state = changed.json().await.unwrap();
     // Originals create a saved copy immediately, but the player must still
     // resolve Keep/Discard before that copy may become a startup selection.
     assert!(state["copy_on_edit"].is_object());
