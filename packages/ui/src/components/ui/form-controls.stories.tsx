@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
+import { Button } from './button';
 import { Checkbox } from './checkbox';
+import { ActionRow, FormField, FormGrid } from './form-layout';
 import {
   Select,
   SelectContent,
@@ -115,5 +117,31 @@ export const Selects: StoryObj = {
         </Select>
       </div>
     </div>
+  ),
+};
+
+export const PresetDetails: StoryObj = {
+  render: () => (
+    <form onSubmit={(event) => event.preventDefault()}>
+      <FormGrid>
+        <FormField>
+          Preset name
+          <input name="preset" defaultValue="Clean amp" />
+        </FormField>
+        <FormField>
+          Starting scene
+          <select defaultValue="Clean">
+            <option>Clean</option>
+            <option>Lead</option>
+          </select>
+        </FormField>
+      </FormGrid>
+      <ActionRow>
+        <Button type="submit">Save</Button>
+        <Button type="reset" variant="outline">
+          Reset
+        </Button>
+      </ActionRow>
+    </form>
   ),
 };

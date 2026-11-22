@@ -27,6 +27,7 @@ export function Caption<T extends ElementType = 'p'>({
   const Component = as ?? 'p';
   return (
     <Component
+      data-slot="caption"
       className={cn('m-0 text-sm text-muted-foreground', className)}
       {...props}
     />

@@ -17,6 +17,19 @@ body,
   -webkit-font-smoothing: antialiased;
 }
 
+@layer base {
+  summary {
+    min-height: var(--touch-target);
+    cursor: pointer;
+  }
+
+  @media (pointer: coarse) {
+    :where(input, select, textarea) {
+      font-size: max(16px, 1rem);
+    }
+  }
+}
+
 /* Focus is always visible and always the ring colour. */
 :focus-visible {
   outline: 2px solid var(--ring);

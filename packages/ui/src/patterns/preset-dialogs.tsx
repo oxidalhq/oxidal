@@ -19,11 +19,8 @@ import {
   SheetHeader,
 } from '../components/ui/sheet';
 import { Caption, Eyebrow } from '../components/ui/text';
+import { playingPresetCaption } from '../lib/preset-caption';
 import { PoweredByTone3000 } from './credits';
-
-export function playingPresetCaption(name: string) {
-  return `Copy ${name} with its current edits.`;
-}
 
 const starts = (playing: string) =>
   [
