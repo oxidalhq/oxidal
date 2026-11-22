@@ -14,6 +14,10 @@ import {
   presetLibrary,
   rigLibrary,
 } from './api';
+import {
+  SessionMediaContext,
+  useSessionMedia,
+} from './components/media/sessionMedia';
 import { StageFootswitches } from './features/stage/StageFootswitches';
 import { setPerform } from './performState';
 import { PerformView } from './PerformView';
@@ -285,6 +289,71 @@ it('uses the mapped block for a held switch and the scene for a tap', () => {
     fireEvent.click(pad);
     expect(onSelect).toHaveBeenCalledExactlyOnceWith('chorus');
     expect(onToggle).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('holds the transport switch to repeat the backing track without pausing it', () => {
+  const send = vi.fn();
+  function Playing({ repeat }: { repeat: boolean }) {
+    const base = useSessionMedia();
+    return (
+      <SessionMediaContext.Provider
+        value={{
+          ...base,
+          player: {
+            track: {
+              id: 'friday',
+              title: 'Friday',
+              rate: 48000,
+              frames: 96000,
+              channels: 2,
+              trimDb: 0,
+            },
+            repeat,
+            frame: 0,
+            levelDb: 0,
+            order: ['friday'],
+            revision: 1,
+            state: 'playing',
+            underruns: 0,
+          },
+          shown: 'playing',
+          send,
+        }}
+      >
+        <StageFootswitches
+          layout="ten"
+          blocks={[]}
+          disabled={false}
+          onStep={vi.fn()}
+          onToggle={vi.fn()}
+        />
+      </SessionMediaContext.Provider>
+    );
+  }
+  const view = render(<Playing repeat={false} />);
+  vi.useFakeTimers();
+  try {
+    const hold = (label: string) => {
+      const button = screen.getByRole('button', { name: label });
+      fireEvent.pointerDown(button, { button: 0, isPrimary: true });
+      vi.advanceTimersByTime(500);
+      fireEvent.pointerUp(button);
+      fireEvent.click(button);
+    };
+    hold('D Pause Hold · Loop');
+    expect(send).toHaveBeenCalledExactlyOnceWith({
+      kind: 'set_repeat',
+      repeat: true,
+    });
+    view.rerender(<Playing repeat />);
+    hold('D Pause Hold · Loop on');
+    expect(send.mock.calls).toEqual([
+      [{ kind: 'set_repeat', repeat: true }],
+      [{ kind: 'set_repeat', repeat: false }],
+    ]);
   } finally {
     vi.useRealTimers();
   }

@@ -68,7 +68,9 @@ export function StageFootswitches({
       )
         tap = unassigned;
       if (hold?.kind === 'tap' && !tempo) hold = undefined;
-      if (hold && ['boost', 'loop'].includes(hold.kind)) hold = undefined;
+      if (hold?.kind === 'boost') hold = undefined;
+      if (hold?.kind === 'loop' && (!canPlay || media.pending))
+        hold = undefined;
       return { ...item, tap, hold };
     }),
   };
@@ -95,7 +97,7 @@ export function StageFootswitches({
           boost: false,
           tuner: false,
           playing: play,
-          loop: false,
+          loop: media.player?.repeat ?? false,
           bpm: tempo?.bpm,
         }}
         disabled={disabled}
@@ -112,6 +114,13 @@ export function StageFootswitches({
               return requestTuner();
             case 'tap':
               return void tapTempo();
+            case 'loop':
+              if (media.player && canPlay && !media.pending)
+                return void media.send({
+                  kind: 'set_repeat',
+                  repeat: !media.player.repeat,
+                });
+              return;
             case 'play':
               return void media.send({ kind: play ? 'pause' : 'play' });
           }

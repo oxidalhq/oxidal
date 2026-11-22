@@ -55,7 +55,7 @@ function describe(
     case 'play':
       return { label: state.playing ? 'Pause' : 'Play', on: state.playing };
     case 'loop':
-      return { label: 'Loop', on: state.loop };
+      return { label: state.loop ? 'Loop on' : 'Loop', on: state.loop };
     case 'none':
       return { label: '—', on: false };
   }
