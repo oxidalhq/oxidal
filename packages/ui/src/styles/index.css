@@ -18,6 +18,20 @@ body,
 }
 
 @layer base {
+  :where(
+    button:not(:disabled),
+    a[href],
+    select:not(:disabled),
+    label,
+    [role='button']:not([aria-disabled='true']),
+    [role='link']:not([aria-disabled='true']),
+    [role='menuitem']:not([aria-disabled='true']),
+    [role='option']:not([aria-disabled='true']),
+    [role='tab']:not([aria-disabled='true'])
+  ) {
+    cursor: pointer;
+  }
+
   summary {
     min-height: var(--touch-target);
     cursor: pointer;
