@@ -108,8 +108,12 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
   const every = slow || displayMode === 'epaper' ? 5000 : 1000;
   const accepted = useRef(-Infinity);
   function accept(feed: MonitorReading) {
-    if (feed.disconnected && feed.link == null) {
-      setError('Disconnected · readings are stale');
+    if (feed.disconnected) {
+      setError(
+        feed.link == null
+          ? 'Disconnected · readings are stale'
+          : 'Monitoring sampler is stale',
+      );
       return;
     }
     const next = feed.snapshot;
@@ -434,7 +438,28 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
         </div>
         <div>
           <dt className="text-muted-foreground">System CPU</dt>
-          <dd>{number(state?.host.cpu_percent, '%')}</dd>
+          <dd>{number(error ? null : state?.host.cpu_percent, '%')}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Per-core CPU</dt>
+          <dd>
+            {!error && state?.host.cpu_cores?.length
+              ? state.host.cpu_cores
+                  .map(
+                    ({ core, percent }) =>
+                      `CPU ${core} · ${number(percent, '%')}`,
+                  )
+                  .join(' / ')
+              : 'Unavailable'}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Audio thread CPU</dt>
+          <dd>
+            {stale || state?.audio?.audio_cpu == null
+              ? 'Unavailable'
+              : `Last observed on CPU ${state.audio.audio_cpu}`}
+          </dd>
         </div>
         <div>
           <dt className="text-muted-foreground">CPU temperature</dt>

@@ -11,6 +11,7 @@ import {
 
 import { Button } from '@oxidal/design-system/components/button';
 import { ChartContainer } from '@oxidal/design-system/components/chart';
+import { FormField } from '@oxidal/design-system/components/form-layout';
 import {
   Select,
   SelectContent,
@@ -18,9 +19,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@oxidal/design-system/components/select';
+import { Caption } from '@oxidal/design-system/components/text';
 
 import { type MonitoringHistory as History, monitoringHistory } from './api';
-import { historyCsv, historyPoints } from './historyData';
+import { historyCsv, historyPoints, recordedCoreIds } from './historyData';
 import { friendlyError } from './lib/friendlyError';
 
 /** Appliance-owned samples, distinct from the live browser's Freeze/Reset view. */
@@ -60,14 +62,18 @@ export function MonitoringHistory() {
             r.elapsed_ms >= latest.elapsed_ms - Number(range) * 60000,
         );
   const points = historyPoints(records);
-  const series =
-    metric === 'memory'
-      ? { key: 'memory', label: 'RAM', unit: '%' }
-      : metric === 'temperature'
-        ? { key: 'temperature', label: 'Temperature', unit: '°C' }
-        : metric === 'xruns'
-          ? { key: 'xruns', label: 'New xruns per sample', unit: 'count' }
-          : { key: 'dsp', label: 'DSP p95', unit: '%' };
+  const cores = recordedCoreIds(records);
+  const series = metric.startsWith('core_')
+    ? { key: metric, label: `CPU ${metric.slice(5)}`, unit: '%' }
+    : metric === 'audioCpu'
+      ? { key: metric, label: 'Audio thread CPU', unit: 'core number' }
+      : metric === 'memory'
+        ? { key: 'memory', label: 'RAM', unit: '%' }
+        : metric === 'temperature'
+          ? { key: 'temperature', label: 'Temperature', unit: '°C' }
+          : metric === 'xruns'
+            ? { key: 'xruns', label: 'New xruns per sample', unit: 'count' }
+            : { key: 'dsp', label: 'DSP p95', unit: '%' };
   function exportShown() {
     const url = URL.createObjectURL(
       new Blob([historyCsv(records)], { type: 'text/csv;charset=utf-8' }),
@@ -80,7 +86,7 @@ export function MonitoringHistory() {
   }
   return (
     <details
-      className="control-help"
+      className="border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']"
       onToggle={(event) => {
         const opened = event.currentTarget.open;
         setOpen(opened);
@@ -116,7 +122,7 @@ export function MonitoringHistory() {
             </Button>
           </div>
           <div className="grid min-w-0 grid-cols-2 gap-2">
-            <label className="field">
+            <FormField>
               History range
               <Select value={range} onValueChange={setRange}>
                 <SelectTrigger aria-label="History range">
@@ -129,8 +135,8 @@ export function MonitoringHistory() {
                   <SelectItem value="60">Last hour · this run</SelectItem>
                 </SelectContent>
               </Select>
-            </label>
-            <label className="field">
+            </FormField>
+            <FormField>
               History metric
               <Select value={metric} onValueChange={setMetric}>
                 <SelectTrigger aria-label="History metric">
@@ -138,12 +144,18 @@ export function MonitoringHistory() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="load">DSP / CPU</SelectItem>
+                  {cores.map((core) => (
+                    <SelectItem key={core} value={`core_${core}`}>
+                      CPU {core}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="audioCpu">Audio thread CPU</SelectItem>
                   <SelectItem value="memory">RAM</SelectItem>
                   <SelectItem value="temperature">Temperature</SelectItem>
                   <SelectItem value="xruns">New xruns</SelectItem>
                 </SelectContent>
               </Select>
-            </label>
+            </FormField>
           </div>
           <Button
             variant="outline"
@@ -153,10 +165,10 @@ export function MonitoringHistory() {
             <DownloadSimple aria-hidden="true" />
             Export shown CSV
           </Button>
-          <p className="caption">
+          <Caption>
             5-second samples · latest 720 loaded. JSON includes all retained
             data; CSV includes the selected range and all readings.
-          </p>
+          </Caption>
           {error && <p role="alert">{error}</p>}
           {state &&
             (state.storage_error ||
@@ -174,11 +186,11 @@ export function MonitoringHistory() {
           )}
           {records.length > 0 && (
             <>
-              <p className="caption">
+              <Caption>
                 {new Date(records[0]!.recorded_at_ms).toLocaleString()} –{' '}
                 {new Date(records.at(-1)!.recorded_at_ms).toLocaleString()} ·{' '}
                 {records.length} samples
-              </p>
+              </Caption>
               <ChartContainer
                 label={
                   metric === 'load'
@@ -220,7 +232,7 @@ export function MonitoringHistory() {
                     }}
                   />
                   <Line
-                    type="linear"
+                    type={metric === 'audioCpu' ? 'stepAfter' : 'linear'}
                     dataKey={series.key}
                     name={series.label}
                     stroke="var(--control-accent)"
@@ -240,21 +252,32 @@ export function MonitoringHistory() {
                   )}
                 </LineChart>
               </ChartContainer>
+              {!cores.length && (
+                <Caption>
+                  Per-core CPU readings are unavailable for this range.
+                </Caption>
+              )}
+              {metric === 'audioCpu' &&
+                !points.some((p) => p.audioCpu != null) && (
+                  <Caption>
+                    Audio thread CPU is unavailable for this range.
+                  </Caption>
+                )}
               {metric === 'xruns' && (
-                <p className="caption">
+                <Caption>
                   Recovered underruns/overruns between samples. Gaps mean stale
                   data, a counter reset or a new audio session; they do not mean
                   zero.
-                </p>
+                </Caption>
               )}
-              <details className="control-help">
+              <details className="border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']">
                 <summary>Recording details</summary>
-                <p className="caption">
+                <Caption>
                   Recorded even with the browser closed; up to 8 MiB survives
                   restarts. Gaps mark stale audio, session changes or missed
                   samples. Exports include recorder identity and elapsed time
                   for clock corrections.
-                </p>
+                </Caption>
               </details>
             </>
           )}

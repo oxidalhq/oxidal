@@ -4733,6 +4733,28 @@
         "source_name"
       ]
     },
+    "CoreLoad": {
+      "type": "object",
+      "properties": {
+        "core": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "percent": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "core"
+      ]
+    },
     "Creator": {
       "type": "object",
       "properties": {
@@ -6569,6 +6591,12 @@
     "Host": {
       "type": "object",
       "properties": {
+        "cpu_cores": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CoreLoad"
+          }
+        },
         "cpu_percent": {
           "type": [
             "number",
@@ -14747,6 +14775,16 @@
     "Snapshot2": {
       "type": "object",
       "properties": {
+        "audio_cpu": {
+          "description": "CPU on which the ALSA render thread emitted this reading. The scheduler may move it.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
         "deadline_misses": {
           "description": "Callbacks reaching/exceeding one period, not necessarily ALSA underruns.",
           "type": [

@@ -79,3 +79,31 @@ it('exports explicit units, identities and missing values without spreadsheet fo
   expect(csv).not.toContain('undefined');
   expect(csv).not.toContain('NaN');
 });
+
+it('keeps physical CPU numbers across old rows, missing cores, stale audio and session changes', () => {
+  const old = sample(0, 0),
+    running = sample(5000, 0),
+    stale = sample(10000, 0),
+    changed = sample(15000, 0);
+  running.readings.host.cpu_cores = [
+    { core: 2, percent: 10 },
+    { core: 0, percent: 90 },
+  ];
+  running.readings.audio!.audio_cpu = 0;
+  stale.readings.host.cpu_cores = [{ core: 2, percent: null }];
+  stale.readings.audio!.audio_cpu = 2;
+  stale.readings.audio_age_ms = 3200;
+  changed.audio_session = 'next-worker';
+  changed.readings.host.cpu_cores = [{ core: 2, percent: 15 }];
+  const rows = [old, running, stale, changed];
+  const points = historyPoints(rows);
+  expect(points[0]).not.toHaveProperty('core_2');
+  expect(points[1]).toMatchObject({ core_0: 90, core_2: 10, audioCpu: 0 });
+  expect(points[2]).toMatchObject({ core_2: null, audioCpu: null });
+  expect(points[3]).toMatchObject({ core_2: null });
+  const lines = historyCsv(rows).split('\r\n');
+  expect(lines[0]).toMatch(/,audio_cpu,cpu_0_percent,cpu_2_percent$/);
+  expect(lines[1]).toMatch(/,,,$/);
+  expect(lines[2]).toMatch(/,"0","90","10"$/);
+  expect(lines[3]).toMatch(/,,,$/);
+});

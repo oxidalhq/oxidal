@@ -24,7 +24,13 @@ never loads a preset or changes playback.
 
 Use recorded history to look back at device load and audio health. Freeze pauses
 the displayed history while live resource status continues updating. E-paper
-mode uses a slower refresh and skips chart animation.
+mode uses a slower refresh and skips chart animation. On Linux, per-core CPU
+load is measured between successive operating-system samples. Select a CPU
+number in recorded history to follow its load. Audio thread CPU shows where
+the active render thread last reported from. The scheduler may move it
+between readings. Missing or stale audio leaves that reading unavailable.
+CSV exports append the observed audio CPU and the load of each reported CPU.
+Earlier device records leave the new readings blank.
 
 ## Control request audit
 

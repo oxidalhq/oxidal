@@ -23,6 +23,10 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
       sequence: sequence++,
       host: {
         cpu_percent: 23.4,
+        cpu_cores: [
+          { core: 0, percent: 4 },
+          { core: 2, percent: 42.8 },
+        ],
         memory_used_bytes: 512 * 1048576,
         memory_total_bytes: 4096 * 1048576,
         temperature_c: 48.2,
@@ -59,6 +63,7 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
       },
       audio: {
         frames: sequence * 48000,
+        audio_cpu: 0,
         input: [channel, { ...channel, clips: 0 }],
         output: [
           { ...channel, peak_dbfs: -3 },
@@ -151,6 +156,8 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   await expect(
     panel.getByRole('status', { name: 'Monitoring state' }),
   ).toHaveText('TONE3000 preset · live');
+  await expect(panel.getByText('Last observed on CPU 0')).toBeVisible();
+  await expect(panel.getByText('CPU 0 · 4.0% / CPU 2 · 42.8%')).toBeVisible();
   mixed = true;
   await expect(
     panel.getByRole('status', { name: 'Monitoring state' }),
@@ -260,10 +267,12 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   ).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   expect((await strip.boundingBox())!.y).toBeGreaterThanOrEqual(0);
+  await expect(panel.getByText('Last observed on CPU 0')).toHaveCount(0);
   disconnected = true;
   await expect(strip.getByTestId('resource-state')).toHaveText('Disconnected');
   await expect(strip).not.toContainText('23%');
   await expect(strip).not.toContainText('0.5 GiB');
+  await expect(panel.getByText('CPU 0 · 4.0% / CPU 2 · 42.8%')).toHaveCount(0);
 });
 
 test('monitor shows device history after browser reload and exports retained samples', async ({

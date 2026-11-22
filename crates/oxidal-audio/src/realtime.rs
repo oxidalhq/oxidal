@@ -39,6 +39,13 @@ pub fn monotonic_millis() -> Option<u64> {
     imp::monotonic_millis()
 }
 
+/// The logical CPU executing the calling render thread at the sampling instant.
+#[cfg(all(target_os = "linux", feature = "alsa"))]
+pub(crate) fn current_cpu() -> Option<u16> {
+    // SAFETY: sched_getcpu takes no pointers and only reads the current CPU number.
+    u16::try_from(unsafe { libc::sched_getcpu() }).ok()
+}
+
 #[cfg(all(target_os = "linux", feature = "alsa"))]
 mod imp {
     pub fn monotonic_millis() -> Option<u64> {

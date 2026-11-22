@@ -12,6 +12,9 @@ pub struct Channel {
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Snapshot {
+    /// CPU on which the ALSA render thread emitted this reading. The scheduler may move it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_cpu: Option<u16>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub monitoring: Option<crate::tools::HostState>,
     /// Recovered transport overruns/underruns in this worker lifetime.
@@ -148,6 +151,7 @@ impl Meter {
             }
         };
         Snapshot {
+            audio_cpu: None,
             monitoring: None,
             xruns: None,
             frames: self.frames,

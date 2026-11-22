@@ -23,7 +23,15 @@ use std::{
 use tokio::sync::watch;
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+pub struct CoreLoad {
+    pub core: u16,
+    pub percent: Option<f64>,
+}
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct Host {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cpu_cores: Vec<CoreLoad>,
     pub cpu_percent: Option<f64>,
     pub memory_used_bytes: Option<u64>,
     pub memory_total_bytes: Option<u64>,
@@ -72,12 +80,14 @@ fn text(path: &str) -> Option<String> {
         .ok()?;
     Some(s)
 }
-fn cpu(text: &str) -> Option<(u64, u64)> {
-    let mut parts = text.lines().next()?.split_whitespace();
-    if parts.next() != Some("cpu") {
-        return None;
-    }
-    // guest/guest_nice are already included in user/nice: do not count them twice.
+#[derive(Default)]
+struct CpuTimes {
+    aggregate: Option<(u64, u64)>,
+    cores: std::collections::BTreeMap<u16, (u64, u64)>,
+}
+
+fn counters(parts: std::str::SplitWhitespace<'_>) -> Option<(u64, u64)> {
+    // Linux includes guest and guest_nice in user and nice already.
     let values = parts
         .take(8)
         .map(str::parse::<u64>)
@@ -87,9 +97,50 @@ fn cpu(text: &str) -> Option<(u64, u64)> {
         return None;
     }
     Some((
-        values.iter().sum(),
-        values[3] + values.get(4).copied().unwrap_or(0),
+        values
+            .iter()
+            .try_fold(0u64, |sum, value| sum.checked_add(*value))?,
+        values[3].checked_add(values.get(4).copied().unwrap_or(0))?,
     ))
+}
+
+fn cpu(stat: &str) -> CpuTimes {
+    let mut result = CpuTimes::default();
+    for line in stat.lines().take_while(|line| line.starts_with("cpu")) {
+        let mut parts = line.split_whitespace();
+        let Some(name) = parts.next() else { continue };
+        let Some(times) = counters(parts) else {
+            continue;
+        };
+        if name == "cpu" {
+            result.aggregate = Some(times);
+        } else if let Some(core) = name.strip_prefix("cpu").and_then(|n| n.parse().ok()) {
+            result.cores.insert(core, times);
+        }
+    }
+    result
+}
+
+fn load(old: Option<(u64, u64)>, new: Option<(u64, u64)>) -> Option<f64> {
+    let (total, idle) = new?;
+    let (old_total, old_idle) = old?;
+    let elapsed = total.checked_sub(old_total)?;
+    let unused = idle.checked_sub(old_idle)?;
+    (elapsed > 0 && unused <= elapsed).then(|| 100.0 * (elapsed - unused) as f64 / elapsed as f64)
+}
+
+fn cpu_load(previous: &CpuTimes, current: &CpuTimes) -> (Option<f64>, Vec<CoreLoad>) {
+    (
+        load(previous.aggregate, current.aggregate),
+        current
+            .cores
+            .iter()
+            .map(|(&core, &times)| CoreLoad {
+                core,
+                percent: load(previous.cores.get(&core).copied(), Some(times)),
+            })
+            .collect(),
+    )
 }
 fn memory(text: &str) -> Option<(u64, u64)> {
     let value = |key: &str| {
@@ -104,17 +155,13 @@ fn memory(text: &str) -> Option<(u64, u64)> {
     let total = value("MemTotal:")?;
     Some((total.saturating_sub(value("MemAvailable:")?), total))
 }
-fn sample(previous: Option<(u64, u64)>) -> (Host, Option<(u64, u64)>) {
-    let current = text("/proc/stat").as_deref().and_then(cpu);
-    let percent = match (previous, current) {
-        (Some((a, b)), Some((c, d))) if c > a && d >= b => {
-            Some(100.0 * (1.0 - ((d - b) as f64 / (c - a) as f64)).clamp(0.0, 1.0))
-        }
-        _ => None,
-    };
+fn sample(previous: CpuTimes) -> (Host, CpuTimes) {
+    let current = text("/proc/stat").as_deref().map(cpu).unwrap_or_default();
+    let (percent, cpu_cores) = cpu_load(&previous, &current);
     let mem = text("/proc/meminfo").as_deref().and_then(memory);
     let mut host = Host {
         cpu_percent: percent,
+        cpu_cores,
         memory_used_bytes: mem.map(|v| v.0),
         memory_total_bytes: mem.map(|v| v.1),
         ..Default::default()
@@ -156,7 +203,7 @@ pub(super) fn start(shared: Weak<Shared>, updates: watch::Sender<Monitoring>) {
     let mut rig_updates = initial.rig_playback.subscribe();
     drop(initial);
     tokio::spawn(async move {
-        let mut previous = None;
+        let mut previous = CpuTimes::default();
         let mut host = Host::default();
         let mut phases = None;
         let mut sequence = 0;
@@ -184,12 +231,11 @@ pub(super) fn start(shared: Weak<Shared>, updates: watch::Sender<Monitoring>) {
                 break;
             };
             // Host sampling stays at 1 Hz; lifecycle notifications do not inflate CPU deltas.
-            if timed
-                && let Ok((next_host, next)) =
-                    tokio::task::spawn_blocking(move || sample(previous)).await
-            {
-                host = next_host;
-                previous = next;
+            if timed {
+                let prior = std::mem::take(&mut previous);
+                (host, previous) = tokio::task::spawn_blocking(move || sample(prior))
+                    .await
+                    .unwrap_or_default();
             }
             sequence += 1;
             let native = shared.playback.snapshot();
@@ -341,9 +387,38 @@ mod tests {
         );
     }
     #[test]
+    fn real_core_ids_survive_reorder_hotplug_and_reset() {
+        let old = cpu("cpu 30 0 0 60 0 0 0 0 1 0\ncpu0 10 0 0 20\ncpu2 20 0 0 40\nintr 100");
+        let new = cpu("cpu 40 0 0 70 0 0 0 0 2 0\ncpu2 21 0 0 49\ncpu0 19 0 0 21\ncpu3 0 0 0 0");
+        let (aggregate, cores) = cpu_load(&old, &new);
+        assert_eq!(aggregate, Some(50.0));
+        assert_eq!(
+            cores
+                .iter()
+                .map(|c| (c.core, c.percent))
+                .collect::<Vec<_>>(),
+            [(0, Some(90.0)), (2, Some(10.0)), (3, None)]
+        );
+        assert!(
+            cpu_load(&new, &old)
+                .1
+                .iter()
+                .all(|core| core.percent.is_none())
+        );
+        assert!(
+            cpu_load(&new, &new)
+                .1
+                .iter()
+                .all(|core| core.percent.is_none())
+        );
+    }
+    #[test]
     fn linux_counters_exclude_guest_and_handle_missing_metrics() {
-        assert_eq!(cpu("cpu 10 20 30 40 5 6 7 8 100 200\n"), Some((126, 45)));
-        assert_eq!(cpu("cpu broken"), None);
+        assert_eq!(
+            cpu("cpu 10 20 30 40 5 6 7 8 100 200\n").aggregate,
+            Some((126, 45))
+        );
+        assert_eq!(cpu("cpu broken").aggregate, None);
         assert_eq!(
             memory("MemTotal: 1000 kB\nMemAvailable: 400 kB\n"),
             Some((614400, 1024000))

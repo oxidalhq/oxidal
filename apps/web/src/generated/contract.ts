@@ -2465,6 +2465,10 @@ export interface NativeValue {
 }
 export interface Snapshot2 {
   /**
+   * CPU on which the ALSA render thread emitted this reading. The scheduler may move it.
+   */
+  audio_cpu?: number | null;
+  /**
    * Callbacks reaching/exceeding one period, not necessarily ALSA underruns.
    */
   deadline_misses?: number | null;
@@ -3318,11 +3322,16 @@ export interface Monitoring {
   xruns?: number | null;
 }
 export interface Host {
+  cpu_cores?: CoreLoad[];
   cpu_percent?: number | null;
   memory_total_bytes?: number | null;
   memory_used_bytes?: number | null;
   temperature_c?: number | null;
   temperature_sensor?: string | null;
+}
+export interface CoreLoad {
+  core: number;
+  percent?: number | null;
 }
 export interface TempoState {
   bpm?: number | null;

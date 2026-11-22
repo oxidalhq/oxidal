@@ -1,5 +1,19 @@
 import type { MonitoringHistory } from './api';
 type Sample = MonitoringHistory['records'][number];
+export function recordedCoreIds(records: Sample[]) {
+  return [
+    ...new Set(
+      records.flatMap(({ readings }) =>
+        (readings.host.cpu_cores ?? []).map(({ core }) => core),
+      ),
+    ),
+  ].sort((a, b) => a - b);
+}
+function audioCpu(sample: Sample['readings']) {
+  return sample.audio_age_ms != null && sample.audio_age_ms < 3000
+    ? (sample.audio?.audio_cpu ?? null)
+    : null;
+}
 export function historyPoints(records: Sample[]) {
   return records.map((record, index) => {
     const sample = record.readings;
@@ -15,6 +29,13 @@ export function historyPoints(records: Sample[]) {
     const oldXruns = previous?.readings.xruns;
     return {
       time: new Date(record.recorded_at_ms).toLocaleTimeString(),
+      ...Object.fromEntries(
+        (sample.host.cpu_cores ?? []).map(({ core, percent }) => [
+          `core_${core}`,
+          boundary ? null : (percent ?? null),
+        ]),
+      ),
+      audioCpu: boundary ? null : audioCpu(sample),
       cpu: boundary ? null : sample.host.cpu_percent,
       dsp:
         !boundary && valid && sample.audio!.deadline_us > 0
@@ -51,6 +72,7 @@ export function historyCsv(records: Sample[]) {
       text = `'${text}`;
     return `"${text.replaceAll('"', '""')}"`;
   };
+  const cores = recordedCoreIds(records);
   const columns = [
     'recorded_at_utc',
     'recorder_session',
@@ -70,6 +92,8 @@ export function historyCsv(records: Sample[]) {
     'output_right_peak_dbfs',
     'output_left_clips_total',
     'output_right_clips_total',
+    'audio_cpu',
+    ...cores.map((core) => `cpu_${core}_percent`),
   ];
   return (
     [
@@ -96,6 +120,10 @@ export function historyCsv(records: Sample[]) {
           a?.output[1].peak_dbfs,
           a?.output[0].clips,
           a?.output[1].clips,
+          audioCpu(s),
+          ...cores.map(
+            (core) => s.host.cpu_cores?.find((c) => c.core === core)?.percent,
+          ),
         ]
           .map(cell)
           .join(',');

@@ -378,6 +378,7 @@ impl Duplex {
     }
     pub fn telemetry(&mut self) -> crate::meter::Snapshot {
         let mut snapshot = self.meter.snapshot();
+        snapshot.audio_cpu = crate::realtime::current_cpu();
         snapshot.monitoring = Some(self.host.state());
         snapshot.xruns = Some(self.recovered_xruns);
         snapshot
@@ -536,6 +537,16 @@ mod tests {
         }
         let sample = stream.telemetry();
         assert!(sample.valid());
+        let core = sample
+            .audio_cpu
+            .expect("Linux render thread reports its CPU");
+        let name = format!("cpu{core}");
+        assert!(
+            std::fs::read_to_string("/proc/stat")
+                .unwrap()
+                .lines()
+                .any(|line| line.split_whitespace().next() == Some(name.as_str()))
+        );
         assert!(!sample.monitoring.unwrap().hear_yourself);
         assert!(sample.monitoring.unwrap().test_tone_active);
         assert!((-31.0..=-29.0).contains(&sample.output[0].peak_dbfs));
