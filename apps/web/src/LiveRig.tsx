@@ -1440,6 +1440,19 @@ export function LiveRig({
             name: state.preset_name,
             modified: state.modified,
           }}
+          switchPreset={
+            state.phase === 'running' &&
+            state.configured &&
+            !state.configured.draft
+              ? {
+                  kind: state.configured.owned ? 'owned' : 'original',
+                  id: state.configured.preset_id,
+                  session: state.session + ':' + state.revision,
+                  midi: state.midi,
+                  targets: [],
+                }
+              : undefined
+          }
           lanes={chainLanes}
           disabled={disabled || !!draft || !!picker}
           onToggle={(id) => {

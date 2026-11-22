@@ -25,6 +25,12 @@ If a screen cannot download, its recovery message offers **Reload interface**.
 Navigation and device readback remain available. Device audio runs independently
 of the page.
 
+## Preset switches in Perform
+
+In a playing native preset or mixed Rig, choose **Four switches** or **Ten switches** in Perform. **Edit preset switches** changes what a tap or hold does on the selected board for this preset. Choose **Tap tempo** and a note division, or select an available Bloom Freeze or Echo Hold control in a mixed Rig. Freeze can toggle, or stay on only while you hold the switch. Release your finger or key to end a held Freeze. If a controller disconnects while held, use **Release held switches** on the Stage board.
+
+To pair a physical switch, choose **Listen for MIDI switch**, press the configured controller switch, and select its port, channel and CC in **Physical MIDI input**. Saving a different action keeps its assigned MIDI input. Choosing **Profile default** restores that gesture’s original behavior and removes its assigned input. Turn Protect off to edit a layout. If another viewer saves first, **Reload saved layout** shows the current assignments before you try again. Effects-only presets use their existing controls in Rig.
+
 ## MIDI defaults
 
 Open **Settings → MIDI** to review or learn controller assignments. A new map starts with CC 7 for master output, CC 16–23 for the eight-scene template, CC 24/25 for previous/next preset, CC 26 for the tuner, CC 27 for tap tempo, CC 28 for a temporary instrument boost, and CC 29 for Protect. CC 80–85 control backing playback. CC 86 toggles chord-sheet scrolling or advances a page in E-paper and reduced-motion modes. CC 87 sets the scrolling speed. The master uses the same taper as the on-screen fader. Boost adds 3 dB within the existing gain limit and clears when the audio stream closes.

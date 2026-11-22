@@ -62,6 +62,34 @@ it('footswitches show the tap and hold actions and fire them', () => {
   expect(action).not.toHaveBeenCalledWith({ kind: 'previous' });
 });
 
+it('ends a held Freeze on key release or unmount without firing the tap', () => {
+  vi.useFakeTimers();
+  const press = vi.fn();
+  const release = vi.fn();
+  const tap = vi.fn();
+  const { unmount } = render(
+    <Footswitches
+      profile={CONTROLLERS[0]!}
+      state={STATE}
+      onAction={tap}
+      overrides={{ 1: { hold: { label: 'Freeze', run: press, release } } }}
+    />,
+  );
+  const pad = screen.getByRole('button', { name: 'A Clean Hold · Freeze' });
+  fireEvent.keyDown(pad, { key: ' ' });
+  act(() => vi.advanceTimersByTime(500));
+  fireEvent.keyDown(pad, { key: ' ', repeat: true });
+  fireEvent.keyUp(pad, { key: ' ' });
+  expect(press).toHaveBeenCalledTimes(1);
+  expect(release).toHaveBeenCalledTimes(1);
+  fireEvent.pointerDown(pad, { isPrimary: true, button: 0 });
+  act(() => vi.advanceTimersByTime(500));
+  unmount();
+  expect(press).toHaveBeenCalledTimes(2);
+  expect(release).toHaveBeenCalledTimes(2);
+  expect(tap).not.toHaveBeenCalled();
+});
+
 it('every controller profile draws one tile per switch', () => {
   for (const profile of CONTROLLERS) {
     const { unmount } = render(

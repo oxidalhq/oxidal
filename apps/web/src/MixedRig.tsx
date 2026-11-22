@@ -112,6 +112,45 @@ export function MixedRig(props: {
                 (state.control?.stomp_scene ?? state.control?.scene),
             )?.name,
           }}
+          switchPreset={
+            running && matching && state.control
+              ? {
+                  kind: 'rig',
+                  id: state.control.source_revision,
+                  session: state.control.session,
+                  midi: state.control.midi,
+                  targets: state.control.controls.flatMap((c) => {
+                    const t = c.target;
+                    if (t.kind !== 'lv2' || !c.toggle) return [];
+                    const instance = matching.manifest.oxidal?.graph.nodes.find(
+                      (node) => node.id === t.node,
+                    )?.instance;
+                    const uri = matching.manifest.oxidal?.lv2?.find(
+                      (b) => b.id === instance,
+                    )?.pluginUri;
+                    if (!(
+                      uri &&
+                      ((/^urn:oxidal:plugin:bloom#(mono|stereo)$/.test(uri) &&
+                        t.symbol === 'freeze') ||
+                        (/^urn:oxidal:plugin:echo#(mono|stereo)$/.test(uri) &&
+                          t.symbol === 'hold'))
+                    ))
+                      return [];
+                    return [
+                      {
+                        node: t.node,
+                        symbol: t.symbol,
+                        label:
+                          stageLanes
+                            .flatMap((l) => l.blocks)
+                            .find((b) => b.id === t.node)?.label ?? t.node,
+                        on: c.value >= 0.5,
+                      },
+                    ];
+                  }),
+                }
+              : undefined
+          }
           lanes={stageLanes}
           disabled={waiting || performSwitching}
           switching={performSwitching}

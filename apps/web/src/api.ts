@@ -1,6 +1,11 @@
 import Ajv2020 from 'ajv/dist/2020';
 
-import type { Contract } from './generated/contract';
+import type {
+  Contract,
+  SwitchLayoutState,
+  SwitchLayoutUpdate,
+  SwitchPress,
+} from './generated/contract';
 import schema from './generated/contract.schema.json';
 import { DeviceError, deviceError } from './lib/friendlyError';
 
@@ -93,6 +98,42 @@ async function presetResponse(response: Response): Promise<unknown> {
       `The device answered HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''} with no explanation`,
     );
   return body;
+}
+const switchLayoutValidator = ajv.compile<SwitchLayoutState>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/SwitchLayoutState',
+});
+async function switchRequest(
+  path: string,
+  body?: SwitchLayoutUpdate | SwitchPress | { session: string },
+) {
+  return presetResponse(
+    await fetch(
+      path,
+      body
+        ? {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          }
+        : undefined,
+    ),
+  );
+}
+export async function presetSwitchLayout(
+  path: string,
+  update?: SwitchLayoutUpdate,
+) {
+  const body = await switchRequest(path, update);
+  if (!switchLayoutValidator(body))
+    throw new Error('Incompatible preset switch layout');
+  return body;
+}
+export async function pressPresetSwitch(path: string, press: SwitchPress) {
+  await switchRequest(path + '/action', press);
+}
+export async function releasePresetSwitches(path: string, session: string) {
+  await switchRequest(path + '/release', { session });
 }
 /** The first schema mismatch in a response, for Details: where and what. */
 function schemaProblem(

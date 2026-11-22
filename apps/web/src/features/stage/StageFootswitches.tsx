@@ -10,6 +10,7 @@ import { boostMidi, sendTempo } from '../../api';
 import { useSessionMedia } from '../../components/media/sessionMedia';
 import { friendlyError } from '../../lib/friendlyError';
 import { requestTuner } from '../../tunerNavigation';
+import { StageSwitchLayout, type StageSwitchPreset } from './StageSwitchLayout';
 
 export type StageSceneControls = {
   active: string | null;
@@ -21,6 +22,7 @@ const unassigned: SwitchAction = { kind: 'none' };
 
 export function StageFootswitches({
   layout,
+  preset,
   scenes,
   blocks,
   disabled,
@@ -30,6 +32,7 @@ export function StageFootswitches({
   onToggle,
 }: {
   layout: 'four' | 'ten';
+  preset?: StageSwitchPreset;
   scenes?: StageSceneControls;
   blocks: { id: string; label: string; on: boolean }[];
   disabled: boolean;
@@ -103,46 +106,57 @@ export function StageFootswitches({
   }
   return (
     <>
-      <Footswitches
-        profile={mapped}
-        state={{
-          scene: scenes?.active ?? null,
-          scenes: liveScenes,
-          blocks: Object.fromEntries(blocks.map((block) => [block.id, block])),
-          boost: boost ?? false,
-          tuner: false,
-          playing: play,
-          loop: media.player?.repeat ?? false,
-          bpm: tempo?.bpm,
-        }}
-        disabled={disabled}
-        onAction={(action) => {
-          switch (action.kind) {
-            case 'scene':
-              return scenes?.onSelect(action.scene);
-            case 'previous':
-            case 'next':
-              return onStep(action.kind);
-            case 'block':
-              return onToggle(action.block);
-            case 'tuner':
-              return requestTuner();
-            case 'boost':
-              return void toggleBoost();
-            case 'tap':
-              return void tapTempo();
-            case 'loop':
-              if (media.player && canPlay && !media.pending)
-                return void media.send({
-                  kind: 'set_repeat',
-                  repeat: !media.player.repeat,
-                });
-              return;
-            case 'play':
-              return void media.send({ kind: play ? 'pause' : 'play' });
-          }
-        }}
-      />
+      <StageSwitchLayout
+        preset={preset}
+        profile={layout}
+        names={profile.switches.map((s) => s.name)}
+      >
+        {(overrides, loading) => (
+          <Footswitches
+            profile={mapped}
+            overrides={overrides}
+            state={{
+              scene: scenes?.active ?? null,
+              scenes: liveScenes,
+              blocks: Object.fromEntries(
+                blocks.map((block) => [block.id, block]),
+              ),
+              boost: boost ?? false,
+              tuner: false,
+              playing: play,
+              loop: media.player?.repeat ?? false,
+              bpm: tempo?.bpm,
+            }}
+            disabled={disabled || loading}
+            onAction={(action) => {
+              switch (action.kind) {
+                case 'scene':
+                  return scenes?.onSelect(action.scene);
+                case 'previous':
+                case 'next':
+                  return onStep(action.kind);
+                case 'block':
+                  return onToggle(action.block);
+                case 'tuner':
+                  return requestTuner();
+                case 'boost':
+                  return void toggleBoost();
+                case 'tap':
+                  return void tapTempo();
+                case 'loop':
+                  if (media.player && canPlay && !media.pending)
+                    return void media.send({
+                      kind: 'set_repeat',
+                      repeat: !media.player.repeat,
+                    });
+                  return;
+                case 'play':
+                  return void media.send({ kind: play ? 'pause' : 'play' });
+              }
+            }}
+          />
+        )}
+      </StageSwitchLayout>
       {error && <p role="alert">{error}</p>}
     </>
   );

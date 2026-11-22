@@ -63,14 +63,27 @@ function describe(
 
 const HOLD_MS = 450;
 
+export type SwitchOverride = {
+  label: string;
+  pressed?: boolean;
+  run: () => void;
+  release?: () => void;
+};
+export type SwitchOverrides = Record<
+  number,
+  { tap?: SwitchOverride; hold?: SwitchOverride }
+>;
+
 function Switch({
   sw,
+  overrides,
   state,
   onAction,
   size,
   disabled,
 }: {
   sw: Footswitch;
+  overrides?: SwitchOverrides[number];
   state: StageState;
   onAction: (action: SwitchAction) => void;
   size: 'md' | 'lg';
@@ -81,17 +94,30 @@ function Switch({
   return (
     <FootswitchPad
       name={sw.name}
-      label={tap.label}
-      holdLabel={hold?.label}
+      label={overrides?.tap?.label ?? tap.label}
+      holdLabel={overrides?.hold?.label ?? hold?.label}
       pressed={
-        ['previous', 'next', 'tap'].includes(sw.tap.kind) ? undefined : tap.on
+        overrides?.tap
+          ? overrides.tap.pressed
+          : ['previous', 'next', 'tap'].includes(sw.tap.kind)
+            ? undefined
+            : tap.on
       }
-      scene={sw.tap.kind === 'scene'}
-      colour={tap.colour}
+      scene={!overrides?.tap && sw.tap.kind === 'scene'}
+      colour={overrides?.tap ? undefined : tap.colour}
       size={size}
-      disabled={disabled || (sw.tap.kind === 'none' && !sw.hold)}
-      onTap={() => onAction(sw.tap)}
-      onHold={sw.hold ? () => onAction(sw.hold!) : undefined}
+      disabled={
+        disabled ||
+        (sw.tap.kind === 'none' &&
+          !sw.hold &&
+          !overrides?.tap &&
+          !overrides?.hold)
+      }
+      onTap={overrides?.tap?.run ?? (() => onAction(sw.tap))}
+      onHold={
+        overrides?.hold?.run ?? (sw.hold ? () => onAction(sw.hold!) : undefined)
+      }
+      onHoldRelease={overrides?.hold?.release}
     />
   );
 }
@@ -108,6 +134,7 @@ export function FootswitchPad({
   disabled,
   onTap,
   onHold,
+  onHoldRelease,
 }: {
   name: string;
   label: string;
@@ -120,14 +147,39 @@ export function FootswitchPad({
   disabled?: boolean;
   onTap: () => void;
   onHold?: () => void;
+  onHoldRelease?: () => void;
 }) {
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const release = React.useRef<(() => void) | undefined>(undefined);
   const held = React.useRef(false);
   const cancel = React.useCallback(() => {
     if (timer.current !== null) clearTimeout(timer.current);
     timer.current = null;
+    release.current?.();
+    release.current = undefined;
   }, []);
-  React.useEffect(() => cancel, [cancel, disabled, name, label, holdLabel]);
+  function start() {
+    cancel();
+    held.current = false;
+    if (onHold)
+      timer.current = setTimeout(() => {
+        held.current = true;
+        release.current = onHoldRelease;
+        onHold();
+      }, HOLD_MS);
+  }
+  React.useEffect(() => {
+    const visibility = () => {
+      if (document.hidden) cancel();
+    };
+    window.addEventListener('blur', cancel);
+    document.addEventListener('visibilitychange', visibility);
+    return () => {
+      window.removeEventListener('blur', cancel);
+      document.removeEventListener('visibilitychange', visibility);
+      cancel();
+    };
+  }, [cancel, disabled, name, holdLabel]);
   return (
     <button
       type="button"
@@ -142,19 +194,23 @@ export function FootswitchPad({
       data-on={pressed || undefined}
       aria-pressed={pressed}
       onPointerDown={(event) => {
-        cancel();
-        held.current = false;
-        if (onHold && event.isPrimary !== false && event.button <= 0)
-          timer.current = setTimeout(() => {
-            held.current = true;
-            onHold();
-          }, HOLD_MS);
+        if (event.isPrimary !== false && event.button <= 0) start();
       }}
       onPointerCancel={cancel}
+      onLostPointerCapture={cancel}
       onPointerUp={cancel}
       onPointerLeave={cancel}
-      onKeyDown={() => {
-        held.current = false;
+      onBlur={cancel}
+      onKeyDown={(event) => {
+        if (event.key !== ' ' && event.key !== 'Enter') return;
+        event.preventDefault();
+        if (!event.repeat) start();
+      }}
+      onKeyUp={(event) => {
+        if (event.key !== ' ' && event.key !== 'Enter') return;
+        event.preventDefault();
+        cancel();
+        if (!held.current) onTap();
       }}
       onClick={() => {
         if (!held.current) onTap();
@@ -224,6 +280,7 @@ export function FootswitchPad({
  */
 export function Footswitches({
   profile,
+  overrides,
   state,
   onAction,
   size = 'lg',
@@ -231,6 +288,7 @@ export function Footswitches({
   disabled,
 }: {
   profile: ControllerProfile;
+  overrides?: SwitchOverrides;
   state: StageState;
   onAction: (action: SwitchAction) => void;
   size?: 'md' | 'lg';
@@ -252,10 +310,11 @@ export function Footswitches({
       )}
       style={{ ['--switch-columns' as string]: columns }}
     >
-      {profile.switches.map((sw) => (
+      {profile.switches.map((sw, index) => (
         <Switch
           key={sw.id}
           sw={sw}
+          overrides={overrides?.[index + 1]}
           state={state}
           onAction={onAction}
           size={size}

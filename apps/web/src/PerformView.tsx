@@ -36,6 +36,7 @@ import {
   type StageSceneControls,
 } from './features/stage/StageFootswitches';
 import { StageSetList } from './features/stage/StageSetList';
+import type { StageSwitchPreset } from './features/stage/StageSwitchLayout';
 import { GuitarSwitch } from './GuitarSettings';
 import { friendlyError } from './lib/friendlyError';
 import { useSessionState } from './lib/sessionState';
@@ -246,6 +247,7 @@ export function PerformView({
   knobs,
   scenes,
   sceneControls,
+  switchPreset,
   selector,
 }: {
   /** What is playing: the surface is the same for every engine. */
@@ -267,6 +269,7 @@ export function PerformView({
   /** Scene pads, for a preset with scenes. */
   scenes?: React.ReactNode;
   sceneControls?: StageSceneControls;
+  switchPreset?: StageSwitchPreset;
   /** The preset pads, rendered by the rig that owns the library. */
   selector: React.ReactNode;
 }) {
@@ -593,6 +596,13 @@ export function PerformView({
               {scenes}
               {layout !== 'pads' && (
                 <StageFootswitches
+                  key={[
+                    layout,
+                    switchPreset?.kind,
+                    switchPreset?.id,
+                    switchPreset?.session,
+                  ].join('/')}
+                  preset={switchPreset}
                   layout={layout}
                   scenes={sceneControls}
                   blocks={boxes.map(({ block }) => block)}

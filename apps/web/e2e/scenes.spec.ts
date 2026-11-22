@@ -7,7 +7,7 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
-import type { MidiMap, Preset } from '../src/api';
+import type { MidiMap, Preset, RigControl } from '../src/api';
 import type { RigPublish } from '../src/generated/contract';
 import { sceneRig } from '../src/rigDraft';
 import { expectWorkspaceSection, selectWorkspaceSection } from './display';
@@ -373,6 +373,7 @@ async function mockRig(
   page: Page,
   request: APIRequestContext,
   revision: string,
+  controls: RigControl[] = [],
 ) {
   const baseline = await (await request.get('/api/v1/rig-audio')).json();
   const input = {
@@ -447,7 +448,7 @@ async function mockRig(
         modified: false,
         buffer_bytes: 1024,
         latency_frames: 0,
-        controls: [],
+        controls,
         scenes,
         scene: scenes.scenes[0].id,
         branches: branchStates(scenes, scenes.scenes[0].id),
@@ -525,6 +526,171 @@ async function mockRig(
     },
   });
 }
+
+test('mixed rig authoring: preset switches persist both gestures and release Freeze on cancellation', async ({
+  page,
+  request,
+}) => {
+  const doc = manifest('Custom stage switches', [
+    { id: 'clean', name: 'Clean', value: 1 },
+  ]);
+  const echo = {
+    id: 'echo',
+    kind: 'lv2',
+    audioInputs: 1,
+    audioOutputs: 1,
+    instance: 'echo-processor',
+    bypassed: false,
+  };
+  doc.oxidal.graph.nodes.splice(1, 0, echo);
+  doc.oxidal.graph.edges[0]!.to.node = 'echo';
+  doc.oxidal.graph.edges.push({
+    from: { node: 'echo', port: 0 },
+    to: { node: 'scene-gain', port: 0 },
+  });
+  Object.assign(doc.oxidal, {
+    lv2: [
+      {
+        id: 'echo-processor',
+        pluginUri: 'urn:oxidal:plugin:echo#mono',
+        controls: {},
+        assets: [],
+        requiredFeatures: [],
+      },
+    ],
+  });
+  const revision = await publish(request, doc);
+  const path = '/api/v1/presets/switch-layout/rig/' + revision;
+  const hold: RigControl = {
+    target: { kind: 'lv2', node: 'echo', symbol: 'hold' },
+    label: 'Hold',
+    toggle: true,
+    value: 0,
+    display: 'Off',
+    minimum: 0,
+    maximum: 1,
+    integer: true,
+    logarithmic: false,
+  };
+  await mockRig(page, request, revision, [hold]);
+  const presses: {
+    pressed: boolean;
+    gesture: string;
+    session: string;
+    performer: string;
+  }[] = [];
+  await page.route('**' + path + '/action', (route) => {
+    presses.push(route.request().postDataJSON());
+    return route.fulfill({ json: { ok: true } });
+  });
+  try {
+    const initial = await (await request.get(path)).json();
+    const assigned = await request.post(path, {
+      data: {
+        expected_revision: initial.revision,
+        layout: {
+          version: 1,
+          switches: [
+            {
+              profile: 'four',
+              position: 1,
+              gesture: 'tap',
+              action: { kind: 'tap_tempo', note: 'quarter' },
+            },
+          ],
+        },
+      },
+    });
+    expect(assigned.ok(), await assigned.text()).toBe(true);
+    await page.goto('/#rig');
+    await page.getByRole('button', { name: 'Perform view' }).click();
+    await page
+      .getByRole('combobox', { name: 'On-screen controller layout' })
+      .click();
+    await page.getByRole('option', { name: 'Four switches' }).click();
+    const edit = page.getByRole('button', { name: 'Edit preset switches' });
+    const dialog = page.getByRole('dialog', { name: 'Edit preset switches' });
+    await edit.click();
+    await dialog.getByLabel('Tap note').selectOption('dotted_eighth');
+    const latest = await (await request.get(path)).json();
+    const other = await request.post(path, {
+      data: {
+        expected_revision: latest.revision,
+        layout: {
+          ...latest.layout,
+          switches: [
+            ...latest.layout.switches,
+            {
+              profile: 'ten',
+              position: 1,
+              gesture: 'tap',
+              action: { kind: 'tap_tempo', note: 'triplet' },
+            },
+          ],
+        },
+      },
+    });
+    expect(other.ok(), await other.text()).toBe(true);
+    await dialog.getByRole('button', { name: 'Save switch' }).click();
+    await expect(dialog.getByRole('alert')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Reload saved layout' }).click();
+    await expect(dialog.getByLabel('Tap note')).toHaveValue('quarter');
+    await dialog.getByLabel('Tap note').selectOption('dotted_eighth');
+    await dialog.getByRole('button', { name: 'Save switch' }).click();
+    await expect(dialog).toBeHidden();
+    const saved = await (await request.get(path)).json();
+    expect(saved.layout.switches).toHaveLength(2);
+    expect(
+      saved.layout.switches.find(
+        (a: { profile: string }) => a.profile === 'four',
+      ),
+    ).toMatchObject({ action: { note: 'dotted_eighth' } });
+    await edit.click();
+    await expect(dialog.getByLabel('Tap note')).toHaveValue('dotted_eighth');
+    await dialog.getByLabel('Gesture').selectOption('hold');
+    await dialog
+      .getByRole('combobox', { name: 'Action', exact: true })
+      .selectOption('freeze');
+    await dialog.getByLabel('Freeze behavior').selectOption('gate');
+    await dialog.getByRole('button', { name: 'Save switch' }).click();
+    const pad = page.getByRole('button', {
+      name: /^A Tap · Dotted eighth Hold · Freeze/,
+    });
+    await pad.click();
+    await expect.poll(() => presses.length).toBe(1);
+    await pad.dispatchEvent('pointerdown', { isPrimary: true, button: 0 });
+    await expect.poll(() => presses.length).toBe(2);
+    await pad.dispatchEvent('pointercancel');
+    await expect.poll(() => presses.length).toBe(3);
+    expect(presses.map((p) => [p.gesture, p.pressed])).toEqual([
+      ['tap', true],
+      ['hold', true],
+      ['hold', false],
+    ]);
+    expect(presses[1]!.session).toBeTruthy();
+    expect(presses[1]!.performer).toBe(presses[2]!.performer);
+    let releasedSession = '';
+    await page.route('**' + path + '/release', (route) => {
+      releasedSession = route.request().postDataJSON().session;
+      return route.fulfill({ json: { ok: true } });
+    });
+    await page.getByRole('button', { name: 'Release held switches' }).click();
+    await expect(page.getByText('Held switches released.')).toBeVisible();
+    expect(releasedSession).toBe(presses[1]!.session);
+    const beforeReset = await (await request.get(path)).json();
+    const reset = await request.post(path, {
+      data: {
+        expected_revision: beforeReset.revision,
+        layout: { version: 1, switches: [] },
+      },
+    });
+    expect(reset.ok(), await reset.text()).toBe(true);
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(page.getByRole('button', { name: /^A Clean/ })).toBeVisible();
+  } finally {
+    await remove(request, [revision]);
+  }
+});
 
 test('mixed rig authoring: four- and ten-switch Stage follows confirmed scenes and Set list', async ({
   page,
