@@ -1,4 +1,4 @@
-//! Explicit five-minute debug mode. Execution never occurs inside the web/audio daemon.
+//! Explicit 15-minute debug mode. Execution never occurs inside the web/audio daemon.
 use crate::{Shared, failure};
 use axum::{
     Json,
@@ -119,7 +119,7 @@ impl DebugBridge {
             Command::Status {} => unreachable!("status uses the nonblocking snapshot"),
             Command::Enable {} => {
                 inner.exchange(Command::Status {}).await?;
-                inner.enabled_until = Some(Instant::now() + Duration::from_secs(300));
+                inner.enabled_until = Some(Instant::now() + Duration::from_secs(15 * 60));
             }
             Command::Disable {} => {
                 inner.enabled_until = None;

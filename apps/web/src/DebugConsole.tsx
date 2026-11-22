@@ -181,7 +181,7 @@ export function DebugConsole() {
               >
                 {state.enabled
                   ? 'Disable debug mode'
-                  : 'Enable debug mode for 5 minutes'}
+                  : 'Enable debug mode for 15 minutes'}
               </Button>
               {running && (
                 <Button

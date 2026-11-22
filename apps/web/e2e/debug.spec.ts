@@ -27,7 +27,7 @@ test('debug requires enablement, executes once, cancels and keeps commands out o
       commands.push(command);
       if (command.type === 'enable') {
         state.enabled = true;
-        state.remaining_seconds = 299;
+        state.remaining_seconds = 899;
       }
       if (command.type === 'disable') {
         state.enabled = false;
@@ -53,7 +53,7 @@ test('debug requires enablement, executes once, cancels and keeps commands out o
   await expand(panel, 'Debug console');
   await expect(panel.getByLabel('Command', { exact: true })).toBeDisabled();
   await panel
-    .getByRole('button', { name: 'Enable debug mode for 5 minutes' })
+    .getByRole('button', { name: 'Enable debug mode for 15 minutes' })
     .click();
   await panel
     .getByLabel('Command', { exact: true })
