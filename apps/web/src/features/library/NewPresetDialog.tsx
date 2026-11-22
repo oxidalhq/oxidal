@@ -57,11 +57,11 @@ export function NewPresetDialog({
 }) {
   const [playing, setPlaying] =
     useState<Awaited<ReturnType<typeof playingCopySource>>>(null);
+  if (!connected && playing) setPlaying(null);
   const copyRequest = useRef<AbortController | null>(null);
   useEffect(() => () => copyRequest.current?.abort(), []);
   useEffect(() => {
     let alive = true;
-    setPlaying(null);
     if (connected)
       void playingCopySource()
         .then((owner) => {
