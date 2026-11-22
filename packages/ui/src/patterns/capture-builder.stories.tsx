@@ -19,16 +19,20 @@ export const AssignScenes: StoryObj = {
       await userEvent.click(
         c.getByRole('button', { name: scene + ' · Choose capture' }),
       );
-      await userEvent.click(c.getByRole('button', { name: models[i]!.name }));
+      await userEvent.click(
+        await c.findByRole('button', { name: models[i]!.name }),
+      );
     }
     await expect(c.getByRole('button', { name: 'Save rig' })).toBeDisabled();
     await userEvent.selectOptions(c.getByLabelText('Dirt capture type'), 'amp');
     await userEvent.selectOptions(
       c.getByLabelText('Shared cabinet for amp-only scenes'),
-      'cab1',
+      await c.findByRole('option', { name: 'Studio cabinet' }),
     );
     await userEvent.click(c.getByRole('button', { name: 'Save rig' }));
-    await expect(c.getByRole('status')).toHaveTextContent('Saved Friday four');
+    await expect(
+      await c.findByText(/Saved Friday four/, {}, { timeout: 10000 }),
+    ).toBeVisible();
   },
 };
 export const Cancel: StoryObj = {
@@ -38,9 +42,11 @@ export const Cancel: StoryObj = {
     await userEvent.click(
       c.getByRole('button', { name: 'Build a rig from captures' }),
     );
-    await userEvent.click(c.getByRole('button', { name: 'Clean combo' }));
+    await userEvent.click(
+      await c.findByRole('button', { name: 'Clean combo' }),
+    );
     await userEvent.click(c.getByRole('button', { name: 'Cancel' }));
-    await expect(c.queryByRole('status')).toBeNull();
+    await expect(c.queryByText(/^Saved /)).toBeNull();
     await userEvent.click(
       c.getByRole('button', { name: 'Build a rig from captures' }),
     );

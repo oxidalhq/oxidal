@@ -11,14 +11,14 @@ import {
   SheetHeader,
 } from '../components/ui/sheet';
 import { Caption, Eyebrow } from '../components/ui/text';
-import { glyphFor } from '../lib/block-glyphs';
+import { glyphFor, type GlyphKey } from '../lib/block-glyphs';
 import type { BlockModel } from '../widgets/block-editor';
 import { BlockGlyph } from '../widgets/block-glyph';
 import { type BlockSource, SourceLine } from '../widgets/block-source';
 import type { ModelChoice } from './swap-sheet';
 
 /** An effect the chooser offers. LV2 effects come from packs the player installs. */
-export type EffectChoice = {
+export type EffectOption = {
   id: string;
   label: string;
   kind: string;
@@ -28,8 +28,11 @@ export type EffectChoice = {
   installed?: boolean;
   /** Who made it and where it comes from. */
   origin?: BlockSource;
-  make: (id: string) => BlockModel;
+  disabledReason?: string;
+  glyph?: GlyphKey;
 };
+
+export type EffectChoice = EffectOption & { make: (id: string) => BlockModel };
 
 export type Placement = 'before' | 'after' | 'beside';
 
@@ -89,9 +92,9 @@ export function BlockChooser({
     close(false);
   };
   const count = React.useRef(0);
-  const id = () => `added-${(count.current += 1)}`;
+  const nextId = () => `added-${(count.current += 1)}`;
   const fromModel = (m: ModelChoice): BlockModel => ({
-    id: id(),
+    id: nextId(),
     label: m.label,
     kind: m.kind === 'cab' ? 'cab' : m.kind === 'pedal' ? 'pedal' : 'amp',
     caption: m.caption,
@@ -211,121 +214,149 @@ export function BlockChooser({
           {step === 'effect' && (
             <>
               {search('Find an effect')}
-              {GROUPS.map((g) => {
-                const list = effects.filter(
-                  (e) =>
-                    e.from === g.from &&
-                    matches(`${e.label} ${e.kind} ${e.pack ?? ''}`),
-                );
-                if (!list.length) return null;
-                return (
-                  <section
-                    key={g.from}
-                    aria-label={g.title}
-                    className="grid gap-1"
-                  >
-                    <Eyebrow>{g.title}</Eyebrow>
-                    <List>
-                      {list.map((e) => (
-                        <ListRow
-                          key={e.id}
-                          leading={
-                            <BlockGlyph
-                              glyph={glyphFor('', `${e.kind} ${e.label}`)}
-                              className="ml-1"
-                            />
-                          }
-                          title={e.label}
-                          caption={
-                            e.origin ? (
-                              <>
-                                <span className="block">{e.kind}</span>
-                                <SourceLine source={e.origin} plain />
-                              </>
-                            ) : (
-                              `${e.kind}${e.pack ? ` · ${e.pack}` : ''}`
-                            )
-                          }
-                          trailing={
-                            e.from === 'lv2' && !e.installed ? (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => onInstall?.(e.pack!)}
-                              >
-                                Install in Settings…
-                              </Button>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                aria-label={`Add ${e.label}`}
-                                onClick={() => {
-                                  const made = e.make(id());
-                                  const block = e.origin
-                                    ? { ...made, origin: e.origin }
-                                    : made;
-                                  if (tone3000Chain) {
-                                    setPending(block);
-                                    setStep('where');
-                                  } else finish(block);
-                                }}
-                              >
-                                Add
-                              </Button>
-                            )
-                          }
-                        />
-                      ))}
-                    </List>
-                  </section>
-                );
-              })}
+              <EffectChoices
+                options={effects.filter((effect) =>
+                  matches(
+                    `${effect.label} ${effect.kind} ${effect.pack ?? ''}`,
+                  ),
+                )}
+                onSelect={(id) => {
+                  const effect = effects.find((item) => item.id === id)!;
+                  const made = effect.make(nextId());
+                  const block = effect.origin
+                    ? { ...made, origin: effect.origin }
+                    : made;
+                  if (tone3000Chain) {
+                    setPending(block);
+                    setStep('where');
+                  } else finish(block);
+                }}
+                onInstall={onInstall}
+              />
               <Caption className="text-xs">
                 LV2 packs are made by others; install them in Settings › LV2.
               </Caption>
             </>
           )}
           {step === 'where' && pending && (
-            <div className="grid gap-2">
-              {(
-                [
-                  [
-                    'before',
-                    'Before the TONE3000 chain',
-                    'Into the amp, like a pedal on the floor',
-                  ],
-                  [
-                    'after',
-                    'After the TONE3000 chain',
-                    'Like an effects loop or a studio rack',
-                  ],
-                  [
-                    'beside',
-                    'In a split beside it',
-                    'Runs in parallel and joins after',
-                  ],
-                ] as const
-              ).map(([to, title, caption]) => (
-                <button
-                  key={to}
-                  type="button"
-                  onClick={() => finish(pending, to)}
-                  className="grid gap-0.5 rounded-lg border border-input bg-card px-4 py-3 text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                >
-                  <span className="text-md font-semibold">{title}</span>{' '}
-                  <span className="text-sm text-muted-foreground">
-                    {caption}
-                  </span>
-                </button>
-              ))}
-              <Badge size="sm" className="justify-self-start">
-                Makes a new preset; the original stays as it is
-              </Badge>
-            </div>
+            <EffectPlacement
+              onPlace={(placement) => finish(pending, placement)}
+              note="Makes a new preset; the original stays as it is"
+            />
           )}
         </SheetBody>
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** @see BlockChooser */
+export function EffectChoices({
+  options,
+  onSelect,
+  onInstall,
+}: {
+  options: EffectOption[];
+  onSelect: (id: string) => void;
+  onInstall?: (pack: string) => void;
+}) {
+  return GROUPS.map(({ from, title }) => {
+    const list = options.filter((effect) => effect.from === from);
+    return list.length ? (
+      <section key={from} aria-label={title} className="grid gap-1">
+        <Eyebrow>{title}</Eyebrow>
+        <List>
+          {list.map((effect) => (
+            <ListRow
+              key={effect.id}
+              leading={
+                <BlockGlyph
+                  glyph={
+                    effect.glyph ??
+                    glyphFor('', `${effect.kind} ${effect.label}`)
+                  }
+                  className="ml-1"
+                />
+              }
+              title={effect.label}
+              caption={
+                effect.disabledReason ??
+                (effect.origin ? (
+                  <>
+                    <span className="block">{effect.kind}</span>
+                    <SourceLine source={effect.origin} plain />
+                  </>
+                ) : (
+                  [effect.kind, effect.pack].filter(Boolean).join(' · ')
+                ))
+              }
+              trailing={
+                effect.from === 'lv2' && effect.installed === false ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => effect.pack && onInstall?.(effect.pack)}
+                  >
+                    Install in Settings…
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    aria-label={`Add ${effect.label}`}
+                    disabled={!!effect.disabledReason}
+                    onClick={() => onSelect(effect.id)}
+                  >
+                    Add
+                  </Button>
+                )
+              }
+            />
+          ))}
+        </List>
+      </section>
+    ) : null;
+  });
+}
+
+const placements: [Placement, string, string][] = [
+  [
+    'before',
+    'Before the TONE3000 chain',
+    'Into the amp, like a pedal on the floor',
+  ],
+  [
+    'after',
+    'After the TONE3000 chain',
+    'Like an effects loop or a studio rack',
+  ],
+  ['beside', 'In a split beside it', 'Runs in parallel and joins after'],
+];
+
+/** @see BlockChooser */
+export function EffectPlacement({
+  onPlace,
+  note,
+}: {
+  onPlace: (placement: Placement) => void;
+  note: string;
+}) {
+  return (
+    <div className="grid gap-2">
+      {placements.map(([placement, title, caption]) => (
+        <button
+          key={placement}
+          type="button"
+          onClick={() => onPlace(placement)}
+          className="grid gap-0.5 rounded-lg border border-input bg-card px-4 py-3 text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          <span className="text-md font-semibold">{title}</span>{' '}
+          <span className="text-sm text-muted-foreground">{caption}</span>
+        </button>
+      ))}
+      <Badge size="sm" className="justify-self-start whitespace-normal">
+        {note}
+      </Badge>
+    </div>
   );
 }

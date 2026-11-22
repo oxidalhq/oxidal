@@ -167,7 +167,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
             <>
               <Button
                 variant="outline"
-                disabled={waiting}
+                disabled={waiting || !matching}
                 onClick={() => setGridOpen(true)}
               >
                 Edit scenes

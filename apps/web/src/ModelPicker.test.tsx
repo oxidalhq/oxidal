@@ -283,3 +283,44 @@ it('says only the internet is missing when TONE3000 cannot be reached', async ()
   expect(await screen.findByText(/TONE3000 needs the internet/)).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Sign in' })).toBeNull();
 });
+
+it('keeps earlier tones and models when Show more returns overlapping rows', async () => {
+  const tone = (id: number) => ({
+    id,
+    title: `Amp ${id}`,
+    gear: 'amp',
+    format: 'nam',
+    license: 'test',
+    user: { username: 'author' },
+    url: '',
+    models_count: 3,
+  });
+  vi.mocked(tone3000Tones).mockImplementation(async ({ page }) => ({
+    data: (page === 2 ? [2, 3] : [1, 2]).map(tone),
+    total_pages: 2,
+  }));
+  vi.mocked(tone3000Models).mockImplementation(async (tone_id, page) => ({
+    data: (page === 2 ? [2, 3] : [1, 2]).map((id) => ({
+      id,
+      tone_id,
+      name: `Capture ${id}`,
+    })),
+    total_pages: 2,
+  }));
+  render(<ModelPicker name="Slot" onClose={vi.fn()} onAudition={vi.fn()} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Show more' }));
+  await screen.findByRole('button', { name: /Amp 3/ });
+  for (const id of [1, 2, 3])
+    expect(
+      screen.getByRole('button', { name: new RegExp(`Amp ${id}`) }),
+    ).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: /Amp 1/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Show more' }));
+  await screen.findByRole('button', { name: /Capture 3/ });
+  for (const id of [1, 2, 3])
+    expect(
+      screen.getByRole('button', { name: new RegExp(`Capture ${id}`) }),
+    ).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull();
+});

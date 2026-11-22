@@ -672,14 +672,11 @@ export function useMixedRigSession({
       ))
     );
   }
-  /**
-   * Sets a path's left and right merge gains (level, pan, polarity) as one
-   * change. The API takes one control per command, so when a later side fails
-   * the sides already set are put back: a pan is never left half applied. An
-   * Oxidal sound or TONE3000 chain makes its copy in Mine only once both
-   * sides are set, never between them.
-   */
-  async function setPathSides(values: [RigControl['target'], number][]) {
+  /** Apply one gesture’s related controls before promoting a read-only preset copy. */
+  async function setControlsTogether(
+    values: [RigControl['target'], number][],
+    messages: { restored: string; partial: string },
+  ) {
     const result = await applyTogether(
       values,
       (target) =>
@@ -700,15 +697,16 @@ export function useMixedRigSession({
       } finally {
         if (alive.current) setBusy(false);
       }
-    } else if (result === 'restored')
-      setError(
-        'That path change did not go through, so the path is back as it was. Try again.',
-      );
-    else if (result === 'partial')
-      setError(
-        'That path change went through on one side only. Check the path’s level and pan, then try again.',
-      );
+    } else if (result === 'restored') setError(messages.restored);
+    else if (result === 'partial') setError(messages.partial);
   }
+  const setPathSides = (values: [RigControl['target'], number][]) =>
+    setControlsTogether(values, {
+      restored:
+        'That path change did not go through, so the path is back as it was. Try again.',
+      partial:
+        'That path change went through on one side only. Check the path’s level and pan, then try again.',
+    });
   /**
    * Recalls a scene; a drafted update then replaces its saved snapshot live.
    * The engine recalls what the saved preset holds, so the drafted levels and
@@ -1387,6 +1385,7 @@ export function useMixedRigSession({
     command,
     saveScenes,
     setPathSides,
+    setControlsTogether,
     recallScene,
     choose,
     editing,

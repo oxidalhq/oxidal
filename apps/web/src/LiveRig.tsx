@@ -21,6 +21,7 @@ import { Toggle } from '@oxidal/design-system/components/toggle';
 import { glyphFor } from '@oxidal/design-system/lib/block-glyphs';
 import { shortValue } from '@oxidal/design-system/lib/preview';
 import { useVerticalRig } from '@oxidal/design-system/lib/use-media';
+import { RigAudioUnavailable } from '@oxidal/design-system/patterns/rig-audio-unavailable';
 import { RigHeading } from '@oxidal/design-system/patterns/rig-heading';
 import {
   BlockEditor,
@@ -94,6 +95,7 @@ import { MidiControls } from './SceneMidi';
 import { SlotChooser } from './SlotChooser';
 import { type Placement, playingTone, presetWithEffect } from './slotEffects';
 import { TunerButton } from './TunerButton';
+import { requestTuner } from './tunerNavigation';
 import { useToneSource } from './useToneSource';
 import { useWorkspaceState } from './workspaceMemory';
 
@@ -175,7 +177,7 @@ export function LiveRig({
   // An empty slot the player tapped, and a preset with effects being made.
   const [slot, setSlot] = useState<string | null>(null);
   const [making, setMaking] = useState(false);
-  const [matching, setMatching] = useState(false);
+  const [matching, setMatching] = useState<AudioState | null>(null);
   const [selection, setSelection] = useWorkspaceState('native-selection', {
     session: '',
     target: 'outputLevel',
@@ -279,15 +281,15 @@ export function LiveRig({
       void adjustment.current?.finish(latestValue.current).catch(() => {});
     };
   }, [onPlaying]);
-  async function apply(id: string, value: number) {
-    if (!state || sending.current) return;
+  async function apply(id: string, value: number, opening = state) {
+    if (!opening || sending.current) return null;
     generation.current += 1;
     sending.current = true;
     setBusy(true);
     setError('');
     try {
       const token = crypto.randomUUID();
-      const started = await playbackCommand(state, {
+      const started = await playbackCommand(opening, {
         kind: 'authoring',
         action: {
           kind: 'gesture',
@@ -306,6 +308,7 @@ export function LiveRig({
         setDraft(null);
         setAdjusting(false);
       }
+      return next;
     } catch (cause) {
       if (alive.current) {
         setError(friendlyError(cause, 'update the rig'));
@@ -325,6 +328,7 @@ export function LiveRig({
       } catch {
         /* Preserve last confirmed state. */
       }
+      return null;
     } finally {
       sending.current = false;
       if (alive.current) setBusy(false);
@@ -376,6 +380,7 @@ export function LiveRig({
     const configured = state?.configured;
     if (!configured || configured.draft) return;
     setSlot(null);
+    setAdding(false);
     setMaking(true);
     setError('');
     try {
@@ -683,6 +688,16 @@ export function LiveRig({
   }
   if (state?.phase !== 'running') {
     if (hideInactive) return null;
+    if (state?.phase === 'unavailable' && !state.waiting_for_device) {
+      return (
+        <RigAudioUnavailable
+          onLibrary={onLibrary}
+          onAudioSetup={onAudioSetup}
+          onTuner={requestTuner}
+          error={error || state.error}
+        />
+      );
+    }
     return (
       <section className="panel space-y-3" aria-label="Rig playback">
         <h2>
@@ -708,11 +723,6 @@ export function LiveRig({
             Resume picks up where you left off
             {state.preset_name ? ` with ${state.preset_name}` : ''}, including
             unsaved edits. To start a different preset, choose its name below.
-          </p>
-        ) : state?.phase === 'unavailable' ? (
-          <p>
-            This device cannot play audio right now. You can still browse and
-            edit presets; check Audio setup if an interface should be connected.
           </p>
         ) : (
           <p>
@@ -1593,7 +1603,7 @@ export function LiveRig({
               </Button>
             </div>
           )}
-          {adding && (
+          {adding && !state.configured && (
             <AddBlockChooser
               onCancel={() => setAdding(false)}
               onChoose={(format) => {
@@ -1605,13 +1615,34 @@ export function LiveRig({
           {matching && (
             <AdjustmentDialog
               title="Match preset level"
-              onCancel={() => setMatching(false)}
+              onCancel={() => setMatching(null)}
             >
               <LevelMatch
                 output={state.controls.find((c) => c.target === 'outputLevel')}
                 disabled={disabled || busy}
-                onApply={(value) => apply('outputLevel', value)}
-                onClose={() => setMatching(false)}
+                preset={state.preset_name ?? 'Current preset'}
+                stale={
+                  state.session !== matching.session ||
+                  state.revision !== matching.revision
+                }
+                onApply={async (value) => {
+                  const updated = await apply('outputLevel', value, matching);
+                  const reported = updated?.controls.find(
+                    (c) => c.target === 'outputLevel',
+                  );
+                  if (
+                    !updated ||
+                    updated.session !== matching.session ||
+                    !reported ||
+                    Math.abs(reported.value - value) > 0.0001
+                  )
+                    return false;
+                  setMatching((current) =>
+                    current === matching ? updated : current,
+                  );
+                  return true;
+                }}
+                onClose={() => setMatching(null)}
               />
             </AdjustmentDialog>
           )}
@@ -1664,7 +1695,7 @@ export function LiveRig({
                   }
                   onClick={() => {
                     setActionsOpen(false);
-                    setMatching(true);
+                    setMatching(state);
                   }}
                 >
                   Match level…
@@ -1782,14 +1813,22 @@ export function LiveRig({
             </div>
           )}
           {making && <p role="status">Making a preset with that effect…</p>}
-          {slot && state.configured && (
+          {(slot || adding) && state.configured && (
             <SlotChooser
               sampleRate={state.configured.stream.input.sample_rate}
               presetName={state.preset_name ?? 'this preset'}
               modified={state.modified}
               allowEffects={!state.configured.draft}
-              onCancel={() => setSlot(null)}
+              onCancel={() => {
+                setSlot(null);
+                setAdding(false);
+              }}
               onModel={(format) => {
+                if (!slot) {
+                  setAdding(false);
+                  setInsertion({ opening: state, format });
+                  return;
+                }
                 const position = state.slots?.find((s) => s.target === slot);
                 setPicker({
                   target: slot,

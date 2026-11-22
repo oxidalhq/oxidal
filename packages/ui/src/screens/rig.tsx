@@ -1,7 +1,6 @@
 import { useState } from 'react';
 
 import { Button } from '../components/ui/button';
-import { Card, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import {
   Dialog,
   DialogBody,
@@ -13,6 +12,7 @@ import { useRemembered } from '../lib/use-remembered';
 import { EFFECTS } from '../patterns/block-chooser.data';
 import { NamBlockToolsDemo } from '../patterns/nam-block.demo';
 import { SCENES, SERIAL_ROUTE } from '../patterns/rig.fixtures';
+import { RigAudioUnavailable } from '../patterns/rig-audio-unavailable';
 import { RigSurface } from '../patterns/rig-surface';
 import { useModelDownloads } from '../patterns/swap.demo';
 import { BLOCK_TYPES, MODELS } from '../patterns/swap.fixtures';
@@ -46,25 +46,7 @@ export function Rig({ audio = true }: { audio?: boolean }) {
   const echo = useRigDemo(SERIAL_ROUTE);
   const rig = position === 0 ? rhythm : echo;
   const store = useModelDownloads(MODELS);
-  if (!audio)
-    return (
-      <div className="grid gap-4 px-page pt-4">
-        <Card className="max-w-2xl">
-          <CardHeader>
-            <CardTitle>Audio playback unavailable</CardTitle>
-          </CardHeader>
-          <p className="m-0 text-sm text-muted-foreground">
-            This device cannot play audio right now. You can still browse and
-            edit presets; check Audio setup if an interface should be connected.
-          </p>
-          <CardFooter>
-            <Button>Browse presets</Button>
-            <Button variant="outline">Audio setup</Button>
-            <Button variant="outline">Tuner</Button>
-          </CardFooter>
-        </Card>
-      </div>
-    );
+  if (!audio) return <RigAudioUnavailable />;
   return (
     <RigSurface
       blockTools={(b) => b.kind === 'amp' && <NamBlockToolsDemo />}

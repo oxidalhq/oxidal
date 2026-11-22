@@ -1,10 +1,26 @@
+import { ArrowLeft, MagnifyingGlass } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import {
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetHeader,
+} from '@oxidal/design-system/components/sheet';
 import { Loading } from '@oxidal/design-system/components/states';
+import {
+  EffectChoices,
+  type EffectOption,
+  EffectPlacement,
+} from '@oxidal/design-system/patterns/block-chooser';
 
-import { AdjustmentDialog } from './AdjustmentDialog';
-import { installedLv2, type Lv2Plugin } from './api';
+import {
+  type EffectPacks,
+  effectPacks,
+  installedLv2,
+  type Lv2Plugin,
+} from './api';
 import {
   EFFECT_TYPES,
   effectGlyph,
@@ -14,6 +30,7 @@ import {
 } from './effectCatalog';
 import { GearIcon } from './GearIcon';
 import { friendlyError } from './lib/friendlyError';
+import { lv2Source } from './lv2Source';
 import type { Placement } from './slotEffects';
 
 /**
@@ -53,6 +70,10 @@ export function SlotChooser({
   const [step, setStep] = useState<'kind' | 'effect' | 'place'>(
     modelsAllowed ? 'kind' : 'effect',
   );
+  const [returnFocus] = useState(
+    () => document.activeElement as HTMLElement | null,
+  );
+  const [packs, setPacks] = useState<EffectPacks['packs']>([]);
   const [plugins, setPlugins] = useState<Lv2Plugin[] | null>(null);
   const [plugin, setPlugin] = useState<Lv2Plugin | null>(null);
   const [query, setQuery] = useState('');
@@ -81,6 +102,17 @@ export function SlotChooser({
       });
     return () => abort.abort();
   }, [step, plugins, sampleRate]);
+  useEffect(() => {
+    if (step !== 'effect') return;
+    const abort = new AbortController();
+    void effectPacks().then(
+      (state) => {
+        if (!abort.signal.aborted) setPacks(state.packs);
+      },
+      () => {},
+    );
+    return () => abort.abort();
+  }, [step]);
   const found = query.trim().toLowerCase();
   const usable = (p: Lv2Plugin) => !p.unsupported;
   // Only the types and sources that have effects here are offered.
@@ -99,10 +131,45 @@ export function SlotChooser({
         (!type || effectType(p) === type) &&
         (!source || effectSource(p) === source) &&
         (p.name.toLowerCase().includes(found) ||
-          effectSource(p).toLowerCase().includes(found)),
+          effectSource(p).toLowerCase().includes(found) ||
+          effectType(p).toLowerCase().includes(found)),
     )
     // Effects that cannot run here go last.
     .sort((a, b) => Number(!usable(a)) - Number(!usable(b)));
+  const options: EffectOption[] = shown.map((effect) => ({
+    id: effect.uri,
+    label: effect.name,
+    from: effectSource(effect) === 'Oxidal' ? 'oxidal' : 'lv2',
+    kind: effectType(effect),
+    glyph: effectGlyph(effect),
+    origin: lv2Source(effect, packs),
+    disabledReason: effect.unsupported ?? undefined,
+  }));
+  if (!type && !source) {
+    for (const pack of packs) {
+      if (
+        !pack.installed &&
+        `${pack.name} ${pack.package}`.toLowerCase().includes(found)
+      )
+        options.push({
+          id: `pack:${pack.id}`,
+          label: pack.name,
+          kind: 'Effect pack',
+          from: 'lv2',
+          pack: pack.name,
+          installed: false,
+        });
+    }
+  }
+  const openEffect = (id: string) => {
+    const effect = shown.find((item) => item.uri === id);
+    if (!effect || !usable(effect)) return;
+    if (placement === 'here') onEffect(effect, 'after');
+    else {
+      setPlugin(effect);
+      setStep('place');
+    }
+  };
   function chips(
     label: string,
     options: readonly string[],
@@ -127,142 +194,133 @@ export function SlotChooser({
     );
   }
   return (
-    <AdjustmentDialog
-      title={
-        step === 'kind'
-          ? 'Add to this slot'
-          : step === 'effect'
-            ? effectTitle
-            : `Where does ${plugin?.name ?? 'it'} go?`
-      }
-      onCancel={onCancel}
-    >
-      {step === 'kind' && (
-        <div className="add-block-list">
-          <button
-            type="button"
-            className="add-block-option"
-            aria-label="Add NAM"
-            onClick={() => onModel('nam')}
-          >
-            <GearIcon gear="amp" />
-            <span>
-              <strong>Amp, pedal or rig capture</strong>
-              <span>A NAM model, straight into this slot.</span>
-            </span>
-          </button>
-          <button
-            type="button"
-            className="add-block-option"
-            aria-label="Add IR"
-            onClick={() => onModel('ir')}
-          >
-            <GearIcon gear="ir" />
-            <span>
-              <strong>Cabinet or room</strong>
-              <span>An impulse response, straight into this slot.</span>
-            </span>
-          </button>
-          {allowEffects && (
-            <button
-              type="button"
-              className="add-block-option"
-              aria-label="Add effect"
-              onClick={() => setStep('effect')}
+    <Sheet open onOpenChange={(open) => !open && onCancel()}>
+      <SheetContent
+        onOpenChange={(open) => !open && onCancel()}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          returnFocus?.focus({ preventScroll: true });
+        }}
+        className="md:w-[min(30rem,100vw)]"
+      >
+        <SheetHeader
+          title={
+            step === 'kind'
+              ? 'Add a block'
+              : step === 'effect'
+                ? effectTitle
+                : 'Where should it go?'
+          }
+          description={
+            step === 'place'
+              ? 'A TONE3000 chain plays as one piece, so effects go around it.'
+              : placement === 'here'
+                ? 'It goes where you pressed +.'
+                : undefined
+          }
+        />
+        <SheetBody className="grid content-start gap-3">
+          {(step === 'place' || (step === 'effect' && modelsAllowed)) && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="w-fit"
+              onClick={() => setStep(step === 'place' ? 'effect' : 'kind')}
             >
-              <GearIcon gear="" name="Effect" />
-              <span>
-                <strong>Effect</strong>
-                <span>
-                  {placement === 'here'
-                    ? 'Pitch, Hold, delay and other effects, added here.'
-                    : 'Pitch, Hold, delay and other effects, before, after or beside this chain.'}
-                </span>
-              </span>
-            </button>
+              <ArrowLeft /> Back
+            </Button>
           )}
-        </div>
-      )}
-      {step === 'effect' && (
-        <div className="control-stack">
-          <input
-            type="search"
-            className="preset-picker-search"
-            aria-label="Find an effect"
-            placeholder="Find an effect"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          {!plugins && !error && <Loading label="Reading effects…" />}
-          {chips('Effect type', types, type, (t) => setType(t as EffectType))}
-          {chips('Source', sources, source, setSource)}
-          <div className="add-block-list" aria-label="Effects">
-            {shown.map((p) => (
+          {step === 'kind' && (
+            <div className="add-block-list">
               <button
-                key={p.uri}
                 type="button"
                 className="add-block-option"
-                disabled={!!p.unsupported}
-                onClick={() => {
-                  if (placement === 'here') {
-                    onEffect(p, 'after');
-                    return;
-                  }
-                  setPlugin(p);
-                  setStep('place');
-                }}
+                aria-label="Add NAM"
+                onClick={() => onModel('nam')}
               >
-                <GearIcon gear="" glyph={effectGlyph(p)} />
+                <GearIcon gear="amp" />
                 <span>
-                  <strong>{p.name}</strong>
-                  <span className="caption">
-                    {p.unsupported ?? `${effectType(p)} · ${effectSource(p)}`}
-                  </span>
+                  <strong>Amp, pedal or rig capture</strong>
+                  <span>A NAM model, straight into this slot.</span>
                 </span>
               </button>
-            ))}
-            {plugins && !shown.length && (
-              <p className="caption">No effects match.</p>
-            )}
-          </div>
-        </div>
-      )}
-      {step === 'place' && plugin && (
-        <div className="control-stack">
-          <div className="menu-list" aria-label="Placement">
-            {(
-              [
-                ['before', 'Straight, before', `Into ${presetName}.`],
-                ['after', 'Straight, after', `Out of ${presetName}.`],
-                [
-                  'split',
-                  'Split',
-                  `Beside ${presetName}, the two mixed together.`,
-                ],
-              ] as const
-            ).map(([placement, title, detail]) => (
               <button
-                key={placement}
                 type="button"
-                onClick={() => onEffect(plugin, placement)}
+                className="add-block-option"
+                aria-label="Add IR"
+                onClick={() => onModel('ir')}
               >
-                {title}
-                <span className="caption">{detail}</span>
+                <GearIcon gear="ir" />
+                <span>
+                  <strong>Cabinet or room</strong>
+                  <span>An impulse response, straight into this slot.</span>
+                </span>
               </button>
-            ))}
-          </div>
-          <p className="caption">
-            Effects cannot go inside a TONE3000 chain, so this makes a new
-            preset with effects; {presetName} stays as it is.
-            {modified &&
-              ' It starts from the saved version: save your edits first to keep them.'}
-          </p>
-          <Button variant="ghost" onClick={() => setStep('effect')}>
-            Back
-          </Button>
-        </div>
-      )}
-      {error && <p role="alert">{error}</p>}
-    </AdjustmentDialog>
+              {allowEffects && (
+                <button
+                  type="button"
+                  className="add-block-option"
+                  aria-label="Effect"
+                  onClick={() => setStep('effect')}
+                >
+                  <GearIcon gear="" name="Effect" />
+                  <span>
+                    <strong>Effect</strong>
+                    <span>
+                      {placement === 'here'
+                        ? 'Pitch, Hold, delay and other effects, added here.'
+                        : 'Pitch, Hold, delay and other effects, before, after or beside this chain.'}
+                    </span>
+                  </span>
+                </button>
+              )}
+            </div>
+          )}
+          {step === 'effect' && (
+            <div className="control-stack">
+              <label className="flex h-10 items-center gap-2 rounded-md border border-input bg-background px-3 focus-within:outline-2 focus-within:outline-ring">
+                <MagnifyingGlass
+                  aria-hidden="true"
+                  className="size-4 text-muted-foreground"
+                />
+                <span className="sr-only">Find an effect</span>
+                <input
+                  type="search"
+                  className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+                  placeholder="Find an effect"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </label>
+              {!plugins && !error && <Loading label="Reading effects…" />}
+              {chips('Effect type', types, type, (t) =>
+                setType(t as EffectType),
+              )}
+              {chips('Source', sources, source, setSource)}
+              <EffectChoices
+                options={options}
+                onSelect={openEffect}
+                onInstall={() => {
+                  onCancel();
+                  window.location.hash = 'settings/plugins';
+                }}
+              />
+              {plugins && !options.length && (
+                <p className="caption">No effects match.</p>
+              )}
+            </div>
+          )}
+          {step === 'place' && plugin && (
+            <EffectPlacement
+              onPlace={(where) =>
+                onEffect(plugin, where === 'beside' ? 'split' : where)
+              }
+              note={`Makes a new preset with ${plugin.name}. ${presetName} stays as it is.${modified ? ' Save your current edits first to keep them.' : ''}`}
+            />
+          )}
+          {error && <p role="alert">{error}</p>}
+        </SheetBody>
+      </SheetContent>
+    </Sheet>
   );
 }

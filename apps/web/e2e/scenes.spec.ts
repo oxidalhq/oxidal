@@ -776,7 +776,9 @@ test('mixed rig authoring: duplicate a pedal for one saved scene with a checked 
 
     await open();
     playing.changeCursor();
-    await save.click();
+    // Polling can disable Save before the click lands. In either order the
+    // stale copy must stay unpublished; do not wait for Save to re-enable.
+    await save.evaluate((button: HTMLButtonElement) => button.click());
     await expect(dialog.getByRole('alert')).toContainText('changed');
     await expect(save).toBeDisabled();
     await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();

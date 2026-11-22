@@ -3,7 +3,6 @@ import {
   CaretRight,
   Check,
   CloudArrowDown,
-  FolderOpen,
   MagnifyingGlass,
   Play,
 } from '@phosphor-icons/react';
@@ -90,6 +89,22 @@ function readView(): 'pictures' | 'list' {
   }
 }
 
+/** Keep the already visible rows when a catalogue page is appended. */
+function appendPage<Row extends { id: number }>(
+  previous: { data: Row[]; page?: number; total_pages?: number } | null,
+  page: { data: Row[]; page?: number; total_pages?: number },
+) {
+  if (!previous) return page;
+  return {
+    ...page,
+    data: [
+      ...new Map(
+        [...previous.data, ...page.data].map((row) => [row.id, row]),
+      ).values(),
+    ],
+  };
+}
+
 /** Selection starts at the opening revision; repeat comparison advances only its own receipt. */
 export function ModelPicker({
   name,
@@ -119,7 +134,9 @@ export function ModelPicker({
   onClose: () => void;
   onAudition: (asset: string) => Promise<void>;
 }) {
-  const [source, setSource] = useState<'tone3000' | 'local'>('tone3000');
+  const [source, setSource] = useState<'all' | 'tone3000' | 'local'>(
+    intent === 'download' ? 'tone3000' : 'all',
+  );
   const [view, setView] = useState(readView);
   function chooseView(next: 'pictures' | 'list') {
     setView(next);
@@ -132,11 +149,19 @@ export function ModelPicker({
   const [files, setFiles] = useState<File[]>([]);
   const [local, setLocal] = useState<LocalModelPage | null>(null);
   const [localAfter, setLocalAfter] = useState<string | null>(null);
+  const [localLoading, setLocalLoading] = useState(true);
+  const [localError, setLocalError] = useState('');
+
   const memory = (key: string) => (inline ? `discover-tone3000-${key}` : null);
-  const [query, setQuery] = useSessionState<ToneQuery>(memory('query'), {
+  const [query, saveQuery] = useSessionState<ToneQuery>(memory('query'), {
     collection: 'latest',
     page: 1,
   });
+  const [tonePage, setTonePage] = useState(1);
+  const setQuery = (next: ToneQuery) => {
+    setTonePage(1);
+    saveQuery({ ...next, page: 1 });
+  };
   const [format, setFormat] = useSessionState(
     memory('format'),
     allowedFormat ?? initialFormat,
@@ -151,7 +176,7 @@ export function ModelPicker({
     null,
   );
   const [models, setModels] = useState<ModelPage | null>(null);
-  const [modelPage, setModelPage] = useSessionState(memory('model-page'), 1);
+  const [modelPage, setModelPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<'download' | 'assign' | null>(null);
   const [error, setError] = useState('');
@@ -173,41 +198,65 @@ export function ModelPicker({
       download.current?.abort();
     };
   }, []);
+  const showRemote = source !== 'local';
+  const showLocal = source === 'local' || (source === 'all' && !tone);
   useEffect(() => {
+    if (!showLocal) return;
     const controller = new AbortController();
-    async function load() {
+    async function loadLocal() {
+      setLocalLoading(true);
+      setLocalError('');
+      try {
+        const page = await localModels(localAfter, controller.signal, true);
+        if (!controller.signal.aborted) setLocal(page);
+      } catch (cause) {
+        if (!controller.signal.aborted)
+          setLocalError(friendlyError(cause, 'read local model files'));
+      } finally {
+        if (!controller.signal.aborted) setLocalLoading(false);
+      }
+    }
+    void loadLocal();
+    return () => controller.abort();
+  }, [localAfter, showLocal]);
+  useEffect(() => {
+    if (!showRemote) return;
+    const controller = new AbortController();
+    async function loadRemote() {
       setLoading(true);
-      setError('');
       setCatalogueError('');
       try {
-        if (source === 'local') {
-          const page = await localModels(localAfter, controller.signal, true);
-          if (!controller.signal.aborted) setLocal(page);
-        } else if (tone) {
+        if (tone) {
           const page = await tone3000Models(
             tone.id,
             modelPage,
             controller.signal,
             format,
           );
-          if (!controller.signal.aborted) setModels(page);
+          if (!controller.signal.aborted)
+            setModels((previous) =>
+              modelPage === 1 ? page : appendPage(previous, page),
+            );
         } else {
-          const page = await tone3000Tones(query, controller.signal);
-          if (!controller.signal.aborted) setTones(page);
+          const page = await tone3000Tones(
+            { ...query, page: tonePage },
+            controller.signal,
+          );
+          if (!controller.signal.aborted)
+            setTones((previous) =>
+              tonePage === 1 ? page : appendPage(previous, page),
+            );
         }
       } catch (cause) {
-        if (!controller.signal.aborted) {
-          const message = friendlyError(cause, 'read the sounds');
-          if (source === 'local') setError(message);
-          else setCatalogueError(message);
-        }
+        if (!controller.signal.aborted)
+          setCatalogueError(friendlyError(cause, 'read the sounds'));
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
     }
-    void load();
+    void loadRemote();
     return () => controller.abort();
-  }, [query, tone, modelPage, format, source, localAfter, retry]);
+  }, [query, tone, modelPage, tonePage, format, showRemote, retry]);
   function close() {
     if (busy === 'assign') return;
     download.current?.abort();
@@ -296,11 +345,13 @@ export function ModelPicker({
   }
   const paginated =
     query.collection !== 'latest' && query.collection !== 'trending';
-  const page = tone ? modelPage : (query.page ?? 1);
+  const page = tone ? modelPage : tonePage;
   const total = (tone ? models : tones)?.total_pages ?? 1;
-  function turnPage(next: number) {
-    if (tone) setModelPage(next);
-    else setQuery({ ...query, page: next });
+  const appending = page > 1;
+  function showMore() {
+    setLoading(true);
+    if (tone) setModelPage((value) => value + 1);
+    else setTonePage((value) => value + 1);
   }
   const problem = remoteProblem(catalogueError);
   const title =
@@ -316,27 +367,22 @@ export function ModelPicker({
           </p>
         )}
         {intent !== 'download' && (
-          <div className="action-row" role="group" aria-label="Model source">
-            <Button
-              variant="ghost"
-              aria-pressed={source === 'tone3000'}
-              disabled={locked}
-              onClick={() => setSource('tone3000')}
-            >
-              <CloudArrowDown aria-hidden="true" /> TONE3000
-            </Button>
-            <Button
-              variant="ghost"
-              aria-pressed={source === 'local'}
-              disabled={locked}
-              onClick={() => setSource('local')}
-            >
-              <FolderOpen aria-hidden="true" /> On this unit
-            </Button>
-          </div>
+          <SegmentedControl
+            aria-label="Model source"
+            value={source}
+            disabled={locked}
+            onValueChange={(value) => {
+              if (value === 'all' || value === 'tone3000' || value === 'local')
+                setSource(value);
+            }}
+          >
+            <Segment value="all">All</Segment>
+            <Segment value="local">On this device</Segment>
+            <Segment value="tone3000">TONE3000</Segment>
+          </SegmentedControl>
         )}
-        {source === 'local' ? (
-          <div className="space-y-3">
+        {showLocal && (
+          <section aria-label="On this device" className="space-y-3">
             <details className="local-upload">
               <summary>Add a file from this device</summary>
               <div className="space-y-3">
@@ -374,9 +420,9 @@ export function ModelPicker({
             <div
               aria-label="Local model files"
               className="space-y-2"
-              aria-busy={loading}
+              aria-busy={localLoading}
             >
-              {loading ? (
+              {localLoading ? (
                 <Loading label="Reading this unit…" />
               ) : (
                 <>
@@ -422,22 +468,24 @@ export function ModelPicker({
               <div className="action-row">
                 <Button
                   variant="outline"
-                  disabled={!localAfter || loading || locked}
+                  disabled={!localAfter || localLoading || locked}
                   onClick={() => setLocalAfter(null)}
                 >
                   First page
                 </Button>
                 <Button
                   variant="outline"
-                  disabled={!local?.next || loading || locked}
+                  disabled={!local?.next || localLoading || locked}
                   onClick={() => setLocalAfter(local!.next ?? null)}
                 >
                   More files
                 </Button>
               </div>
             )}
-          </div>
-        ) : (
+            {localError && <p role="alert">{localError}</p>}
+          </section>
+        )}
+        {showRemote && (
           <>
             {!tone ? (
               <>
@@ -591,11 +639,11 @@ export function ModelPicker({
               data-view={tone ? undefined : view}
               aria-busy={loading || locked}
             >
-              {loading ? (
+              {loading && !appending ? (
                 <p className="catalog-empty" role="status">
                   Searching TONE3000…
                 </p>
-              ) : catalogueError ? null : tone ? (
+              ) : catalogueError && !appending ? null : tone ? (
                 <>
                   {!models?.data.length && (
                     <p className="catalog-empty" role="status">
@@ -664,6 +712,7 @@ export function ModelPicker({
                         data-view={view}
                         onClick={() => {
                           setTone(t);
+                          setModels(null);
                           setModelPage(1);
                         }}
                       >
@@ -688,6 +737,18 @@ export function ModelPicker({
                 </>
               )}
             </div>
+            {loading && appending && <Loading label="Loading more…" />}
+            {!catalogueError && page < total && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-fit"
+                disabled={loading || locked}
+                onClick={showMore}
+              >
+                Show more
+              </Button>
+            )}
           </>
         )}
         <p className="caption">
@@ -712,7 +773,7 @@ export function ModelPicker({
               : error || comparison?.error}
           </p>
         )}
-        {catalogueError && (
+        {showRemote && catalogueError && (
           <CatalogueNotice
             status={
               problem === 'account'
@@ -752,27 +813,6 @@ export function ModelPicker({
           </p>
         )}
         <DialogFooter>
-          {source === 'tone3000' && total > 1 && (
-            <>
-              <Button
-                variant="outline"
-                disabled={loading || locked || page <= 1}
-                onClick={() => turnPage(page - 1)}
-              >
-                Previous
-              </Button>
-              <span>
-                {page} / {total}
-              </span>
-              <Button
-                variant="outline"
-                disabled={loading || locked || page >= total}
-                onClick={() => turnPage(page + 1)}
-              >
-                Next
-              </Button>
-            </>
-          )}
           {(!inline || busy === 'download') && (
             <Button
               variant="outline"

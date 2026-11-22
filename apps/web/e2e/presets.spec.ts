@@ -4578,12 +4578,15 @@ test('live model comparison stays open, waits for application and rejects a chan
   await page.route('**/api/v1/tone3000/tones?*', (route) =>
     route.fulfill({
       json: {
-        page: 1,
-        total_pages: 1,
+        page: Number(new URL(route.request().url()).searchParams.get('page')),
+        total_pages: 2,
         data: [
           {
-            id: 1,
-            title: 'Comparison amp',
+            id: Number(new URL(route.request().url()).searchParams.get('page')),
+            title:
+              new URL(route.request().url()).searchParams.get('page') === '2'
+                ? 'Silver anniversary'
+                : 'Comparison amp',
             format: 'nam',
             gear: 'amp',
             license: 'Fixture',
@@ -4640,6 +4643,14 @@ test('live model comparison stays open, waits for application and rejects a chan
     .click();
   await page.getByRole('button', { name: /^Change(?: .+)?…$/ }).click();
   const picker = page.getByRole('dialog', { name: 'Choose model' });
+  await picker.getByRole('radio', { name: 'TONE3000', exact: true }).click();
+  await expect(
+    picker.getByRole('region', { name: 'On this device' }),
+  ).toHaveCount(0);
+  await picker.getByRole('button', { name: 'Show more' }).click();
+  await expect(
+    picker.getByRole('button', { name: /Silver anniversary/ }),
+  ).toBeVisible();
   await picker.getByRole('button', { name: /Comparison amp/ }).click();
   await picker.getByRole('button', { name: /Clean fixture/ }).click();
   await expect.poll(() => assignments).toBe(1);
@@ -5994,6 +6005,91 @@ async function mockCanvasUnit(
   };
 }
 
+test('rig controls add a searched effect after the native chain', async ({
+  page,
+  request,
+}) => {
+  const imported = await request.post('/api/v1/presets', {
+    data: readFileSync(new URL('authored-current.t3kpreset', fixtures)),
+    headers: { 'Content-Type': 'application/octet-stream' },
+  });
+  expect(imported.ok()).toBe(true);
+  const preset = await imported.json();
+  const baseline = await (await request.get('/api/v1/audio')).json();
+  const input = {
+    endpoint: 'fixture',
+    direction: 'capture',
+    sample_rate: 48000,
+    channels: 2,
+    format: 's16',
+    period_frames: 128,
+    periods: 3,
+  };
+  await page.route('**/api/v1/audio', (route) =>
+    route.fulfill({
+      json: {
+        ...baseline,
+        phase: 'running',
+        preset_name: preset.name,
+        configured: {
+          preset_id: preset.sha256,
+          owned: false,
+          stream: {
+            input,
+            output: { ...input, direction: 'playback' },
+            input_map: [0, 1],
+            output_map: [0, 1],
+          },
+        },
+        slots: [{ target: 'slot-1', position: { lane: 0, index: 1 } }],
+        controls: [
+          {
+            target: 'block:amp:enabled',
+            label: 'Amp · enabled',
+            display: 'On',
+            value: 1,
+            toggle: true,
+          },
+        ],
+      },
+    }),
+  );
+  await page.route('**/api/v1/plugins/lv2?*', (route) =>
+    route.fulfill({ json: { sample_rate: 48000, plugins: canvasPlugins } }),
+  );
+  await page.goto('/#rig');
+  const rig = page.getByRole('region', { name: 'Sounding rig' });
+  await rig.getByRole('button', { name: 'Edit', exact: true }).click();
+  await rig.getByRole('button', { name: 'Add block', exact: true }).click();
+  await page.getByRole('button', { name: 'Effect', exact: true }).click();
+  await page.getByRole('searchbox', { name: 'Find an effect' }).fill('echo');
+  await expect(page.getByRole('button', { name: 'Add Hall' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Add Echo', exact: true }).click();
+  const publishing = page.waitForRequest(
+    (req) =>
+      req.method() === 'POST' &&
+      new URL(req.url()).pathname === '/api/v1/presets/rigs',
+  );
+  await page.getByRole('button', { name: /^After the TONE3000 chain/ }).click();
+  const command = (await publishing).postDataJSON();
+  const manifest = JSON.parse(command.manifest_json);
+  expect(command.resources['preset-0']).toMatchObject({
+    kind: 'original',
+    preset: preset.sha256,
+  });
+  const nodes = manifest.oxidal.graph.nodes;
+  const native = nodes.find(
+    (node: { kind: string }) => node.kind === 'tone3000',
+  );
+  const effect = nodes.find((node: { kind: string }) => node.kind === 'lv2');
+  expect(manifest.oxidal.graph.edges).toContainEqual(
+    expect.objectContaining({
+      from: expect.objectContaining({ node: native.id }),
+      to: expect.objectContaining({ node: effect.id }),
+    }),
+  );
+});
+
 test('mixed rig authoring splits inside scene lanes and asks before removing a path with effects', async ({
   page,
   request,
@@ -6050,7 +6146,7 @@ test('mixed rig authoring splits inside scene lanes and asks before removing a p
   // The new empty path is never a dead end: it asks for an effect.
   await rig.getByRole('button', { name: /^Add effect to path 2/ }).click();
   const chooser = page.getByRole('dialog', { name: 'Add an effect' });
-  await chooser.getByRole('button', { name: /^Hall/ }).click();
+  await chooser.getByRole('button', { name: /^Add Hall/ }).click();
   await expect.poll(() => unit.published.length).toBe(2);
   const hall = expect.stringMatching(/^fx-/);
   expect(unit.route()).toMatchObject([
