@@ -9,7 +9,7 @@ import { DownloadSimple, Faders } from '@phosphor-icons/react';
 import { useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
-import { Slider } from '@oxidal/design-system/components/slider';
+import { StemStrip } from '@oxidal/design-system/widgets/stem-strip';
 
 import { type PlayerSnapshot, saveSongMix, songView } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
@@ -54,7 +54,11 @@ export function StemMixer({
   onCommit: () => void;
 }) {
   return (
-    <ul className="stem-mixer" aria-label="Stem controls">
+    <ul
+      className={slow ? 'stem-mixer' : 'flex gap-3 overflow-x-auto px-1 pb-1'}
+      aria-label="Stem controls"
+      data-slot={slow ? undefined : 'stem-mixer'}
+    >
       {roles.map((role) => (
         <StemRow
           key={role}
@@ -103,71 +107,80 @@ function StemRow({
     });
   return (
     <li
-      className="stem-row"
+      className={slow ? 'stem-row' : 'grid shrink-0 justify-items-center gap-1'}
       data-silent={!heard || undefined}
       data-download={download ? '' : undefined}
     >
-      <span className="stem-row-name">{label}</span>
-      <div className="stem-row-toggles">
-        <Button
-          variant="outline"
-          size="icon"
-          className="stem-toggle"
-          aria-label={`Mute ${label}`}
-          aria-pressed={settings.muted}
-          title={`Mute ${label}`}
-          disabled={disabled}
-          onClick={() => set({ muted: !settings.muted })}
-        >
-          M
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          className="stem-toggle"
-          aria-label={`Solo ${label}`}
-          aria-pressed={settings.solo}
-          title={`Solo ${label}`}
-          disabled={disabled}
-          onClick={() => set({ solo: !settings.solo })}
-        >
-          S
-        </Button>
-      </div>
       {slow ? (
-        <div className="stem-row-steps">
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label={`Lower ${label}`}
-            disabled={disabled || gain <= GAIN_MIN}
-            onClick={() => step(-10)}
-          >
-            −
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label={`Raise ${label}`}
-            disabled={disabled || gain >= GAIN_MAX}
-            onClick={() => step(10)}
-          >
-            +
-          </Button>
-        </div>
+        <>
+          <span className="stem-row-name">{label}</span>
+          <div className="stem-row-toggles">
+            <Button
+              variant="outline"
+              size="icon"
+              className="stem-toggle"
+              aria-label={`Mute ${label}`}
+              aria-pressed={settings.muted}
+              title={`Mute ${label}`}
+              disabled={disabled}
+              onClick={() => set({ muted: !settings.muted })}
+            >
+              M
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="stem-toggle"
+              aria-label={`Solo ${label}`}
+              aria-pressed={settings.solo}
+              title={`Solo ${label}`}
+              disabled={disabled}
+              onClick={() => set({ solo: !settings.solo })}
+            >
+              S
+            </Button>
+          </div>
+          <div className="stem-row-steps">
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label={`Lower ${label}`}
+              disabled={disabled || gain <= GAIN_MIN}
+              onClick={() => step(-10)}
+            >
+              −
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label={`Raise ${label}`}
+              disabled={disabled || gain >= GAIN_MAX}
+              onClick={() => step(10)}
+            >
+              +
+            </Button>
+          </div>
+        </>
       ) : (
-        <Slider
-          className="stem-row-level"
-          label={`${label} level`}
-          min={GAIN_MIN}
-          max={GAIN_MAX}
-          step={5}
-          value={[gain]}
+        <StemStrip
+          role={role}
+          controls={{
+            level: gain / 10,
+            muted: settings.muted,
+            solo: settings.solo,
+          }}
+          heard={heard}
+          minimumLevel={GAIN_MIN / 10}
+          className="h-64"
           disabled={disabled}
-          onValueChange={([value]) =>
-            onChange({ ...settings, gain_tenths_db: value ?? 0 }, true)
-          }
-          onValueCommit={onCommit}
+          onChange={(next) => {
+            const nextGain = Math.round(next.level * 10);
+            onChange(
+              { gain_tenths_db: nextGain, muted: next.muted, solo: next.solo },
+              nextGain !== gain,
+            );
+          }}
+          onCommit={onCommit}
         />
       )}
       <button

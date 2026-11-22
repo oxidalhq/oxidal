@@ -577,34 +577,40 @@ export function StemMixEditor({
                 </div>
               )}
 
-              <div className="stem-quick" role="group" aria-label="Start from">
-                <span className="caption">Start from</span>
-                {quicks.map((item) => (
-                  <Button
-                    key={item.name}
-                    variant="outline"
-                    className="stem-quick-item"
-                    aria-pressed={quick?.name === item.name}
-                    disabled={!mixable}
-                    onClick={() => {
-                      const named =
-                        !saved &&
-                        (draft.title === defaultTitle ||
-                          quicks.some(
-                            (q) =>
-                              draft.title === `${source.title} – ${q.name}`,
-                          ));
-                      edit({
-                        title: named
-                          ? `${source.title} – ${item.name}`.slice(0, 120)
-                          : draft.title,
-                        recipe: applyQuickMix(draft.recipe, roles, item),
-                      });
-                    }}
-                  >
-                    {item.name}
-                  </Button>
-                ))}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="small-caps text-xs text-muted-foreground">
+                  Start from
+                </span>
+                <SegmentedControl
+                  size="sm"
+                  className="max-w-full flex-wrap"
+                  role="radiogroup"
+                  aria-label="Start from"
+                  value={quick?.name ?? ''}
+                  disabled={!mixable}
+                  onValueChange={(name) => {
+                    const item = quicks.find((q) => q.name === name);
+                    if (!item) return;
+                    const named =
+                      !saved &&
+                      (draft.title === defaultTitle ||
+                        quicks.some(
+                          (q) => draft.title === `${source.title} – ${q.name}`,
+                        ));
+                    edit({
+                      title: named
+                        ? `${source.title} – ${item.name}`.slice(0, 120)
+                        : draft.title,
+                      recipe: applyQuickMix(draft.recipe, roles, item),
+                    });
+                  }}
+                >
+                  {quicks.map((item) => (
+                    <Segment key={item.name} value={item.name}>
+                      {item.name}
+                    </Segment>
+                  ))}
+                </SegmentedControl>
               </div>
 
               <StemMixer
@@ -707,7 +713,7 @@ export function StemMixEditor({
                   }
                   onClick={() => void save(false)}
                 >
-                  {saved ? 'Save' : 'Save mix'}
+                  {saved ? 'Save' : 'Save as backing track'}
                 </Button>
               </div>
               {notice && (

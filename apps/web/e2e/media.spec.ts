@@ -33,7 +33,6 @@ async function expectBottomPlayerClear(page: Page) {
     )
     .toBeGreaterThanOrEqual(0);
   const area = (await chrome.boundingBox())!;
-  const bar = (await player.boundingBox())!;
   const viewport = page.viewportSize()!;
   const viewportDetails = await page.evaluate(
     (width) => ({
@@ -63,8 +62,16 @@ async function expectBottomPlayerClear(page: Page) {
     name: 'Instrument navigation',
   });
   if (await navigation.isVisible()) {
-    const nav = (await navigation.boundingBox())!;
-    expect(bar.y + bar.height).toBeLessThanOrEqual(nav.y + 0.5);
+    // Read both edges in one frame while the responsive navigation settles.
+    const overlap = await navigation.evaluate((nav) => {
+      const player = nav.parentElement!.querySelector(
+        '[role="region"][aria-label="Now playing"]',
+      )!;
+      return (
+        player.getBoundingClientRect().bottom - nav.getBoundingClientRect().top
+      );
+    });
+    expect(overlap).toBeLessThanOrEqual(0.5);
     const rig = navigation.getByRole('button', { name: 'Rig', exact: true });
     expect(
       await rig.evaluate((button) => {
@@ -411,4 +418,75 @@ test('backing player on e-paper uses the bottom bar, words and step buttons', as
   ).toBeVisible();
   await sheet.getByRole('button', { name: 'Close dialog' }).click();
   await setDisplayMode(page, 'default');
+});
+
+test('backing click level follows two viewers without replacing the timing or loop', async ({
+  page,
+  context,
+  request,
+}) => {
+  await importFixture(page);
+  const catalog = await (await request.get('/api/v1/media')).json();
+  const asset = catalog.assets.find(
+    (item: { title: string }) => item.title === title,
+  ).id;
+  async function command(kind: string, fields: Record<string, unknown>) {
+    const response = await request.post('/api/v1/player/commands', {
+      data: {
+        requestId: crypto.randomUUID(),
+        origin: 'api',
+        command: { kind, ...fields },
+      },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+  }
+  await command('cue', { asset });
+  await command('set_practice_range', { range: { a: 0, b: 6000 } });
+  await command('set_speed', { percent: 75 });
+  await command('set_click', {
+    click: { kind: 'manual', bpm_tenths: 980, first_frame: 100, level_db: -18 },
+  });
+  const second = await context.newPage();
+  try {
+    await second.goto('/#rig');
+    for (const viewer of [page, second]) {
+      await nowPlaying(viewer)
+        .getByRole('button', {
+          name: new RegExp(`Open backing player: ${title}`),
+        })
+        .click();
+    }
+    const knob = (viewer: Page) =>
+      viewer.getByRole('slider', { name: 'Click level' });
+    await expect(knob(second)).toHaveAttribute('aria-valuenow', '-18');
+    const before = await (await request.get('/api/v1/player')).json();
+    const gestures: string[] = [];
+    second.on('request', (r) => {
+      if (r.method() === 'POST' && r.url().endsWith('/api/v1/player/commands'))
+        gestures.push(r.postDataJSON().command.kind);
+    });
+    await second.getByRole('spinbutton', { name: 'BPM' }).focus();
+    await knob(second).focus();
+    const sent = second.waitForRequest(
+      (r) =>
+        r.method() === 'POST' && r.url().endsWith('/api/v1/player/commands'),
+    );
+    await knob(second).press('ArrowLeft');
+    expect((await sent).postDataJSON()).toMatchObject({
+      expectedCue: asset,
+      command: { kind: 'set_click_level', level_db: -19 },
+    });
+    await expect(knob(page)).toHaveAttribute('aria-valuenow', '-19');
+    const after = await (await request.get('/api/v1/player')).json();
+    expect(gestures).toEqual(['set_click_level']);
+    expect(after.click).toEqual({ ...before.click, level_db: -19 });
+    expect(after).toMatchObject({
+      track: before.track,
+      frame: before.frame,
+      range: before.range,
+      speedPercent: 75,
+    });
+  } finally {
+    await second.close();
+  }
 });

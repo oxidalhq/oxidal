@@ -45,10 +45,24 @@ export function PracticeControls() {
   const [first, setFirst] = useState(
     click?.kind === 'manual' ? click.first_frame : 0,
   );
-  const [level, setLevel] = useState(click?.level_db ?? -12);
+  const [savedLevel, setSavedLevel] = useState(click?.level_db ?? -12);
+  const [dragLevel, setDragLevel] = useState<number | null>(null);
+  const level = dragLevel ?? click?.level_db ?? savedLevel;
   const [follow, setFollow] = useState(
     click ? click.kind === 'detected' : true,
   );
+  const manualBpm = click?.kind === 'manual' ? click.bpm_tenths / 10 : null;
+  const manualFirst = click?.kind === 'manual' ? click.first_frame : null;
+  const confirmedTiming =
+    click?.kind === 'manual' ? `${manualBpm}:${manualFirst}` : click?.kind;
+  const [lastTiming, setLastTiming] = useState(confirmedTiming);
+  if (lastTiming !== confirmedTiming) {
+    setLastTiming(confirmedTiming);
+    if (click) setFollow(click.kind === 'detected');
+    if (manualBpm !== null) setBpm(manualBpm);
+    if (manualFirst !== null) setFirst(manualFirst);
+  }
+  const bpmEdited = useRef(false);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
   const drag = useRef<number | null>(null);
@@ -133,6 +147,12 @@ export function PracticeControls() {
   /** While the click is on, every change is sent at once. */
   function updateClick(next: Parameters<typeof clickSettings>[0] = {}) {
     if (click) void send({ kind: 'set_click', click: clickSettings(next) });
+  }
+
+  function changeClickLevel(level_db: number) {
+    setDragLevel(null);
+    setSavedLevel(level_db);
+    if (click) void send({ kind: 'set_click_level', level_db });
   }
 
   async function analyse() {
@@ -413,10 +433,15 @@ export function PracticeControls() {
                 step={0.1}
                 value={bpm}
                 onChange={(event) => {
-                  if (Number.isFinite(event.target.valueAsNumber))
+                  if (Number.isFinite(event.target.valueAsNumber)) {
+                    bpmEdited.current = true;
                     setBpm(event.target.valueAsNumber);
+                  }
                 }}
-                onBlur={() => updateClick()}
+                onBlur={() => {
+                  if (bpmEdited.current && bpm !== manualBpm) updateClick();
+                  bpmEdited.current = false;
+                }}
               />
             </label>
             <Button variant="outline" onClick={() => void tap()}>
@@ -446,8 +471,7 @@ export function PracticeControls() {
                 aria-label="Lower click"
                 disabled={level <= -60}
                 onClick={() => {
-                  setLevel(level - 3);
-                  updateClick({ level: level - 3 });
+                  changeClickLevel(Math.max(-60, level - 3));
                 }}
               >
                 −
@@ -458,8 +482,7 @@ export function PracticeControls() {
                 aria-label="Raise click"
                 disabled={level >= 0}
                 onClick={() => {
-                  setLevel(level + 3);
-                  updateClick({ level: level + 3 });
+                  changeClickLevel(Math.min(0, level + 3));
                 }}
               >
                 +
@@ -473,8 +496,8 @@ export function PracticeControls() {
               max={0}
               step={1}
               value={[level]}
-              onValueChange={([value]) => setLevel(value ?? -12)}
-              onValueCommit={([value]) => updateClick({ level: value ?? -12 })}
+              onValueChange={([value]) => setDragLevel(value ?? -12)}
+              onValueCommit={([value]) => changeClickLevel(value ?? -12)}
             />
           )}
           <output className="media-mono">{level} dB</output>

@@ -192,6 +192,9 @@ async fn imported_mp3_and_wav_make_one_editable_song_without_a_model() {
     let song_path = format!("/media/songs/{source}");
     let (status, view) = json_request(&app, "GET", &song_path, Value::Null).await;
     assert_eq!(status, 200, "{view}");
+    let (status, listing) = json_request(&app, "GET", "/media/songs", Value::Null).await;
+    assert_eq!(status, 200);
+    assert_eq!(listing["songs"], json!([view]));
     let split = &view["splits"][0];
     assert_eq!(split["importedRoles"], json!(["bass", "guitar"]));
     assert_eq!(split["mode"], "six");
@@ -615,6 +618,26 @@ async fn prepared_song_mixes_save_reopen_cue_and_export_both_stem_counts() {
         assert_eq!(state["range"]["b"], 6000);
         if index >= 1 { assert_eq!(state["speedPercent"], 75) }
         if index == 2 { assert_eq!(state["click"]["kind"], "manual") }
+    }
+    // A second viewer changes only the click level on the cued song.
+    let (_, before) = json_request(&app, "GET", "/player", Value::Null).await;
+    let (status, quieter) = json_request(
+        &app,
+        "POST",
+        "/player/commands",
+        json!({
+            "requestId":"quieter-click", "origin":"api", "expectedCue":asset,
+            "command":{"kind":"set_click_level","level_db":-24.0}
+        }),
+    )
+    .await;
+    assert_eq!(status, 200, "{quieter}");
+    assert_eq!(
+        quieter["click"],
+        json!({"kind":"manual","bpm_tenths":1200,"first_frame":0,"level_db":-24.0})
+    );
+    for field in ["track", "frame", "range", "speedPercent", "stems", "state"] {
+        assert_eq!(quieter[field], before[field], "{field}");
     }
     let reference = json!({"id":saved["id"],"revision":saved["revision"]});
     assert_eq!(

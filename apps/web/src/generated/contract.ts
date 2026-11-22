@@ -220,6 +220,10 @@ export type BackingCommand =
       kind: "gain";
     }
   | {
+      kind: "click_level";
+      level_db: number;
+    }
+  | {
       kind: "repeat";
       repeat: boolean;
     };
@@ -884,6 +888,10 @@ export type PlayerCommand =
       kind: "set_click";
     }
   | {
+      kind: "set_click_level";
+      level_db: number;
+    }
+  | {
       kind: "set_speed";
       percent: number;
     }
@@ -1506,6 +1514,10 @@ export interface StemMix2 {
    * @maxItems 6
    */
   gains: [number, number, number, number, number, number];
+  /**
+   * Imported tracks keep their stems under the source asset.
+   */
+  imported?: boolean;
   /**
    * Bit `i` set when the split has stem `STEM_NAMES[i]`.
    */

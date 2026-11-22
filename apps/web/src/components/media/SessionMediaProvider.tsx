@@ -49,6 +49,7 @@ const cueBound = new Set<PlayerCommand['kind']>([
   'skip_by',
   'set_practice_range',
   'set_click',
+  'set_click_level',
   'set_speed',
   'set_stem_mix',
   'set_muted_part',
@@ -56,6 +57,7 @@ const cueBound = new Set<PlayerCommand['kind']>([
 ]);
 const levelKinds = new Set<PlayerCommand['kind']>([
   'set_level',
+  'set_click_level',
   'adjust_level',
   'edit_stem',
   'set_muted_part',
@@ -228,7 +230,7 @@ export function SessionMediaProvider({ children }: { children: ReactNode }) {
 
   // A held fader replaces the pending value for that field. Keep other
   // stems and controls in order, and bind each edit to the cue at the gesture.
-  const stemQueue = useRef(
+  const fieldQueue = useRef(
     new Map<
       string,
       {
@@ -238,32 +240,36 @@ export function SessionMediaProvider({ children }: { children: ReactNode }) {
       }
     >(),
   );
-  const drainingStems = useRef(false);
+  const drainingFields = useRef(false);
   const send = useCallback(
     (command: PlayerCommand) => {
       const cue = current.current?.track?.id ?? null;
-      if (command.kind !== 'edit_stem' && command.kind !== 'set_muted_part')
+      if (
+        command.kind !== 'edit_stem' &&
+        command.kind !== 'set_muted_part' &&
+        command.kind !== 'set_click_level'
+      )
         return dispatch(command, cue);
       const key =
         command.kind === 'edit_stem'
           ? command.role + ':' + command.edit.field
-          : 'part';
-      const queue = stemQueue.current;
+          : command.kind;
+      const queue = fieldQueue.current;
       const result = new Promise<boolean>((done) => {
         queue.get(key)?.done(false);
         queue.delete(key);
         queue.set(key, { command, cue, done });
       });
       async function drain() {
-        if (drainingStems.current) return;
-        drainingStems.current = true;
+        if (drainingFields.current) return;
+        drainingFields.current = true;
         try {
           for (const [field, change] of queue) {
             queue.delete(field);
             change.done(await dispatch(change.command, change.cue));
           }
         } finally {
-          drainingStems.current = false;
+          drainingFields.current = false;
         }
       }
       void drain();

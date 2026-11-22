@@ -160,6 +160,9 @@ pub enum PlayerCommand {
     SetClick {
         click: Option<Click>,
     },
+    SetClickLevel {
+        level_db: f32,
+    },
     SetSpeed {
         percent: u16,
     },
@@ -498,6 +501,7 @@ fn resolve_stems(
     Ok(LiveStems {
         source: MediaId::parse(source).ok_or("Invalid song")?,
         split: MediaId::parse(split).ok_or("Invalid stems")?,
+        imported: record.imported_roles.is_some(),
         gains,
         present,
     })
@@ -918,6 +922,30 @@ async fn run(
                 inner.range = previous;
                 return Err(error);
             }
+        }
+        PlayerCommand::SetClickLevel { level_db } => {
+            let command = BackingCommand::ClickLevel { level_db };
+            if !command.valid() {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    "Choose a click level from −60 to 0 dB".into(),
+                ));
+            }
+            let Some(mut click) = inner.click else {
+                return Err((StatusCode::CONFLICT, "Turn on the click first".into()));
+            };
+            match &mut click {
+                Click::Manual {
+                    level_db: level, ..
+                }
+                | Click::Detected {
+                    level_db: level, ..
+                } => *level = level_db,
+            }
+            if inner.state == PlayerState::Playing {
+                send(shared, command).await?;
+            }
+            inner.click = Some(click);
         }
         PlayerCommand::SetClick { click } => {
             let Some(track) = &inner.track else {

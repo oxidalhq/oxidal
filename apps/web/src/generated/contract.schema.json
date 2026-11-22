@@ -2547,6 +2547,24 @@
           "properties": {
             "kind": {
               "type": "string",
+              "const": "click_level"
+            },
+            "level_db": {
+              "type": "number",
+              "format": "float"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "level_db"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
               "const": "repeat"
             },
             "repeat": {
@@ -10278,6 +10296,24 @@
           "properties": {
             "kind": {
               "type": "string",
+              "const": "set_click_level"
+            },
+            "level_db": {
+              "type": "number",
+              "format": "float"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "level_db"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
               "const": "set_speed"
             },
             "percent": {
@@ -15232,6 +15268,11 @@
           },
           "maxItems": 6,
           "minItems": 6
+        },
+        "imported": {
+          "description": "Imported tracks keep their stems under the source asset.",
+          "type": "boolean",
+          "default": false
         },
         "present": {
           "description": "Bit `i` set when the split has stem `STEM_NAMES[i]`.",

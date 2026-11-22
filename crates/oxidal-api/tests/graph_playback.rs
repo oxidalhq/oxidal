@@ -649,10 +649,69 @@ async fn a_backing_track_plays_through_the_worker_to_its_end_with_no_client_watc
             body
         }
     };
-    command(json!({ "kind": "cue", "asset": asset })).await;
+    let cued = command(json!({ "kind": "cue", "asset": asset })).await;
+    let frames = cued["track"]["frames"].as_u64().unwrap();
+    // A second viewer can adjust the click without restarting the buffered loop.
+    let range = json!({"a":0,"b":frames / 2});
+    command(json!({"kind":"set_practice_range","range":range})).await;
+    command(json!({"kind":"set_speed","percent":75})).await;
+    command(json!({"kind":"set_click","click":{"kind":"manual","bpm_tenths":1200,"first_frame":0,"level_db":-12}})).await;
+    command(json!({"kind":"play"})).await;
+    let mut before = Value::Null;
+    for _ in 0..100 {
+        before = get(&c, &url, "graph-audio").await["telemetry"]["monitoring"]["backing"].clone();
+        if before["playing"] == true && before["frame"].as_u64().unwrap_or(0) > 0 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert_eq!(before["playing"], true, "{before}");
+    let other = Client::new();
+    let changed = other
+        .post(format!("{url}/player/commands"))
+        .json(
+            &json!({"requestId":"viewer-click-level","origin":"api","expectedCue":asset,
+                     "command":{"kind":"set_click_level","level_db":-24}}),
+        )
+        .send()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap();
+    assert_eq!(changed["state"], "playing");
+    assert_eq!(changed["range"], range);
+    assert_eq!(changed["speedPercent"], 75);
+    assert_eq!(
+        changed["click"],
+        json!({"kind":"manual","bpm_tenths":1200,"first_frame":0,"level_db":-24.0})
+    );
+    let mut advanced = false;
+    for _ in 0..100 {
+        let after =
+            get(&c, &url, "graph-audio").await["telemetry"]["monitoring"]["backing"].clone();
+        assert_eq!(after["seq"], before["seq"]);
+        assert_eq!(after["underruns"], before["underruns"]);
+        if after["playing"] == true && after["frame"] != before["frame"] {
+            advanced = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(
+        advanced,
+        "The running worker must advance the original sequence"
+    );
+    command(json!({"kind":"stop"})).await;
+    command(json!({"kind":"set_practice_range","range":null})).await;
+    command(json!({"kind":"set_speed","percent":100})).await;
+    command(json!({"kind":"set_click","click":null})).await;
+
     let playing = command(json!({ "kind": "play" })).await;
     assert_eq!(playing["state"], "playing");
-    let frames = playing["track"]["frames"].as_u64().unwrap();
+    assert_eq!(playing["track"]["frames"], frames);
 
     // Pause holds the position the worker reached; Play resumes from it.
     tokio::time::sleep(Duration::from_millis(250)).await;

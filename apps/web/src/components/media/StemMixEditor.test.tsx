@@ -97,8 +97,8 @@ it('opens uploaded stems without the local model and shows only the supplied par
   expect(screen.queryByRole('button', { name: 'Mute Piano' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Split song' })).toBeNull();
   // Starting points only name the parts this song has.
-  expect(screen.getByRole('button', { name: 'No guitar' })).toBeVisible();
-  expect(screen.queryByRole('button', { name: 'No vocals' })).toBeNull();
+  expect(screen.getByRole('radio', { name: 'No guitar' })).toBeVisible();
+  expect(screen.queryByRole('radio', { name: 'No vocals' })).toBeNull();
   expect(fetch).toHaveBeenCalledExactlyOnceWith('/api/v1/media/songs/song');
 });
 
@@ -180,16 +180,16 @@ it('restores mute, undoes an edit, saves the new level and switches to four stem
   const mute = await screen.findByRole('button', { name: 'Mute Guitar' });
   expect(mute).toHaveAttribute('aria-pressed', 'true');
   expect(
-    within(screen.getByRole('group', { name: 'Start from' })).getByRole(
-      'button',
+    within(screen.getByRole('radiogroup', { name: 'Start from' })).getByRole(
+      'radio',
       { name: 'No guitar' },
     ),
-  ).toHaveAttribute('aria-pressed', 'true');
+  ).toHaveAttribute('aria-checked', 'true');
   fireEvent.click(mute);
   expect(mute).toHaveAttribute('aria-pressed', 'false');
   fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
   expect(mute).toHaveAttribute('aria-pressed', 'true');
-  const drums = screen.getByRole('slider', { name: 'Drums level' });
+  const drums = screen.getByRole('slider', { name: 'Drums' });
   for (let step = 0; step < 5; step += 1)
     fireEvent.keyDown(drums, { key: 'ArrowRight' });
   expect(
@@ -231,7 +231,7 @@ it('applies a starting point and names a new mix after it', async () => {
   });
   vi.stubGlobal('fetch', fetch);
   render(<StemMixEditor source={source} locked={false} onClose={() => {}} />);
-  fireEvent.click(await screen.findByRole('button', { name: 'No vocals' }));
+  fireEvent.click(await screen.findByRole('radio', { name: 'No vocals' }));
   expect(screen.getByRole('button', { name: 'Mute Vocals' })).toHaveAttribute(
     'aria-pressed',
     'true',
@@ -239,7 +239,7 @@ it('applies a starting point and names a new mix after it', async () => {
   expect(screen.getByLabelText('Mix name')).toHaveValue(
     'Practice song – No vocals',
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Drums and bass' }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Drums and bass' }));
   expect(screen.getByLabelText('Mix name')).toHaveValue(
     'Practice song – Drums and bass',
   );

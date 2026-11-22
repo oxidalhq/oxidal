@@ -9,7 +9,7 @@ use oxidal_splitter::{MixRecipe, SplitMode, StemRole};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs::{self, File},
     io::{self, BufReader, BufWriter},
     path::{Path, PathBuf},
@@ -284,7 +284,15 @@ pub(crate) fn owns_asset(store: &Store, manifest: &MediaManifest) -> bool {
 }
 
 pub(crate) fn list(store: &Store) -> Result<SongList, MediaError> {
-    let mut songs: Vec<SongView> = children(&store.root().join("songs"))?
+    // Imported stems live inside their source asset, including before its first mix.
+    let assets = store.root().join("assets");
+    let mut sources: BTreeSet<_> = children(&store.root().join("songs"))?.into_iter().collect();
+    sources.extend(
+        children(&assets)?
+            .into_iter()
+            .filter(|id| valid_id(id) && assets.join(id).join("stems/manifest.json").is_file()),
+    );
+    let mut songs: Vec<SongView> = sources
         .into_iter()
         .filter(|id| valid_id(id))
         .filter_map(|id| view(store, &id).ok())

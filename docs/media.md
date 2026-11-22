@@ -151,7 +151,10 @@ turns off section repeat. Changing songs resets the range, click and speed.
 The analyser stores an estimated tempo, beat positions and waveform overview
 beside the media store. Songs with uncertain beats can use a manual BPM and
 first beat. The device follows the backing transport and applies a separate
-click level. The click follows the session output routing, including mute.
+click level. Moving Click level sends only the new dB value for the cued song.
+The worker applies the gain to buffered click samples as it plays them, keeping
+the beat timing, playhead, loop, speed and stem mix. Other viewers show the
+confirmed level. The click follows the session output routing, including mute.
 
 The backing reader uses bounded waveform-similarity overlap-add at 0.5×,
 0.75×, 1.25× and 1.5×. At 1× it reads the original audio directly. Method
@@ -224,7 +227,8 @@ original file and each split stay available when a mix changes or is removed.
 The player commands `cue_stems` (song, split and recipe; the position is kept
 when that song or one of its mixes is cued) and `set_stem_mix` (a new recipe
 for the live stems) drive live playback; the player snapshot reports the live
-split, its roles and recipe as `stems`.
+split, its roles and recipe as `stems`. For live playback the worker reads imported files from
+`assets/{source}/stems/` and on-device splits from `songs/{source}/splits/{split}/`.
 
 A saved mix's section in the sheet downloads its WAV and lists where it
 **Plays with**. Link it to a Set list entry or saved rig there; linking a

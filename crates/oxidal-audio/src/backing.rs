@@ -106,8 +106,7 @@ impl Click {
     }
 }
 
-/// Stem files a song split stores, in this order, as
-/// `songs/{source}/splits/{split}/{name}.f32` (stereo f32 at the stream rate).
+/// Stem file names in mix order (stereo f32 at the stream rate).
 pub const STEM_NAMES: [&str; 6] = ["vocals", "drums", "bass", "other", "guitar", "piano"];
 
 /// Play a split's stems instead of one render, mixed live with `gains`.
@@ -116,6 +115,9 @@ pub const STEM_NAMES: [&str; 6] = ["vocals", "drums", "bass", "other", "guitar",
 pub struct StemMix {
     pub source: MediaId,
     pub split: MediaId,
+    /// Imported tracks keep their stems under the source asset.
+    #[serde(default)]
+    pub imported: bool,
     /// Linear gain per entry of [`STEM_NAMES`]; 0 is silent. Absent stems
     /// must be 0.
     pub gains: [f32; 6],
@@ -124,7 +126,10 @@ pub struct StemMix {
 }
 impl StemMix {
     fn valid(&self) -> bool {
-        self.present != 0 && self.present < 1 << STEM_NAMES.len() && valid_stem_gains(&self.gains)
+        (!self.imported || self.source == self.split)
+            && self.present != 0
+            && self.present < 1 << STEM_NAMES.len()
+            && valid_stem_gains(&self.gains)
     }
 }
 fn valid_stem_gains(gains: &[f32; 6]) -> bool {
@@ -168,6 +173,9 @@ pub enum BackingCommand {
     Gain {
         gain_db: f32,
     },
+    ClickLevel {
+        level_db: f32,
+    },
     Repeat {
         repeat: bool,
     },
@@ -196,6 +204,7 @@ impl BackingCommand {
                     && speed.is_none_or(|speed| (50..=150).contains(&speed))
             }
             Self::Gain { gain_db } => valid_gain(gain_db),
+            Self::ClickLevel { level_db } => (-60.0..=0.0).contains(&level_db),
             Self::StemGains { gains } => valid_stem_gains(&gains),
             Self::Stop { .. } | Self::Repeat { .. } => true,
         }
@@ -283,6 +292,8 @@ pub struct Backing {
     fade_step: f32,
     gain: f32,
     gain_target: f32,
+    click_gain: f32,
+    click_target: f32,
     gain_step: f32,
     status: BackingStatus,
     scratch: [f32; 768],
@@ -334,6 +345,8 @@ pub fn start(rate: u32, root: PathBuf) -> Backing {
         fade_step: 1.0 / (FADE_SECONDS * rate as f32),
         gain: 0.0,
         gain_target: 0.0,
+        click_gain: 0.0,
+        click_target: 0.0,
         gain_step: 1.0 - (-1.0 / (GAIN_GLIDE_SECONDS / 4.0 * rate as f32)).exp(),
         status: BackingStatus::default(),
         scratch: [0.0; 768],
@@ -407,9 +420,15 @@ impl Backing {
                     self.hand_back(stale);
                 }
                 self.gain_target = gain(gain_db);
+                self.click_target = click.map_or(0.0, |click| match click {
+                    Click::Manual { level_db, .. } | Click::Detected { level_db, .. } => {
+                        gain(level_db)
+                    }
+                });
                 if self.current.is_none() {
                     // Nothing audible to fade out: start the new level directly.
                     self.gain = self.gain_target;
+                    self.click_gain = self.click_target;
                 }
                 self.status = BackingStatus {
                     seq,
@@ -429,6 +448,7 @@ impl Backing {
                 }
             }
             BackingCommand::Gain { gain_db } => self.gain_target = gain(gain_db),
+            BackingCommand::ClickLevel { level_db } => self.click_target = gain(level_db),
             BackingCommand::StemGains { gains } => {
                 // A full queue drops this change; the daemon resends on the next edit.
                 let _ = self.commands.try_send(ReaderCommand::StemGains(gains));
@@ -556,6 +576,8 @@ impl Backing {
                     (self.fade + self.fade_step).min(1.0)
                 };
                 self.gain += (self.gain_target - self.gain) * self.gain_step;
+                self.click_gain += (self.click_target - self.click_gain) * self.gain_step;
+                let click = click * self.click_gain;
                 let g = self.fade * self.gain;
                 left[i] += l * g + click * self.fade;
                 right[i] += r * g + click * self.fade;
@@ -746,21 +768,18 @@ struct ClickRender {
 
 impl ClickRender {
     fn load(root: &std::path::Path, rate: u32, settings: Click) -> Option<Self> {
-        let (beats, level) = match settings {
+        let beats = match settings {
             Click::Manual {
                 bpm_tenths,
                 first_frame,
-                level_db,
-            } => (
-                ClickBeats::Manual {
-                    first: first_frame,
-                    period: ((u64::from(rate) * 600 + u64::from(bpm_tenths / 2))
-                        / u64::from(bpm_tenths))
-                    .max(1),
-                },
-                level_db,
-            ),
-            Click::Detected { timing, level_db } => {
+                ..
+            } => ClickBeats::Manual {
+                first: first_frame,
+                period: ((u64::from(rate) * 600 + u64::from(bpm_tenths / 2))
+                    / u64::from(bpm_tenths))
+                .max(1),
+            },
+            Click::Detected { timing, .. } => {
                 #[derive(Deserialize)]
                 struct Document {
                     rate: u32,
@@ -788,15 +807,15 @@ impl ClickRender {
                         .ok()
                     })
                     .collect::<Option<Vec<_>>>()?;
-                (ClickBeats::Detected(positions), level_db)
+                ClickBeats::Detected(positions)
             }
         };
-        let peak = gain(level);
+        // Queue a unity-level pulse. The audio callback applies the current click level.
         let length = (rate / 35).max(1);
         let pulse = (0..length)
             .map(|i| {
                 let phase = i as f32 / rate as f32 * std::f32::consts::TAU * 1400.0;
-                phase.sin() * peak * (1.0 - i as f32 / length as f32).powi(2)
+                phase.sin() * (1.0 - i as f32 / length as f32).powi(2)
             })
             .collect();
         Some(Self { beats, pulse })
@@ -857,11 +876,16 @@ impl Input {
                 channels: usize::from(channels),
             });
         };
-        let dir = root
-            .join("songs")
-            .join(stems.source.as_str())
-            .join("splits")
-            .join(stems.split.as_str());
+        let dir = if stems.imported {
+            root.join("assets")
+                .join(stems.source.as_str())
+                .join("stems")
+        } else {
+            root.join("songs")
+                .join(stems.source.as_str())
+                .join("splits")
+                .join(stems.split.as_str())
+        };
         let files = STEM_NAMES
             .iter()
             .enumerate()
@@ -1163,11 +1187,24 @@ mod tests {
 
     #[test]
     fn stems_mix_live_and_a_mute_is_heard_within_the_short_read_ahead() {
+        verify_live_stems(false);
+    }
+
+    #[test]
+    fn imported_stems_mix_live_from_the_source_asset() {
+        verify_live_stems(true);
+    }
+
+    fn verify_live_stems(imported: bool) {
         const SOURCE: &str = "01JD2W8T3N8M4K6V0P7Q9R1S2V";
         const SPLIT: &str = "01JD2W8T3N8M4K6V0P7Q9R1S2W";
         let (root, asset) = render(8, 2);
         let frames = u64::from(RATE) * 4;
-        let dir = root.join("songs").join(SOURCE).join("splits").join(SPLIT);
+        let dir = if imported {
+            root.join("assets").join(SOURCE).join("stems")
+        } else {
+            root.join("songs").join(SOURCE).join("splits").join(SPLIT)
+        };
         std::fs::create_dir_all(&dir).unwrap();
         // Vocals at 0.25 and drums at 0.125 on both channels.
         for (name, level) in [("vocals", 0.25f32), ("drums", 0.125)] {
@@ -1187,7 +1224,8 @@ mod tests {
             speed: None,
             stems: Some(StemMix {
                 source: MediaId::parse(SOURCE).unwrap(),
-                split: MediaId::parse(SPLIT).unwrap(),
+                split: MediaId::parse(if imported { SOURCE } else { SPLIT }).unwrap(),
+                imported,
                 gains: [1.0, 1.0, 0.0, 0.0, 0.0, 0.0],
                 present: 0b11,
             }),
@@ -1244,6 +1282,7 @@ mod tests {
             stems: Some(StemMix {
                 source: asset,
                 split: asset,
+                imported: false,
                 gains: [1.0; 6],
                 present: 0b1,
             }),
@@ -1431,6 +1470,19 @@ mod tests {
             output[first + 2000..first + 11_900]
                 .iter()
                 .all(|sample| *sample == 0.0)
+        );
+        let before = backing.status();
+        backing.command(BackingCommand::ClickLevel { level_db: -24.0 });
+        assert_eq!(backing.status().seq, before.seq);
+        assert_eq!(backing.status().frame, before.frame);
+        let quieter = run(&mut backing, 250, |_| false);
+        let peak = |samples: &[f32]| samples.iter().map(|value| value.abs()).fold(0.0, f32::max);
+        assert!((peak(&quieter[12_000..]) / peak(&output) - gain(-12.0)).abs() < 0.001);
+        assert!(backing.status().playing);
+        assert_eq!(backing.status().seq, before.seq);
+        assert_eq!(
+            backing.status().frame,
+            range.a + (before.frame - range.a + quieter.len() as u64) % (range.b - range.a)
         );
         assert_eq!(backing.status().underruns, 0);
         std::fs::remove_dir_all(root).unwrap();
