@@ -231,10 +231,11 @@ export function SlotChooser({
             </Button>
           )}
           {step === 'kind' && (
-            <div className="add-block-list">
-              <button
+            <div className="grid divide-y divide-border">
+              <Button
+                variant="ghost"
                 type="button"
-                className="add-block-option"
+                className="grid h-auto min-h-touch grid-cols-[2rem_minmax(0,1fr)] justify-start gap-3 rounded-none px-0 py-3 text-left whitespace-normal [&_svg]:size-7 [&>span]:grid [&>span]:gap-0.5"
                 aria-label="Add NAM"
                 onClick={() => onModel('nam')}
               >
@@ -243,10 +244,11 @@ export function SlotChooser({
                   <strong>Amp, pedal or rig capture</strong>
                   <span>A NAM model, straight into this slot.</span>
                 </span>
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
                 type="button"
-                className="add-block-option"
+                className="grid h-auto min-h-touch grid-cols-[2rem_minmax(0,1fr)] justify-start gap-3 rounded-none px-0 py-3 text-left whitespace-normal [&_svg]:size-7 [&>span]:grid [&>span]:gap-0.5"
                 aria-label="Add IR"
                 onClick={() => onModel('ir')}
               >
@@ -255,11 +257,12 @@ export function SlotChooser({
                   <strong>Cabinet or room</strong>
                   <span>An impulse response, straight into this slot.</span>
                 </span>
-              </button>
+              </Button>
               {allowEffects && (
-                <button
+                <Button
+                  variant="ghost"
                   type="button"
-                  className="add-block-option"
+                  className="grid h-auto min-h-touch grid-cols-[2rem_minmax(0,1fr)] justify-start gap-3 rounded-none px-0 py-3 text-left whitespace-normal [&_svg]:size-7 [&>span]:grid [&>span]:gap-0.5"
                   aria-label="Effect"
                   onClick={() => setStep('effect')}
                 >
@@ -272,7 +275,7 @@ export function SlotChooser({
                         : 'Pitch, Hold, delay and other effects, before, after or beside this chain.'}
                     </span>
                   </span>
-                </button>
+                </Button>
               )}
             </div>
           )}

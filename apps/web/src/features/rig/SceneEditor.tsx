@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
 
-import './SceneEditor.css';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { SceneChange } from '../../SceneChange';
 import { nativeBypassKey } from '../../sceneNativeBypass';
@@ -228,7 +227,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
         />
       )}
       {notice && (
-        <p className="caption scene-notice" role="status">
+        <p className="caption my-1" role="status">
           {notice}
         </p>
       )}

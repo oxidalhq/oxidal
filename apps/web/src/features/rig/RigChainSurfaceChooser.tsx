@@ -24,7 +24,10 @@ export function RigChainSurfaceChooser({ rig, vm }: RigViewProps) {
   if (choice.kind === 'gap')
     return (
       <AdjustmentDialog title="Add or split here" onCancel={close}>
-        <div className="menu-list" aria-label="Add or split">
+        <div
+          className="grid divide-y divide-border [&>button]:h-auto [&>button]:justify-start [&>button]:rounded-none [&>button]:py-2.5 [&>button]:text-left [&>button]:whitespace-normal"
+          aria-label="Add or split"
+        >
           <Button
             variant="outline"
             onClick={() => setCanvasChoice({ ...choice, kind: 'add' })}

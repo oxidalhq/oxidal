@@ -1,3 +1,5 @@
+import { Button } from '@oxidal/design-system/components/button';
+
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { GearIcon } from './GearIcon';
 
@@ -26,12 +28,13 @@ export function AddBlockChooser({
 }) {
   return (
     <AdjustmentDialog title="Add a block" onCancel={onCancel}>
-      <div className="add-block-list">
+      <div className="grid divide-y divide-border">
         {kinds.map((kind) => (
-          <button
+          <Button
+            variant="ghost"
             key={kind.format}
             type="button"
-            className="add-block-option"
+            className="grid h-auto min-h-touch grid-cols-[2rem_minmax(0,1fr)] justify-start gap-3 rounded-none px-0 py-3 text-left whitespace-normal [&_svg]:size-7 [&>span]:grid [&>span]:gap-0.5"
             aria-label={kind.format === 'nam' ? 'Add NAM' : 'Add IR'}
             onClick={() => onChoose(kind.format)}
           >
@@ -40,7 +43,7 @@ export function AddBlockChooser({
               <strong>{kind.title}</strong>
               <span className="caption">{kind.detail}</span>
             </span>
-          </button>
+          </Button>
         ))}
       </div>
       <p className="caption">

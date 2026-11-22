@@ -3,7 +3,6 @@ import { useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 
-import './SelectedBlockPanel.css';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { LedToggle } from '../../ChainView';
 import type { IdStep } from '../../rigChain';
@@ -143,13 +142,19 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
   const effects = pathBlocks(fullRoute, id) ?? 1;
   const why = 'selected-block-why';
   return (
-    <div className="selected-block" aria-label="Selected block">
+    <div
+      className="grid gap-3 border-t border-foreground py-3"
+      aria-label="Selected block"
+    >
       {(selected?.kind !== 'lv2' || selectedView.branch) && (
-        <div className="selected-block-head">
-          <h3 className="selected-block-title" title={label}>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 [&>button]:justify-self-end">
+          <h3
+            className="selected-block-title col-span-full m-0 min-w-0 truncate leading-tight"
+            title={label}
+          >
             {label}
           </h3>
-          <span className="selected-block-type">{kind}</span>
+          <span className="text-sm text-muted-foreground">{kind}</span>
           {selectedView.branch ? (
             <LedToggle
               on={selectedView.branch.enabled}
@@ -255,11 +260,11 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
       )}
       {inLane && (
         <div
-          className="selected-block-routing"
+          className="grid gap-2 border-t border-border pt-3"
           role="group"
           aria-label={`Routing for ${label}`}
         >
-          <p className="selected-block-path">
+          <p className="m-0 font-bold">
             {inSplit
               ? `Path ${owner!.path + 1} of ${owner!.paths}`
               : sceneOwner
@@ -326,7 +331,7 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
             </Button>
           </div>
           {routeWhy && (
-            <p id={why} className="caption selected-block-why">
+            <p id={why} className="caption m-0">
               {routeWhy}
             </p>
           )}

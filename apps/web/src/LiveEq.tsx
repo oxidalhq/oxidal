@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@oxidal/design-system/components/button';
 import { RelativeAdjustment as TouchAdjust } from '@oxidal/design-system/components/number-field';
 
-import './RigControls.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { type AudioAction, type AudioState } from './api';
 import { EditQueue } from './editQueue';
@@ -243,10 +242,11 @@ export function LiveEq<S extends EqSession>({
       )}
       <div className="grid grid-cols-3 gap-2">
         {(Object.keys(fields) as Field[]).map((field) => (
-          <button
+          <Button
+            variant="ghost"
             key={field}
             type="button"
-            className="value-cell min-w-0"
+            className="grid h-auto min-h-touch min-w-0 justify-start gap-0.5 rounded-none border-b border-border px-0 py-1.5 text-left [&>span]:text-sm [&>span]:text-muted-foreground [&>strong]:font-mono [&>strong]:text-base [&>strong]:font-medium [&>strong]:tabular-nums"
             aria-label={`Adjust EQ ${fields[field].label}`}
             aria-haspopup="dialog"
             disabled={
@@ -258,7 +258,7 @@ export function LiveEq<S extends EqSession>({
           >
             <span>{fields[field].label}</span>
             <strong>{display(field, band[field])}</strong>
-          </button>
+          </Button>
         ))}
       </div>
       {error && !draft && (

@@ -13,16 +13,16 @@ export function SceneSettings({
 }) {
   if (!settings.offered.length) return null;
   return (
-    <fieldset className="scene-settings">
-      <legend>Effect settings in scenes</legend>
+    <fieldset className="my-2 grid gap-1.5">
+      <legend className="font-semibold">Effect settings in scenes</legend>
       <p className="caption">
         Ticked settings are kept by every scene. Others stay shared by the whole
         preset.
       </p>
-      <ul>
+      <ul className="grid gap-1">
         {settings.offered.map((s) => (
           <li key={key(s)}>
-            <label>
+            <label className="flex min-h-touch items-center gap-2">
               <Checkbox
                 checked={s.inScenes || settings.chosen.has(key(s))}
                 disabled={s.inScenes}

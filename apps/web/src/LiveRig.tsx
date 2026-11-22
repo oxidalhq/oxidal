@@ -34,7 +34,6 @@ import {
   SelectedBlockPanel,
 } from '@oxidal/design-system/widgets/selected-block-panel';
 
-import './RigControls.css';
 import { AddBlockChooser } from './AddBlockChooser';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
@@ -851,12 +850,17 @@ export function LiveRig({
     },
   ];
   const knobStrip = knobs.some((k) => k.item) ? (
-    <div className="knob-strip" role="group" aria-label="Performance knobs">
+    <div
+      className="grid grid-cols-5 border-b border-border"
+      role="group"
+      aria-label="Performance knobs"
+    >
       {knobs.map(({ label, item, hint }) => (
-        <button
+        <Button
+          variant="ghost"
           key={label}
           type="button"
-          className="knob-cell"
+          className="group/knob grid h-auto min-h-13 place-content-center justify-items-center gap-0.5 rounded-none border-r border-border px-0.5 py-1 last:border-r-0 min-[481px]:min-h-16 min-[481px]:gap-1"
           data-inactive={!item || !!hint || undefined}
           aria-haspopup="dialog"
           title={item ? item.label : hint}
@@ -864,9 +868,13 @@ export function LiveRig({
           onClick={() => item && openAdjustment(item)}
         >
           <span className="sr-only">Adjust </span>
-          <span className="knob-label">{label}</span>{' '}
-          <strong className="knob-value">{item ? item.display : '—'}</strong>
-        </button>
+          <span className="small-caps text-2xs text-muted-foreground min-[481px]:text-xs">
+            {label}
+          </span>{' '}
+          <strong className="font-mono text-md leading-none font-medium tabular-nums group-data-inactive/knob:text-muted-foreground min-[481px]:text-xl">
+            {item ? item.display : '—'}
+          </strong>
+        </Button>
       ))}
     </div>
   ) : null;
@@ -1489,9 +1497,9 @@ export function LiveRig({
         </Button>
         <TunerButton />
         {/* Save and the preset actions form one split button. */}
-        <div className="preset-save-group" role="group" aria-label="Save">
+        <div className="inline-flex shrink-0" role="group" aria-label="Save">
           <Button
-            className="preset-save"
+            className="rounded-r-none"
             aria-label="Save copy"
             title="Save a copy for offline use"
             variant={state.modified ? 'default' : 'outline'}
@@ -1508,7 +1516,7 @@ export function LiveRig({
             aria-label="Preset actions"
             aria-haspopup="dialog"
             title="MIDI, Revert, Match level and appearance"
-            className="preset-actions"
+            className="min-w-9 rounded-l-none border-l-current/35 px-2"
             disabled={disabled || !!draft || !!picker}
             onClick={() => setActionsOpen(true)}
           >
@@ -1570,7 +1578,7 @@ export function LiveRig({
       <div className="rig-workspace gap-3" data-inspecting={!!selectedBlock}>
         <div className="rig-chain-column">
           {editingChain && (
-            <div className="chain-bar">
+            <div className="flex min-h-touch flex-wrap items-center gap-0.5 [&>h3]:mr-auto [&>h3]:font-semibold">
               <h3>Chain</h3>
               {!!state.slots?.length && (
                 <Button
@@ -1651,8 +1659,9 @@ export function LiveRig({
               title="Preset actions"
               onCancel={() => setActionsOpen(false)}
             >
-              <div className="menu-list">
-                <button
+              <div className="grid divide-y divide-border [&>button]:h-auto [&>button]:justify-start [&>button]:rounded-none [&>button]:py-2.5 [&>button]:text-left [&>button]:whitespace-normal">
+                <Button
+                  variant="ghost"
                   type="button"
                   disabled={disabled || !!draft || !!picker}
                   onClick={() => {
@@ -1664,8 +1673,9 @@ export function LiveRig({
                   <span className="caption">
                     Assign this preset&apos;s switches and controls
                   </span>
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="ghost"
                   type="button"
                   aria-label="Reload saved"
                   disabled={
@@ -1684,8 +1694,9 @@ export function LiveRig({
                   <span className="caption">
                     Discards edits since the last save
                   </span>
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="ghost"
                   type="button"
                   disabled={
                     disabled ||
@@ -1702,10 +1713,10 @@ export function LiveRig({
                   <span className="caption">
                     Play for eight seconds to level this preset with the others
                   </span>
-                </button>
+                </Button>
               </div>
               <div
-                className="menu-choice"
+                className="mt-3 flex flex-wrap items-center gap-2 [&_[aria-pressed=true]]:bg-foreground [&_[aria-pressed=true]]:text-background [&>span]:mr-auto [&>span]:font-semibold"
                 role="group"
                 aria-label="Chain appearance"
               >
@@ -2021,7 +2032,7 @@ export function LiveRig({
                   ))}
               </div>
               <div
-                className="live-parameter-grid"
+                className="grid border-t border-foreground"
                 aria-label="Sounding controls"
               >
                 {state.controls
@@ -2031,9 +2042,10 @@ export function LiveRig({
                       controlGroup(item.target) === group,
                   )
                   .map((item) => (
-                    <button
+                    <Button
+                      variant="ghost"
                       type="button"
-                      className="live-value-trigger value-row"
+                      className="live-value-trigger grid h-auto min-h-touch grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-2 gap-y-1 rounded-none border-b border-border px-0 py-2.5 text-left whitespace-normal data-toggle:items-center"
                       aria-label={`Adjust sounding ${shortControlLabel(item.label)} ${item.display}`}
                       data-toggle={item.toggle || undefined}
                       key={item.target}
@@ -2052,10 +2064,10 @@ export function LiveRig({
                         else openAdjustment(item);
                       }}
                     >
-                      <span className="value-row-label">
+                      <span className="min-w-0 text-base wrap-anywhere">
                         {shortControlLabel(item.label)}
                       </span>{' '}
-                      <strong className="value-row-value">
+                      <strong className="text-right font-mono text-xl font-medium tabular-nums">
                         {item.display}
                       </strong>
                       {!item.toggle && (
@@ -2083,7 +2095,7 @@ export function LiveRig({
                           onEnd={(cancel) => void finishAdjustment(cancel)}
                         />
                       )}
-                    </button>
+                    </Button>
                   ))}
               </div>
             </>

@@ -7,11 +7,12 @@ import {
   useState,
 } from 'react';
 
+import { Led } from '@oxidal/design-system/components/badge';
+import { Button } from '@oxidal/design-system/components/button';
 import { useFlip } from '@oxidal/design-system/lib/use-flip';
 import { useVerticalRig } from '@oxidal/design-system/lib/use-media';
-import { ChainBlock } from '@oxidal/design-system/widgets/chain';
+import { ChainBlock, ChainPort } from '@oxidal/design-system/widgets/chain';
 
-import './ChainView.css';
 import type { BlockKind, RigBlockVM, RigLaneVM } from './rigChain';
 
 /**
@@ -57,6 +58,10 @@ export function ChainView({
   );
   const phone = useVerticalRig();
   const vertical = phone && appearance !== 'artwork';
+  const portClass =
+    'relative z-1 mt-5 inline-flex w-fit items-center gap-1 bg-background px-1.5 font-mono text-xs font-semibold whitespace-nowrap group-data-active/lane:text-foreground group-data-dim/lane:text-muted-foreground group-data-[orientation=vertical]/chain:mt-0 group-data-[orientation=vertical]/chain:justify-self-start max-sm:mt-0 group-data-[orientation=vertical]/chain:[&>svg]:rotate-90';
+  const busClass =
+    'absolute -top-2 bottom-0 border-l border-wire group-first/lane:top-8 group-last/lane:bottom-auto group-last/lane:h-10 group-data-[orientation=vertical]/chain:hidden data-[side=split]:left-0 data-[side=sum]:right-0 max-sm:hidden';
   const drag = useDrag(root, vertical, disabled ? undefined : onMove);
   const block = (b: RigBlockVM, lane: number) =>
     b.empty ? (
@@ -91,7 +96,7 @@ export function ChainView({
     );
   const tiles = (lane: RigLaneVM, index: number) => (
     <div
-      className="chain-blocks"
+      className="relative z-1 flex min-w-0 [scrollbar-width:none] gap-1 overflow-x-auto px-0.5 py-1 group-data-[orientation=vertical]/chain:flex-col group-data-[orientation=vertical]/chain:items-stretch group-data-[orientation=vertical]/chain:gap-2 group-data-[orientation=vertical]/chain:overflow-visible group-data-[orientation=vertical]/chain:border-l group-data-[orientation=vertical]/chain:border-wire group-data-[orientation=vertical]/chain:pl-2 max-sm:flex-wrap max-sm:overflow-visible"
       role="region"
       aria-label={`${lane.id} chain blocks`}
       data-lane={index}
@@ -102,7 +107,9 @@ export function ChainView({
         .filter((b, i) => !(b.empty && lane.blocks[i - 1]?.empty))
         .map((b) => block(b, index))}
       {!lane.blocks.length && (
-        <span className="chain-empty">Direct signal</span>
+        <span className="mt-5 self-center bg-background px-1.5 text-sm text-muted-foreground">
+          Direct signal
+        </span>
       )}
     </div>
   );
@@ -110,47 +117,50 @@ export function ChainView({
     return (
       <div
         ref={root}
-        className="chain-view chain-parallel"
+        className="chain-view group/chain relative isolate grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-0 before:absolute before:inset-x-0 before:top-8 before:-z-1 before:border-t before:border-wire data-dragging:cursor-grabbing data-[orientation=vertical]:grid-cols-1 data-[orientation=vertical]:before:hidden max-sm:grid-cols-1 max-sm:gap-1.5 max-sm:before:hidden"
         data-dragging={drag.active || undefined}
         aria-label={label}
         data-chain-view={appearance}
         data-orientation={vertical ? 'vertical' : 'horizontal'}
       >
-        <span className="chain-port">IN</span>
-        <div className="chain-parallel-lanes">
+        <ChainPort label="IN" className={portClass} />
+        <div className="grid min-w-0 [scrollbar-width:none] auto-cols-max gap-2 overflow-x-auto group-data-[orientation=vertical]/chain:auto-cols-auto group-data-[orientation=vertical]/chain:overflow-visible max-sm:auto-cols-auto max-sm:gap-3 max-sm:overflow-visible max-sm:border-l max-sm:border-wire max-sm:pl-3">
           {lanes.map((lane, index) => (
             <div
               key={lane.id}
-              className="chain-lane chain-branch"
+              className="group/lane relative grid min-w-max grid-cols-[auto_minmax(0,1fr)] items-start gap-1.5 px-2.5 group-data-[orientation=vertical]/chain:min-w-0 group-data-[orientation=vertical]/chain:grid-cols-1 before:absolute before:inset-x-0 before:top-8 before:border-t before:border-wire group-data-[orientation=vertical]/chain:before:hidden max-sm:min-w-0 max-sm:grid-cols-1 max-sm:px-0 max-sm:before:hidden [&>[data-lane]]:overflow-visible"
               data-dim={lane.dim || undefined}
               data-active={lane.active || undefined}
               role="group"
               aria-current={lane.active ? 'true' : undefined}
               aria-label={`${lane.id} signal chain${lane.active ? ', sounding' : ''}`}
             >
+              <span className={busClass} data-side="split" aria-hidden="true" />
               <span
-                className="chain-bus"
-                data-side="split"
-                aria-hidden="true"
-              />
-              <span
-                className="chain-port chain-branch-number"
+                className="relative z-1 mt-5 inline-flex w-fit min-w-5 flex-col items-center justify-center gap-1 bg-background px-1.5 font-mono text-xs font-semibold whitespace-nowrap group-data-active/lane:text-foreground group-data-dim/lane:text-muted-foreground group-data-[orientation=vertical]/chain:mt-0 group-data-[orientation=vertical]/chain:justify-self-start max-sm:mt-0 max-sm:flex-row max-sm:justify-start max-sm:gap-2 [&:has([data-lane-name])]:w-18 max-sm:[&:has([data-lane-name])]:w-auto group-data-[orientation=vertical]/chain:[&>svg]:rotate-90"
                 title={lane.name}
               >
                 <span>{lane.input}</span>
                 {lane.name && (
-                  <span className="chain-branch-name">{lane.name}</span>
+                  <span
+                    data-lane-name
+                    className="max-w-18 truncate text-2xs font-medium max-sm:max-w-none max-sm:text-sm"
+                  >
+                    {lane.name}
+                  </span>
                 )}
                 {lane.active && (
-                  <span className="chain-branch-state">Sounding</span>
+                  <span className="rounded border border-current px-1 py-0.5 text-2xs leading-none uppercase">
+                    Sounding
+                  </span>
                 )}
               </span>
               {tiles(lane, index)}
-              <span className="chain-bus" data-side="sum" aria-hidden="true" />
+              <span className={busClass} data-side="sum" aria-hidden="true" />
             </div>
           ))}
         </div>
-        <span className="chain-port">
+        <span className={portClass}>
           OUT <ArrowRight aria-hidden="true" />
         </span>
       </div>
@@ -158,7 +168,7 @@ export function ChainView({
   return (
     <div
       ref={root}
-      className="chain-view"
+      className="chain-view group/chain grid min-w-0 gap-2 data-dragging:cursor-grabbing"
       data-dragging={drag.active || undefined}
       aria-label={label}
       data-chain-view={appearance}
@@ -167,16 +177,16 @@ export function ChainView({
       {lanes.map((lane, index) => (
         <div
           key={lane.id}
-          className="chain-lane"
+          className="group/lane relative grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-1.5 group-data-[orientation=vertical]/chain:grid-cols-1 before:absolute before:inset-x-0 before:top-8 before:border-t before:border-wire group-data-[orientation=vertical]/chain:before:hidden max-sm:before:hidden"
           data-dim={lane.dim || undefined}
           data-active={lane.active || undefined}
           role="group"
           aria-current={lane.active ? 'true' : undefined}
           aria-label={`${lane.id} signal chain${lane.active ? ', sounding' : ''}`}
         >
-          <span className="chain-port">{lane.input}</span>
+          <ChainPort label={lane.input} className={portClass} />
           {tiles(lane, index)}
-          <span className="chain-port">
+          <span className={portClass}>
             OUT <ArrowRight aria-hidden="true" />
           </span>
         </div>
@@ -186,7 +196,7 @@ export function ChainView({
 }
 
 /** An empty slot: a dashed + tile on the wire. A tap adds a block here. */
-function SlotTile({
+export function SlotTile({
   id,
   disabled,
   dropBefore,
@@ -198,20 +208,18 @@ function SlotTile({
   onAdd: () => void;
 }) {
   return (
-    <button
+    <Button
+      variant="outline"
       type="button"
-      className="rig-tile rig-slot"
+      className="relative min-h-touch shrink-0 gap-1 border-dashed bg-background px-3 text-muted-foreground data-drop-before:border-solid data-drop-before:outline-2 data-drop-before:outline-brand"
       data-tile={id}
       data-drop-before={dropBefore || undefined}
       aria-label="Add a block here"
       disabled={disabled}
       onClick={onAdd}
     >
-      <span className="rig-tile-face">
-        <Plus aria-hidden="true" />
-      </span>
-      <span className="rig-tile-label">Add</span>
-    </button>
+      <Plus aria-hidden="true" /> Add
+    </Button>
   );
 }
 
@@ -250,7 +258,7 @@ export function RigTile({
       selected={selected}
       tint={block.tint}
       lifted={!!drag?.style}
-      className={dropBefore ? 'outline-2 outline-brand' : undefined}
+      className="group-data-[orientation=vertical]/chain:w-full data-drop-before:outline-2 data-drop-before:outline-brand data-lifted:pointer-events-none data-movable:select-none"
       data-tile={block.id}
       data-flip={block.id}
       data-movable={drag ? true : undefined}
@@ -285,18 +293,19 @@ export function LedToggle({
   onToggle: () => void;
 }) {
   return (
-    <button
+    <Button
       type="button"
-      className="led-toggle"
+      variant="outline"
+      className="min-w-24 justify-start aria-pressed:border-foreground"
       data-kind={kind}
       aria-pressed={on}
       aria-label={on && !state ? label : `${label} · ${state ?? 'Bypassed'}`}
       disabled={disabled}
       onClick={onToggle}
     >
-      <span className="chain-led" aria-hidden="true" />
+      <Led kind={!kind || kind === 'other' ? 'lv2' : kind} on={on} />
       {state ?? (on ? 'On' : 'Bypassed')}
-    </button>
+    </Button>
   );
 }
 

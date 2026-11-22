@@ -222,9 +222,14 @@ export function SceneMenu({
       title={`Scene ${index + 1}: ${scene.name}`}
       onCancel={onClose}
     >
-      <div className="menu-list" role="menu" aria-label={`Scene ${scene.name}`}>
+      <div
+        className="grid divide-y divide-border [&>button]:h-auto [&>button]:justify-start [&>button]:rounded-none [&>button]:py-2.5 [&>button]:text-left [&>button]:whitespace-normal"
+        role="menu"
+        aria-label={`Scene ${scene.name}`}
+      >
         {items.map(([label, run, off]) => (
-          <button
+          <Button
+            variant="ghost"
             key={label}
             type="button"
             role="menuitem"
@@ -232,7 +237,7 @@ export function SceneMenu({
             onClick={run}
           >
             {label}
-          </button>
+          </Button>
         ))}
       </div>
       {pending && (
@@ -382,7 +387,7 @@ function CopyToPreset({
           </p>
         )}
         {plan && (
-          <ul className="scene-copy-plan" aria-label="What copies">
+          <ul className="grid gap-1" aria-label="What copies">
             {plan.refused ? (
               <li role="alert">{plan.refused}</li>
             ) : plan.exact ? (

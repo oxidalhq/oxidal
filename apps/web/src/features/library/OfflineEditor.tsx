@@ -504,7 +504,7 @@ export function OfflineEditor({
                     routePathMix(r, step.split, path, { ...mix, ...next }),
                   );
                 return (
-                  <div className="path-mix">
+                  <div className="path-mix [[data-display=epaper]_&_input[type=range]]:hidden">
                     <label className="field">
                       <span>
                         Path {path + 1} level · {Math.round(mix.level * 100)}%

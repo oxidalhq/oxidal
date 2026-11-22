@@ -65,7 +65,11 @@ export function PathLevel({
     commit(next);
   };
   return (
-    <div className="path-mix" role="group" aria-label={`Path ${path} mix`}>
+    <div
+      className="path-mix [[data-display=epaper]_&_input[type=range]]:hidden"
+      role="group"
+      aria-label={`Path ${path} mix`}
+    >
       <label className="field">
         <span>
           Path {path} level · {Math.round(draft.level * 100)}%
@@ -85,7 +89,7 @@ export function PathLevel({
           onKeyUp={() => commit()}
           onBlur={() => commit()}
         />
-        <span className="path-mix-steps">
+        <span className="hidden gap-1 [[data-display=epaper]_&]:inline-flex">
           <Button
             variant="outline"
             size="icon"
@@ -125,7 +129,7 @@ export function PathLevel({
           onKeyUp={() => commit()}
           onBlur={() => commit()}
         />
-        <span className="path-mix-steps">
+        <span className="hidden gap-1 [[data-display=epaper]_&]:inline-flex">
           <Button
             variant="outline"
             size="icon"

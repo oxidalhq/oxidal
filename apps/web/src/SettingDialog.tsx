@@ -9,7 +9,6 @@ import {
 } from '@oxidal/design-system/components/segmented';
 import { Switch } from '@oxidal/design-system/components/switch';
 
-import './ChainView.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import type { AudioState } from './api';
 import { formatDefault } from './engineHelp';
@@ -49,7 +48,7 @@ export function SettingDialog({
         if (!busy) onCancel();
       }}
     >
-      <div className="setting-dialog">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 [&>.action-row]:mt-1">
         {detail && <p className="caption">{detail}</p>}
         {choices ? (
           <SegmentedControl

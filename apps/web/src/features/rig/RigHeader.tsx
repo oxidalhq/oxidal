@@ -204,8 +204,9 @@ export function RigHeader({ rig, vm }: RigViewProps) {
             title="Preset actions"
             onCancel={() => setActionsOpen(false)}
           >
-            <div className="menu-list">
-              <button
+            <div className="grid divide-y divide-border [&>button]:h-auto [&>button]:justify-start [&>button]:rounded-none [&>button]:py-2.5 [&>button]:text-left [&>button]:whitespace-normal">
+              <Button
+                variant="ghost"
                 type="button"
                 disabled={
                   !changed ||
@@ -225,8 +226,9 @@ export function RigHeader({ rig, vm }: RigViewProps) {
                 <span className="caption">
                   Reload this saved preset version
                 </span>
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
                 type="button"
                 onClick={() => {
                   setActionsOpen(false);
@@ -237,7 +239,7 @@ export function RigHeader({ rig, vm }: RigViewProps) {
                 <span className="caption">
                   Assign this preset&apos;s scenes, switches and controls
                 </span>
-              </button>
+              </Button>
             </div>
           </AdjustmentDialog>
         )}

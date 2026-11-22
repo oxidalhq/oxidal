@@ -725,9 +725,10 @@ export function GuitarPicker() {
       </Button>
       {open && (
         <AdjustmentDialog title="Guitar" onCancel={() => setOpen(false)}>
-          <div className="menu-list">
+          <div className="grid divide-y divide-border [&>button]:h-auto [&>button]:justify-start [&>button]:rounded-none [&>button]:py-2.5 [&>button]:text-left [&>button]:whitespace-normal">
             {profiles.guitars.map((g) => (
-              <button
+              <Button
+                variant="ghost"
                 key={g.id}
                 type="button"
                 aria-pressed={profiles.active === g.id}
@@ -741,7 +742,7 @@ export function GuitarPicker() {
                 {profiles.active === g.id && (
                   <span className="caption">Playing</span>
                 )}
-              </button>
+              </Button>
             ))}
           </div>
           {preset &&

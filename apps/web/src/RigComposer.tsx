@@ -17,7 +17,6 @@ import {
   TabsTrigger,
 } from '@oxidal/design-system/components/tabs';
 
-import './RigComposer.css';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
   graphAudioState,
@@ -300,8 +299,8 @@ export function RigComposer({
     }
   }
   return (
-    <section className="rig-builder space-y-3" aria-label="Compose rig">
-      <header className="rig-builder-header">
+    <section className="min-w-0 space-y-3" aria-label="Compose rig">
+      <header className="flex min-w-0 items-center gap-3 max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto] [&_input]:min-h-touch [&_input]:text-md [&_input]:font-semibold [&>.field]:m-0 max-sm:[&>.field]:col-span-full">
         <label className="field min-w-0 flex-1">
           <span className="sr-only">Preset name</span>
           <input
@@ -319,7 +318,7 @@ export function RigComposer({
           {busy ? 'Preparing…' : 'Play draft'}
         </Button>
       </header>
-      <div className="rig-builder-toolbar">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 max-sm:items-stretch max-sm:[&>*]:w-full [&>.action-row]:m-0 max-sm:[&>.action-row>*]:flex-1">
         <Tabs
           value={layout}
           onValueChange={(value) => chooseLayout(value as 'serial' | 'scenes')}
@@ -374,9 +373,9 @@ export function RigComposer({
           {cancelling ? 'Cancelling…' : 'Cancel preparation'}
         </Button>
       )}
-      <div className="rig-builder-workspace">
-        <div className="rig-builder-canvas">
-          <div className="rig-builder-canvas-heading">
+      <div className="grid min-w-0 items-start gap-4 min-[820px]:grid-cols-[minmax(0,1.65fr)_minmax(15rem,0.75fr)]">
+        <div className="min-w-0 rounded-xl border border-border bg-background p-3 sm:p-4">
+          <div className="mb-3 flex min-w-0 items-center justify-between gap-3 [&_h2]:m-0 [&_p]:m-0">
             <div>
               <p className="eyebrow">Signal path</p>
               <h2>{layout === 'serial' ? 'Chain' : 'Scenes'}</h2>
@@ -417,7 +416,7 @@ export function RigComposer({
                 onSelect={setSelected}
                 disabled={busy}
               />
-              <div className="rig-builder-shared">
+              <div className="mt-4 grid gap-2 border-t border-border pt-4 [&>[data-slot=badge]]:justify-self-start">
                 <Badge>Shared after scenes</Badge>
                 <ChainView
                   label="Shared effects"
@@ -437,7 +436,7 @@ export function RigComposer({
                   onMove={(id, _lane, before) => moveBefore(id, before)}
                 />
               </div>
-              <label className="rig-builder-tail-mode">
+              <label className="mt-4 flex min-w-0 items-center justify-between gap-3 [&>button]:max-w-64 [&>span]:font-semibold">
                 <span>Scene tails</span>
                 <Select
                   value={sceneTails}
@@ -458,7 +457,7 @@ export function RigComposer({
             </>
           )}
           {!effects.length && (
-            <div className="rig-builder-empty">
+            <div className="grid min-h-32 place-content-center gap-1 text-center text-muted-foreground [&>strong]:text-foreground">
               <strong>Start with a tone or effect</strong>
               <span>
                 Add blocks above. The signal path stays editable until you play
@@ -467,11 +466,14 @@ export function RigComposer({
             </div>
           )}
         </div>
-        <section className="rig-builder-inspector" aria-label="Block inspector">
+        <section
+          className="grid min-w-0 scroll-mt-4 gap-4 min-[820px]:sticky min-[820px]:top-3 min-[820px]:border-l min-[820px]:border-border min-[820px]:pl-4 [&>.field]:m-0"
+          aria-label="Block inspector"
+        >
           {selectedEffect ? (
             <>
-              <div className="rig-builder-inspector-heading">
-                <div className="rig-builder-inspector-icon">
+              <div className="flex min-w-0 items-start gap-3 [&_h3]:mt-1.5 [&_h3]:text-md [&_h3]:wrap-anywhere [&>div:last-child]:min-w-0">
+                <div className="grid size-14 shrink-0 place-items-center rounded-lg border border-foreground bg-card [&_svg]:size-7">
                   {block(selectedEffect).face}
                 </div>
                 <div>
@@ -487,7 +489,7 @@ export function RigComposer({
                   <h3>{selectedEffect.name}</h3>
                 </div>
               </div>
-              <div className="rig-builder-inspector-actions">
+              <div className="flex gap-2">
                 <Button
                   variant="outline"
                   className="h-11 w-11 p-0"
@@ -614,7 +616,7 @@ export function RigComposer({
               </p>
             </>
           ) : (
-            <div className="rig-builder-inspector-empty">
+            <div className="grid gap-1 text-muted-foreground [&>strong]:text-foreground">
               <strong>No block selected</strong>
               <span>Add a tone or effect to begin.</span>
             </div>

@@ -1,9 +1,9 @@
 import { CaretDown, CaretUp, X } from '@phosphor-icons/react';
 import { type ReactNode, useRef } from 'react';
 
+import { Button } from '@oxidal/design-system/components/button';
 import { DockableSheet } from '@oxidal/design-system/patterns/tool-dock';
 
-import './RigSheet.css';
 import { useSessionState } from '../lib/sessionState';
 
 /**
@@ -41,7 +41,7 @@ export function RigSheet({
       }}
       renderSheet={(placement) => (
         <section
-          className="rig-sheet"
+          className="rig-sheet group/sheet shadow-lg -mx-1 flex min-w-0 flex-col rounded-t-xl border border-b-0 border-border bg-background max-sm:data-closable:data-open:sticky max-sm:data-closable:data-open:bottom-0 max-sm:data-closable:data-open:z-5 max-sm:data-closable:data-open:max-h-[60dvh] max-sm:data-closable:data-open:overflow-y-auto max-sm:data-closable:data-open:overscroll-contain max-sm:data-closable:data-open:pb-[env(safe-area-inset-bottom)] [[data-display=epaper]_&]:border-2 [[data-display=epaper]_&]:border-foreground [[data-display=epaper]_&]:shadow-none"
           data-open={open || undefined}
           data-closable={onClose ? true : undefined}
           aria-label="Block controls"
@@ -58,17 +58,22 @@ export function RigSheet({
             toggle.current?.focus();
           }}
         >
-          <header className="rig-sheet-header">
-            <span className="rig-sheet-handle" aria-hidden="true" />
-            <div className="rig-sheet-title">
+          <header className="relative flex min-h-touch items-center gap-2 px-3 pt-3 pb-2 group-data-open/sheet:border-b group-data-open/sheet:border-border">
+            <span
+              className="absolute top-1 left-1/2 h-1 w-10 -translate-x-1/2 rounded-full bg-border"
+              aria-hidden="true"
+            />
+            <div className="rig-sheet-title grid min-w-0 flex-1 [&>strong]:truncate">
               <strong title={title}>{title}</strong>
               {detail && <span className="caption">{detail}</span>}
             </div>
             {open && actions}
-            <button
+            <Button
+              variant="outline"
+              size="icon"
               ref={toggle}
               type="button"
-              className="rig-sheet-toggle"
+              className="shrink-0"
               aria-expanded={open}
               aria-label={open ? 'Hide controls' : `Show controls: ${title}`}
               onClick={() => setOpen(!open)}
@@ -78,20 +83,22 @@ export function RigSheet({
               ) : (
                 <CaretUp aria-hidden="true" />
               )}
-            </button>
+            </Button>
             {onClose && (
-              <button
+              <Button
+                variant="outline"
+                size="icon"
                 type="button"
-                className="rig-sheet-toggle"
+                className="shrink-0"
                 aria-label="Close block panel"
                 onClick={onClose}
               >
                 <X aria-hidden="true" />
-              </button>
+              </Button>
             )}
           </header>
           {open && placement}
-          <div className="rig-sheet-body" hidden={!open}>
+          <div className="space-y-3 p-3" hidden={!open}>
             {children}
           </div>
         </section>

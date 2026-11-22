@@ -3,7 +3,6 @@ import { useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 
-import './RigHeaderDuplicate.css';
 import { friendlyError } from '../../lib/friendlyError';
 import { OfflineEditor } from '../library/OfflineEditor';
 import { duplicatePreset } from '../library/setList';
@@ -72,7 +71,7 @@ export function RigHeaderDuplicate({
         <span className="phone-hidden">Duplicate</span>
       </Button>
       {message && (
-        <p className="caption rig-duplicate-status" role="status">
+        <p className="caption basis-full" role="status">
           {message}
         </p>
       )}

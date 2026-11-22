@@ -13,10 +13,10 @@ import {
 import { Button } from '@oxidal/design-system/components/button';
 import { useFlip } from '@oxidal/design-system/lib/use-flip';
 import { useVerticalRig } from '@oxidal/design-system/lib/use-media';
+import { ChainPort } from '@oxidal/design-system/widgets/chain';
 import { SilentBranchesToggle } from '@oxidal/design-system/widgets/silent-branches-toggle';
 
-import './RouteTree.css';
-import { RigTile } from '../ChainView';
+import { RigTile, SlotTile } from '../ChainView';
 import { panLabel } from '../lib/panLabel';
 import type { IdStep, RigBlockVM } from '../rigChain';
 import { pathMix, type RouteAt } from '../rigRoute';
@@ -84,8 +84,15 @@ export function RouteTree(props: Props) {
   );
   if (list)
     return (
-      <div className="route-canvas" role="group" aria-label={label}>
-        <ol className="route-list" aria-label="Chain as a list">
+      <div
+        className="route-canvas group/route min-w-0 data-dragging:select-none"
+        role="group"
+        aria-label={label}
+      >
+        <ol
+          className="m-0 grid list-decimal gap-1.5 pl-6 [&_li]:leading-relaxed [&_ol]:mt-1 [&_ol]:grid [&_ol]:list-decimal [&_ol]:gap-1.5 [&_ol]:pl-6"
+          aria-label="Chain as a list"
+        >
           <ListSteps {...props} steps={route} />
           {props.onGap && props.gaps?.(top(route.length)) && (
             <li>
@@ -104,7 +111,7 @@ export function RouteTree(props: Props) {
   return (
     <div
       ref={root}
-      className="route-canvas"
+      className="route-canvas group/route min-w-0 data-dragging:select-none"
       data-orientation={vertical ? 'vertical' : 'horizontal'}
       role="group"
       aria-label={label}
@@ -112,15 +119,18 @@ export function RouteTree(props: Props) {
     >
       <div
         ref={scroller}
-        className="route-scroll"
+        className="overflow-x-auto pt-1 pb-2 group-data-[orientation=vertical]/route:overflow-visible"
         role="region"
         aria-label={
           vertical ? 'Chain, input to output' : 'Chain, scrolls sideways'
         }
         tabIndex={vertical ? undefined : 0}
       >
-        <div className="route-row">
-          <span className="route-port">IN</span>
+        <div className="flex w-max shrink-0 items-center group-data-[orientation=vertical]/route:w-full group-data-[orientation=vertical]/route:min-w-0 group-data-[orientation=vertical]/route:flex-col group-data-[orientation=vertical]/route:items-stretch">
+          <ChainPort
+            className="group-data-[orientation=vertical]/route:ml-3 group-data-[orientation=vertical]/route:self-start"
+            label="IN"
+          />
           <RowSteps
             {...props}
             drag={drag}
@@ -129,7 +139,10 @@ export function RouteTree(props: Props) {
             silentExpanded={expanded ?? !vertical}
             onToggleSilent={() => setExpanded(!(expanded ?? !vertical))}
           />
-          <span className="route-port">OUT</span>
+          <ChainPort
+            className="group-data-[orientation=vertical]/route:ml-3 group-data-[orientation=vertical]/route:self-start"
+            label="OUT"
+          />
         </div>
       </div>
     </div>
@@ -191,21 +204,22 @@ function RowSteps(
     return (
       <span
         key={`gap-${key}`}
-        className="route-gap"
+        className="group/gap relative grid min-h-touch w-11 shrink-0 place-items-center group-data-[orientation=vertical]/route:min-h-5 group-data-[orientation=vertical]/route:w-13 before:absolute before:inset-x-0 before:top-1/2 before:h-px before:bg-wire group-data-[orientation=vertical]/route:before:inset-y-0 group-data-[orientation=vertical]/route:before:left-1/2 group-data-[orientation=vertical]/route:before:h-auto group-data-[orientation=vertical]/route:before:w-px group-data-[orientation=vertical]/route:has-[button]:min-h-touch"
         data-gap={open ? key : undefined}
         data-drop={drag.over === key || undefined}
         data-drop-before={drag.over === key || undefined}
       >
         {open && (
-          <button
+          <Button
+            variant="outline"
             type="button"
-            className="route-gap-add"
+            className="relative size-9 min-h-0 min-w-0 rounded-full border-wire bg-background p-0 text-muted-foreground group-data-drop/gap:border-2 group-data-drop/gap:border-foreground after:absolute after:-inset-2 hover:border-foreground hover:text-foreground sm:size-7 [@media(pointer:coarse)]:min-w-0"
             aria-label={describe(here, owner?.name ?? null)}
             disabled={props.disabled}
             onClick={() => props.onGap!(here)}
           >
             <Plus aria-hidden="true" />
-          </button>
+          </Button>
         )}
       </span>
     );
@@ -230,7 +244,7 @@ function RowSteps(
     out.push(
       <div
         key={step.split}
-        className="route-split"
+        className="grid shrink-0 gap-2 border-x-2 border-wire py-1 group-data-[orientation=vertical]/route:min-w-0 group-data-[orientation=vertical]/route:border-r-0 group-data-[orientation=vertical]/route:pl-3"
         role="group"
         aria-label={
           scene ? 'Scene lanes' : `Split · ${step.branches.length} paths`
@@ -250,7 +264,7 @@ function RowSteps(
           return (
             <div
               key={`${step.split}-${path}`}
-              className="route-path"
+              className="route-path grid min-w-0 gap-0.5 data-dim:opacity-60"
               role="group"
               aria-label={
                 scene
@@ -259,14 +273,14 @@ function RowSteps(
               }
               data-dim={(scene && !sounding) || undefined}
             >
-              <span className="route-path-caption">
+              <span className="pl-2 font-mono text-2xs font-medium whitespace-nowrap text-muted-foreground group-data-[orientation=vertical]/route:wrap-anywhere group-data-[orientation=vertical]/route:whitespace-normal">
                 {scene
                   ? `${path + 1} ${scene.names[path] ?? ''}${sounding ? ' · Sounding' : ''}`
                   : props.plain
                     ? `Path ${path + 1}`
                     : caption(step, path)}
               </span>
-              <div className="route-row">
+              <div className="flex w-max shrink-0 items-center group-data-[orientation=vertical]/route:w-full group-data-[orientation=vertical]/route:min-w-0 group-data-[orientation=vertical]/route:flex-col group-data-[orientation=vertical]/route:items-stretch">
                 {branch.length ? (
                   <RowSteps
                     {...props}
@@ -275,11 +289,15 @@ function RowSteps(
                   />
                 ) : (
                   <>
-                    <span className="route-gap" aria-hidden="true" />
+                    <span
+                      className="group/gap relative grid min-h-touch w-11 shrink-0 place-items-center group-data-[orientation=vertical]/route:min-h-5 group-data-[orientation=vertical]/route:w-13 before:absolute before:inset-x-0 before:top-1/2 before:h-px before:bg-wire group-data-[orientation=vertical]/route:before:inset-y-0 group-data-[orientation=vertical]/route:before:left-1/2 group-data-[orientation=vertical]/route:before:h-auto group-data-[orientation=vertical]/route:before:w-px group-data-[orientation=vertical]/route:has-[button]:min-h-touch"
+                      aria-hidden="true"
+                    />
                     {props.onAdd ? (
-                      <button
+                      <Button
+                        variant="outline"
                         type="button"
-                        className="route-empty"
+                        className="inline-grid min-h-touch shrink-0 place-items-center rounded-md border border-dashed border-wire px-3 font-medium group-data-[orientation=vertical]/route:self-start data-drop:border-2 data-drop:border-foreground"
                         data-gap={gapKey(empty)}
                         data-drop={drag.over === gapKey(empty) || undefined}
                         aria-label={`Add effect to ${name}`}
@@ -287,11 +305,16 @@ function RowSteps(
                         onClick={() => props.onAdd!(empty)}
                       >
                         + Add effect
-                      </button>
+                      </Button>
                     ) : (
-                      <span className="route-empty">Dry</span>
+                      <span className="inline-grid min-h-touch shrink-0 place-items-center rounded-md border border-dashed border-wire px-3 font-medium group-data-[orientation=vertical]/route:self-start data-drop:border-2 data-drop:border-foreground">
+                        Dry
+                      </span>
                     )}
-                    <span className="route-gap" aria-hidden="true" />
+                    <span
+                      className="group/gap relative grid min-h-touch w-11 shrink-0 place-items-center group-data-[orientation=vertical]/route:min-h-5 group-data-[orientation=vertical]/route:w-13 before:absolute before:inset-x-0 before:top-1/2 before:h-px before:bg-wire group-data-[orientation=vertical]/route:before:inset-y-0 group-data-[orientation=vertical]/route:before:left-1/2 group-data-[orientation=vertical]/route:before:h-auto group-data-[orientation=vertical]/route:before:w-px group-data-[orientation=vertical]/route:has-[button]:min-h-touch"
+                      aria-hidden="true"
+                    />
                   </>
                 )}
               </div>
@@ -319,7 +342,7 @@ function Block(props: Props & { drag: Drag; id: string }) {
   // A run of empty slots shows as one + (7.28); it adds at the first.
   return (
     <div
-      className="route-block"
+      className="flex shrink-0 gap-1 group-data-[orientation=vertical]/route:w-full group-data-[orientation=vertical]/route:min-w-0 group-data-[orientation=vertical]/route:flex-col group-data-[orientation=vertical]/route:items-stretch data-lifted:relative data-lifted:z-2 data-lifted:opacity-70"
       data-node={id}
       data-flip={id}
       data-lifted={drag.moving === id || undefined}
@@ -330,24 +353,17 @@ function Block(props: Props & { drag: Drag; id: string }) {
         .map((t) =>
           t.empty ? (
             props.onSlot && (
-              <button
+              <SlotTile
                 key={t.id}
-                type="button"
-                className="rig-tile rig-slot"
-                aria-label="Add a block here"
+                id={t.id}
                 disabled={props.disabled}
-                onClick={() => props.onSlot!(t.id)}
-              >
-                <span className="rig-tile-face">
-                  <Plus aria-hidden="true" />
-                </span>
-                <span className="rig-tile-label">Add</span>
-              </button>
+                onAdd={() => props.onSlot!(t.id)}
+              />
             )
           ) : (
             <span
               key={t.id}
-              className="route-tile"
+              className="group-data-[orientation=vertical]/route:w-full data-movable:touch-pan-x group-data-[orientation=vertical]/route:data-movable:touch-pan-y group-data-[orientation=vertical]/route:[&>button]:w-full"
               onKeyDown={(e: ReactKeyboardEvent) => {
                 const key = moveKey(e);
                 if (!key || !canMove || !props.onKey) return;

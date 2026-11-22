@@ -17,16 +17,16 @@ export function NativeSceneSettings({
   return (
     <>
       {warning}
-      <fieldset className="scene-settings">
-        <legend>Capture settings in scenes</legend>
+      <fieldset className="my-2 grid gap-1.5">
+        <legend className="font-semibold">Capture settings in scenes</legend>
         <p className="caption">
           Tick a changed setting to keep it per scene. Capture gain and mix
           glide over 50 ms.
         </p>
-        <ul>
+        <ul className="grid gap-1">
           {settings.offered.map((s) => (
             <li key={s.key}>
-              <label>
+              <label className="flex min-h-touch items-center gap-2">
                 <Checkbox
                   checked={s.inScenes || settings.chosen.has(s.key)}
                   disabled={s.inScenes}
