@@ -1499,12 +1499,17 @@ it('keeps a delayed bypass reply on the original block after selecting another b
   const { state } = twoPaths();
   const command = vi.mocked(rigAudioCommand);
   let reply!: (value: typeof state) => void;
-  command.mockImplementationOnce(() => new Promise((resolve) => { reply = resolve; }));
+  command.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        reply = resolve;
+      }),
+  );
 
   fireEvent.click(await screen.findByRole('button', { name: 'dirt lv2' }));
   fireEvent.click(await screen.findByRole('switch', { name: 'dirt on' }));
   await waitFor(() => expect(command).toHaveBeenCalledTimes(1));
-  expect(command.mock.calls[0][1]).toMatchObject({
+  expect(command.mock.calls[0]?.[1]).toMatchObject({
     kind: 'control',
     command: { target: { kind: 'bypass', node: 'dirt' }, value: 1 },
   });
@@ -1528,6 +1533,8 @@ it('keeps a delayed bypass reply on the original block after selecting another b
   await act(async () => reply(next));
   expect(screen.getByRole('switch', { name: 'clean on' })).toBeChecked();
   fireEvent.click(screen.getByRole('button', { name: /^dirt lv2(?: Off)?$/i }));
-  expect(await screen.findByRole('switch', { name: 'dirt on' })).not.toBeChecked();
+  expect(
+    await screen.findByRole('switch', { name: 'dirt on' }),
+  ).not.toBeChecked();
   expect(command).toHaveBeenCalledTimes(1);
 });
