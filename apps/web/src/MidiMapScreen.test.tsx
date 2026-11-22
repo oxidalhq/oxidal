@@ -714,6 +714,58 @@ it('adds a second controller explicitly, with its own channel, and removes it ag
   expect(vi.mocked(updateMidiMap).mock.calls[1]![0].extra_inputs).toEqual([]);
 });
 
+it('enables Learn only for the selected connected controller', async () => {
+  arrange();
+  const user = userEvent.setup();
+  vi.mocked(midiMap).mockResolvedValue({
+    ...map,
+    extra_inputs: [{ input: 'hw:Captain,0,0', channel: 1 }],
+  });
+  const makeRig = (primary: boolean, secondary: boolean) => {
+    const active = rig();
+    const midi = active.control!.midi!;
+    midi.connected = primary;
+    midi.sources = [{ connected: secondary, error: null }];
+    return active;
+  };
+  const view = renderScreen(makeRig(true, false));
+  const learn = await screen.findByRole('button', { name: 'Learn Tap tempo' });
+  expect(learn).toBeEnabled();
+  await user.click(
+    screen.getByRole('combobox', { name: 'Learn from controller' }),
+  );
+  await user.click(screen.getByRole('option', { name: /Controller 2/ }));
+  expect(learn).toBeDisabled();
+  view.rerender(
+    <MidiMapScreen
+      connected
+      native={{ phase: 'stopped' } as AudioState}
+      mixed={makeRig(false, true)}
+      onMapApplied={vi.fn(async () => undefined)}
+    />,
+  );
+  expect(learn).toBeEnabled();
+  expect(
+    screen.getByRole('button', { name: 'Learn Play/Pause' }),
+  ).toBeEnabled();
+});
+
+it('explains hardware MIDI availability when neither supported rig owns playback', async () => {
+  arrange();
+  renderScreen({ ...rig(), phase: 'stopped' });
+  expect(
+    await screen.findByText(
+      'Play a native or mixed rig to receive hardware MIDI.',
+    ),
+  ).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: 'Learn Tap tempo' }),
+  ).toBeDisabled();
+  expect(
+    screen.queryByText('Primary controller disconnected'),
+  ).not.toBeInTheDocument();
+});
+
 it('learns backing-player switches and a level knob outside every preset', async () => {
   arrange();
   const view = render(

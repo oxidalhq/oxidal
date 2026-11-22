@@ -795,13 +795,20 @@ export function MidiMapScreen({
   if (!map || !catalog) {
     return <p className="caption">{error || 'Reading controller map…'}</p>;
   }
-  const canLearn =
+  const sourceReady = Boolean(
     connected &&
-    !!map.input &&
-    !!status?.connected &&
-    !busy &&
-    !navLearning &&
-    !backingLearning;
+    map.input &&
+    (learnSource === 0
+      ? status?.connected
+      : map.extra_inputs?.[learnSource - 1] &&
+        status?.sources?.[learnSource - 1]?.connected),
+  );
+  const sourceRecent = (status?.recent ?? []).filter(
+    (item) => (item.source ?? 0) === learnSource,
+  );
+  const hasMidiOwner =
+    native?.phase === 'running' || mixed?.phase === 'running';
+  const canLearn = sourceReady && !busy && !navLearning && !backingLearning;
   const templateChanged =
     templateButtons !== (map.template?.scene_buttons ?? 0) ||
     (templateButtons > 0 &&
@@ -892,9 +899,11 @@ export function MidiMapScreen({
             <strong>
               {!map.input
                 ? 'MIDI is off'
-                : status?.connected
-                  ? 'Controller connected'
-                  : 'Controller disconnected'}
+                : !hasMidiOwner
+                  ? 'Play a native or mixed rig to receive hardware MIDI.'
+                  : status?.connected
+                    ? 'Primary controller connected'
+                    : 'Primary controller disconnected'}
             </strong>
             {status && (
               <span className="caption">{status.events} messages</span>
@@ -907,11 +916,11 @@ export function MidiMapScreen({
             >
               Channel {status.last.channel} · {messageText(status.last)}
             </output>
-          ) : (
+          ) : status ? (
             <p className="caption mt-1">
               The last incoming message appears here.
             </p>
-          )}
+          ) : null}
           {(status?.recent?.length ?? 0) > 1 && (
             <ol className="midi-recent" aria-label="Recent MIDI messages">
               {status!
@@ -943,24 +952,19 @@ export function MidiMapScreen({
           groups.find((group) => sameEntry(group.entry, entry))?.name ??
           'Preset'
         }
-        last={status?.last}
-        recent={(status?.recent ?? []).map((item) => item.message)}
-        checking={checking}
-        canCheck={
-          connected &&
-          !!map.input &&
-          !!status?.connected &&
-          !learning &&
-          !navLearning
+        last={
+          sourceRecent.at(-1)?.message ??
+          (learnSource === 0 && !status?.recent?.length ? status?.last : null)
         }
+        recent={sourceRecent.map((item) => item.message)}
+        checking={checking}
+        canCheck={sourceReady && !learning && !navLearning}
         busy={busy}
         onChecking={setChecking}
         onApply={(content) =>
           void replaceMap({ ...map, ...content }).catch(() => undefined)
         }
-        canLearnNav={
-          connected && !!map.input && !!status?.connected && !learning && !busy
-        }
+        canLearnNav={sourceReady && !learning && !busy}
         onLearnNav={(key) => {
           setLearning(null);
           setNavLearning({ key, after: status?.events ?? 0 });
@@ -1272,7 +1276,7 @@ export function MidiMapScreen({
       <PresetNavigation
         navigation={map.navigation}
         learning={navLearning?.key ?? null}
-        canLearn={connected && !!map.input && !!status?.connected && !learning}
+        canLearn={sourceReady && !learning}
         busy={busy}
         onLearn={(key) => {
           setLearning(null);
@@ -1290,7 +1294,7 @@ export function MidiMapScreen({
       <BackingPlayerControls
         backing={map.navigation?.backing}
         learning={backingLearning?.key ?? null}
-        canLearn={connected && !!map.input && !!status?.connected && !learning}
+        canLearn={sourceReady && !learning}
         busy={busy}
         onLearn={(key) => {
           setLearning(null);
