@@ -1,0 +1,46 @@
+{
+  "template": {
+    "scene_buttons": 8,
+    "first_controller": 16
+  },
+  "navigation": {
+    "previous": {
+      "program": null,
+      "controller": 24
+    },
+    "next": {
+      "program": null,
+      "controller": 25
+    },
+    "tuner": {
+      "program": null,
+      "controller": 26
+    },
+    "tap": {
+      "program": null,
+      "controller": 27
+    },
+    "boost": {
+      "program": null,
+      "controller": 28
+    },
+    "backing": {
+      "play_pause": {
+        "program": null,
+        "controller": 80
+      },
+      "stop": {
+        "program": null,
+        "controller": 81
+      },
+      "previous": {
+        "program": null,
+        "controller": 82
+      },
+      "next": {
+        "program": null,
+        "controller": 83
+      }
+    }
+  }
+}

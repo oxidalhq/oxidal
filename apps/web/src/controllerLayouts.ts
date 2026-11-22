@@ -206,6 +206,14 @@ export function layoutConflicts(
   const claimed = Object.values(layout.navigation).filter(
     (t): t is Trigger => !!t,
   );
+  return presetTriggerConflicts(map, claimed, nameOf);
+}
+
+export function presetTriggerConflicts(
+  map: Pick<MidiMap, 'entries'>,
+  claimed: Trigger[],
+  nameOf: (entry: MidiMap['entries'][number]['entry']) => string,
+): string[] {
   const found: string[] = [];
   for (const item of map.entries) {
     const uses = (program: number | null, controller: number | null) =>

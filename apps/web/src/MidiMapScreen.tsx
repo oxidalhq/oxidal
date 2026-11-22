@@ -45,6 +45,7 @@ import { ExtraControllers } from './ExtraControllers';
 import { RecoveryAction } from './FailureNotice';
 import { friendlyError } from './lib/friendlyError';
 import { useFailure } from './lib/useFailure';
+import { MidiDefaults } from './MidiDefaults';
 import { firstAfter, useLearnGate } from './midiLearn';
 import { type NavigationKey, PresetNavigation } from './PresetNavigation';
 
@@ -301,6 +302,13 @@ export function MidiMapScreen({
       }
       setUndoDepth(history.current.length);
       setMap(updated);
+      if (
+        updated.template?.scene_buttons !== map.template?.scene_buttons ||
+        updated.template?.first_controller !== map.template?.first_controller
+      ) {
+        setTemplateButtons(updated.template?.scene_buttons ?? 0);
+        setTemplateController(updated.template?.first_controller ?? 16);
+      }
       await onMapApplied(updated);
       return updated;
     } catch (cause) {
@@ -978,9 +986,8 @@ export function MidiMapScreen({
               </span>
             </span>
             <span className="caption mt-1 flex max-w-2xl">
-              A unit template maps consecutive CC buttons to scenes. New Mine
-              scene presets inherit it automatically. The standard four-scene
-              default is CC 16–19, MIDI General Purpose Controllers 1–4.
+              New Mine presets inherit the unit template. It assigns consecutive
+              CC buttons to up to two, four or eight scenes.
             </span>
           </span>
         </summary>
@@ -1173,6 +1180,16 @@ export function MidiMapScreen({
           }}
         />
       </div>
+
+      <MidiDefaults
+        map={map}
+        disabled={!connected || busy}
+        nameOf={(entry) =>
+          groups.find((group) => sameEntry(group.entry, entry))?.name ??
+          entry.id
+        }
+        onApply={(content) => replaceMap({ ...map, ...content })}
+      />
 
       {pendingClearAll && (
         <section

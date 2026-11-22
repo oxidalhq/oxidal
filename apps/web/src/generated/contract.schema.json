@@ -2632,7 +2632,7 @@
       ]
     },
     "BackingTriggers": {
-      "description": "Device-wide backing-player controls. Nothing is assigned by default.",
+      "description": "Device-wide backing-player controls. New maps assign CC 80–83 to transport.",
       "type": "object",
       "properties": {
         "level": {

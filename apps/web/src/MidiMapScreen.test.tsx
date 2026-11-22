@@ -790,3 +790,95 @@ it('learns backing-player switches and a level knob outside every preset', async
     backing: { stop: null, level: 7 },
   });
 });
+
+it('reviews and explicitly resets supported defaults without replacing preset maps or unrelated switches', async () => {
+  const user = userEvent.setup();
+  arrange();
+  const initial = {
+    ...map,
+    navigation: {
+      previous: { program: 4 },
+      mute: { controller: 40 },
+      backing: { level: 70 },
+    },
+  };
+  vi.mocked(midiMap).mockResolvedValue(initial);
+  renderScreen();
+  const open = await screen.findByRole('button', {
+    name: /Reset to default MIDI controls/,
+  });
+  await user.click(open);
+  let review = screen.getByRole('region', {
+    name: 'Review default MIDI controls',
+  });
+  expect(review).toHaveTextContent('Program 5 → CC 24');
+  await user.click(within(review).getByRole('button', { name: 'Cancel' }));
+  expect(updateMidiMap).not.toHaveBeenCalled();
+  await user.click(
+    await screen.findByRole('button', {
+      name: /Reset to default MIDI controls/,
+    }),
+  );
+  review = screen.getByRole('region', { name: 'Review default MIDI controls' });
+  await user.click(
+    within(review).getByRole('button', { name: 'Apply default controls' }),
+  );
+  const trigger = (controller: number) => ({ controller, program: null });
+  expect(updateMidiMap).toHaveBeenCalledTimes(1);
+  expect(updateMidiMap).toHaveBeenCalledWith(
+    expect.objectContaining({
+      expected_revision: map.revision,
+      entries: map.entries,
+      channel: map.channel,
+      input: map.input,
+      template: { first_controller: 16, scene_buttons: 8 },
+      navigation: {
+        previous: trigger(24),
+        next: trigger(25),
+        tuner: trigger(26),
+        tap: trigger(27),
+        boost: trigger(28),
+        mute: { controller: 40 },
+        backing: {
+          play_pause: trigger(80),
+          stop: trigger(81),
+          previous: trigger(82),
+          next: trigger(83),
+          level: 70,
+        },
+      },
+    }),
+  );
+});
+
+it('names blocking preset and retained controller conflicts before a reset', async () => {
+  arrange();
+  vi.mocked(midiMap).mockResolvedValue({
+    ...map,
+    navigation: { mute: { controller: 17 }, backing: { level: 83 } },
+    entries: map.entries.map((item) => ({
+      ...item,
+      branch_bindings: [{ branch: 'hold', controller: 26, mode: 'toggle' }],
+    })),
+  });
+  renderScreen();
+  await userEvent.click(
+    await screen.findByRole('button', {
+      name: /Reset to default MIDI controls/,
+    }),
+  );
+  const review = screen.getByRole('region', {
+    name: 'Review default MIDI controls',
+  });
+  const alert = within(review).getByRole('alert');
+  for (const conflict of [
+    'CC 26 · Stage Rig',
+    'CC 17 · Mute output',
+    'CC 83 · Backing level',
+  ])
+    expect(alert).toHaveTextContent(conflict);
+  expect(
+    within(review).getByRole('button', { name: 'Apply default controls' }),
+  ).toBeDisabled();
+  expect(updateMidiMap).not.toHaveBeenCalled();
+});

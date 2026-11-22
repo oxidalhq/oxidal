@@ -205,20 +205,25 @@ struct Book {
     entries: BTreeMap<String, PresetMap>,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MidiDefaults {
+    template: MidiTemplate,
+    navigation: Navigation,
+}
+
 impl Default for Book {
     fn default() -> Self {
+        static DEFAULTS: std::sync::LazyLock<MidiDefaults> = std::sync::LazyLock::new(|| {
+            serde_json::from_str(include_str!("../midi-defaults.json"))
+                .expect("bundled MIDI defaults must match the device map")
+        });
         Self {
             schema: 1,
             input: None,
             channel: 1,
-            template: None,
-            navigation: Navigation {
-                boost: Some(Trigger {
-                    program: None,
-                    controller: Some(28),
-                }),
-                ..Navigation::default()
-            },
+            template: Some(DEFAULTS.template),
+            navigation: DEFAULTS.navigation,
             saved_layouts: Vec::new(),
             extra_inputs: Vec::new(),
             entries: BTreeMap::new(),
@@ -285,7 +290,7 @@ pub struct Navigation {
     pub backing: BackingTriggers,
 }
 
-/// Device-wide backing-player controls. Nothing is assigned by default.
+/// Device-wide backing-player controls. New maps assign CC 80–83 to transport.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct BackingTriggers {
@@ -798,6 +803,7 @@ impl MidiMapStore {
         let mut book = Book {
             input: Some(settings.input.clone()),
             channel: settings.channel,
+            template: None,
             navigation: Navigation::default(),
             ..Book::default()
         };
@@ -1680,6 +1686,7 @@ mod tests {
         // field existed keep their revision (value recorded from the prior build).
         assert_eq!(
             revision(&Book {
+                template: None,
                 navigation: Navigation::default(),
                 ..Book::default()
             })
@@ -2045,6 +2052,9 @@ mod tests {
         store
             .adopt(Some(&first), Some(&settings(7)))
             .expect("adopt legacy map");
+        let adopted = store.snapshot().unwrap();
+        assert!(adopted.template.is_none());
+        assert!(adopted.navigation.is_empty());
         assert_eq!(store.settings(Some(&first)).unwrap(), Some(settings(7)));
 
         let second = entry('b');
@@ -2082,6 +2092,75 @@ mod tests {
         };
         assert!(clash.validate(&BTreeMap::new()).is_err());
     }
+    #[test]
+    fn device_defaults_only_initialize_a_missing_map() {
+        let root = root("new-map-defaults");
+        let store = MidiMapStore::new(root.clone());
+        let initial = store.snapshot().unwrap();
+        assert_eq!(initial.channel, 1);
+        assert!(initial.input.is_none());
+        let template = initial.template.unwrap();
+        assert_eq!((template.first_controller, template.scene_buttons), (16, 8));
+        for (cc, action) in [
+            (24, DeviceAction::Previous),
+            (25, DeviceAction::Next),
+            (26, DeviceAction::TunerOpen),
+            (27, DeviceAction::TapTempo),
+            (28, DeviceAction::BoostToggle),
+            (80, DeviceAction::BackingPlayPause),
+            (81, DeviceAction::BackingStop),
+            (82, DeviceAction::BackingPrevious),
+            (83, DeviceAction::BackingNext),
+        ] {
+            let message = |value| Message::Control {
+                channel: 1,
+                controller: cc,
+                value,
+            };
+            assert_eq!(initial.navigation.action(message(127)), Some(action));
+            assert_eq!(initial.navigation.action(message(0)), None);
+        }
+        let path = root.join("midi-map.json");
+        assert!(!path.exists());
+        let scenes: Vec<_> = (1..=9).map(|i| format!("scene-{i}")).collect();
+        store.inherit_template(entry('a'), &scenes).unwrap();
+        let saved = MidiMapStore::new(root.clone()).snapshot().unwrap();
+        assert_eq!(saved.navigation, initial.navigation);
+        let bindings = &saved.entries[0].bindings;
+        assert_eq!(bindings.len(), 8);
+        for (index, binding) in bindings.iter().enumerate() {
+            assert_eq!(binding.scene, scenes[index]);
+            assert_eq!(binding.controller, Some(16 + u8::try_from(index).unwrap()));
+        }
+
+        // A legacy installation may deliberately have no triggers. Preserve both
+        // its file and the optimistic revision clients already use.
+        let legacy = r#"{"schema":1,"input":null,"channel":1,"entries":{}}"#;
+        fs::write(&path, legacy).unwrap();
+        let snapshot = store.snapshot().unwrap();
+        assert!(snapshot.template.is_none());
+        assert!(snapshot.navigation.is_empty());
+        assert_eq!(
+            snapshot.revision,
+            "38eb924807afdfc80f86e87b767cfecb01000b48928f176256ab153593285691"
+        );
+        assert_eq!(fs::read_to_string(&path).unwrap(), legacy);
+
+        // A persisted custom layout with omitted newer controls also survives.
+        let custom = r#"{"schema":1,"input":"hw:Controller,0,0","channel":3,"template":{"scene_buttons":4,"first_controller":40},"navigation":{"previous":{"program":null,"controller":90}},"entries":{}}"#;
+        fs::write(&path, custom).unwrap();
+        let reopened = MidiMapStore::new(root.clone()).snapshot().unwrap();
+        assert_eq!(reopened.input.as_deref(), Some("hw:Controller,0,0"));
+        assert_eq!(reopened.channel, 3);
+        assert_eq!(reopened.template.unwrap().first_controller, 40);
+        assert_eq!(reopened.navigation.previous.unwrap().controller, Some(90));
+        assert!(reopened.navigation.next.is_none());
+        assert!(reopened.navigation.backing.is_empty());
+        assert_eq!(reopened.revision, format!("{:x}", Sha256::digest(custom)));
+        assert_eq!(fs::read_to_string(&path).unwrap(), custom);
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn only_new_maps_assign_cc28_to_boost_and_only_presses_toggle_it() {
         let nav = Book::default().navigation;
