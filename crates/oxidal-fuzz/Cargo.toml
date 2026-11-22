@@ -1,0 +1,21 @@
+[package]
+name = "oxidal-fuzz"
+description = "Oxidal Fuzz: an original Rust LV2 fuzz effect"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+
+[lints.clippy]
+all = "warn"
+
+[dependencies]
+oxidal-lv2-plugin.workspace = true

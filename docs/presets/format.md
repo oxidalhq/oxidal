@@ -232,7 +232,7 @@ Eligibility and conversion previews bind to the active document revision, SHA-25
 
 ## Examples and conformance gates
 
-[Pure edited manifest](examples/pure-edited.json), [mixed delay manifest](examples/mixed-delay.json), [separate compatible-copy manifest](examples/compatible-copy.json), and
+[Pure edited manifest](examples/pure-edited.json), [mixed delay manifest](examples/mixed-delay.json), [Fuzz and Wah scene manifest](examples/fuzz-wah-scene.json), [separate compatible-copy manifest](examples/compatible-copy.json), and
 [LV2-only manifest](examples/lv2-only.json) illustrate structure. These are **manifest-only, synthetic documentation examples**: sizes/hashes where present are placeholders, the example plugin URIs name no real plugins, and no native/audio payload is bundled. They pass shape validation but MUST fail full admission without actual matching native resources. They are not factory presets or audio compatibility fixtures.
 
 `pnpm presets:check` validates the schema, examples and shared

@@ -86,7 +86,7 @@ HTTP_CERTIFICATE_ROUTES = '''    # Oxidal public certificate: hotspot bootstrap 
 # Oxidal's own Rust effects. Bundles are replaced whole, in the directory the
 # daemon's LV2_PATH reads. Nothing temporary may sit in that directory: the
 # LV2 host loads every bundle it finds there, hidden ones included.
-LV2_EFFECTS = ('bloom', 'sustain', 'echo', 'motion', 'moment')
+LV2_EFFECTS = ('bloom', 'sustain', 'echo', 'motion', 'moment', 'fuzz', 'wah')
 LV2_DIRECTORY = Path('/usr/local/lib/lv2')
 MAX_FILES = 4096
 MAX_BYTES = 128 * 1024 * 1024

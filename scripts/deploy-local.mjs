@@ -17,7 +17,7 @@
  * `oxidal-development-deploy` helper, which needs no password for these
  * listed modes. Set OXIDAL_PI to choose the SSH target and
  * OXIDAL_SPLITTER_MODELS for the four model files listed in
- * thirdparty/oxidal-splitter/SHA256SUMS.models. Certificate installation requires
+ * thirdparty/demucs-onnx/SHA256SUMS.models. Certificate installation requires
  * OXIDAL_ACCESS_DIR pointing to the original device setup folder.
  *
  * @see os/README.md
@@ -58,7 +58,7 @@ for (const part of wanted)
     );
 
 const work = join(root, '.local/deploy-local');
-const splitterDir = join(root, 'thirdparty/oxidal-splitter');
+const splitterDir = join(root, 'thirdparty/demucs-onnx');
 const image = 'oxidal-pi-build:rust-1.95-bookworm-native-v3';
 const helper = '/usr/local/sbin/oxidal-development-deploy';
 const features = [
@@ -75,7 +75,7 @@ const binaries = [
   'oxidal-native-worker',
 ];
 /** Oxidal's own Rust effects, as the helper's LV2_EFFECTS lists them. */
-const effects = ['bloom', 'sustain', 'echo', 'motion', 'moment'];
+const effects = ['bloom', 'sustain', 'echo', 'motion', 'moment', 'fuzz', 'wah'];
 mkdirSync(join(work, 'target'), { recursive: true });
 
 const sha256 = (path) =>
@@ -350,7 +350,7 @@ if (wanted.has('splitter')) {
     '--locked',
     '--release',
     '--manifest-path',
-    'thirdparty/oxidal-splitter/demucs-onnx/Cargo.toml',
+    'thirdparty/demucs-onnx/demucs-onnx/Cargo.toml',
     '--target-dir',
     '/target/splitter',
   ]);

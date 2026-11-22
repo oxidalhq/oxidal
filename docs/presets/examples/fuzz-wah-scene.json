@@ -1,0 +1,112 @@
+{
+  "format": "oxidal.preset",
+  "formatVersion": 1,
+  "id": "8f741e38-1a03-4a17-9cf4-7e46f5f1d018",
+  "name": "Fuzz and Wah scenes",
+  "tone3000": { "instances": [] },
+  "oxidal": {
+    "graph": {
+      "nodes": [
+        { "id": "input", "audioInputs": 0, "audioOutputs": 2, "kind": "input" },
+        {
+          "id": "fuzz",
+          "audioInputs": 2,
+          "audioOutputs": 2,
+          "kind": "lv2",
+          "instance": "fuzz",
+          "bypassed": false
+        },
+        {
+          "id": "wah",
+          "audioInputs": 2,
+          "audioOutputs": 2,
+          "kind": "lv2",
+          "instance": "wah",
+          "bypassed": true
+        },
+        {
+          "id": "output",
+          "audioInputs": 2,
+          "audioOutputs": 0,
+          "kind": "output"
+        }
+      ],
+      "edges": [
+        {
+          "from": { "node": "input", "port": 0 },
+          "to": { "node": "fuzz", "port": 0 }
+        },
+        {
+          "from": { "node": "input", "port": 1 },
+          "to": { "node": "fuzz", "port": 1 }
+        },
+        {
+          "from": { "node": "fuzz", "port": 0 },
+          "to": { "node": "wah", "port": 0 }
+        },
+        {
+          "from": { "node": "fuzz", "port": 1 },
+          "to": { "node": "wah", "port": 1 }
+        },
+        {
+          "from": { "node": "wah", "port": 0 },
+          "to": { "node": "output", "port": 0 }
+        },
+        {
+          "from": { "node": "wah", "port": 1 },
+          "to": { "node": "output", "port": 1 }
+        }
+      ]
+    },
+    "lv2": [
+      {
+        "id": "fuzz",
+        "pluginUri": "urn:oxidal:plugin:fuzz#stereo",
+        "controls": { "drive": 78, "tone": 48, "mix": 85, "level": -1 },
+        "assets": [],
+        "requiredFeatures": []
+      },
+      {
+        "id": "wah",
+        "pluginUri": "urn:oxidal:plugin:wah#stereo",
+        "controls": {
+          "position": 28,
+          "resonance": 52,
+          "range": 82,
+          "mix": 100
+        },
+        "assets": [],
+        "requiredFeatures": []
+      }
+    ],
+    "recall": { "tails": "cut" }
+  },
+  "resources": [],
+  "extensions": {
+    "urn:oxidal:scenes:2": {
+      "fade_ms": 35,
+      "scenes": [
+        {
+          "id": "fuzz",
+          "name": "Fuzz",
+          "gains": [],
+          "controls": [
+            { "node": "fuzz", "symbol": "drive", "value": 78 },
+            { "node": "wah", "symbol": "mix", "value": 0 }
+          ]
+        },
+        {
+          "id": "wah",
+          "name": "Wah lead",
+          "gains": [],
+          "controls": [
+            { "node": "fuzz", "symbol": "drive", "value": 64 },
+            { "node": "wah", "symbol": "position", "value": 72 },
+            { "node": "wah", "symbol": "mix", "value": 100 }
+          ]
+        }
+      ]
+    }
+  },
+  "requiredExtensions": ["urn:oxidal:scenes:2"]
+}

@@ -1013,6 +1013,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "oxidal-fuzz"
+version = "0.1.0"
+dependencies = [
+ "oxidal-lv2-plugin",
+]
+
+[[package]]
 name = "oxidal-graph"
 version = "0.1.0"
 dependencies = [
@@ -1104,6 +1111,13 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+]
+
+[[package]]
+name = "oxidal-wah"
+version = "0.1.0"
+dependencies = [
+ "oxidal-lv2-plugin",
 ]
 
 [[package]]

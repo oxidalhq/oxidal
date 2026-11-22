@@ -1,4 +1,4 @@
-# Oxidal splitter dependencies
+# Demucs ONNX dependencies used by Oxidal Splitter
 
 Oxidal invokes the Rust `demucs-onnx` runner as a local CPU process. The
 runner loads ONNX Runtime and reads one Demucs graph and its JSON sidecar.

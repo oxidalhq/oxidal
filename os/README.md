@@ -204,8 +204,8 @@ Name parts to deploy fewer, for example `pnpm deploy:local ui`, and add `--build
 Pi. `pnpm deploy:local lv2` builds and installs the effect bundles; it is not part
 of the default set. `OXIDAL_PI` sets the SSH target (default `oxidal-admin@oxidal.local`) and
 `OXIDAL_SPLITTER_MODELS` the folder holding the four model files pinned in
-`thirdparty/oxidal-splitter/SHA256SUMS.models` (default
-`thirdparty/oxidal-splitter/models/`, which Git ignores). An image built
+`thirdparty/demucs-onnx/SHA256SUMS.models` (default
+`thirdparty/demucs-onnx/models/`, which Git ignores). An image built
 before the splitter or `lv2` mode existed needs `pnpm deploy:local helper` once; it asks
 for the admin password. Ordinary binary updates are limited to the unprivileged daemon,
 its audio workers and the worker-loaded TONE3000 library. The root device service has

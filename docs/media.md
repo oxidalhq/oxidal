@@ -277,7 +277,7 @@ daemon before starting it.
 | Four stems               | `htdemucs.onnx` and `htdemucs.json`                            |
 | Six stems                | `htdemucs_6s.onnx` and `htdemucs_6s.json`                      |
 
-The [third-party splitter directory](../thirdparty/oxidal-splitter/README.md)
+The [Demucs ONNX dependency directory](../thirdparty/demucs-onnx/README.md)
 contains the pinned runner source, Linux ARM64 runtime libraries, notices,
 and instructions for preparing the runtime.
 
