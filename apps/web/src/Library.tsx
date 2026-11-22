@@ -145,7 +145,11 @@ export function Library({
   });
   const [details, setDetails] = useState<Record<string, PresetDetails>>({});
   const [detailsError, setDetailsError] = useState('');
-  const [category, setCategory] = useState('');
+  const [savedCategory, setCategory] = useSessionState(
+    'library-preset-category',
+    '',
+  );
+  const toneSearch = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<{
     kind: 'original' | 'owned' | 'rig';
     id: string;
@@ -154,6 +158,7 @@ export function Library({
   const categories = [
     ...new Set(Object.values(details).flatMap((d) => d.categories)),
   ].sort((a, b) => a.localeCompare(b));
+  const category = categories.includes(savedCategory) ? savedCategory : '';
   const [presets, setPresets] = useState<Preset[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(true);
@@ -472,8 +477,9 @@ export function Library({
               className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
             />
             <input
+              ref={toneSearch}
               type="search"
-              className="h-11 w-full min-w-0 rounded-md border border-input bg-card pr-11 pl-10"
+              className="h-touch w-full min-w-0 rounded-md border border-input bg-card pr-touch pl-10"
               placeholder={placeholder}
               value={value}
               onChange={(event) => set(event.target.value)}
@@ -482,9 +488,13 @@ export function Library({
           {value && (
             <Button
               variant="ghost"
-              className="library-search-clear w-11 px-0"
+              size="icon"
+              className="library-search-clear"
               aria-label="Clear preset search"
-              onClick={() => set('')}
+              onClick={() => {
+                set('');
+                toneSearch.current?.focus();
+              }}
             >
               <X aria-hidden="true" />
             </Button>
@@ -687,7 +697,7 @@ export function Library({
               <StateNotice kind="loading" title="Reading TONE3000 presets…" />
             ) : !originalsShown.length ? (
               <p role="status" className="caption">
-                {toneQuery.trim()
+                {toneQuery.trim() || category
                   ? 'No TONE3000 presets match these filters.'
                   : 'No TONE3000 presets yet. Import a preset file below.'}
               </p>

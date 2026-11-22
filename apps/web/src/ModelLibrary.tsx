@@ -59,6 +59,7 @@ export function ModelLibrary({
   connected: boolean;
   onOpenRig?: () => void;
 }) {
+  const searchInput = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useWorkspaceState(`library-${format}-query`, '');
   const [result, setResult] = useState<{
     key: string;
@@ -194,6 +195,7 @@ export function ModelLibrary({
             className="library-search-icon"
           />
           <input
+            ref={searchInput}
             type="search"
             className="library-search-input"
             value={query}
@@ -214,6 +216,7 @@ export function ModelLibrary({
             onClick={() => {
               setCursors([null]);
               setQuery('');
+              searchInput.current?.focus();
             }}
           >
             <X aria-hidden="true" />

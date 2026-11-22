@@ -5,9 +5,10 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 
-import { importPreset, presetLibrary } from './api';
+import { importPreset, presetDetails, presetLibrary } from './api';
 import { Library } from './Library';
 
 vi.mock('./api', () => ({
@@ -33,6 +34,7 @@ vi.mock('./components/media/StemSongs', () => ({ StemSongs: () => null }));
 afterEach(() => {
   cleanup();
   window.location.hash = '';
+  sessionStorage.removeItem('oxidal-page:library-preset-category');
 });
 
 it('stops a preset import in flight and says what may still happen', async () => {
@@ -86,4 +88,42 @@ it('switches between sounds and media from the same directory', async () => {
   fireEvent.click(mine);
   expect(mine).toHaveAttribute('aria-current', 'page');
   expect(backing).not.toHaveAttribute('aria-current');
+});
+
+it('keeps the selected category on return and explains a filtered TONE3000 result', async () => {
+  window.location.hash = '#library/tone3000';
+  const available = {
+    revision: 'details',
+    entries: [
+      {
+        entry: { kind: 'rig' as const, id: 'a'.repeat(64) },
+        details: { categories: ['Clean'], description: '' },
+      },
+    ],
+  };
+  vi.mocked(presetDetails)
+    .mockResolvedValueOnce(available)
+    .mockResolvedValueOnce(available);
+  const user = userEvent.setup();
+  const first = render(<Library connected onOpenRig={() => {}} />);
+  const category = await screen.findByRole('combobox', { name: 'Category' });
+  await user.click(category);
+  await user.click(screen.getByRole('option', { name: 'Clean' }));
+  expect(
+    screen.getByText('No TONE3000 presets match these filters.'),
+  ).toBeVisible();
+  first.unmount();
+  render(<Library connected onOpenRig={() => {}} />);
+  expect(
+    await screen.findByRole('combobox', { name: 'Category' }),
+  ).toHaveTextContent('Clean');
+  const field = screen.getByRole('searchbox', { name: 'Search presets' });
+  fireEvent.change(field, { target: { value: 'test' } });
+  const clear = screen.getByRole('button', { name: 'Clear preset search' });
+  clear.focus();
+  fireEvent.click(clear);
+  expect(field).toHaveFocus();
+  expect(screen.getByRole('combobox', { name: 'Category' })).toHaveTextContent(
+    'Clean',
+  );
 });

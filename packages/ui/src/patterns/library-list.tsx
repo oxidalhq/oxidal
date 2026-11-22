@@ -378,6 +378,7 @@ export function LibraryList({
   toolbar?: React.ReactNode;
   className?: string;
 }) {
+  const searchInput = React.useRef<HTMLInputElement>(null);
   const wide = useMedia('(min-width: 72rem)');
   const [sheet, setSheet] = React.useState(false);
   const [sort, setSort] = React.useState<SortId>(
@@ -427,6 +428,7 @@ export function LibraryList({
             className="size-4 shrink-0 text-muted-foreground"
           />
           <input
+            ref={searchInput}
             type="search"
             aria-label={searchLabels?.input ?? 'Search'}
             placeholder={searchLabels?.placeholder ?? 'Find…'}
@@ -440,8 +442,11 @@ export function LibraryList({
             <button
               type="button"
               aria-label={searchLabels?.clear ?? 'Clear search'}
-              onClick={() => onQuery('')}
-              className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+              onClick={() => {
+                onQuery('');
+                searchInput.current?.focus();
+              }}
+              className="inline-flex size-touch shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
             >
               <X className="size-4" />
             </button>

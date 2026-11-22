@@ -361,3 +361,23 @@ it('shows set list position on Mine rows and lets extra rows join the set list',
     ),
   );
 });
+
+it('returns focus to Mine search after clearing a query', async () => {
+  render(
+    <SavedRigs
+      connected
+      onOpenRig={() => {}}
+      origin="oxidal_example"
+      title="Presets"
+    />,
+  );
+  await screen.findByText('Factory 1');
+  const search = screen.getByRole('searchbox', { name: 'Search presets' });
+  fireEvent.change(search, { target: { value: 'no-such-sound' } });
+  expect(screen.getByText(/Nothing matches/)).toBeVisible();
+  const clear = screen.getByRole('button', { name: 'Clear preset search' });
+  clear.focus();
+  fireEvent.click(clear);
+  expect(search).toHaveFocus();
+  expect(screen.getByText('Factory 1')).toBeVisible();
+});

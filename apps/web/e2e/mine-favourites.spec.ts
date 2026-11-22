@@ -124,9 +124,20 @@ test('Mine sorts saved presets with owned native rows, stars an entry and rememb
   await page.reload();
   await expect(search).toHaveValue(tag);
   await expect(rigStar).toHaveAttribute('aria-pressed', 'true');
-  await page
-    .getByRole('button', { name: 'Clear preset search', exact: true })
-    .click();
+  const clear = page.getByRole('button', {
+    name: 'Clear preset search',
+    exact: true,
+  });
+  const bounds = await clear.boundingBox();
+  expect(bounds?.width).toBeGreaterThanOrEqual(44);
+  expect(bounds?.height).toBeGreaterThanOrEqual(44);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await clear.click();
+  await expect(search).toBeFocused();
   await expect(ownedStar).toHaveAttribute('aria-pressed', 'false');
   const soundingAfter: AudioState = await (
     await request.get('/api/v1/audio')

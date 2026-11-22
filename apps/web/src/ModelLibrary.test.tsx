@@ -85,6 +85,18 @@ it('uses filtered server pages, includes both sources and replaces rows on next/
       { format: 'ir', query: 'needle' },
     ),
   );
+  const clear = screen.getByRole('button', { name: 'Clear IRs search' });
+  clear.focus();
+  fireEvent.click(clear);
+  expect(screen.getByRole('searchbox')).toHaveFocus();
+  await waitFor(() =>
+    expect(localModels).toHaveBeenLastCalledWith(
+      null,
+      expect.any(AbortSignal),
+      true,
+      { format: 'ir', query: '' },
+    ),
+  );
 });
 it('imports a collection over one GB sequentially without the picker collection-size cap', async () => {
   let concurrent = 0;
