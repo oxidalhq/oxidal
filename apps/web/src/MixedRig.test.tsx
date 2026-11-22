@@ -1494,3 +1494,40 @@ it('keeps live edits after saving an independent copy and reloads only on explic
     }),
   );
 });
+
+it('keeps a delayed bypass reply on the original block after selecting another block', async () => {
+  const { state } = twoPaths();
+  const command = vi.mocked(rigAudioCommand);
+  let reply!: (value: typeof state) => void;
+  command.mockImplementationOnce(() => new Promise((resolve) => { reply = resolve; }));
+
+  fireEvent.click(await screen.findByRole('button', { name: 'dirt lv2' }));
+  fireEvent.click(await screen.findByRole('switch', { name: 'dirt on' }));
+  await waitFor(() => expect(command).toHaveBeenCalledTimes(1));
+  expect(command.mock.calls[0][1]).toMatchObject({
+    kind: 'control',
+    command: { target: { kind: 'bypass', node: 'dirt' }, value: 1 },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'clean lv2' }));
+  expect(await screen.findByRole('switch', { name: 'clean on' })).toBeChecked();
+
+  const control = state.control!;
+  const next = {
+    ...state,
+    control: {
+      ...control,
+      revision: control.revision + 1,
+      controls: control.controls.map((item) =>
+        item.target.kind === 'bypass' && item.target.node === 'dirt'
+          ? { ...item, value: 1 }
+          : item,
+      ),
+    },
+  };
+  vi.mocked(rigAudioState).mockResolvedValue(next);
+  await act(async () => reply(next));
+  expect(screen.getByRole('switch', { name: 'clean on' })).toBeChecked();
+  fireEvent.click(screen.getByRole('button', { name: /^dirt lv2(?: Off)?$/i }));
+  expect(await screen.findByRole('switch', { name: 'dirt on' })).not.toBeChecked();
+  expect(command).toHaveBeenCalledTimes(1);
+});
