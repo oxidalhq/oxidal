@@ -190,7 +190,7 @@ export function useSongbook(connected: boolean) {
     }
   };
   const reviewLatest = async () => {
-    if (!editor || busy) return;
+    if (!editor || busy || !connected) return;
     setBusy(true);
     try {
       if (editor.id) setLatest(await chordSheet(editor.id));

@@ -312,10 +312,16 @@ export function Songbook({ connected }: { connected: boolean }) {
           onChange={(value) =>
             book.setEditor((previous) => previous && { ...previous, value })
           }
-          busy={book.busy || !connected}
+          busy={book.busy}
+          canSave={connected}
           onSave={() => void book.save()}
           error={
             <>
+              {!connected && (
+                <p role="status">
+                  You can keep editing. Reconnect to save this draft.
+                </p>
+              )}
               {book.editError && <p role="alert">{book.editError}</p>}
               {book.stale && (
                 <div className="grid gap-2 rounded-lg border border-border p-3">
@@ -324,7 +330,7 @@ export function Songbook({ connected }: { connected: boolean }) {
                   </p>
                   <Button
                     variant="outline"
-                    disabled={book.busy}
+                    disabled={book.busy || !connected}
                     onClick={() => void book.reviewLatest()}
                   >
                     Read latest saved text
@@ -356,7 +362,7 @@ export function Songbook({ connected }: { connected: boolean }) {
                         Use latest saved text
                       </Button>
                       <Button
-                        disabled={book.busy}
+                        disabled={book.busy || !connected}
                         onClick={() =>
                           book.editor &&
                           book.latest &&
@@ -372,7 +378,7 @@ export function Songbook({ connected }: { connected: boolean }) {
                   )}
                   {!book.editor.id && book.page && (
                     <Button
-                      disabled={book.busy}
+                      disabled={book.busy || !connected}
                       onClick={() =>
                         book.editor &&
                         void book.save({
@@ -502,7 +508,7 @@ export function Songbook({ connected }: { connected: boolean }) {
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
-                disabled={book.busy}
+                disabled={book.busy || !connected}
                 onClick={() => void book.previewDelete()}
               >
                 Check references again

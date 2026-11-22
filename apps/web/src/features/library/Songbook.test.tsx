@@ -89,9 +89,10 @@ afterEach(cleanup);
 
 async function openSaved() {
   rows = [saved];
-  render(<Songbook connected />);
+  const view = render(<Songbook connected />);
   await userEvent.click(await screen.findByRole('button', { name: /^Stored/ }));
   await screen.findByRole('heading', { name: 'Stored' });
+  return view;
 }
 
 it('keeps the new-song editor open until the device confirms its exact saved text', async () => {
@@ -132,6 +133,30 @@ it('keeps the new-song editor open until the device confirms its exact saved tex
     ).not.toBeInTheDocument(),
   );
   expect(screen.getByRole('heading', { name: 'My song' })).toBeVisible();
+});
+
+it('keeps an open draft editable when disconnected and saves the edits after reconnect', async () => {
+  const user = userEvent.setup();
+  const view = await openSaved();
+  await user.click(screen.getByRole('button', { name: 'Edit' }));
+  view.rerender(<Songbook connected={false} />);
+  const source = screen.getByRole('textbox', { name: 'Words and chords' });
+  expect(source).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  await user.clear(source);
+  await user.type(source, 'Drafted offline');
+  expect(saveChordSheet).not.toHaveBeenCalled();
+  view.rerender(<Songbook connected />);
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() =>
+    expect(saveChordSheet).toHaveBeenCalledWith(
+      'sheet-1',
+      expect.objectContaining({
+        source: 'Drafted offline',
+        expected: 'saved-1',
+      }),
+    ),
+  );
 });
 
 it('retains a stale draft, shows the latest text, and replaces only its reviewed revision', async () => {

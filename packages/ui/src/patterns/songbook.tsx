@@ -178,6 +178,7 @@ export function SongbookEditor({
   value,
   onChange,
   busy = false,
+  canSave = true,
   error,
   onSave,
 }: {
@@ -186,6 +187,7 @@ export function SongbookEditor({
   value: SheetDraft;
   onChange: (value: SheetDraft) => void;
   busy?: boolean;
+  canSave?: boolean;
   error?: ReactNode;
   onSave: () => void;
 }) {
@@ -253,7 +255,9 @@ export function SongbookEditor({
             Cancel
           </Button>
           <Button
-            disabled={busy || !value.title.trim() || !value.source.trim()}
+            disabled={
+              busy || !canSave || !value.title.trim() || !value.source.trim()
+            }
             onClick={onSave}
           >
             {busy ? 'Saving…' : 'Save'}
