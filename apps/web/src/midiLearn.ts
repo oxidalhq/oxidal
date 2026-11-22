@@ -4,8 +4,6 @@ import { learnMidi } from './api';
 
 const gate = async (on: boolean) => learnMidi(on);
 
-type Observed = { seq: number; message: unknown; source?: number };
-
 /**
  * The first message received after `after`, in arrival order. A burst between
  * polls therefore learns the first press, not whichever message arrived last.
@@ -22,17 +20,22 @@ export function firstAfter<T>(
   after: number,
   /** Only accept a message from this controller (0 is the first). */
   source?: number,
+  accepts: (message: T) => boolean = () => true,
 ): T | undefined {
   if (!status || status.events <= after) return undefined;
-  const recent = status.recent as Observed[] | undefined;
-  if (recent && source !== undefined) {
-    return recent.find(
-      (item) => item.seq > after && (item.source ?? 0) === source,
-    )?.message as T | undefined;
+  if (status.recent) {
+    return status.recent.find(
+      (item) =>
+        item.seq > after &&
+        (source === undefined || (item.source ?? 0) === source) &&
+        accepts(item.message),
+    )?.message;
   }
-  const found = recent?.find((item) => item.seq > after)?.message as
-    T | undefined;
-  return found ?? status.last ?? undefined;
+  // Older workers only report a last message from their primary input.
+  const last = status.last;
+  return (source === undefined || source === 0) && last != null && accepts(last)
+    ? last
+    : undefined;
 }
 
 /**

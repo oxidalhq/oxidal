@@ -3,7 +3,8 @@ import { Button } from '@oxidal/design-system/components/button';
 import type { MidiMap } from './api';
 
 type Navigation = NonNullable<MidiMap['navigation']>;
-export type NavigationKey = 'previous' | 'next' | 'mute' | 'tuner' | 'guitar';
+export type NavigationKey =
+  'previous' | 'next' | 'mute' | 'tuner' | 'guitar' | 'tap';
 type Trigger = NonNullable<Navigation['previous']>;
 
 const rows: [NavigationKey, string][] = [
@@ -12,6 +13,7 @@ const rows: [NavigationKey, string][] = [
   ['mute', 'Mute output'],
   ['tuner', 'Tuner'],
   ['guitar', 'Next guitar'],
+  ['tap', 'Tap tempo'],
 ];
 
 /** Shows both the friendly and the raw MIDI number so neither is guessed. */

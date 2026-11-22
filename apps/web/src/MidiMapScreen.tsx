@@ -60,6 +60,9 @@ type RowRef =
   | { kind: 'scene'; index: number }
   | { kind: 'branch'; index: number }
   | { kind: 'parameter'; index: number };
+function isSwitchPress(message: Message) {
+  return message.kind === 'program' || message.value >= 64;
+}
 type Learning = {
   entry: EntryRef;
   row: RowRef;
@@ -621,12 +624,10 @@ export function MidiMapScreen({
   }, [eventCount, lastMessage, learning]);
 
   const navMessage = navLearning
-    ? firstAfter<Message>(status, navLearning.after, learnSource)
+    ? firstAfter<Message>(status, navLearning.after, learnSource, isSwitchPress)
     : undefined;
   useEffect(() => {
     if (!navLearning || !navMessage || !map) return;
-    // A CC release or a fader movement is not a press; keep waiting for one.
-    if (navMessage.kind === 'control' && navMessage.value < 64) return;
     const key = navLearning.key;
     const trigger =
       navMessage.kind === 'program'
@@ -643,7 +644,14 @@ export function MidiMapScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navMessage, navLearning]);
   const backingMessage = backingLearning
-    ? firstAfter<Message>(status, backingLearning.after, learnSource)
+    ? firstAfter<Message>(
+        status,
+        backingLearning.after,
+        learnSource,
+        backingLearning.key === 'level'
+          ? (message) => message.kind === 'control'
+          : isSwitchPress,
+      )
     : undefined;
   useEffect(() => {
     if (!backingLearning || !backingMessage || !map) return;

@@ -55,3 +55,15 @@ it('learns only from the chosen controller when several are connected', () => {
   // No source given keeps the earlier behaviour (first message from anyone).
   expect(firstAfter(status, 0)).toEqual(program(0));
 });
+
+it('skips releases and other devices before the first eligible press', () => {
+  const messages = [0, 0, 127, 99, 100];
+  const recent = messages.map((message, seq) => ({
+    message,
+    seq,
+    source: seq === 2 ? 1 : 0,
+  }));
+  const status = { events: 4, last: 100, recent };
+  expect(firstAfter(status, 0, 0, (value) => value >= 64)).toBe(99);
+  expect(firstAfter({ events: 1, last: 127 }, 0, 1)).toBeUndefined();
+});

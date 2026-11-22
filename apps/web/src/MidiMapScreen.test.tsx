@@ -513,7 +513,10 @@ it('learns a Mute trigger and shows it beside Previous and Next', async () => {
   expect(await screen.findByText('CC 22 · press')).toBeVisible();
 });
 
-it('learns a global Tuner trigger', async () => {
+it.each([
+  ['Tuner', 'tuner'],
+  ['Tap tempo', 'tap'],
+])('learns a global %s trigger', async (label, key) => {
   arrange();
   const view = render(
     <MidiMapScreen
@@ -523,7 +526,9 @@ it('learns a global Tuner trigger', async () => {
       onMapApplied={vi.fn(async () => undefined)}
     />,
   );
-  fireEvent.click(await screen.findByRole('button', { name: /Learn.*Tuner/ }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: new RegExp('Learn.*' + label) }),
+  );
   view.rerender(
     <MidiMapScreen
       connected
@@ -539,7 +544,7 @@ it('learns a global Tuner trigger', async () => {
   );
   await waitFor(() => expect(updateMidiMap).toHaveBeenCalled());
   expect(vi.mocked(updateMidiMap).mock.calls[0]![0].navigation).toEqual({
-    tuner: { program: null, controller: 23 },
+    [key]: { program: null, controller: 23 },
   });
   expect(await screen.findByText('CC 23 · press')).toBeVisible();
 });
