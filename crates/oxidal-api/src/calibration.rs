@@ -168,6 +168,7 @@ pub(crate) struct Store {
     path: PathBuf,
     value: Mutex<Calibration>,
     progress: Mutex<Progress>,
+    playback: Mutex<Option<Calibration>>,
     cancel: AtomicBool,
 }
 impl Store {
@@ -181,17 +182,27 @@ impl Store {
             path,
             value: Mutex::new(value),
             progress: Mutex::new(Progress::default()),
+            playback: Mutex::new(None),
             cancel: AtomicBool::new(false),
         }
     }
     pub(crate) fn current(&self) -> Calibration {
         self.value.lock().map(|v| v.clone()).unwrap_or_default()
     }
+    pub(crate) fn for_playback(&self) -> Calibration {
+        self.playback
+            .lock()
+            .ok()
+            .and_then(|value| value.clone())
+            .unwrap_or_else(|| self.current())
+    }
+    fn hold_playback(&self, hold: bool) {
+        if let Ok(mut value) = self.playback.lock() {
+            *value = hold.then(|| self.current());
+        }
+    }
     fn progress(&self) -> Progress {
         self.progress.lock().map(|p| p.clone()).unwrap_or_default()
-    }
-    pub(crate) fn running(&self) -> bool {
-        self.progress().running
     }
     fn update(&self, change: impl FnOnce(&mut Progress)) {
         if let Ok(mut progress) = self.progress.lock() {
@@ -422,8 +433,12 @@ async fn render(
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let mut bytes = serde_json::to_vec(request).map_err(|e| e.to_string())?;
     bytes.push(b'\n');
+    let runtime = root.join("measurement-runtime");
+    std::fs::create_dir_all(&runtime).map_err(|e| e.to_string())?;
+    let runtime = std::fs::canonicalize(runtime).map_err(|e| e.to_string())?;
     let mut child = tokio::process::Command::new(executable)
         .arg("--measure-loudness")
+        .env("OXIDAL_QUALIFICATION_DATA", runtime)
         .env("OXIDAL_PRESET_DIR", root)
         .env("OXIDAL_BUNDLE_STORE", root.join("bundles"))
         .stdin(Stdio::piped())
@@ -473,6 +488,7 @@ fn stopped_after_failures() -> String {
 
 async fn run(shared: Arc<Shared>, all: bool) {
     let result = run_inner(&shared, all).await;
+    shared.calibration.hold_playback(false);
     shared.calibration.update(|p| {
         p.running = false;
         p.current = None;
@@ -620,6 +636,7 @@ pub(super) async fn command(
             if running {
                 return failure(StatusCode::CONFLICT, "Already evening out");
             }
+            shared.calibration.hold_playback(true);
             shared.calibration.cancel.store(false, Ordering::Release);
             shared.calibration.update(|p| {
                 *p = Progress {
@@ -727,6 +744,17 @@ mod tests {
                 .success()
         );
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn playback_uses_previous_measurements_until_background_run_finishes() {
+        let store = Store::load(std::env::temp_dir().join("oxidal-no-calibration-test.json"));
+        *store.value.lock().unwrap() = measured(&[("a", -26.0), ("b", -20.0)]);
+        store.hold_playback(true);
+        *store.value.lock().unwrap() = measured(&[("a", -20.0), ("b", -20.0)]);
+        assert_eq!(store.for_playback().offset("a"), Some(3.0));
+        store.hold_playback(false);
+        assert_eq!(store.for_playback().offset("a"), Some(0.0));
     }
 
     fn measured(lufs: &[(&str, f32)]) -> Calibration {
