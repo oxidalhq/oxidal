@@ -1,8 +1,8 @@
 const gearLabels: Record<string, string> = {
   amp: 'Amp head',
   combo: 'Combo amp',
-  'amp-cab': 'Amp + cab',
-  'full-rig': 'Amp + cab',
+  'amp-cab': 'Full rig (amp + cab)',
+  'full-rig': 'Full rig',
   cab: 'Cabinet',
   pedal: 'Pedal',
   outboard: 'Outboard',

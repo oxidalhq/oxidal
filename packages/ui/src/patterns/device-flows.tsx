@@ -153,7 +153,6 @@ export function RecordDiToggle({
 }) {
   return (
     <Toggle
-      size="sm"
       disabled={disabled}
       pressed={recording}
       onPressedChange={onRecording}

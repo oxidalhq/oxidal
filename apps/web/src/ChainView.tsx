@@ -96,7 +96,7 @@ export function ChainView({
     );
   const tiles = (lane: RigLaneVM, index: number) => (
     <div
-      className="relative z-1 flex min-w-0 [scrollbar-width:none] gap-1 overflow-x-auto px-0.5 py-1 group-data-[orientation=vertical]/chain:flex-col group-data-[orientation=vertical]/chain:items-stretch group-data-[orientation=vertical]/chain:gap-2 group-data-[orientation=vertical]/chain:overflow-visible group-data-[orientation=vertical]/chain:border-l group-data-[orientation=vertical]/chain:border-wire group-data-[orientation=vertical]/chain:pl-2 max-sm:flex-wrap max-sm:overflow-visible"
+      className="relative z-1 flex min-w-0 gap-1 overflow-x-auto px-0.5 py-1 [scrollbar-width:none] group-data-[orientation=vertical]/chain:flex-col group-data-[orientation=vertical]/chain:items-stretch group-data-[orientation=vertical]/chain:gap-2 group-data-[orientation=vertical]/chain:overflow-visible group-data-[orientation=vertical]/chain:border-l group-data-[orientation=vertical]/chain:border-wire group-data-[orientation=vertical]/chain:pl-2 max-sm:flex-wrap max-sm:overflow-visible"
       role="region"
       aria-label={`${lane.id} chain blocks`}
       data-lane={index}
@@ -124,7 +124,7 @@ export function ChainView({
         data-orientation={vertical ? 'vertical' : 'horizontal'}
       >
         <ChainPort label="IN" className={portClass} />
-        <div className="grid min-w-0 [scrollbar-width:none] auto-cols-max gap-2 overflow-x-auto group-data-[orientation=vertical]/chain:auto-cols-auto group-data-[orientation=vertical]/chain:overflow-visible max-sm:auto-cols-auto max-sm:gap-3 max-sm:overflow-visible max-sm:border-l max-sm:border-wire max-sm:pl-3">
+        <div className="grid min-w-0 auto-cols-max gap-2 overflow-x-auto [scrollbar-width:none] group-data-[orientation=vertical]/chain:auto-cols-auto group-data-[orientation=vertical]/chain:overflow-visible max-sm:auto-cols-auto max-sm:gap-3 max-sm:overflow-visible max-sm:border-l max-sm:border-wire max-sm:pl-3">
           {lanes.map((lane, index) => (
             <div
               key={lane.id}

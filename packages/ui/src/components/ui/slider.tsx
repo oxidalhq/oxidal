@@ -53,6 +53,7 @@ export function Slider({
         </span>
       )}
       <SliderPrimitive.Root
+        data-slot="slider-track"
         orientation={orientation}
         value={value}
         defaultValue={defaultValue}

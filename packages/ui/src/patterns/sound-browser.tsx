@@ -281,6 +281,7 @@ export function SoundRecipeRow({
 }) {
   return (
     <Row
+      data-slot="sound-row"
       aria-label={rowLabel}
       data-state={state}
       data-active={active || undefined}
@@ -400,7 +401,7 @@ export function SoundSearch({
         value={query}
         onChange={(event) => onQuery(event.target.value)}
         placeholder="Search by name, style or era"
-        className="h-10 w-full rounded-md border border-input bg-background pr-3 pl-9 text-sm focus-visible:outline-2 focus-visible:outline-ring"
+        className="min-h-touch w-full rounded-md border border-input bg-background pr-3 pl-9 text-sm focus-visible:outline-2 focus-visible:outline-ring"
       />
     </label>
   );

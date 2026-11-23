@@ -825,10 +825,7 @@ export function buildSceneRoute(
     ...scene.branches.flatMap((b) => b.slice(1)),
     ...behind,
   ];
-  if (routeBlocks(rebuilt).some((b) => b.kind !== 'lv2'))
-    throw new Error(
-      'Only effects go ahead of the scenes or after a scene’s tone.',
-    );
+  validateStages(routeBlocks(rebuilt));
   const manifest: Manifest = JSON.parse(JSON.stringify(document.manifest));
   if (name) manifest.name = name.trim();
   const authoring = (manifest.extensions['urn:oxidal:authoring'] ??= {});
@@ -877,8 +874,12 @@ export function buildSceneRoute(
   );
   host.graph.nodes = host.graph.nodes.filter((n) => !removed.has(n.id));
   host.lv2 = host.lv2.filter((l) => !instances.has(l.id));
+  manifest.tone3000.instances = manifest.tone3000.instances.filter(
+    (n) => !instances.has(n.id),
+  );
   for (const id of removed) delete labels[id];
-  const rig = rigBuilder(manifest.id, manifest.name, '', false, manifest);
+  const profile = manifest.tone3000.instances[0]?.profile ?? '';
+  const rig = rigBuilder(manifest.id, manifest.name, profile, false, manifest);
   const place = placer(
     rig,
     new Set([...host.graph.nodes.map((n) => n.id), ...blocks.map((b) => b.id)]),
@@ -938,11 +939,18 @@ export function buildSceneRoute(
   }
   return {
     manifest_json: JSON.stringify(sealScenes(manifest)),
-    resources: Object.fromEntries(
-      manifest.resources.map((r) => [
-        r.id,
-        { kind: 'bundle', revision: document.revision, resource: r.id },
-      ]),
-    ),
+    resources: {
+      ...Object.fromEntries(
+        manifest.resources.map((r) => [
+          r.id,
+          {
+            kind: 'bundle' as const,
+            revision: document.revision,
+            resource: r.id,
+          },
+        ]),
+      ),
+      ...rig.sources,
+    },
   };
 }

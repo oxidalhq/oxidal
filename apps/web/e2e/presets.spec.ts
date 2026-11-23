@@ -274,7 +274,9 @@ test('rig controls follow the actual session without example effects', async ({
   await expect(rig).toBeVisible();
   await expect(page.getByTestId('active-preset')).toHaveText('Amp only');
   await expect(rig.locator('[data-slot="chain-block"]')).toHaveCount(1);
-  await rig.getByRole('button', { name: /^My amp Tone block(?: |$)/ }).click();
+  await rig
+    .getByRole('button', { name: /^My amp TONE3000 · Model(?: |$)/ })
+    .click();
   const selectedControl = page.getByRole('slider', {
     name: /(?:My amp )?Input gain/,
   });
@@ -285,7 +287,7 @@ test('rig controls follow the actual session without example effects', async ({
   const reopenPhoneEditor = async () => {
     if (phone)
       await rig
-        .getByRole('button', { name: /^My amp Tone block(?: |$)/ })
+        .getByRole('button', { name: /^My amp TONE3000 · Model(?: |$)/ })
         .click();
   };
   await expect(selectedControl).toBeVisible();
@@ -316,7 +318,7 @@ test('rig controls follow the actual session without example effects', async ({
   );
   if (verticalAfterRotation && !phone)
     await rig
-      .getByRole('button', { name: /^My amp Tone block(?: |$)/ })
+      .getByRole('button', { name: /^My amp TONE3000 · Model(?: |$)/ })
       .click();
   const rotatedControl = (
     verticalAfterRotation
@@ -4629,7 +4631,7 @@ test('live model comparison stays open, waits for application and rejects a chan
   await page.goto('/#rig');
   const rig = page.getByRole('region', { name: 'Sounding rig' });
   await rig
-    .getByRole('button', { name: /^Current amp Tone block(?: |$)/ })
+    .getByRole('button', { name: /^Current amp TONE3000 · Model(?: |$)/ })
     .click();
   await page.getByRole('button', { name: /^Change(?: .+)?…$/ }).click();
   const picker = page.getByRole('dialog', { name: 'Choose model' });
@@ -6147,6 +6149,7 @@ test('mixed rig authoring splits inside scene lanes and asks before removing a p
   );
   // The new empty path is never a dead end: it asks for an effect.
   await rig.getByRole('button', { name: /^Add effect to path 2/ }).click();
+  await page.getByRole('button', { name: 'Effect', exact: true }).click();
   const chooser = page.getByRole('dialog', { name: 'Add an effect' });
   await chooser.getByRole('button', { name: /^Add Hall/ }).click();
   await expect.poll(() => unit.published.length).toBe(2);

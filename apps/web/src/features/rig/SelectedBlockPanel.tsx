@@ -104,11 +104,12 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
   const busy = rigBusy(vm, rig);
   const id = selected!.id;
   const label = selectedView.label;
-  const movable = editable && selected!.kind === 'lv2';
   /** The split nearest the block, and whether it is the scene lanes. */
   const owner = selectedSpot?.owners.at(-1);
   const sceneOwner = !!owner && owner.split === sceneCanvas?.split;
   const sceneTone = selectedInScene && sceneOwner && selectedSpot!.index === 0;
+  const movable =
+    editable && !sceneTone && ['lv2', 'tone3000'].includes(selected!.kind);
   const kind = selectedView.branch
     ? 'Path'
     : selected!.kind === 'lv2'

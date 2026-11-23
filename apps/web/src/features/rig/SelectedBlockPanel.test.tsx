@@ -78,3 +78,10 @@ it('offers no Remove while a change is in flight', () => {
   render(<SelectedBlockPanel {...props(vi.fn(), true)} />);
   expect(screen.getByRole('button', { name: 'Remove Echo' })).toBeDisabled();
 });
+
+it('can remove an added TONE3000 host block that is not a scene anchor', () => {
+  const input = props();
+  input.vm.selected!.kind = 'tone3000';
+  render(<SelectedBlockPanel {...input} />);
+  expect(screen.getByRole('button', { name: 'Remove Echo' })).toBeEnabled();
+});

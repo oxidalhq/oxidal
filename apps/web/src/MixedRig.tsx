@@ -377,11 +377,11 @@ export function MixedRig(props: {
       )}
       <RigChoosers rig={rig} vm={vm} />
       <MaybeSheet sheet={running && selected ? selectedSheet : null}>
+        <SelectedBlockPanel rig={rig} vm={vm} />
         <SelectedModelControls rig={rig} vm={vm} />
         {running && selected?.kind === 'lv2' && (
           <LiveLv2Panel rig={rig} vm={vm} />
         )}
-        <SelectedBlockPanel rig={rig} vm={vm} />
         {selected?.kind !== 'lv2' && <ControlGrid rig={rig} vm={vm} />}
       </MaybeSheet>
       <ControlAdjustDialog rig={rig} vm={vm} />

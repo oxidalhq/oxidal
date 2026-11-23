@@ -20,7 +20,13 @@ export function RigHeading({
             {identity}
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">{children}</div>
+        <div
+          role="group"
+          aria-label="Rig actions"
+          className="flex flex-wrap items-center gap-2"
+        >
+          {children}
+        </div>
       </div>
     </header>
   );

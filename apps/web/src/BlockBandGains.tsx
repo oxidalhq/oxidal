@@ -34,7 +34,7 @@ export function BlockBandGains({
         compact && 'h-20',
       )}
     >
-      <span className="small-caps text-xs text-muted-foreground">
+      <span className="text-xs small-caps text-muted-foreground">
         EQ band gains{enabled ? '' : ' · bypassed'}
       </span>
       <span className={`relative block ${compact ? 'h-12' : 'h-24'}`}>

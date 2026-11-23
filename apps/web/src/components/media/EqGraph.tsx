@@ -305,7 +305,7 @@ export function EqGraph({
               <circle
                 cx={hx}
                 cy={hy}
-                r={18}
+                r={24}
                 className="fill-transparent group-focus-visible:stroke-ring group-focus-visible:stroke-2"
               />
               {pass ? (

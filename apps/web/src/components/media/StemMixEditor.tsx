@@ -595,7 +595,7 @@ export function StemMixEditor({
               )}
 
               <div className="flex flex-wrap items-center gap-2">
-                <span className="small-caps text-xs text-muted-foreground">
+                <span className="text-xs small-caps text-muted-foreground">
                   Start from
                 </span>
                 <SegmentedControl

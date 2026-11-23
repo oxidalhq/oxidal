@@ -27,3 +27,10 @@ it('stores no provider title and keeps voice characters free of product names', 
     expect(factoryVoices[id].character, id).not.toMatch(marks);
   }
 });
+
+it('gives every older recipe role a concrete first-use capture', () => {
+  for (const role of ['clean', 'crunch', 'heavy', 'bass'] as const) {
+    expect(factoryVoices[role].captures[0]?.tone).toBeGreaterThan(0);
+    expect(factoryVoices[role].captures[0]?.model).toBeGreaterThan(0);
+  }
+});

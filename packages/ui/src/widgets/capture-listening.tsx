@@ -21,7 +21,7 @@ export function ListeningSelect({
     <label className="grid min-w-0 gap-1 text-sm">
       {label}
       <select
-        className="h-10 min-w-0 rounded-md border border-input bg-background px-2 text-foreground"
+        className="min-h-touch min-w-0 rounded-md border border-input bg-background px-2 text-foreground"
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >
@@ -66,7 +66,7 @@ export function CaptureReferences({
         <label className="grid gap-1 text-sm">
           Interface input reference (dBu)
           <input
-            className="h-10 min-w-0 rounded-md border border-input bg-background px-2"
+            className="min-h-touch min-w-0 rounded-md border border-input bg-background px-2"
             type="number"
             step="any"
             placeholder="Unknown"
@@ -75,7 +75,7 @@ export function CaptureReferences({
         <label className="grid gap-1 text-sm">
           Interstage trim (dB)
           <input
-            className="h-10 min-w-0 rounded-md border border-input bg-background px-2"
+            className="min-h-touch min-w-0 rounded-md border border-input bg-background px-2"
             type="number"
             step="any"
             placeholder="Unknown"

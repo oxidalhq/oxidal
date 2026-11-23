@@ -235,13 +235,14 @@ export function rigBuilder(
           manifest.resources.find((r) => r.sha256 === effect.preset.sha256)
             ?.id ?? `preset-${manifest.resources.length}`;
         if (!sources[resource]) {
-          manifest.resources.push({
-            id: resource,
-            path: `tone3000/${effect.preset.sha256}.t3kpreset`,
-            kind: 'tone3000-preset',
-            sha256: effect.preset.sha256,
-            bytes: effect.preset.size_bytes,
-          });
+          if (!manifest.resources.some((r) => r.id === resource))
+            manifest.resources.push({
+              id: resource,
+              path: `tone3000/${effect.preset.sha256}.t3kpreset`,
+              kind: 'tone3000-preset',
+              sha256: effect.preset.sha256,
+              bytes: effect.preset.size_bytes,
+            });
           sources[resource] = effect.source;
         }
         manifest.tone3000.instances.push({
@@ -301,7 +302,7 @@ export function rigBuilder(
     { node: 'in', port: 0 },
     { node: 'in', port: 1 },
   ];
-  return { host, labels, chain, finish, input };
+  return { host, labels, chain, finish, input, sources };
 }
 
 /** Construct explicit scalar routing. No backend/plugin code runs in the browser.

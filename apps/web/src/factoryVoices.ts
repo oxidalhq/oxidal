@@ -35,6 +35,27 @@ export type FactoryVoice = {
 };
 
 const voiceData = {
+  // Older recipes use these roles. Each now has a concrete first-use download.
+  clean: {
+    character: 'Open, bell-like American combo clean',
+    gain: 'clean',
+    captures: [{ tone: 65227, model: 385845 }],
+  },
+  crunch: {
+    character: 'Raw, dynamic fifty-watt stack crunch',
+    gain: 'crunch',
+    captures: [{ tone: 65578, model: 418470 }],
+  },
+  heavy: {
+    character: 'Scooped, heavy, wide high-gain rhythm',
+    gain: 'high',
+    captures: [{ tone: 87866, model: 742072 }],
+  },
+  bass: {
+    character: 'Warm, round vintage bass stack with a tight low end',
+    gain: 'bass',
+    captures: [{ tone: 55, model: 420126 }],
+  },
   // Cleans.
   'blackface-clean': {
     tiers: ['a2-lite', 'a2-full'],

@@ -113,9 +113,12 @@ it('titles the effect chooser for Replace… and for Add', () => {
   const { unmount } = render(
     <RigChainSurfaceChooser {...chooser('replace')} />,
   );
+  expect(screen.getByRole('button', { name: 'Add NAM' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Effect' }));
   expect(screen.getByRole('dialog', { name: 'Replace with…' })).toBeVisible();
   unmount();
   render(<RigChainSurfaceChooser {...chooser('add')} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Effect' }));
   expect(screen.getByRole('dialog', { name: 'Add an effect' })).toBeVisible();
 });
 

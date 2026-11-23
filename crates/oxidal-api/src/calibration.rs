@@ -38,10 +38,11 @@ const MAX_OFFSET_DB: f32 = oxidal_audio::tools::HostLevels::OFFSET_RANGE.1;
 /// Stable Oxidal factory riff level. It must not depend on one unit's guitar.
 const FACTORY_REFERENCE_PEAK_DB: f32 = -12.0;
 /// Changing the reference invalidates cached measurements without changing the file schema.
-const FACTORY_REFERENCE_REVISION: &str = "oxidal-factory-riff-v1";
+const FACTORY_REFERENCE_REVISION: &str = "oxidal-factory-riff-v2";
 
-fn measurement_content(content: &str) -> String {
-    format!("{FACTORY_REFERENCE_REVISION}:{content}")
+fn measurement_content(content: &str, mono: bool) -> String {
+    let mode = if mono { "mono" } else { "stereo" };
+    format!("{FACTORY_REFERENCE_REVISION}:{mode}:{content}")
 }
 
 /// One measured preset or scene, keyed like boosts (`boosts.rs`).
@@ -102,10 +103,13 @@ impl Calibration {
     }
     /// Offsets for what is playing: the TONE3000 preset, or the sounding scene.
     pub fn total(&self, playing: &[String]) -> f32 {
+        // A scene measurement already includes its complete preset signal.
+        // Never add an older whole-preset correction a second time.
         playing
             .iter()
-            .filter_map(|k| self.offset(k))
-            .fold(0.0, |sum, db| sum + db)
+            .rev()
+            .find_map(|key| self.offset(key))
+            .unwrap_or(0.0)
     }
 }
 
@@ -232,13 +236,14 @@ impl Store {
             .iter()
             .filter_map(|(key, measured)| {
                 let rest = key.strip_prefix(&prefix)?;
-                (measured.content == measurement_content(from_revision)
-                    && (rest.is_empty() || rest.starts_with('#')))
-                .then(|| {
+                let mono = [false, true]
+                    .into_iter()
+                    .find(|&mono| measured.content == measurement_content(from_revision, mono))?;
+                (rest.is_empty() || rest.starts_with('#')).then(|| {
                     (
                         format!("scenes:{to_id}{rest}"),
                         Measured {
-                            content: measurement_content(to_revision),
+                            content: measurement_content(to_revision, mono),
                             ..measured.clone()
                         },
                     )
@@ -383,7 +388,7 @@ fn inventory(root: &std::path::Path) -> Result<Vec<Item>, String> {
     Ok(items)
 }
 
-fn coverage_for(calibration: &Calibration, items: &[Item]) -> CalibrationCoverage {
+fn coverage_for(calibration: &Calibration, items: &[Item], mono: bool) -> CalibrationCoverage {
     let mut coverage = CalibrationCoverage {
         total: items.len(),
         measured: 0,
@@ -392,7 +397,7 @@ fn coverage_for(calibration: &Calibration, items: &[Item]) -> CalibrationCoverag
     };
     for item in items {
         match calibration.measured.get(&item.key) {
-            Some(measured) if measured.content == measurement_content(&item.content) => {
+            Some(measured) if measured.content == measurement_content(&item.content, mono) => {
                 coverage.measured += 1;
             }
             Some(_) => coverage.stale += 1,
@@ -774,6 +779,7 @@ async fn run_inner(shared: &Shared, all: bool) -> Result<(), String> {
     let items = tokio::task::spawn_blocking(move || inventory(&root))
         .await
         .map_err(|_| "Preset inventory failed")??;
+    let mono = stream.levels.mono;
     let visible: BTreeSet<&str> = items.iter().map(|item| item.key.as_str()).collect();
     let mut cached = shared.calibration.current();
     let cached_len = cached.measured.len();
@@ -793,7 +799,7 @@ async fn run_inner(shared: &Shared, all: bool) -> Result<(), String> {
             all || cached
                 .measured
                 .get(&item.key)
-                .is_none_or(|m| m.content != measurement_content(&item.content))
+                .is_none_or(|m| m.content != measurement_content(&item.content, mono))
         })
         .collect();
     shared.calibration.update(|p| p.total = todo.len());
@@ -842,7 +848,7 @@ async fn run_inner(shared: &Shared, all: bool) -> Result<(), String> {
                     item.key.clone(),
                     Measured {
                         name: item.name.clone(),
-                        content: measurement_content(&item.content),
+                        content: measurement_content(&item.content, mono),
                         lufs,
                     },
                 );
@@ -881,8 +887,9 @@ pub(super) async fn state(State(shared): State<Arc<Shared>>) -> Response {
 pub(super) async fn coverage(State(shared): State<Arc<Shared>>) -> Response {
     let root = shared.config.preset_dir.clone();
     let calibration = shared.calibration.current();
+    let mono = shared.levels.current().mono;
     match tokio::task::spawn_blocking(move || {
-        inventory(&root).map(|items| coverage_for(&calibration, &items))
+        inventory(&root).map(|items| coverage_for(&calibration, &items, mono))
     })
     .await
     {
@@ -1016,15 +1023,15 @@ mod tests {
     #[test]
     fn reference_revision_invalidates_personalized_measurements() {
         assert_eq!(
-            measurement_content("preset-revision"),
-            "oxidal-factory-riff-v1:preset-revision"
+            measurement_content("preset-revision", false),
+            "oxidal-factory-riff-v2:stereo:preset-revision"
         );
     }
 
     #[test]
     fn coverage_distinguishes_current_stale_and_unmeasured_items() {
         let mut calibration = measured(&[("current", -20.0), ("stale", -21.0)]);
-        calibration.measured.get_mut("current").unwrap().content = measurement_content("c");
+        calibration.measured.get_mut("current").unwrap().content = measurement_content("c", false);
         let item = |key: &str, content: &str| Item {
             key: key.into(),
             name: key.into(),
@@ -1042,6 +1049,7 @@ mod tests {
                     item("stale", "changed"),
                     item("new", "new"),
                 ],
+                false,
             ),
             CalibrationCoverage {
                 total: 3,
@@ -1049,6 +1057,16 @@ mod tests {
                 stale: 1,
                 unmeasured: 1,
             }
+        );
+    }
+    #[test]
+    fn scene_correction_replaces_an_older_whole_preset_correction() {
+        let c = measured(&[("preset", -15.0), ("preset#scene", -25.0), ("other", -20.0)]);
+        assert_eq!(c.total(&["preset".into(), "preset#scene".into()]), 5.0);
+        assert_eq!(c.total(&["preset".into(), "unknown".into()]), -5.0);
+        assert_ne!(
+            measurement_content("same", true),
+            measurement_content("same", false)
         );
     }
 }

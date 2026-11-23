@@ -17,7 +17,7 @@ const sources = import.meta.glob<string>(
   ],
   { query: '?raw', import: 'default', eager: true },
 );
-const helper = /\.(stories|test|data|fixtures|demo)\.tsx?$/;
+const helper = /\.(stories|test|data|fixtures?|demo)\.tsx?$/;
 const modules = Object.entries(sources).filter(([path]) => !helper.test(path));
 const exportsMap = pkg.exports as Record<string, string | null>;
 
@@ -73,7 +73,7 @@ describe('the @oxidal/design-system package', () => {
         .split('\n')
         .filter(
           (line) =>
-            /from '[^']*\.(data|fixtures|demo)'/.test(line) &&
+            /from '[^']*\.(data|fixtures?|demo)'/.test(line) &&
             !/^import type /.test(line),
         );
       expect(bad).toEqual([]);
@@ -82,6 +82,7 @@ describe('the @oxidal/design-system package', () => {
 
   it('does not export demos', () => {
     expect(resolve('./patterns/tone3000.demo')).toBeNull();
+    expect(resolve('./patterns/moment.fixture')).toBeNull();
     expect(resolve('./widgets/scene-editor.demo')).toBeNull();
   });
 });

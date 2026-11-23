@@ -18,8 +18,8 @@ const db = (n: number) =>
   `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n).toFixed(1)} dB`;
 
 /**
- * Even out all: one button that brings every preset and scene to the same
- * loudness, so switching never jumps. Only new or changed presets are measured
+ * Even out all: measures a reference riff through every preset and scene
+ * and applies a stored loudness correction. Only new or changed presets are measured
  * again. Hidden on a daemon without calibration.
  * @see docs/audio.md
  */
@@ -121,24 +121,6 @@ export function EvenOut({ connected }: { connected: boolean }) {
         </>
       ) : (
         <>
-          <Caption>{summary}</Caption>
-          {spread != null && (
-            <>
-              <p>Loudest to quietest: {spread.toFixed(1)} dB</p>
-              <PresetLoudnessChart presets={presets} target={target_lufs} />
-              <Caption>Estimated LUFS after stored level corrections.</Caption>
-            </>
-          )}
-          <details className="grid gap-1 text-sm [&>summary]:min-h-touch">
-            <summary>How it works</summary>
-            <Caption>
-              Plays a built-in riff through each new or changed preset and scene
-              at Oxidal's fixed factory level for about four seconds, silently,
-              then puts back what you were playing. Your guitar profile does not
-              change the result. Oxidal chooses a reachable common level within
-              its correction range. Boost remains a separate control.
-            </Caption>
-          </details>
           {entries.length > 0 && (
             <ActionRow>
               <Button variant="outline" onClick={() => setDetails((v) => !v)}>
@@ -160,6 +142,29 @@ export function EvenOut({ connected }: { connected: boolean }) {
               </Button>
             </ActionRow>
           )}
+          <Caption>{summary}</Caption>
+          {spread != null && (
+            <>
+              <p>Loudest to quietest: {spread.toFixed(1)} dB</p>
+              <PresetLoudnessChart presets={presets} target={target_lufs} />
+              <Caption>Estimated LUFS after stored level corrections.</Caption>
+            </>
+          )}
+          <details className="grid gap-1 text-sm [&>summary]:min-h-touch">
+            <summary>How it works</summary>
+            <Caption>
+              Plays a built-in riff through each new or changed preset and scene
+              at Oxidal's fixed factory level for about four seconds, silently,
+              then puts back what you were playing. Measurements follow the Mono
+              or Stereo output setting. Changing it requires measuring again.
+              Your guitar profile does not change the result. Oxidal chooses a
+              reachable common level within its correction range. Boost remains
+              a separate control. This is a reference-riff estimate; playing
+              dynamics and long effect tails can still change perceived
+              loudness.
+            </Caption>
+          </details>
+
           {progress.total > 0 &&
             !progress.error &&
             !progress.failed?.length && (

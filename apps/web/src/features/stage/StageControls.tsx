@@ -79,7 +79,7 @@ export function StageControls({
     >
       <Button
         variant={muted ? 'destructive' : grouped ? 'ghost' : 'outline'}
-        size={grouped ? 'sm' : 'md'}
+        size={compact ? 'md' : grouped ? 'sm' : 'md'}
         className={grouped ? 'min-w-touch px-2' : undefined}
         aria-label={muted ? 'Muted' : 'Mute'}
         title={muted ? 'Unmute output' : 'Mute output'}
@@ -100,7 +100,7 @@ export function StageControls({
       </Button>
       <Button
         variant={protect ? 'default' : grouped ? 'ghost' : 'outline'}
-        size={grouped ? 'sm' : 'md'}
+        size={compact ? 'md' : grouped ? 'sm' : 'md'}
         className={grouped ? 'min-w-touch px-2' : undefined}
         aria-label={protect ? 'Protected' : 'Protect'}
         aria-pressed={!!protect}

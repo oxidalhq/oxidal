@@ -670,6 +670,15 @@ impl HostSignal {
     pub fn output(&mut self, left: &mut [f32], right: &mut [f32]) {
         if self.reference.active() {
             // Calibration is silent: measure the rig, send nothing to the speakers.
+            // Measure the same channel sum the player hears. Master and venue
+            // correction remain outside preset matching. @see docs/audio.md
+            if self.levels.mono {
+                for (l, r) in left.iter_mut().zip(right.iter_mut()) {
+                    let sum = (*l + *r) * 0.5;
+                    *l = sum;
+                    *r = sum;
+                }
+            }
             self.reference.measure(left, right);
             left.fill(0.0);
             right.fill(0.0);
@@ -1018,6 +1027,40 @@ mod host_tests {
             .validate()
             .is_err()
         );
+    }
+    #[test]
+    fn reference_measures_the_audible_mono_fold() {
+        let measure = |mono, right_gain: f32| {
+            let mut signal = HostSignal::new(
+                48000,
+                true,
+                HostLevels {
+                    mono,
+                    ..HostLevels::default()
+                },
+            );
+            signal.command(HostUtility::Reference {
+                enabled: true,
+                peak_db: -12.0,
+            });
+            for block in 0..2250 {
+                let (mut l, mut r) = ([0.0; 64], [0.0; 64]);
+                signal.input(&mut l, &mut r);
+                for i in 0..64 {
+                    l[i] = ((block * 64 + i) as f32 * std::f32::consts::TAU * 440.0 / 48000.0)
+                        .sin()
+                        * 0.2;
+                    r[i] = l[i] * right_gain;
+                }
+                signal.output(&mut l, &mut r);
+                assert!(l.iter().chain(&r).all(|&v| v == 0.0));
+            }
+            signal.state().reference.unwrap().lufs
+        };
+        let stereo = measure(false, 0.0).unwrap();
+        let mono = measure(true, 0.0).unwrap();
+        assert!((stereo - mono - 3.0103).abs() < 0.05);
+        assert!(measure(true, -1.0).is_none());
     }
     #[test]
     fn the_reference_replaces_the_guitar_measures_the_rig_and_stays_silent() {

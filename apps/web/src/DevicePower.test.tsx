@@ -82,21 +82,16 @@ it('does not power off if a network change became pending after opening the sect
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
-it('refuses a helper without guarded-power support before sending a power command', async () => {
+it('explains an outdated helper before offering power commands', async () => {
   vi.mocked(deviceNetwork).mockResolvedValue({
     ...ready,
     capabilities: undefined,
   });
   render(<DevicePower connected />);
-  await waitFor(() =>
-    expect(
-      screen.getByRole('button', { name: 'Restart device' }),
-    ).toBeEnabled(),
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Restart device' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm restart' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent(
-    'guarded power controls',
-  );
-  expect(vi.mocked(deviceNetwork).mock.calls).toEqual([[], []]);
+  await screen.findByText(/Restart and shutdown need a device-service update/);
+  expect(screen.getByRole('button', { name: 'Restart device' })).toBeDisabled();
+  expect(
+    screen.getByRole('button', { name: 'Shut down device' }),
+  ).toBeDisabled();
+  expect(vi.mocked(deviceNetwork).mock.calls).toEqual([[]]);
 });

@@ -16,7 +16,7 @@ const toggleVariants = cva(
   {
     variants: {
       size: {
-        sm: 'h-9 px-3 text-sm',
+        sm: 'h-[max(36px,2.25rem)] px-3 text-sm',
         md: 'min-h-touch px-4 text-sm',
         lg: 'min-h-13 px-5 text-md',
         icon: 'size-touch p-0',
@@ -35,6 +35,7 @@ export function Toggle({
   return (
     <TogglePrimitive.Root
       data-slot="toggle"
+      data-size={size ?? 'md'}
       className={cn(toggleVariants({ size }), className)}
       {...props}
     />
@@ -67,6 +68,7 @@ export function ToggleGroupItem({
   return (
     <ToggleGroupPrimitive.Item
       data-slot="toggle-group-item"
+      data-size={size ?? 'md'}
       className={cn(toggleVariants({ size }), className)}
       {...props}
     />

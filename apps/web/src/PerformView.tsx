@@ -675,7 +675,7 @@ export function PerformView({
                   'group grid min-w-0 content-start gap-0.5 rounded-md p-2 text-left';
                 const content = (
                   <>
-                    <span className="small-caps text-xs text-muted-foreground">
+                    <span className="text-xs small-caps text-muted-foreground">
                       {s.label}
                     </span>
                     <span className="font-mono text-lg font-semibold tabular-nums group-data-[warn]:text-brand [&>small]:ml-1 [&>small]:text-xs">

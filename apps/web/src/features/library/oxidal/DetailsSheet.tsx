@@ -27,6 +27,7 @@ import {
   sceneGuide,
   type SoundItem,
 } from './oxidalSounds.model';
+import { SoundReferences } from './SoundReferences';
 import { ToneLink } from './ToneLink';
 import type { OxidalSounds } from './useOxidalSounds';
 
@@ -140,6 +141,7 @@ export function SoundDetails({
         </Button>
       </ActionRow>
       {item.meta.inspiration && <p>{item.meta.inspiration}</p>}
+      <SoundReferences id={item.recipe?.id} description={item.description} />
       <section aria-label="How to play it">
         <h3>How to play it</h3>
         {item.meta.performance && <p>{item.meta.performance}</p>}

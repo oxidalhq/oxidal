@@ -396,7 +396,9 @@ it('reports native engines separately from actual blocks and A2 quality', async 
 it('keeps internal split, merge and gain routing out of the player', async () => {
   setup('mine', [], false, true);
 
-  await screen.findByRole('button', { name: /^TONE3000 (?:amp|lv2)$/i });
+  await screen.findByRole('button', {
+    name: /^TONE3000 TONE3000 · Preset$/i,
+  });
   expect(screen.queryByText('Merge · L')).not.toBeInTheDocument();
   expect(screen.queryByText('Merge · R')).not.toBeInTheDocument();
   expect(screen.queryByText('Input 1')).not.toBeInTheDocument();

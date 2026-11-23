@@ -7,6 +7,7 @@ import type {
   SceneNativeBypass,
   SceneNativeControl,
 } from '../../generated/contract';
+import { gearLabel } from '../../lib/gearLabel';
 import { lv2Control } from '../../lv2Control';
 import { oxidalEffectControls } from '../../oxidalEffectLabels';
 import {
@@ -368,7 +369,17 @@ export function mixedRigViewModel({
         : n.kind === 'lv2'
           ? (plugin?.pluginUri.split(/[/#]/).pop() ?? 'Effect')
           : 'Mix');
-    const gear = role === 'amp' ? 'amp' : role === 'cab' ? 'cab' : '';
+    const knownGears = [
+      ...new Set(Object.values(gears[n.instance ?? ''] ?? {})),
+    ];
+    const gear =
+      role === 'amp' || role === 'cab'
+        ? role
+        : knownGears.length === 1
+          ? knownGears[0]!
+          : knownGears.includes('amp') && knownGears.includes('cab')
+            ? 'full-rig'
+            : '';
     // LV2 effects and mix points are named by plugin URI/label, not a gear type.
     const hint = `${label} ${plugin?.pluginUri ?? ''} ${n.kind === 'merge' ? 'mix' : ''}`;
     return {
@@ -379,6 +390,10 @@ export function mixedRigViewModel({
         id: n.id,
         label,
         kind: blockKind(gear, hint),
+        caption:
+          n.kind === 'tone3000'
+            ? `TONE3000 · ${gear ? gearLabel(gear) : 'Preset'}`
+            : undefined,
         // A bypass control value of 1 means bypassed; branches report enabled.
         on: branch ? branch.enabled : bypass?.value !== 1,
         face: createElement(GearIcon, { gear, name: hint }),
@@ -527,12 +542,16 @@ export function mixedRigViewModel({
         const name =
           enabled?.label.replace(/(?: · (?:left|right))? · enabled$/, '') ??
           'Block';
-        const gear = gears[instance]?.[block.id] ?? '';
+        const assigned = state.control?.models
+          ?.find((row) => row.node === n.id)
+          ?.assignments.some((assignment) => assignment.target === block.id);
+        const gear = assigned ? '' : (gears[instance]?.[block.id] ?? '');
         return {
           // Lanes reuse block ids; the lane prefix keeps selection to one tile.
           id: laneBlockId(n.id, block.id),
           label: name,
           kind: blockKind(gear, name),
+          caption: `${assigned ? 'NAM / IR' : 'TONE3000'} · ${gear ? gearLabel(gear) : 'Model'}`,
           on: enabled?.value !== 0,
           face: createElement(GearIcon, { gear, name }),
         };
@@ -653,19 +672,7 @@ export function mixedRigViewModel({
           })(),
         }
       : null;
-  const routeIds = stepIds(fullRoute ?? []);
-  /** The canvas edits the route; a scene preset while its scene lanes are a
-   * top-level split, with effects ahead of, inside and after them, and no
-   * TONE3000 block but the scenes' tones. */
-  const editable =
-    !!fullRoute &&
-    (!sceneBranchIds.length ||
-      (sceneAt >= 0 &&
-        routeIds.every(
-          (id) =>
-            sceneBranchIds.includes(id) ||
-            nodes.find((n) => n.id === id)?.kind !== 'tone3000',
-        )));
+  const editable = !!fullRoute && (!sceneBranchIds.length || sceneAt >= 0);
   /** What the one chain renderer draws: the route, or for any other shape the
    * graph folded into paths for drawing only. */
   const canvasRoute: IdStep[] | null = matching?.manifest.oxidal

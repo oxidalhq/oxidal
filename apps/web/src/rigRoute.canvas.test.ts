@@ -518,3 +518,54 @@ it('moves an effect into and out of the scene lanes past their tones', () => {
     [{ node: 'comp', symbol: 'level', value: 1 }],
   ]);
 });
+
+it('adds and removes a TONE3000 capture around scene lanes without losing their resources', () => {
+  const document = scenes('cut');
+  const original = readRoute(document, [plugin], {});
+  const preset = {
+    sha256: 'f'.repeat(64),
+    name: 'New capture',
+    size_bytes: 123,
+  } as Preset;
+  const capture: NativeDraft = {
+    id: 'added-capture',
+    kind: 'native',
+    name: 'New capture',
+    preset,
+    source: { kind: 'original', preset: preset.sha256 },
+  };
+  const route = routeInsertAt(
+    original,
+    { split: null, path: 0, index: 0 },
+    capture,
+  );
+  const published = buildSceneRoute(document, route);
+  const next: RigDocument = {
+    ...document,
+    manifest: JSON.parse(published.manifest_json),
+  };
+  expect(validator(next.manifest), JSON.stringify(validator.errors)).toBe(true);
+  expect(readScenes(next.manifest)).toEqual(readScenes(document.manifest));
+  const instance = next.manifest.tone3000.instances.find(
+    (n) => n.id === capture.id,
+  )!;
+  expect(instance.profile).toBe(
+    document.manifest.tone3000.instances[0]!.profile,
+  );
+  expect(published.resources[instance.preset]).toEqual(capture.source);
+  expect(new Set(next.manifest.resources.map((r) => r.id)).size).toBe(
+    next.manifest.resources.length,
+  );
+  const removed = JSON.parse(
+    buildSceneRoute(
+      next,
+      routeRemove(readRoute(next, [plugin], {}), capture.id),
+    ).manifest_json,
+  );
+  expect(removed.tone3000.instances).toEqual(
+    document.manifest.tone3000.instances,
+  );
+  expect(chainRoute(removed.oxidal.graph)).toEqual(
+    chainRoute(document.manifest.oxidal!.graph),
+  );
+});

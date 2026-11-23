@@ -101,7 +101,7 @@ for (const format of ['nam', 'ir'] as const) {
     }
     await page.goto('/#rig');
     await page
-      .getByRole('button', { name: /^Starting capture Tone block/ })
+      .getByRole('button', { name: /^Starting capture NAM \/ IR · Model/ })
       .click();
     const stepper = page.getByRole('group', {
       name: `Try another ${gear} model`,
@@ -191,7 +191,9 @@ test('native model stepper identifies the embedded starting capture it cannot re
     await route.fulfill({ json: audio });
   });
   await page.goto('/#rig');
-  await page.getByRole('button', { name: /^Embedded amp Tone block/ }).click();
+  await page
+    .getByRole('button', { name: /^Embedded amp TONE3000 · Model/ })
+    .click();
   const stepper = page.getByRole('group', {
     name: 'Try another capture model',
   });
@@ -202,4 +204,105 @@ test('native model stepper identifies the embedded starting capture it cannot re
   await stepper.getByRole('button', { name: 'Next model' }).click();
   await expect(stepper).toContainText('Local amp');
   await expect(back).toBeDisabled();
+});
+
+test('native global controls stay compact on desktop and phone', async ({
+  page,
+  request,
+}, testInfo) => {
+  const baseline: AudioState = await (
+    await request.get('/api/v1/audio')
+  ).json();
+  const audio: AudioState = {
+    ...baseline,
+    phase: 'running',
+    preset_name: 'Control layout',
+    models: [],
+    controls: [
+      {
+        target: 'inputLevel',
+        label: 'Input level',
+        display: '0.0 dB',
+        value: 0.5,
+        toggle: false,
+      },
+      {
+        target: 'toneBass',
+        label: 'Bass',
+        display: '5.0',
+        value: 0.5,
+        toggle: false,
+      },
+      {
+        target: 'toneMid',
+        label: 'Middle',
+        display: '5.0',
+        value: 0.5,
+        toggle: false,
+      },
+      {
+        target: 'toneTreble',
+        label: 'Treble',
+        display: '5.0',
+        value: 0.5,
+        toggle: false,
+      },
+      {
+        target: 'outputLevel',
+        label: 'Output level',
+        display: '-1.9 dB',
+        value: 0.46,
+        toggle: false,
+      },
+      {
+        target: 'toneEqEnabled',
+        label: 'Tone stack',
+        display: 'On',
+        value: 1,
+        toggle: true,
+      },
+    ],
+  };
+  await page.route('**/api/v1/audio', (route) =>
+    route.fulfill({ json: audio }),
+  );
+  for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 393, height: 852 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/#rig');
+    const controls = page.locator('[aria-label="Sounding controls"]');
+    await expect(controls).toBeVisible();
+    const input = controls.getByRole('button', {
+      name: /Adjust sounding Input level/,
+    });
+    const box = await input.boundingBox();
+    expect(box!.width).toBeLessThan(viewport.width / 2);
+    await expect(controls.getByRole('button')).toHaveCount(6);
+    await expect(controls.locator('input[type="range"]')).toHaveCount(0);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    const actionSizes = await page
+      .getByRole('group', { name: 'Rig actions', exact: true })
+      .getByRole('button')
+      .evaluateAll((buttons) =>
+        buttons.map((button) => {
+          const { width, height } = button.getBoundingClientRect();
+          return { width, height };
+        }),
+      );
+    expect(new Set(actionSizes.map(({ height }) => height)).size).toBe(1);
+    for (const { width, height } of actionSizes) {
+      expect(width).toBeGreaterThanOrEqual(44);
+      expect(height).toBeGreaterThanOrEqual(44);
+    }
+    await page.screenshot({
+      path: testInfo.outputPath(`native-controls-${viewport.width}.png`),
+      fullPage: true,
+    });
+  }
 });

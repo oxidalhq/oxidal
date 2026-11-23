@@ -231,9 +231,7 @@ export function installedKey(
 }
 
 export function roleLabel(role: FactoryRole): string {
-  return isFactoryVoice(role)
-    ? factoryVoices[role].character
-    : `${role[0]!.toUpperCase()}${role.slice(1)} amp`;
+  return factoryVoices[role].character;
 }
 
 /** Which of the recipe's roles still have no capture on this unit. */

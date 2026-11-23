@@ -904,6 +904,8 @@ export function useMixedRigSession({
       if (!opened || editing) return;
       clearEdit();
       setEditing(true);
+      generation.current++;
+      sending.current = true;
       setError('');
       try {
         const rate =
@@ -957,8 +959,25 @@ export function useMixedRigSession({
             origin === 'mine' && manifest.id === opened.manifest.id,
           ),
         );
+        // Keep the current canvas visible during preparation, then install the
+        // new document and readback together. Select an inserted block immediately.
+        await loadDocument(published.revision);
+        const previousIds = new Set(
+          opened.manifest.oxidal?.graph.nodes.map((n) => n.id),
+        );
+        const added = published.manifest.oxidal?.graph.nodes.find(
+          (n) =>
+            !previousIds.has(n.id) &&
+            (n.kind === 'lv2' || n.kind === 'tone3000'),
+        );
         await playScenes(published.revision);
-        accept(await rigAudioState());
+        const next = await rigAudioState();
+        setDocument(published);
+        setSelection({
+          revision: published.revision,
+          node: added?.id ?? view?.selected?.id ?? '',
+        });
+        accept(next);
         // The daemon puts the new revision in the earlier one's place (7.2).
         if (origin !== 'mine')
           setCopyOnEdit({
@@ -970,6 +989,8 @@ export function useMixedRigSession({
         if (alive.current)
           failEdit(cause, 'change the preset', () => void run());
       } finally {
+        generation.current++;
+        sending.current = false;
         if (alive.current) setEditing(false);
       }
     };

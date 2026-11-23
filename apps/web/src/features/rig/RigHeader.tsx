@@ -132,7 +132,6 @@ export function RigHeader({ rig, vm }: RigViewProps) {
           className="flex items-center gap-1"
         >
           <Button
-            size="sm"
             className="max-sm:w-touch max-sm:px-0"
             aria-label="Perform view"
             title="Scene pads and effect switches for playing live"
@@ -144,7 +143,6 @@ export function RigHeader({ rig, vm }: RigViewProps) {
           </Button>
           <Button
             variant="outline"
-            size="sm"
             className="max-sm:w-touch max-sm:px-0"
             aria-label="Save copy"
             title={

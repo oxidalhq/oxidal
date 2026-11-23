@@ -675,7 +675,7 @@ export function GuitarSwitch({
       }
     >
       {layout === 'compact' ? (
-        <span className="small-caps text-xs font-semibold text-muted-foreground">
+        <span className="text-xs font-semibold small-caps text-muted-foreground">
           Guitar
         </span>
       ) : (

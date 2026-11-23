@@ -144,3 +144,18 @@ while open and puts the previous monitoring back on close, can fill the screen,
 has a dark look for the stage and a black-on-white look for daylight, and a
 reference pitch from 430 to 450 Hz. On E-paper nothing animates. The
 tuner stays available under Protect.
+
+## Even out measurement boundary
+
+Even out measures its built-in reference riff before master volume and venue EQ,
+with the same Mono or Stereo fold as playback. Measurements from an older
+algorithm or the other channel mode need remeasurement. A scene's correction
+replaces an older whole-preset measurement; it is not added to it. The chart
+shows the predicted result of stored corrections, not a second measurement of
+the corrected output. An unmeasured or changed preset still needs Even out.
+
+The riff is a repeatable comparison, not a guarantee for every guitar, playing
+style or long effect tail. The mono measurement regression checks one-sided and
+phase-opposed signals, because summing channels can change loudness. See
+[EBU Tech 3343](https://tech.ebu.ch/docs/tech/tech3343v4_1.pdf) for the relationship
+between downmix coefficients, channel correlation and resulting loudness.

@@ -151,7 +151,7 @@ it('keeps bypass in the block detail, opens a single model inspector and retains
     screen.queryByRole('button', { name: 'Change Amp…' }),
   ).not.toBeInTheDocument();
   fireEvent.click(
-    screen.getByRole('button', { name: /^Amp (?:amp|Tone block) 0 dB$/i }),
+    screen.getByRole('button', { name: /^Amp TONE3000 · Model 0 dB$/i }),
   );
   expect(screen.getAllByRole('button', { name: 'Change Amp…' })).toHaveLength(
     1,
@@ -215,7 +215,7 @@ it('restores valid block context across navigation but never carries it into a d
   );
   fireEvent.click(
     await screen.findByRole('button', {
-      name: /^Amp (?:amp|Tone block) 0 dB$/i,
+      name: /^Amp TONE3000 · Model 0 dB$/i,
     }),
   );
   expect(screen.getByRole('button', { name: 'Change Amp…' })).toBeVisible();
@@ -244,7 +244,7 @@ it('restores valid block context across navigation but never carries it into a d
       <LiveRig {...props} />
     </WorkspaceMemory.Provider>,
   );
-  await screen.findByRole('button', { name: /^Amp (?:amp|Tone block) 0 dB$/i });
+  await screen.findByRole('button', { name: /^Amp TONE3000 · Model 0 dB$/i });
   expect(
     screen.queryByRole('button', { name: 'Change Amp…' }),
   ).not.toBeInTheDocument();
@@ -444,7 +444,7 @@ it('edits a desktop block using the shared field and the native gesture cursor',
   const { container } = show();
   fireEvent.click(
     await screen.findByRole('button', {
-      name: /^Amp (?:amp|Tone block) 0 dB$/i,
+      name: /^Amp TONE3000 · Model 0 dB$/i,
     }),
   );
   expect(
@@ -516,7 +516,7 @@ it('opens the shared phone block sheet with a scrim and commits its slider throu
     const { container } = show();
     fireEvent.click(
       await screen.findByRole('button', {
-        name: /^Amp (?:amp|Tone block) 0 dB$/i,
+        name: /^Amp TONE3000 · Model 0 dB$/i,
       }),
     );
     const sheet = await screen.findByRole('dialog', { name: 'Amp' });

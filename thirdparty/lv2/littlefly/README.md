@@ -1,13 +1,12 @@
 # LittleFly.lv2
-Overdrive/Distortion pedal simulation
 
+Overdrive/Distortion pedal simulation
 
 ![LittleFly](https://github.com/brummer10/LittleFly.lv2/raw/master/LittleFly.png)
 
-
 ## Features
 
-- Overdrive pedal simulation. 
+- Overdrive pedal simulation.
 
 ## Dependencys
 

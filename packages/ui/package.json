@@ -15,6 +15,7 @@
     "./patterns/dock-context": "./src/patterns/dock-context.ts",
     "./patterns/*": "./src/patterns/*.tsx",
     "./patterns/*.demo": null,
+    "./patterns/*.fixture": null,
     "./lib/*": "./src/lib/*.ts"
   },
   "scripts": {

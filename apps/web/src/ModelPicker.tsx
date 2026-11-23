@@ -118,6 +118,7 @@ export function ModelPicker({
   allowedFormat,
   onClose,
   onAudition,
+  onTone,
   comparison,
   inline = false,
   onSignIn,
@@ -140,9 +141,11 @@ export function ModelPicker({
   allowedFormat?: 'nam' | 'ir';
   onClose: () => void;
   onAudition: (asset: string) => Promise<void>;
+  /** Build a new host block from a selected TONE3000 capture. */
+  onTone?: (tone: number, model: number, name: string) => Promise<string>;
 }) {
   const [source, setSource] = useState<'all' | 'tone3000' | 'local'>(
-    intent === 'download' ? 'tone3000' : 'all',
+    intent === 'download' || onTone ? 'tone3000' : 'all',
   );
   const [view, setView] = useState(readView);
   function chooseView(next: 'pictures' | 'list') {
@@ -206,7 +209,8 @@ export function ModelPicker({
     };
   }, []);
   const showRemote = source !== 'local';
-  const showLocal = source === 'local' || (source === 'all' && !tone);
+  const showLocal =
+    !onTone && (source === 'local' || (source === 'all' && !tone));
   useEffect(() => {
     if (!showLocal) return;
     const controller = new AbortController();
@@ -273,13 +277,15 @@ export function ModelPicker({
     if (!tone || locked) return;
     const controller = new AbortController();
     download.current = controller;
-    setBusy('download');
+    setBusy(onTone ? 'assign' : 'download');
     setError('');
     try {
-      const asset = await stageTone3000(tone.id, id, controller.signal);
+      const asset = onTone
+        ? { id: await onTone(tone.id, id, tone.title) }
+        : await stageTone3000(tone.id, id, controller.signal);
       if (controller.signal.aborted || !alive.current) return;
       setBusy('assign');
-      await onAudition(asset.id);
+      if (!onTone) await onAudition(asset.id);
       if (alive.current) {
         setChoice({
           asset: asset.id,
@@ -373,7 +379,7 @@ export function ModelPicker({
             {intent === 'add' ? 'Add to' : 'Replace'} {name}
           </p>
         )}
-        {intent !== 'download' && (
+        {intent !== 'download' && !onTone && (
           <SegmentedControl
             aria-label="Model source"
             value={source}

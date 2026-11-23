@@ -21,7 +21,7 @@ import {
   FormGrid,
 } from '@oxidal/design-system/components/form-layout';
 import { RelativeAdjustment as TouchAdjust } from '@oxidal/design-system/components/number-field';
-import { InlineFader, Slider } from '@oxidal/design-system/components/slider';
+import { Slider } from '@oxidal/design-system/components/slider';
 import { Switch } from '@oxidal/design-system/components/switch';
 import { Caption, Title } from '@oxidal/design-system/components/text';
 import { Toggle } from '@oxidal/design-system/components/toggle';
@@ -237,8 +237,6 @@ export function LiveRig({
   } | null>(null);
   const adjustment = useRef<EditQueue<AudioState> | null>(null);
   const latestValue = useRef(0);
-  // Set by a fader drag so the row's trailing click does not open the dialog.
-  const dragged = useRef(false);
   const alive = useRef(false);
   const sending = useRef(false);
   const generation = useRef(0);
@@ -875,7 +873,7 @@ export function LiveRig({
           onClick={() => item && openAdjustment(item)}
         >
           <span className="sr-only">Adjust </span>
-          <span className="small-caps text-2xs text-muted-foreground min-[481px]:text-xs">
+          <span className="text-2xs small-caps text-muted-foreground min-[481px]:text-xs">
             {label}
           </span>{' '}
           <strong className="font-mono text-md leading-none font-medium tabular-nums group-data-inactive/knob:text-muted-foreground min-[481px]:text-xl">
@@ -945,11 +943,7 @@ export function LiveRig({
               id,
               label: blockName(c.label),
               kind,
-              caption: gear
-                ? gearLabel(gear)
-                : kind === 'other'
-                  ? 'Tone block'
-                  : undefined,
+              caption: `${model ? 'NAM / IR' : 'TONE3000'} · ${gear ? gearLabel(gear) : 'Model'}`,
               preview:
                 ['inputGain', 'outputGain']
                   .map(
@@ -1536,7 +1530,7 @@ export function LiveRig({
             aria-label="Preset actions"
             aria-haspopup="dialog"
             title="MIDI, Revert, Match level and appearance"
-            className="min-w-9 rounded-l-none border-l-current/35 px-2"
+            className="min-w-touch rounded-l-none border-l-current/35 px-2"
             disabled={disabled || !!draft || !!picker}
             onClick={() => setActionsOpen(true)}
           >
@@ -1544,7 +1538,6 @@ export function LiveRig({
           </Button>
         </div>
         <Toggle
-          size="sm"
           pressed={editingChain}
           onPressedChange={setEditingChain}
           disabled={disabled || !!draft}
@@ -2058,7 +2051,7 @@ export function LiveRig({
                   ))}
               </div>
               <div
-                className="grid border-t border-foreground"
+                className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
                 aria-label="Sounding controls"
               >
                 {state.controls
@@ -2069,9 +2062,9 @@ export function LiveRig({
                   )
                   .map((item) => (
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       type="button"
-                      className="live-value-trigger grid h-auto min-h-touch grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-2 gap-y-1 rounded-none border-b border-border px-0 py-2.5 text-left whitespace-normal data-toggle:items-center"
+                      className="live-value-trigger flex h-auto min-h-16 flex-col items-start gap-1 p-3 text-left whitespace-normal"
                       aria-label={`Adjust sounding ${shortControlLabel(item.label)} ${item.display}`}
                       data-toggle={item.toggle || undefined}
                       key={item.target}
@@ -2079,10 +2072,6 @@ export function LiveRig({
                       aria-haspopup={item.toggle ? undefined : 'dialog'}
                       aria-pressed={item.toggle ? item.value === 1 : undefined}
                       onClick={() => {
-                        if (dragged.current) {
-                          dragged.current = false;
-                          return;
-                        }
                         setTarget(item.target);
                         setDraft(null);
                         if (item.toggle)
@@ -2093,34 +2082,9 @@ export function LiveRig({
                       <span className="min-w-0 text-base wrap-anywhere">
                         {shortControlLabel(item.label)}
                       </span>{' '}
-                      <strong className="text-right font-mono text-xl font-medium tabular-nums">
+                      <strong className="font-mono text-lg font-medium tabular-nums">
                         {item.display}
                       </strong>
-                      {!item.toggle && (
-                        <InlineFader
-                          value={
-                            draft?.target === item.target
-                              ? draft.value
-                              : item.value
-                          }
-                          dragging={draft?.target === item.target && !adjusting}
-                          disabled={disabled}
-                          onBegin={(value) => {
-                            dragged.current = true;
-                            setTarget(item.target);
-                            openAdjustment(item, true);
-                            latestValue.current = value;
-                            setDraft((old) => (old ? { ...old, value } : old));
-                            adjustment.current?.preview(value);
-                          }}
-                          onMove={(value) => {
-                            latestValue.current = value;
-                            setDraft((old) => (old ? { ...old, value } : old));
-                            adjustment.current?.preview(value);
-                          }}
-                          onEnd={(cancel) => void finishAdjustment(cancel)}
-                        />
-                      )}
                     </Button>
                   ))}
               </div>

@@ -4,7 +4,7 @@ The factory collection: 185 finished rigs authored by Oxidal, in **Library → O
 
 - Read-only examples: **Make my copy** puts an editable copy in **Mine**.
 - Search by name; filter by **Genre**, **Engine** and **Complexity**; group by genre or engine.
-- **Details** shows the description, inspiration, how to play it, scenes, chain, needs and load, and **Add to set list** once ready.
+- **Details** shows the description, inspiration, a listening guide, how to play it, scenes, chain, needs and load, and **Add to set list** once ready.
 
 ```mermaid
 flowchart LR
@@ -33,16 +33,16 @@ flowchart LR
 
 ## Recipe metadata
 
-| Field                 | Meaning                                                          |
-| --------------------- | ---------------------------------------------------------------- |
-| Genres                | One to three from a fixed list of 17.                            |
-| Techniques            | Routing and effect techniques, such as parallel routing or Hold. |
-| Era                   | Songbook sounds only: 80s, 90s, 2000s or Modern.                 |
-| Engine                | LV2 only, A2 Lite, A2 Full (TONE3000 tones) or Hybrid.           |
-| Complexity            | Simple, Layered or Complex.                                      |
-| Inspiration           | A style and an era. Never an artist, a band or a song.           |
-| Performance           | How the scenes are meant to be used live.                        |
-| Required packs, tones | Derived from the sound's blocks and voices.                      |
+| Field                 | Meaning                                                                                                                                     |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Genres                | One to three from a fixed list of 17.                                                                                                       |
+| Techniques            | Routing and effect techniques, such as parallel routing or Hold.                                                                            |
+| Era                   | Songbook sounds only: 80s, 90s, 2000s or Modern.                                                                                            |
+| Engine                | LV2 only, A2 Lite, A2 Full (TONE3000 tones) or Hybrid.                                                                                      |
+| Complexity            | Simple, Layered or Complex.                                                                                                                 |
+| Inspiration           | A style and an era. The separate listening guide may name an artist and song as a musical comparison, without claiming an exact recreation. |
+| Performance           | How the scenes are meant to be used live.                                                                                                   |
+| Required packs, tones | Derived from the sound's blocks and voices.                                                                                                 |
 
 | Engine   | Sounds |
 | -------- | ------ |
@@ -338,3 +338,14 @@ Earlier effects recipes and utility rigs.
 - [LV2 showcase](../apps/web/src/recipes/lv2Showcase.ts), [TONE3000 showcase](../apps/web/src/recipes/tone3000Showcase.ts), [Hybrid showcase](../apps/web/src/recipes/hybridShowcase.ts)
 - [Recipe metadata](../apps/web/src/factoryMetadata.ts)
 - [Appliance image setup](../os/README.md)
+
+## Listening review
+
+Selected presets now pair an artist and song with a specific feature to compare,
+such as muted attack, chorus movement or dotted repeats. These are editorial
+listening references, not claims about the artist's gear or an exact match to
+the recording. Other presets show their own sound description. Capture choices,
+guitar level, monitoring and performance all affect the result; the collection
+still needs owner listening and individual sound revisions. Older clean, crunch,
+heavy and bass roles now have explicit first-use TONE3000 downloads. Existing
+player-selected captures remain selected.

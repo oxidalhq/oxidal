@@ -122,7 +122,30 @@ for (const mode of ['default', 'stage', 'sunlight', 'epaper'] as const)
                   'button, input, select, textarea, summary, [role=slider]',
                 )) {
                   if (!element.checkVisibility()) continue;
-                  const rect = element.getBoundingClientRect();
+                  // Visually hidden file inputs delegate activation to a visible
+                  // button or label; they are not additional touch controls.
+                  if (
+                    element.matches('input[type=file]') &&
+                    (getComputedStyle(element).clip !== 'auto' ||
+                      getComputedStyle(element).clipPath !== 'none')
+                  )
+                    continue;
+                  let target: Element = element;
+                  // Radix slider interaction belongs to the full track band.
+                  if (element.matches('[role=slider]')) {
+                    const track = element.closest('[data-slot=slider-track]');
+                    if (track) target = track;
+                  }
+                  // Sound row titles use an absolute pseudo-element to make
+                  // the whole card clickable, apart from its explicit actions.
+                  const overlay = getComputedStyle(element, '::after');
+                  if (
+                    overlay.position === 'absolute' &&
+                    overlay.inset === '0px' &&
+                    element.closest('[data-slot=sound-row]')
+                  )
+                    target = element.closest('[data-slot=sound-row]')!;
+                  const rect = target.getBoundingClientRect();
                   if (!rect.width || !rect.height) continue;
                   const name = (
                     element.getAttribute('aria-label') ||

@@ -63,7 +63,12 @@ export function DevicePower({ connected }: { connected: boolean }) {
     }
   }
   const disabled =
-    !connected || !state?.available || !!state.pending || busy || Boolean(sent);
+    !connected ||
+    !state?.available ||
+    !state.capabilities?.guarded_power ||
+    !!state.pending ||
+    busy ||
+    Boolean(sent);
   return (
     <section aria-label="Device power">
       <DevicePowerView
@@ -92,6 +97,12 @@ export function DevicePower({ connected }: { connected: boolean }) {
                   <ArrowClockwise aria-hidden="true" /> Retry device controls
                 </Button>
               </div>
+            )}
+            {state?.available && !state.capabilities?.guarded_power && (
+              <p role="status">
+                Restart and shutdown need a device-service update on this unit.
+                The installed service does not support these power controls.
+              </p>
             )}
             {state?.pending && (
               <p role="status">Finish the pending network change first.</p>
