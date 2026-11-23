@@ -163,9 +163,8 @@ phase-opposed signals, because summing channels can change loudness. See
 [EBU Tech 3343](https://tech.ebu.ch/docs/tech/tech3343v4_1.pdf) for the relationship
 between downmix coefficients, channel correlation and resulting loudness.
 
-Calibration workers start with a process-only output mute before their first
-sample. It remains active during preset loading, between reference riffs and
-while measurement results are stored. Reference metering stays before that mute.
-Completing or cancelling the run clears the launch flag and starts the original
-rig in a fresh worker, restoring normal monitoring without saving a mute or
-changing the unit master level.
+Calibration uses a separate low-priority worker that renders the reference riff
+to memory. It never opens an audio or MIDI device, replaces the playing preset,
+or changes live master levels. Only one measurement runs at a time, paced below
+realtime. Cancellation kills and reaps that worker; live playback continues.
+Measurements use the saved preset and selected scene, not unsaved live edits.

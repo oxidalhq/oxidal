@@ -328,14 +328,6 @@ impl Owner {
                 .envs(self.media_dir.iter().map(|dir| ("OXIDAL_MEDIA_DIR", dir)))
                 .env("OXIDAL_PRESET_DIR", &root)
                 .env("OXIDAL_PROTECT", if self.protect.on() { "1" } else { "0" })
-                .env(
-                    "OXIDAL_MEASUREMENT_SILENT",
-                    if self.change.measurement_silent() {
-                        "1"
-                    } else {
-                        "0"
-                    },
-                )
                 .env("OXIDAL_QUALIFICATION_DATA", &data)
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())

@@ -501,14 +501,6 @@ impl Owner {
             tokio::process::Command::new(executable)
                 .envs(self.media_dir.iter().map(|dir| ("OXIDAL_MEDIA_DIR", dir)))
                 .env("OXIDAL_PROTECT", if self.protect.on() { "1" } else { "0" })
-                .env(
-                    "OXIDAL_MEASUREMENT_SILENT",
-                    if self.change.measurement_silent() {
-                        "1"
-                    } else {
-                        "0"
-                    },
-                )
                 .env("OXIDAL_BUNDLE_STORE", &root)
                 .env(
                     "OXIDAL_PRESET_DIR",

@@ -1,9 +1,4 @@
-//! Even out all: plays the built-in reference riff through every TONE3000
-//! preset and every scene of each preset with scenes, measures the loudness
-//! the rig makes of it, and keeps an offset per preset or scene so they all
-//! land at the same loudness. Measurements are cached by preset content, so a
-//! later run measures only what is new or changed. The run is silent (the host
-//! mutes its output while the riff plays) and puts back whatever was playing.
+//! Background reference rendering measures saved presets without changing live playback.
 use crate::{Shared, failure};
 use axum::{
     Json,
@@ -11,11 +6,7 @@ use axum::{
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
-use oxidal_audio::{
-    lifecycle::{AudioAction, AudioCommand, AudioPhase, StartAudio},
-    tools::HostUtility,
-};
-use oxidal_engine::protocol::{RigAudioAction, RigAudioCommand, SceneCommand, StartRig};
+use oxidal_engine::measurement::{Request, Target};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -161,7 +152,7 @@ pub enum CalibrationAction {
     Run,
     /// Measure every preset and scene again.
     RunAll,
-    /// Stop after the current measurement and put back what was playing.
+    /// Stop the background measurement; live playback stays unchanged.
     Cancel,
     /// Forget every measurement: all presets play at their own level again.
     Reset,
@@ -275,19 +266,6 @@ impl Store {
     }
 }
 
-/// Something to measure: a TONE3000 preset, or one scene of a preset with scenes.
-#[derive(Debug, Clone)]
-enum Target {
-    Tone3000 {
-        id: String,
-        owned: bool,
-    },
-    /// A preset with effects or scenes; `scene` is none for one without scenes.
-    Scene {
-        revision: String,
-        scene: Option<String>,
-    },
-}
 #[derive(Debug, Clone)]
 struct Item {
     key: String,
@@ -407,335 +385,90 @@ fn coverage_for(calibration: &Calibration, items: &[Item], mono: bool) -> Calibr
     coverage
 }
 
-async fn until(
-    what: &str,
-    timeout: Duration,
-    mut ready: impl FnMut() -> bool,
-) -> Result<(), String> {
-    let deadline = tokio::time::Instant::now() + timeout;
-    while !ready() {
-        if tokio::time::Instant::now() > deadline {
-            return Err(format!("{what} took too long"));
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-    Ok(())
-}
-async fn stop_native(shared: &Shared) -> Result<(), String> {
-    let s = shared.playback.snapshot();
-    if s.device_owned {
-        shared
-            .playback
-            .dispatch(AudioCommand {
-                session: s.session,
-                expected_revision: s.revision,
-                action: AudioAction::Stop,
-            })
-            .await?;
-        until(
-            "Stopping the TONE3000 preset",
-            Duration::from_secs(10),
-            || !shared.playback.snapshot().device_owned,
-        )
-        .await?;
-    }
-    Ok(())
-}
-async fn stop_rig(shared: &Shared) -> Result<(), String> {
-    let s = shared.rig_playback.snapshot();
-    if s.device_owned {
-        shared
-            .rig_playback
-            .dispatch(RigAudioCommand {
-                session: s.session,
-                expected_revision: s.revision,
-                action: RigAudioAction::Stop,
-            })
-            .await?;
-        until(
-            "Stopping the preset with scenes",
-            Duration::from_secs(10),
-            || !shared.rig_playback.snapshot().device_owned,
-        )
-        .await?;
-    }
-    Ok(())
-}
-async fn play_tone3000(
+/// A separate low-priority worker renders to memory, never the live audio device.
+async fn measure(
     shared: &Shared,
-    id: &str,
-    owned: bool,
+    target: Target,
     stream: &oxidal_audio::StreamConfig,
-) -> Result<(), String> {
-    stop_rig(shared).await?;
-    let s = shared.playback.snapshot();
-    let action = if s.configured.is_some() {
-        AudioAction::LoadPreset {
-            preset_id: id.into(),
-            owned,
-        }
-    } else {
-        AudioAction::Start {
-            settings: StartAudio {
-                midi: None,
-                stream: stream.clone(),
-                preset_id: id.into(),
-                owned,
-                draft: false,
-                working: None,
-            },
-        }
+) -> Result<f32, String> {
+    let _library = shared.library_access.read().await;
+    let executable = shared
+        .config
+        .rig_worker
+        .as_ref()
+        .ok_or("Background measurement worker unavailable")?;
+    let request = Request {
+        target,
+        stream: stream.clone(),
+        peak_db: FACTORY_REFERENCE_PEAK_DB,
+        seconds: MEASURE_SECONDS,
     };
-    shared
-        .playback
-        .dispatch(AudioCommand {
-            session: s.session,
-            expected_revision: s.revision,
-            action,
-        })
-        .await?;
-    until("Loading the preset", Duration::from_secs(20), || {
-        let s = shared.playback.snapshot();
-        s.phase == AudioPhase::Running
-            && s.configured
-                .as_ref()
-                .is_some_and(|c| c.preset_id == id && c.owned == owned)
-    })
-    .await
-}
-async fn play_scene(
-    shared: &Shared,
-    revision: &str,
-    scene: Option<&str>,
-    stream: &oxidal_audio::StreamConfig,
-) -> Result<(), String> {
-    let s = shared.rig_playback.snapshot();
-    let loaded = s.phase == AudioPhase::Running
-        && s.configured
-            .as_ref()
-            .is_some_and(|c| c.revision == revision);
-    if !loaded {
-        stop_native(shared).await?;
-        stop_rig(shared).await?;
-        let s = shared.rig_playback.snapshot();
-        shared
-            .rig_playback
-            .dispatch(RigAudioCommand {
-                session: s.session,
-                expected_revision: s.revision,
-                action: RigAudioAction::Start {
-                    settings: Box::new(StartRig {
-                        revision: revision.into(),
-                        stream: stream.clone(),
-                        recall: None,
-                        prepared: Vec::new(),
-                        midi: None,
-                    }),
-                },
-            })
-            .await?;
-        until(
-            "Loading the preset with scenes",
-            Duration::from_secs(30),
-            || {
-                let s = shared.rig_playback.snapshot();
-                s.phase == AudioPhase::Running && s.control.is_some()
-            },
-        )
-        .await?;
-    }
-    match scene {
-        Some(scene) => select_scene(shared, scene).await,
-        None => Ok(()),
-    }
-}
-async fn select_scene(shared: &Shared, scene: &str) -> Result<(), String> {
-    let s = shared.rig_playback.snapshot();
-    let control = s.control.ok_or("The preset with scenes is not running")?;
-    if control.scene.as_deref() != Some(scene) {
-        shared
-            .rig_playback
-            .dispatch(RigAudioCommand {
-                session: s.session,
-                expected_revision: s.revision,
-                action: RigAudioAction::Scene {
-                    command: SceneCommand {
-                        session: control.session,
-                        expected_revision: control.revision,
-                        scene: scene.into(),
-                        release_ms: None,
-                        native_bypass_preview: None,
-                    },
-                },
-            })
-            .await?;
-    }
-    until("Switching scene", Duration::from_secs(10), || {
-        shared
-            .rig_playback
-            .snapshot()
-            .control
-            .is_some_and(|c| c.scene.as_deref() == Some(scene) && !c.scene_transitioning)
-    })
-    .await
-}
-/// Sends a host utility to whichever engine plays.
-async fn host(shared: &Shared, command: HostUtility) -> Result<(), String> {
-    let native = shared.playback.snapshot();
-    if native.phase == AudioPhase::Running {
-        return shared
-            .playback
-            .dispatch(AudioCommand {
-                session: native.session,
-                expected_revision: native.revision,
-                action: AudioAction::HostUtility { command },
-            })
-            .await
-            .map(|_| ());
-    }
-    let rig = shared.rig_playback.snapshot();
-    shared
-        .rig_playback
-        .dispatch(RigAudioCommand {
-            session: rig.session,
-            expected_revision: rig.revision,
-            action: RigAudioAction::HostUtility { command },
-        })
-        .await
-        .map(|_| ())
-}
-fn reading(shared: &Shared) -> Option<oxidal_audio::reference::ReferenceReading> {
-    let native = shared.playback.snapshot();
-    let telemetry = if native.phase == AudioPhase::Running {
-        shared.playback.telemetry().map(|t| t.0)
-    } else {
-        shared.rig_playback.snapshot().telemetry
-    };
-    telemetry?.monitoring?.reference
-}
-/// Plays the riff into whatever is loaded and returns its loudness.
-async fn measure(shared: &Shared, peak_db: f32) -> Result<f32, String> {
-    // The riff is measured at the outputs; a playing track would be mixed in.
-    if shared.player.playing().await {
-        return Err("Pause the backing track to calibrate".into());
-    }
-    if shared.captures.busy().await {
-        return Err("Finish the recording or reamp to calibrate".into());
-    }
-    host(
-        shared,
-        HostUtility::Reference {
-            enabled: true,
-            peak_db,
-        },
+    render(
+        executable,
+        &shared.config.preset_dir,
+        &request,
+        &shared.calibration.cancel,
     )
-    .await?;
-    let measured = until("Measuring", Duration::from_secs(15), || {
-        reading(shared).is_some_and(|r| r.seconds >= MEASURE_SECONDS)
-    })
     .await
-    .and_then(|()| {
-        reading(shared)
-            .and_then(|r| r.lufs)
-            .filter(|v| v.is_finite())
-            .ok_or_else(|| "The preset made no sound from the reference riff".to_string())
-    });
-    // Always back to the guitar, even when the measurement failed.
-    let stopped = host(
-        shared,
-        HostUtility::Reference {
-            enabled: false,
-            peak_db,
-        },
-    )
-    .await;
-    let lufs = measured?;
-    stopped?;
-    Ok(lufs)
 }
 
-/// What was playing before the run, to put back afterwards.
-#[derive(Debug)]
-enum Playing {
-    Nothing,
-    Tone3000 {
-        id: String,
-        owned: bool,
-    },
-    Scenes {
-        start: Box<StartRig>,
-        scene: Option<String>,
-    },
-}
-async fn restore(shared: &Shared, playing: Playing, stream: &oxidal_audio::StreamConfig) {
-    let result = match playing {
-        Playing::Nothing => {
-            async {
-                stop_native(shared).await?;
-                stop_rig(shared).await
-            }
+async fn render(
+    executable: &std::path::Path,
+    root: &std::path::Path,
+    request: &Request,
+    cancel: &AtomicBool,
+) -> Result<f32, String> {
+    use std::process::Stdio;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut bytes = serde_json::to_vec(request).map_err(|e| e.to_string())?;
+    bytes.push(b'\n');
+    let mut child = tokio::process::Command::new(executable)
+        .arg("--measure-loudness")
+        .env("OXIDAL_PRESET_DIR", root)
+        .env("OXIDAL_BUNDLE_STORE", root.join("bundles"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    let mut input = child.stdin.take().ok_or("Measurement input unavailable")?;
+    let mut output = child
+        .stdout
+        .take()
+        .ok_or("Measurement output unavailable")?
+        .take(2049);
+    let operation = async {
+        input.write_all(&bytes).await.map_err(|e| e.to_string())?;
+        drop(input);
+        let mut reply = Vec::new();
+        output
+            .read_to_end(&mut reply)
             .await
+            .map_err(|e| e.to_string())?;
+        let status = child.wait().await.map_err(|e| e.to_string())?;
+        if !status.success() || reply.len() > 2048 {
+            return Err("Background measurement failed".into());
         }
-        Playing::Tone3000 { id, owned } => {
-            async {
-                stop_native(shared).await?;
-                play_tone3000(shared, &id, owned, stream).await
-            }
-            .await
-        }
-        Playing::Scenes { start, scene } => {
-            async {
-                stop_native(shared).await?;
-                stop_rig(shared).await?;
-                let s = shared.rig_playback.snapshot();
-                // The saved settings carry unsaved edits (`recall`), so they come back.
-                shared
-                    .rig_playback
-                    .dispatch(RigAudioCommand {
-                        session: s.session,
-                        expected_revision: s.revision,
-                        action: RigAudioAction::Start { settings: start },
-                    })
-                    .await?;
-                until(
-                    "Restoring the preset with scenes",
-                    Duration::from_secs(30),
-                    || {
-                        let s = shared.rig_playback.snapshot();
-                        s.phase == AudioPhase::Running && s.control.is_some()
-                    },
-                )
-                .await?;
-                match scene {
-                    Some(scene) => select_scene(shared, &scene).await,
-                    None => Ok(()),
-                }
-            }
-            .await
-        }
+        serde_json::from_slice::<Result<f32, String>>(&reply)
+            .map_err(|_| "Invalid measurement reply")?
     };
-    if let Err(e) = result {
-        shared.calibration.update(|p| {
-            p.error
-                .get_or_insert(format!("Could not restore what was playing: {e}"));
-        });
+    let result = tokio::select! {
+        result = tokio::time::timeout(Duration::from_secs(120), operation) => result.unwrap_or_else(|_| Err("Background measurement timed out".into())),
+        _ = async {
+            while !cancel.load(Ordering::Acquire) {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        } => Err("Cancelled".into()),
+    };
+    if child.id().is_some() {
+        let _ = child.kill().await;
     }
+    result
 }
-
-/// After this many presets in a row fail, audio itself is not starting (a
-/// buffer the interface cannot keep up with, a missing interface), so the run
-/// stops instead of reopening the device for every preset in the library.
 const FAILURES_IN_A_ROW: usize = 4;
-
-fn stopped_after_failures(output: &oxidal_audio::AudioProbe) -> String {
-    format!(
-        "Stopped after {FAILURES_IN_A_ROW} presets in a row would not play: audio is not \
-         starting with this interface and buffer ({} × {}, {:.1} ms). Try a larger buffer \
-         in Settings › Audio, then run Even out again; presets already measured are kept.",
-        output.period_frames,
-        output.periods,
-        1000.0 * f64::from(output.period_frames * output.periods) / f64::from(output.sample_rate),
-    )
+fn stopped_after_failures() -> String {
+    "Stopped after four background measurements failed. Check the listed presets; completed measurements are kept.".into()
 }
 
 async fn run(shared: Arc<Shared>, all: bool) {
@@ -747,47 +480,26 @@ async fn run(shared: Arc<Shared>, all: bool) {
             p.error = Some(e);
         }
     });
-    // The original sound is restored at a neutral offset. Resume its saved
-    // calibration and deliberate boost only after the run no longer owns the
-    // output, so status polling cannot alter a measurement in flight.
+    // Apply the updated correction only after the background run finishes.
     crate::boosts::follow(&shared).await;
 }
 async fn run_inner(shared: &Shared, all: bool) -> Result<(), String> {
-    if shared.graph_playback.snapshot().device_owned {
-        return Err("Stop the effects preset before evening out".into());
-    }
     let native = shared.playback.snapshot();
     let rig = shared.rig_playback.snapshot();
-    let mut stream = native
+    let mut stream = rig
         .configured
         .as_ref()
         .map(|c| c.stream.clone())
-        .or_else(|| rig.configured.as_ref().map(|c| c.stream.clone()))
+        .or_else(|| native.configured.as_ref().map(|c| c.stream.clone()))
         .ok_or("Choose the input, output and buffer in Settings → Audio first")?;
-    let playing = if native.phase == AudioPhase::Running
-        && let Some(c) = native.configured.as_ref().filter(|c| !c.draft)
-    {
-        Playing::Tone3000 {
-            id: c.preset_id.clone(),
-            owned: c.owned,
-        }
-    } else if rig.phase == AudioPhase::Running
-        && let Some(c) = rig.configured.clone()
-    {
-        Playing::Scenes {
-            start: Box::new(c),
-            scene: rig.control.and_then(|c| c.scene),
-        }
-    } else {
-        Playing::Nothing
-    };
+    stream.levels = shared.levels.current();
     let root = shared.config.preset_dir.clone();
     let items = tokio::task::spawn_blocking(move || inventory(&root))
         .await
         .map_err(|_| "Preset inventory failed")??;
     // Both playback owners replace stored stream levels with current unit levels.
     // A stopped owner may still carry an older channel mode in its configuration.
-    let mono = shared.levels.current().mono;
+    let mono = stream.levels.mono;
     let visible: BTreeSet<&str> = items.iter().map(|item| item.key.as_str()).collect();
     let mut cached = shared.calibration.current();
     let cached_len = cached.measured.len();
@@ -814,25 +526,7 @@ async fn run_inner(shared: &Shared, all: bool) -> Result<(), String> {
     if todo.is_empty() {
         return Ok(());
     }
-    // Measure preset content, not a previously stored calibration offset or
-    // intentional scene boost. Starts during this run inherit the same neutral
-    // value. The store is restored from boost/calibration state after playback
-    // itself has been restored.
-    stream.levels.boost_db = 0.0;
-    let neutral = oxidal_audio::tools::HostLevels {
-        boost_db: 0.0,
-        ..shared.levels.current()
-    };
-    crate::levels::apply_running(shared, neutral).await?;
-    // Factory loudness must reproduce across units and guitar profiles.
-    let peak_db = FACTORY_REFERENCE_PEAK_DB;
-    let silence = shared.audio_change.silence_measurement();
-    // Recreate even an already loaded measurement preset with the process-only
-    // output gate active before its first audio frame.
-    let mut outcome = stop_native(shared).await;
-    if outcome.is_ok() {
-        outcome = stop_rig(shared).await;
-    }
+    let mut outcome = Ok(());
     let mut in_a_row = 0;
     for item in todo {
         if outcome.is_err() {
@@ -845,18 +539,11 @@ async fn run_inner(shared: &Shared, all: bool) -> Result<(), String> {
         shared
             .calibration
             .update(|p| p.current = Some(item.name.clone()));
-        let measured = async {
-            match &item.target {
-                Target::Tone3000 { id, owned } => {
-                    play_tone3000(shared, id, *owned, &stream).await?
-                }
-                Target::Scene { revision, scene } => {
-                    play_scene(shared, revision, scene.as_deref(), &stream).await?
-                }
-            }
-            measure(shared, peak_db).await
+        let measured = measure(shared, item.target.clone(), &stream).await;
+        if shared.calibration.cancel.load(Ordering::Acquire) {
+            outcome = Err("Cancelled".into());
+            break;
         }
-        .await;
         match measured {
             Ok(lufs) => {
                 in_a_row = 0;
@@ -886,14 +573,10 @@ async fn run_inner(shared: &Shared, all: bool) -> Result<(), String> {
         }
         shared.calibration.update(|p| p.done += 1);
         if in_a_row >= FAILURES_IN_A_ROW {
-            outcome = Err(stopped_after_failures(&stream.output));
+            outcome = Err(stopped_after_failures());
             break;
         }
     }
-    // Restoration starts fresh workers with normal monitoring, including on
-    // cancellation or a failed measurement. The guard also clears on unwinding.
-    drop(silence);
-    restore(shared, playing, &stream).await;
     outcome
 }
 
@@ -972,6 +655,80 @@ pub(super) async fn command(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn background_reply_and_cancellation_reap_the_worker() {
+        use std::os::unix::fs::PermissionsExt;
+        let root =
+            std::env::temp_dir().join(format!("oxidal-measure-process-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let executable = root.join("worker");
+        let probe = |direction| oxidal_audio::AudioProbe {
+            endpoint: "unavailable".into(),
+            direction,
+            sample_rate: 48000,
+            channels: 2,
+            format: oxidal_audio::SampleFormat::Float,
+            period_frames: 256,
+            periods: 3,
+        };
+        let request = Request {
+            target: Target::Tone3000 {
+                id: "test".into(),
+                owned: false,
+            },
+            peak_db: -18.0,
+            seconds: 4.0,
+            stream: oxidal_audio::StreamConfig {
+                hear_yourself: false,
+                levels: Default::default(),
+                input: probe(oxidal_audio::Direction::Capture),
+                output: probe(oxidal_audio::Direction::Playback),
+                input_map: [0, 1],
+                output_map: [0, 1],
+                venue: None,
+            },
+        };
+        std::fs::write(
+            &executable,
+            "#!/bin/sh\nread request\nprintf '{\"Ok\":-24.5}'\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let cancel = AtomicBool::new(false);
+        assert_eq!(
+            render(&executable, &root, &request, &cancel).await.unwrap(),
+            -24.5
+        );
+        std::fs::write(
+            &executable,
+            "#!/bin/sh\necho $$ > \"$OXIDAL_PRESET_DIR/pid\"\nexec sleep 30\n",
+        )
+        .unwrap();
+        let stop = async {
+            while !root.join("pid").exists() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            cancel.store(true, Ordering::Release);
+        };
+        let (result, ()) = tokio::time::timeout(Duration::from_secs(5), async {
+            tokio::join!(render(&executable, &root, &request, &cancel), stop)
+        })
+        .await
+        .unwrap();
+        assert_eq!(result.unwrap_err(), "Cancelled");
+        let pid = std::fs::read_to_string(root.join("pid")).unwrap();
+        assert!(
+            !std::process::Command::new("kill")
+                .args(["-0", pid.trim()])
+                .stderr(std::process::Stdio::null())
+                .status()
+                .unwrap()
+                .success()
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     fn measured(lufs: &[(&str, f32)]) -> Calibration {
         Calibration {
             measured: lufs
@@ -990,19 +747,10 @@ mod tests {
         }
     }
     #[test]
-    fn a_run_that_cannot_start_audio_names_the_buffer() {
-        let output = oxidal_audio::AudioProbe {
-            endpoint: "hw:CARD=Audio,DEV=0".into(),
-            direction: oxidal_audio::Direction::Playback,
-            sample_rate: 48_000,
-            channels: 2,
-            format: oxidal_audio::SampleFormat::S24Packed,
-            period_frames: 48,
-            periods: 2,
-        };
-        let message = stopped_after_failures(&output);
-        assert!(message.contains("4 presets in a row"), "{message}");
-        assert!(message.contains("48 × 2, 2.0 ms"), "{message}");
+    fn repeated_background_failures_explain_that_completed_results_are_kept() {
+        let message = stopped_after_failures();
+        assert!(message.contains("background measurements failed"));
+        assert!(message.contains("completed measurements are kept"));
     }
 
     #[test]

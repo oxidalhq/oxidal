@@ -3381,7 +3381,7 @@
           "const": "run_all"
         },
         {
-          "description": "Stop after the current measurement and put back what was playing.",
+          "description": "Stop the background measurement; live playback stays unchanged.",
           "type": "string",
           "const": "cancel"
         },

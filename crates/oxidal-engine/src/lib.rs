@@ -17,6 +17,7 @@ mod lv2_state;
 #[cfg(feature = "native")]
 mod partition;
 
+pub mod measurement;
 pub mod protocol;
 #[cfg(feature = "native")]
 mod session;

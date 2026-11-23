@@ -102,8 +102,8 @@ export function EvenOut({ connected }: { connected: boolean }) {
       {running ? (
         <>
           <p role="status">
-            Measuring {Math.min(progress.done + 1, progress.total)} of{' '}
-            {progress.total}
+            Measuring in the background:{' '}
+            {Math.min(progress.done + 1, progress.total)} of {progress.total}
             {progress.current ? `: ${progress.current}` : ''}…
           </p>
           <Progress
@@ -154,14 +154,14 @@ export function EvenOut({ connected }: { connected: boolean }) {
             <summary>How it works</summary>
             <Caption>
               Plays a built-in riff through each new or changed preset and scene
-              at Oxidal's fixed factory level for about four seconds, silently,
-              then puts back what you were playing. Measurements follow the Mono
-              or Stereo output setting. Changing it requires measuring again.
-              Your guitar profile does not change the result. Oxidal chooses a
-              reachable common level within its correction range. Boost remains
-              a separate control. This is a reference-riff estimate; playing
-              dynamics and long effect tails can still change perceived
-              loudness.
+              at Oxidal's fixed factory level in a separate background worker.
+              You can keep playing your current rig while it measures.
+              Measurements follow the Mono or Stereo output setting. Changing it
+              requires measuring again. Your guitar profile does not change the
+              result. Oxidal chooses a reachable common level within its
+              correction range. Boost remains a separate control. This is a
+              reference-riff estimate; playing dynamics and long effect tails
+              can still change perceived loudness.
             </Caption>
           </details>
 

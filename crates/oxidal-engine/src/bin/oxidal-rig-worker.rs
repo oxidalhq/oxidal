@@ -2,7 +2,10 @@
 #[cfg(target_os = "linux")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // First, so the engine's own DSP threads started below inherit it.
-    if std::env::args().nth(1).as_deref() == Some("--check-built-rig") {
+    if matches!(
+        std::env::args().nth(1).as_deref(),
+        Some("--check-built-rig" | "--measure-loudness")
+    ) {
         oxidal_audio::realtime::background_owner();
     } else {
         eprintln!("Hybrid audio {}", oxidal_audio::realtime::enter());
@@ -66,6 +69,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let model_root = std::env::var_os("OXIDAL_PRESET_DIR").map(std::path::PathBuf::from);
     let args: Vec<_> = std::env::args().skip(1).collect();
     if !args.is_empty() {
+        if args == ["--measure-loudness"] {
+            let request = serde_json::from_slice(&frame(&mut std::io::stdin().lock())?)?;
+            let result = oxidal_engine::measurement::measure(
+                model_root.as_deref().ok_or("Model store unavailable")?,
+                request,
+            );
+            serde_json::to_writer(std::io::stdout().lock(), &result)?;
+            std::io::stdout().flush()?;
+            return Ok(());
+        }
         if args == ["--check-built-rig"] {
             let settings: StartRig = serde_json::from_slice(&frame(&mut std::io::stdin().lock())?)?;
             let result: Result<(), String> = (|| {

@@ -65,7 +65,7 @@ it('summarises the evened-out level, runs, and lists each offset', async () => {
   await act(async () => {});
   expect(calibration).toHaveBeenCalledWith('run');
   expect(screen.getByRole('status')).toHaveTextContent(
-    'Measuring 2 of 3: Heavy…',
+    'Measuring in the background: 2 of 3: Heavy…',
   );
   expect(screen.getByRole('progressbar')).toHaveAttribute(
     'aria-valuetext',
