@@ -676,7 +676,13 @@ async fn restore(shared: &Shared, playing: Playing, stream: &oxidal_audio::Strea
             }
             .await
         }
-        Playing::Tone3000 { id, owned } => play_tone3000(shared, &id, owned, stream).await,
+        Playing::Tone3000 { id, owned } => {
+            async {
+                stop_native(shared).await?;
+                play_tone3000(shared, &id, owned, stream).await
+            }
+            .await
+        }
         Playing::Scenes { start, scene } => {
             async {
                 stop_native(shared).await?;
@@ -820,9 +826,18 @@ async fn run_inner(shared: &Shared, all: bool) -> Result<(), String> {
     crate::levels::apply_running(shared, neutral).await?;
     // Factory loudness must reproduce across units and guitar profiles.
     let peak_db = FACTORY_REFERENCE_PEAK_DB;
-    let mut outcome = Ok(());
+    let silence = shared.audio_change.silence_measurement();
+    // Recreate even an already loaded measurement preset with the process-only
+    // output gate active before its first audio frame.
+    let mut outcome = stop_native(shared).await;
+    if outcome.is_ok() {
+        outcome = stop_rig(shared).await;
+    }
     let mut in_a_row = 0;
     for item in todo {
+        if outcome.is_err() {
+            break;
+        }
         if shared.calibration.cancel.load(Ordering::Acquire) {
             outcome = Err("Cancelled".to_string());
             break;
@@ -875,6 +890,9 @@ async fn run_inner(shared: &Shared, all: bool) -> Result<(), String> {
             break;
         }
     }
+    // Restoration starts fresh workers with normal monitoring, including on
+    // cancellation or a failed measurement. The guard also clears on unwinding.
+    drop(silence);
     restore(shared, playing, &stream).await;
     outcome
 }

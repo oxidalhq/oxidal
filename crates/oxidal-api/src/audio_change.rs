@@ -226,6 +226,7 @@ pub(super) struct Change {
     inner: Mutex<Inner>,
     notified: Notify,
     stop_notified: Notify,
+    measurement_silent: std::sync::atomic::AtomicBool,
 }
 
 impl Inner {
@@ -243,7 +244,24 @@ impl Inner {
     }
 }
 
+pub(super) struct MeasurementSilence<'a>(&'a Change);
+impl Drop for MeasurementSilence<'_> {
+    fn drop(&mut self) {
+        self.0
+            .measurement_silent
+            .store(false, std::sync::atomic::Ordering::Release);
+    }
+}
 impl Change {
+    pub(super) fn silence_measurement(&self) -> MeasurementSilence<'_> {
+        self.measurement_silent
+            .store(true, std::sync::atomic::Ordering::Release);
+        MeasurementSilence(self)
+    }
+    pub(super) fn measurement_silent(&self) -> bool {
+        self.measurement_silent
+            .load(std::sync::atomic::Ordering::Acquire)
+    }
     pub(super) fn allows_stop(&self, owner: AudioChangeOwner) -> bool {
         let inner = self.lock();
         inner.active() && inner.view.owner == Some(owner)
@@ -308,6 +326,7 @@ impl Change {
             }),
             notified: Notify::new(),
             stop_notified: Notify::new(),
+            measurement_silent: std::sync::atomic::AtomicBool::new(false),
         })
     }
 
@@ -1306,4 +1325,17 @@ async fn settle(shared: Arc<Shared>, id: &str, keep: bool) -> Response {
         Ok(Err(error)) => failure(StatusCode::CONFLICT, &error),
         Err(_) => StatusCode::SERVICE_UNAVAILABLE.into_response(),
     }
+}
+
+#[cfg(test)]
+#[test]
+fn measurement_silence_is_released_on_error() {
+    let change = Change::default();
+    let run = || -> Result<(), ()> {
+        let _silence = change.silence_measurement();
+        assert!(change.measurement_silent());
+        Err(())
+    };
+    assert!(run().is_err());
+    assert!(!change.measurement_silent());
 }

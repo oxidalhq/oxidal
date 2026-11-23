@@ -273,6 +273,7 @@ pub struct HostSignal {
     tuner: crate::tuner::Tuner,
     hear: bool,
     output_muted: bool,
+    measurement_silent: bool,
     boost_active: bool,
     rate: u32,
     test_frame: u32,
@@ -427,6 +428,7 @@ impl HostSignal {
             tuner: crate::tuner::Tuner::new(rate),
             hear,
             output_muted: false,
+            measurement_silent: std::env::var("OXIDAL_MEASUREMENT_SILENT").as_deref() == Ok("1"),
             boost_active: false,
             rate,
             test_frame: 0,
@@ -710,6 +712,12 @@ impl HostSignal {
         self.master_gain.apply(left, right);
         self.monitor_gain.apply(left, right);
         self.job_gain.apply(left, right);
+        // Measurement workers stay silent between riffs and across preset loads.
+        // This process-only gate cannot leak into saved presets or unit levels.
+        if self.measurement_silent {
+            left.fill(0.0);
+            right.fill(0.0);
+        }
     }
     fn mix_return(&mut self, left: &mut [f32], right: &mut [f32]) {
         let Some(frames) = &mut self.session_return else {
@@ -767,6 +775,35 @@ impl HostSignal {
 #[cfg(test)]
 mod host_tests {
     use super::*;
+    #[test]
+    fn measurement_worker_is_silent_before_and_after_the_reference() {
+        if std::env::var("OXIDAL_MEASUREMENT_SILENT").as_deref() != Ok("1") {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "tools::host_tests::measurement_worker_is_silent_before_and_after_the_reference"])
+                .env("OXIDAL_MEASUREMENT_SILENT", "1")
+                .status().unwrap();
+            assert!(status.success());
+            let mut restored = HostSignal::new(48000, true, HostLevels::default());
+            let mut left = [0.25; 128];
+            let mut right = [0.25; 128];
+            restored.output(&mut left, &mut right);
+            assert!(left.iter().any(|v| *v != 0.0));
+            return;
+        }
+        let mut signal = HostSignal::new(48000, true, HostLevels::default());
+        for enabled in [false, true, false] {
+            signal.command(HostUtility::Reference {
+                enabled,
+                peak_db: -12.0,
+            });
+            signal.command(HostUtility::OutputMute { enabled: false });
+            let mut left = [0.25; 128];
+            let mut right = [-0.25; 128];
+            signal.output(&mut left, &mut right);
+            assert!(left.iter().chain(&right).all(|v| *v == 0.0));
+            assert_eq!(signal.state().levels, HostLevels::default());
+        }
+    }
     #[test]
     fn mute_toggle_flips_the_worker_state_and_agrees_with_explicit_mute() {
         let mut signal = HostSignal::new(48000, true, HostLevels::default());
