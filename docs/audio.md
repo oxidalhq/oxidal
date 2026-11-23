@@ -86,6 +86,9 @@ running the actual rig.
 Switch. A Start first reports preparation; only its confirmed Running result
 updates startup. Failure, cancellation, automatic recovery and Save alone do not
 retarget it. Startup must already be enabled for Follow to replace its target.
+An empty mixed startup override record loads the saved defaults. A partial
+recovery record still requires the complete matching control catalog, and an
+incorrect source revision is rejected.
 The mixed startup recall uses the saved bundle defaults, excluding temporary
 live values, external model overrides and unsaved working receipts. A storage
 failure leaves the previous choice and reports that the new choice was not saved.

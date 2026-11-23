@@ -327,6 +327,15 @@ impl Session {
             budget,
             NativeRecovery { working, models },
         )?;
+        // Startup's saved-default envelope carries the source revision but no
+        // overrides. A partial recovery remains subject to strict catalog checks.
+        let recall = recall.filter(|r| {
+            !r.values.is_empty()
+                || r.eq.is_some()
+                || !r.models.is_empty()
+                || !r.working.is_empty()
+                || r.sleep_enabled.is_some()
+        });
         if let Some(recall) = recall {
             if recall.models.is_empty() {
                 session.restore(recall)?;
@@ -1510,6 +1519,40 @@ mod scene_control_tests {
             .map_err(|e| e.to_string())?;
         let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();
         Session::new(bundle, &world, 48000.0, 64, 1 << 20)
+    }
+    #[test]
+    fn saved_default_startup_loads_but_partial_or_wrong_revision_recall_is_rejected() {
+        use oxidal_presets::manifest::SCENES_CONTROLS_EXTENSION;
+        let baseline = prepare(SCENES_CONTROLS_EXTENSION).unwrap().snapshot();
+        let mut recall = baseline.recall();
+        recall.values.clear();
+        recall.eq = None;
+        recall.models.clear();
+        recall.working.clear();
+        recall.sleep_enabled = None;
+        let load = |recall: &Recall| {
+            let bundle = Bundle::from_parts(
+                serde_json::to_vec(&scene_rig(SCENES_CONTROLS_EXTENSION)).unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+            let budget = PreparationBudget::standalone(&bundle, 1 << 20);
+            let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();
+            Session::new_from_recall(bundle, &world, 48000.0, 64, budget, None, Some(recall))
+        };
+        let restored = load(&recall).unwrap().snapshot();
+        assert_eq!(
+            serde_json::to_value(restored.recall().values).unwrap(),
+            serde_json::to_value(baseline.recall().values).unwrap()
+        );
+        let mut partial = recall.clone();
+        partial.values.push(baseline.recall().values[0].clone());
+        assert!(load(&partial).is_err());
+        let mut empty_eq = recall.clone();
+        empty_eq.eq = Some(vec![]);
+        assert!(load(&empty_eq).is_err());
+        recall.source_revision = "f".repeat(64);
+        assert!(load(&recall).is_err());
     }
     #[test]
     fn scenes_with_controls_prepare_from_known_versions_and_refuse_an_unknown_one() {
