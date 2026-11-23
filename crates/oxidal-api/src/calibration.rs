@@ -779,7 +779,9 @@ async fn run_inner(shared: &Shared, all: bool) -> Result<(), String> {
     let items = tokio::task::spawn_blocking(move || inventory(&root))
         .await
         .map_err(|_| "Preset inventory failed")??;
-    let mono = stream.levels.mono;
+    // Both playback owners replace stored stream levels with current unit levels.
+    // A stopped owner may still carry an older channel mode in its configuration.
+    let mono = shared.levels.current().mono;
     let visible: BTreeSet<&str> = items.iter().map(|item| item.key.as_str()).collect();
     let mut cached = shared.calibration.current();
     let cached_len = cached.measured.len();
