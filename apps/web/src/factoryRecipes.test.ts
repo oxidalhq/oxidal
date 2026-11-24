@@ -48,11 +48,8 @@ const defaults = {
   parameters: {
     osEnabled: 1,
     osFactor: 1,
-    pitchEnabled: 0,
-    pitchWindow: 0.33333334,
     inputCalibrationLevel: 0.5968333,
     calibrateInput: 1,
-    targetLoudness: 0.7,
   },
 };
 const validate = new Ajv({ strict: false }).compile(schema);
@@ -108,6 +105,10 @@ it('builds portable scene instruments and complex serial chains from installed m
       for (const value of Object.values(settings.instances) as {
         parameters: Record<string, number>;
       }[]) {
+        expect(value.parameters.targetLoudness).toBe(0.7);
+        expect(value.parameters.calibrateInput).toBe(0);
+        expect(value.parameters.inputCalibrationLevel).toBe(0.6);
+        expect(value.parameters.pitchWindow).toBeCloseTo(1 / 3);
         expect(value.parameters.osEnabled).toBe(1);
         expect(value.parameters.osFactor).toBe(engines >= 3 ? 0 : 0.5);
       }

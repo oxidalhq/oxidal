@@ -323,6 +323,15 @@ export function useOxidalSounds({
         categories: recipe.categories,
         metadata: factoryMetadata(recipe),
       });
+      // Show the confirmed save immediately, even while the catalog refreshes.
+      setBuilt((current) => [
+        ...current.filter((entry) => entry.name !== builtName(recipe)),
+        {
+          name: builtName(recipe),
+          revision: document.revision,
+          scenes: [],
+        },
+      ]);
       onChanged();
       reload();
       tried.current.add(item.key);
@@ -398,6 +407,8 @@ export function useOxidalSounds({
             caps.captures.map((c) => [`${c.tone_id}:${c.model_id}`, c.source]),
           )
         : downloaded;
+      setPlugins(lv2);
+      setDownloaded(captures);
       const now: UnitFacts = {
         ...facts,
         ready: true,

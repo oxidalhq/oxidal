@@ -65,10 +65,16 @@ it('sends one checked batch to the running node and reports a refused recall wit
     },
     rig: { connected: true, command },
   } as unknown as RigViewProps;
-  render(<LiveLv2Panel {...props} />);
+  const view = render(<LiveLv2Panel {...props} />);
   fireEvent.click(
     await screen.findByText('Named settings', { selector: 'summary' }),
   );
+  for (let i = 0; i < 12; i++) {
+    view.rerender(<LiveLv2Panel {...props} />);
+    expect(
+      screen.getAllByRole('region', { name: `${plugin.name} controls` }),
+    ).toHaveLength(1);
+  }
   const select = screen.getByLabelText('Saved settings for Moment');
   await waitFor(() => expect(select).toHaveTextContent('Dry break'));
   fireEvent.change(select, { target: { value: 'a'.repeat(32) } });

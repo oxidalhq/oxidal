@@ -298,6 +298,44 @@ fn partition_peers_bind_source_roles_recipe_and_complete_graph_ownership() {
 }
 
 #[test]
+fn factory_zero_filled_settings_are_corrected_without_changing_user_presets_or_saved_bytes() {
+    let mut value = fixture("mixed-delay");
+    let id = value["tone3000"]["instances"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    value["extensions"][NATIVE_SETTINGS_EXTENSION] = json!({"instances":{id.clone():{
+        "input_mode":"stereo","parameters":{"osEnabled":1.0,"osFactor":0.5,
+        "pitchEnabled":0.0,"pitchWindow":0.0,"inputCalibrationLevel":0.0,
+        "calibrateInput":1.0,"targetLoudness":0.0}}}});
+    value["requiredExtensions"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!(NATIVE_SETTINGS_EXTENSION));
+    value["extensions"]["urn:oxidal:authoring"] =
+        json!({"origin":"oxidal_example","factory_recipe":"OX-35","factory_version":1});
+    let manifest = parse(&value).unwrap();
+    let saved = manifest.encode().unwrap();
+    assert!(manifest.needs_factory_gain_repair());
+    let repaired = manifest.playback_native_settings().unwrap().unwrap();
+    let p = &repaired.instances[&id].parameters;
+    assert_eq!(p["targetLoudness"], 0.7);
+    assert_eq!(p["calibrateInput"], 0.0);
+    assert_eq!(p["inputCalibrationLevel"], 0.6);
+    assert_eq!(p["osFactor"], 0.5);
+    assert_eq!(manifest.encode().unwrap(), saved);
+    for origin in ["mine", "tone3000"] {
+        value["extensions"]["urn:oxidal:authoring"]["origin"] = json!(origin);
+        let user = parse(&value).unwrap();
+        assert!(!user.needs_factory_gain_repair());
+        assert_eq!(
+            user.playback_native_settings().unwrap().unwrap().instances[&id].parameters["targetLoudness"],
+            0.0
+        );
+    }
+}
+
+#[test]
 fn native_instance_settings_require_explicit_support_and_complete_valid_controls() {
     let mut value = fixture("mixed-delay");
     let id = value["tone3000"]["instances"][0]["id"]

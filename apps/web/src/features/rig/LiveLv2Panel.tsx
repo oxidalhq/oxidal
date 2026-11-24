@@ -161,7 +161,7 @@ export function LiveLv2Panel({ rig, vm }: RigViewProps) {
       />
       {plugin && state.control && supportsNamedSettings(plugin.uri) && (
         <NamedSettings
-          key={panelKey}
+          key={`settings:${panelKey}`}
           live
           block={{
             name: selectedView.label,

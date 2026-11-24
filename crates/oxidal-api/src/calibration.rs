@@ -173,11 +173,29 @@ pub(crate) struct Store {
 }
 impl Store {
     pub(crate) fn load(path: PathBuf) -> Self {
-        let value = std::fs::read(&path)
+        let mut value = std::fs::read(&path)
             .ok()
             .filter(|bytes| bytes.len() <= 1 << 20)
             .and_then(|bytes| serde_json::from_slice::<Calibration>(&bytes).ok())
             .unwrap_or_default();
+        // Old factory recipes were measured with attenuated nested captures.
+        // Do not apply their large corrections to the repaired signal path.
+        if let Some(root) = path.parent()
+            && let Ok(items) = inventory(root)
+        {
+            for item in items
+                .iter()
+                .filter(|item| item.content.ends_with(":factory-gain-2"))
+            {
+                if value.measured.get(&item.key).is_some_and(|measured| {
+                    ![false, true]
+                        .into_iter()
+                        .any(|mono| measured.content == measurement_content(&item.content, mono))
+                }) {
+                    value.measured.remove(&item.key);
+                }
+            }
+        }
         Self {
             path,
             value: Mutex::new(value),
@@ -337,6 +355,11 @@ fn inventory(root: &std::path::Path) -> Result<Vec<Item>, String> {
             continue;
         }
         let manifest = bundles.manifest(&revision).map_err(text)?;
+        let content = if manifest.needs_factory_gain_repair() {
+            format!("{revision}:factory-gain-2")
+        } else {
+            revision.clone()
+        };
         let draft = manifest
             .extensions
             .get("urn:oxidal:authoring")
@@ -354,7 +377,7 @@ fn inventory(root: &std::path::Path) -> Result<Vec<Item>, String> {
             items.push(Item {
                 key: format!("scenes:{}", manifest.id),
                 name: preset,
-                content: revision.clone(),
+                content: content.clone(),
                 target: Target::Scene {
                     revision: revision.clone(),
                     scene: None,
@@ -366,7 +389,7 @@ fn inventory(root: &std::path::Path) -> Result<Vec<Item>, String> {
             items.push(Item {
                 key: crate::boosts::key_scene(&manifest.id, &scene.id),
                 name: format!("{preset} · {}", scene.name),
-                content: revision.clone(),
+                content: content.clone(),
                 target: Target::Scene {
                     revision: revision.clone(),
                     scene: Some(scene.id),

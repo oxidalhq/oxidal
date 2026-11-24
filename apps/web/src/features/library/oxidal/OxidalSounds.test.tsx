@@ -490,10 +490,16 @@ it('an installed pack saves the sounds it completes, with no Build step', async 
   }));
   const { user, card } = await openBrown();
   expect(card).toHaveAttribute('data-state', 'pack');
+  // A slow follow-up inventory must not keep a confirmed install looking missing.
+  vi.mocked(rigLibrary).mockImplementation(() => new Promise(() => {}));
   await user.click(
     within(card).getByRole('button', { name: `Install pack: ${BROWN}` }),
   );
   await waitFor(() => expect(publishRig).toHaveBeenCalled());
+  await waitFor(() => expect(card).toHaveAttribute('data-state', 'ready'));
+  expect(
+    within(card).getByRole('button', { name: `Play: ${BROWN}` }),
+  ).toBeEnabled();
   expect(
     vi
       .mocked(presetDetails)

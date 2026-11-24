@@ -156,16 +156,6 @@ export type FactoryRecipe = {
   scenes: RecipeScene[];
 };
 
-const nativeSettingIds = [
-  'osEnabled',
-  'osFactor',
-  'pitchEnabled',
-  'pitchWindow',
-  'inputCalibrationLevel',
-  'calibrateInput',
-  'targetLoudness',
-] as const;
-
 /** Full A2 stays selected by the source preset. Dense graphs only reduce the
  * internal sample-rate multiplier so every resident scene meets its deadline. */
 function applyNativeBudget(
@@ -177,11 +167,17 @@ function applyNativeBudget(
   // Three voices plus shared effects can pass steady playback at 4× yet miss a
   // deadline while exporting. Keep enough headroom for live save operations.
   const factor = instances.length >= 3 ? 0 : 0.5;
-  const parameters = Object.fromEntries(
-    nativeSettingIds.map((id) => [id, defaults.parameters[id] ?? 0]),
-  );
-  parameters.osEnabled = 1;
-  parameters.osFactor = factor;
+  // Captures form one shared rig. Hardware input calibration must not be
+  // applied again at every pedal/amp, and absent settings are not zero gain.
+  const parameters = {
+    osEnabled: 1,
+    osFactor: factor,
+    pitchEnabled: 0,
+    pitchWindow: 1 / 3,
+    inputCalibrationLevel: 0.6,
+    calibrateInput: 0,
+    targetLoudness: 0.7,
+  };
   manifest.extensions['urn:oxidal:native-settings:1'] = {
     instances: Object.fromEntries(
       instances.map((instance) => [

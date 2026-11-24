@@ -116,7 +116,9 @@ impl PreparedPorts {
                 return Err("Extracted stages require paired state restoration".into());
             }
         }
-        let native_settings = manifest.native_settings().map_err(|e| e.to_string())?;
+        let native_settings = manifest
+            .playback_native_settings()
+            .map_err(|e| e.to_string())?;
         if let Some((root, rows)) = working
             && (!root.is_absolute()
                 || rows.iter().enumerate().any(|(i, row)| {

@@ -349,3 +349,17 @@ guitar level, monitoring and performance all affect the result; the collection
 still needs owner listening and individual sound revisions. Older clean, crunch,
 heavy and bass roles now have explicit first-use TONE3000 downloads. Existing
 player-selected captures remain selected.
+
+## Native capture levels
+
+Factory recipes that chain captures use the native reference loudness of −18 dB
+(normalized 0.7) and leave per-instance input calibration off. Hardware and guitar
+input adjustment belong at the rig input, rather than being repeated at every
+pedal and amp. The processing budget changes oversampling without filling absent
+tone settings with zero.
+
+Early version-1 factory recipes stored zero for absent loudness and pitch-window
+settings. Playback recognizes that exact factory signature and uses neutral
+capture settings; saved bundle bytes remain unchanged. User-authored presets are
+not corrected. Even Out invalidates measurements of these affected recipes and
+keeps their previous excessive corrections out of playback until remeasurement.

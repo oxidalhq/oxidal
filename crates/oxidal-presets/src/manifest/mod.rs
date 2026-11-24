@@ -382,6 +382,49 @@ pub struct NativeSettingsExtension {
     pub instances: BTreeMap<String, NativeSettings>,
 }
 impl Manifest {
+    /// Compatibility for factory v1's zero-filled capture settings. Saved bytes
+    /// remain immutable; user-authored settings never enter this correction.
+    /// @see docs/factory-collection.md
+    pub fn needs_factory_gain_repair(&self) -> bool {
+        let Some(author) = self.extensions.get("urn:oxidal:authoring") else {
+            return false;
+        };
+        author.get("origin").and_then(Value::as_str) == Some("oxidal_example")
+            && author.get("factory_version").and_then(Value::as_u64) == Some(1)
+            && author
+                .get("factory_recipe")
+                .and_then(Value::as_str)
+                .is_some()
+            && self
+                .native_settings()
+                .ok()
+                .flatten()
+                .is_some_and(|settings| {
+                    settings.instances.values().all(|s| {
+                        s.parameters.get("targetLoudness") == Some(&0.0)
+                            && s.parameters.get("pitchEnabled") == Some(&0.0)
+                            && s.parameters.get("pitchWindow") == Some(&0.0)
+                    })
+                })
+    }
+    /// Effective capture settings for playing old factory recipes.
+    /// @see docs/factory-collection.md
+    pub fn playback_native_settings(&self) -> Result<Option<NativeSettingsExtension>> {
+        let mut settings = self.native_settings()?;
+        if self.needs_factory_gain_repair() {
+            for instance in settings.iter_mut().flat_map(|s| s.instances.values_mut()) {
+                for (id, value) in [
+                    ("targetLoudness", 0.7),
+                    ("calibrateInput", 0.0),
+                    ("inputCalibrationLevel", 0.6),
+                    ("pitchWindow", 1.0 / 3.0),
+                ] {
+                    instance.parameters.insert(id.into(), value);
+                }
+            }
+        }
+        Ok(settings)
+    }
     pub fn native_settings(&self) -> Result<Option<NativeSettingsExtension>> {
         let Some(extension) = self.extensions.get(NATIVE_SETTINGS_EXTENSION) else {
             return Ok(None);
