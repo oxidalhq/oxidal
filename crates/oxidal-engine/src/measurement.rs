@@ -80,6 +80,45 @@ pub fn measure(root: &std::path::Path, request: Request) -> Result<f32, String> 
             Renderer::Mixed(rig)
         }
     };
+    // Hold captures the preceding audio, so a fresh offline instance must hear
+    // the riff before its saved Hold-on state is restored.
+    // @see docs/native-hold.md
+    let mut holds = Vec::new();
+    if let Renderer::Mixed(rig) = &mut renderer {
+        let session = rig.active_mut();
+        for control in session.snapshot().controls {
+            if let crate::protocol::Target::Lv2 { node, symbol } = &control.target
+                && symbol == "hold"
+                && control.value > 0.0
+                && session
+                    .bundle
+                    .manifest()
+                    .oxidal
+                    .as_ref()
+                    .is_some_and(|rig| {
+                        rig.lv2.iter().any(|plugin| {
+                            plugin.id == *node
+                                && matches!(
+                                    plugin.plugin_uri.as_str(),
+                                    "urn:oxidal:plugin:hold#mono" | "urn:oxidal:plugin:hold#stereo"
+                                )
+                        })
+                    })
+            {
+                holds.push((control.target, control.value));
+            }
+        }
+        for (target, _) in &holds {
+            let state = session.snapshot();
+            session.apply(crate::protocol::ControlCommand {
+                session: state.session,
+                expected_revision: state.revision,
+                target: target.clone(),
+                value: 0.0,
+            })?;
+        }
+    }
+    let mut priming_frames = 0usize;
     let mut host = HostSignal::new(rate, false, request.stream.levels);
     host.command(HostUtility::Reference {
         enabled: true,
@@ -108,6 +147,31 @@ pub fn measure(root: &std::path::Path, request: Request) -> Result<f32, String> 
                 right.copy_from_slice(&out_right);
             }
         }
+        if !holds.is_empty() {
+            priming_frames += frames;
+            if priming_frames >= rate as usize * 2 {
+                if let Renderer::Mixed(rig) = &mut renderer {
+                    let session = rig.active_mut();
+                    for (target, value) in holds.drain(..) {
+                        let state = session.snapshot();
+                        session.apply(crate::protocol::ControlCommand {
+                            session: state.session,
+                            expected_revision: state.revision,
+                            target,
+                            value,
+                        })?;
+                    }
+                }
+                // Exclude the seed audio from the measured held scene.
+                host = HostSignal::new(rate, false, request.stream.levels);
+                host.command(HostUtility::Reference {
+                    enabled: true,
+                    peak_db: request.peak_db,
+                });
+            }
+            std::thread::sleep(pause);
+            continue;
+        }
         host.output(&mut left, &mut right);
         if let Some(reading) = host.state().reference
             && reading.seconds >= request.seconds
@@ -125,6 +189,70 @@ pub fn measure(root: &std::path::Path, request: Request) -> Result<f32, String> 
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// A pad-only scene must capture reference audio before Hold is engaged.
+    /// @see docs/native-hold.md
+    #[test]
+    fn measures_a_hold_only_pad_from_a_fresh_instance() {
+        let root = std::env::temp_dir().join(format!("oxidal-hold-measure-{}", std::process::id()));
+        let bundle = oxidal_presets::Bundle::from_parts(
+            serde_json::to_vec(&json!({
+                "format":"oxidal.preset","formatVersion":1,
+                "id":"0b8f8d4e-9a39-4a43-a0f2-3c8f3b6d9a12","name":"Held pad measurement",
+                "tone3000":{"instances":[]},"resources":[],"requiredExtensions":[],"extensions":{},
+                "oxidal":{"graph":{"nodes":[
+                    {"id":"in","kind":"input","audioInputs":0,"audioOutputs":2},
+                    {"id":"hold","kind":"lv2","audioInputs":2,"audioOutputs":2,"instance":"hold","bypassed":false},
+                    {"id":"out","kind":"output","audioInputs":2,"audioOutputs":0}],
+                    "edges":[
+                        {"from":{"node":"in","port":0},"to":{"node":"hold","port":0}},
+                        {"from":{"node":"in","port":1},"to":{"node":"hold","port":1}},
+                        {"from":{"node":"hold","port":0},"to":{"node":"out","port":0}},
+                        {"from":{"node":"hold","port":1},"to":{"node":"out","port":1}}]},
+                    "lv2":[{"id":"hold","pluginUri":"urn:oxidal:plugin:hold#stereo",
+                        "controls":{"hold":1,"dry":0,"attack":10,"level":-6,"release":1500,"focus":80,"width":50},
+                        "assets":[],"requiredFeatures":[]}],"recall":{"tails":"cut"}}
+            }))
+            .unwrap(),
+            Default::default(),
+        )
+        .unwrap();
+        let revision = oxidal_presets::BundleStore::new(root.join("bundles"))
+            .save(&bundle)
+            .unwrap();
+        let probe = |direction| oxidal_audio::AudioProbe {
+            endpoint: "nonexistent-measurement-device".into(),
+            direction,
+            sample_rate: 48000,
+            channels: 2,
+            format: oxidal_audio::SampleFormat::Float,
+            period_frames: 256,
+            periods: 3,
+        };
+        let lufs = measure(
+            &root,
+            Request {
+                target: Target::Scene {
+                    revision,
+                    scene: None,
+                },
+                peak_db: -18.0,
+                seconds: 1.0,
+                stream: oxidal_audio::StreamConfig {
+                    hear_yourself: false,
+                    levels: Default::default(),
+                    input: probe(oxidal_audio::Direction::Capture),
+                    output: probe(oxidal_audio::Direction::Playback),
+                    input_map: [0, 1],
+                    output_map: [0, 1],
+                    venue: None,
+                },
+            },
+        )
+        .unwrap();
+        assert!((-60.0..0.0).contains(&lufs), "{lufs}");
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn renders_reference_without_an_audio_device_and_tracks_amplitude() {
