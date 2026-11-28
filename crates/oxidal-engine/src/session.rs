@@ -146,6 +146,7 @@ impl Session {
                             logarithmic: port.logarithmic,
                             display: port.display(value),
                             scale_points: port.scale_points.clone(),
+                            saved: None,
                         });
                     }
                 }
@@ -174,6 +175,7 @@ impl Session {
                     }
                     .into(),
                     scale_points: Vec::new(),
+                    saved: None,
                 });
             }
             if let Some(gains) = &node.input_gains {
@@ -191,6 +193,7 @@ impl Session {
                     logarithmic: false,
                     display: format!("{g:.3}"),
                     scale_points: Vec::new(),
+                    saved: None,
                 }));
             }
         }
@@ -443,6 +446,31 @@ impl Session {
             }
         }
         state.modified = self.is_modified();
+        // Each control says what the saved preset holds while it differs:
+        // the value the playing scene saves, else the preset's own value.
+        let scene = state.scenes.as_ref().and_then(|all| {
+            all.scenes
+                .iter()
+                .chain(&all.branches)
+                .find(|s| Some(&s.id) == state.scene.as_ref())
+        });
+        let saved: Vec<Option<f64>> = state
+            .controls
+            .iter()
+            .zip(&self.initial)
+            .map(|(current, initial)| {
+                if current.target != initial.target {
+                    return None;
+                }
+                let held = scene
+                    .and_then(|scene| scene_value(scene, &current.target))
+                    .unwrap_or(initial.value);
+                (current.value != held).then_some(held)
+            })
+            .collect();
+        for (current, saved) in state.controls.iter_mut().zip(saved) {
+            current.saved = saved;
+        }
         state.scene_transitioning = self.graph.scene_transitioning()
             || self.capture_fade_remaining > 0
             || self.sleep_pending.is_some();
@@ -1450,6 +1478,41 @@ impl Session {
     }
 }
 
+/// The value a scene saves for one control, when it sets one.
+fn scene_value(scene: &oxidal_presets::manifest::Scene, target: &Target) -> Option<f64> {
+    match target {
+        Target::Lv2 { node, symbol } => scene
+            .controls
+            .iter()
+            .find(|c| &c.node == node && &c.symbol == symbol)
+            .map(|c| c.value),
+        Target::Bypass { node } => scene
+            .bypass
+            .iter()
+            .find(|b| &b.node == node)
+            .map(|b| if b.value { 1.0 } else { 0.0 }),
+        Target::Merge { node, port } => scene
+            .gains
+            .iter()
+            .find(|g| &g.node == node && usize::from(g.port) == *port)
+            .map(|g| g.value),
+        Target::Native { node, parameter } => scene
+            .native_controls
+            .iter()
+            .find(|c| &c.node == node && &c.parameter == parameter)
+            .map(|c| c.value)
+            .or_else(|| {
+                let block = parameter.strip_prefix("block:")?.strip_suffix(":enabled")?;
+                scene
+                    .native_bypass
+                    .iter()
+                    .find(|b| &b.node == node && b.block == block)
+                    .map(|b| if b.value { 0.0 } else { 1.0 })
+            }),
+        Target::StompGroup { .. } => None,
+    }
+}
+
 fn native_controls(
     node: &str,
     engine: &mut oxidal_tone3000::Engine,
@@ -1472,6 +1535,7 @@ fn native_controls(
             logarithmic: false,
             display: c.display,
             scale_points: Vec::new(),
+            saved: None,
         })
         .collect())
 }
@@ -1647,5 +1711,78 @@ mod scene_control_tests {
                 .unwrap();
             assert!(l.iter().all(|v| *v == 0.5), "plugin and mix untouched");
         }
+    }
+}
+
+#[cfg(test)]
+mod saved_value_tests {
+    use super::*;
+    use oxidal_presets::manifest::{
+        Scene, SceneBypass, SceneControl, SceneGain, SceneNativeBypass, SceneNativeControl,
+    };
+
+    #[test]
+    fn a_scene_supplies_its_own_saved_value_for_each_kind_of_control() {
+        let scene = Scene {
+            id: "lead".into(),
+            name: "Lead".into(),
+            gains: vec![SceneGain {
+                node: "mix-left".into(),
+                port: 1,
+                value: 0.5,
+            }],
+            controls: vec![SceneControl {
+                node: "echo".into(),
+                symbol: "mix".into(),
+                value: 40.0,
+            }],
+            bypass: vec![SceneBypass {
+                node: "echo".into(),
+                value: true,
+            }],
+            native_controls: vec![SceneNativeControl {
+                node: "amp".into(),
+                parameter: "block:a:mix".into(),
+                value: 0.25,
+            }],
+            native_bypass: vec![SceneNativeBypass {
+                node: "amp".into(),
+                block: "b".into(),
+                value: true,
+            }],
+        };
+        let lv2 = Target::Lv2 {
+            node: "echo".into(),
+            symbol: "mix".into(),
+        };
+        assert_eq!(scene_value(&scene, &lv2), Some(40.0));
+        let bypass = Target::Bypass {
+            node: "echo".into(),
+        };
+        assert_eq!(scene_value(&scene, &bypass), Some(1.0));
+        let merge = Target::Merge {
+            node: "mix-left".into(),
+            port: 1,
+        };
+        assert_eq!(scene_value(&scene, &merge), Some(0.5));
+        let native = Target::Native {
+            node: "amp".into(),
+            parameter: "block:a:mix".into(),
+        };
+        assert_eq!(scene_value(&scene, &native), Some(0.25));
+        let enabled = Target::Native {
+            node: "amp".into(),
+            parameter: "block:b:enabled".into(),
+        };
+        assert_eq!(
+            scene_value(&scene, &enabled),
+            Some(0.0),
+            "bypassed reads as not enabled"
+        );
+        let other = Target::Lv2 {
+            node: "verb".into(),
+            symbol: "mix".into(),
+        };
+        assert_eq!(scene_value(&scene, &other), None);
     }
 }

@@ -124,6 +124,10 @@ pub struct Control {
     /// edit dialog can offer "Ping-pong" rather than "2"; empty when none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub scale_points: Vec<oxidal_lv2::ScalePoint>,
+    /// The value the saved preset holds, present only while the playing value
+    /// differs from it, so any client can list and undo live edits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub saved: Option<f64>,
 }
 impl Control {
     pub fn midi_value(
@@ -768,6 +772,7 @@ mod tests {
             logarithmic: false,
             display: String::new(),
             scale_points: Vec::new(),
+            saved: None,
         };
         assert_eq!(c.midi_value(M::Absolute, 0).unwrap(), Some(0.0));
         assert_eq!(c.midi_value(M::Absolute, 127).unwrap(), Some(1.0));
