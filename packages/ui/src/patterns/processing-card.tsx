@@ -1,4 +1,5 @@
 import { Plus } from '@phosphor-icons/react';
+import type { ReactNode } from 'react';
 
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -155,24 +156,7 @@ export function ProcessingCard({
           </Caption>
         )}
       </div>
-      <div className="grid gap-1.5">
-        <span className="text-sm font-semibold">Silent branches</span>
-        <SegmentedControl
-          size="sm"
-          value={policy}
-          onValueChange={(v) => v && onPolicy(v as BranchPolicy)}
-          aria-label="Silent branches"
-          className="w-full"
-        >
-          <Segment value="running">Keep running</Segment>
-          <Segment value="sleep">Sleep</Segment>
-        </SegmentedControl>
-        <Caption className="text-xs">
-          {policy === 'running'
-            ? 'Every scene change is instant: the amp is already warm. Uses the most processing.'
-            : `Amps not in the playing scene use no processing and wake with no gap.${busiest ? ` Busiest change: ${busiest.from} to ${busiest.to}, ${busiest.amps} amps.` : ''}`}
-        </Caption>
-      </div>
+      <SilentBranches policy={policy} onPolicy={onPolicy} busiest={busiest} />
       <ul className="m-0 grid gap-1 border-t border-border pt-2 pl-4 text-sm">
         {amps.map((a, i) => (
           <li
@@ -184,5 +168,60 @@ export function ProcessingCard({
         ))}
       </ul>
     </Card>
+  );
+}
+
+/**
+ * Whether the paths a scene does not play keep running or sleep: Keep running
+ * makes every scene change instant and uses the most processing; Sleep stops
+ * them, so they use none, and wakes them with no gap when a scene needs them.
+ * Used in the Processing card and in the Rig's scene panel.
+ */
+export function SilentBranches({
+  policy,
+  onPolicy,
+  busiest,
+  status,
+  disabled,
+  children,
+}: {
+  policy: BranchPolicy;
+  onPolicy: (policy: BranchPolicy) => void;
+  /** The scene change that needs the most, while sleeping. */
+  busiest?: { from: string; to: string; amps: number };
+  /** Such as "2 playing · 1 asleep". */
+  status?: string;
+  disabled?: boolean;
+  /** A check or a step to confirm under the choice. */
+  children?: ReactNode;
+}) {
+  return (
+    <div className="grid gap-1.5" role="group" aria-label="Silent branches">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-sm font-semibold">Silent branches</span>
+        {status && (
+          <Caption as="span" className="text-xs">
+            {status}
+          </Caption>
+        )}
+      </div>
+      <SegmentedControl
+        size="sm"
+        value={policy}
+        onValueChange={(v) => v && onPolicy(v as BranchPolicy)}
+        aria-label="Silent branches"
+        className="w-full"
+        disabled={disabled}
+      >
+        <Segment value="running">Keep running</Segment>
+        <Segment value="sleep">Sleep</Segment>
+      </SegmentedControl>
+      <Caption className="text-xs">
+        {policy === 'running'
+          ? 'Every scene change is instant: the amp is already warm. Uses the most processing.'
+          : `Amps not in the playing scene use no processing and wake with no gap.${busiest ? ` Busiest change: ${busiest.from} to ${busiest.to}, ${busiest.amps} amps.` : ''}`}
+      </Caption>
+      {children}
+    </div>
   );
 }

@@ -38,37 +38,49 @@ export function PresetSteps({
   previous,
   next,
   disabled = false,
+  size = 'sm',
+  only,
   onStep,
 }: {
   previous?: string;
   next?: string;
   disabled?: boolean;
+  /** `xs` in the floating capsule: borderless, the capsule's height. */
+  size?: 'sm' | 'xs';
+  /** One arrow on its own, so the two can flank the preset's name. */
+  only?: 'previous' | 'next';
   onStep: (direction: -1 | 1) => void;
 }) {
+  const arrow = (direction: -1 | 1) => {
+    const label = direction < 0 ? 'Previous preset' : 'Next preset';
+    const name = direction < 0 ? previous : next;
+    const Icon = direction < 0 ? CaretLeft : CaretRight;
+    return (
+      <Button
+        key={direction}
+        size={size === 'xs' ? 'icon-xs' : 'icon-sm'}
+        variant={size === 'xs' ? 'ghost' : 'outline'}
+        aria-label={name ? label + ': ' + name : label}
+        title={name ? label + ': ' + name : label}
+        disabled={disabled || !name}
+        onClick={() => onStep(direction)}
+      >
+        <Icon aria-hidden="true" />
+      </Button>
+    );
+  };
+  if (only) return arrow(only === 'previous' ? -1 : 1);
   return (
     <div
       role="group"
       aria-label="Switch preset"
-      className="inline-flex shrink-0 items-center gap-1"
+      className={
+        size === 'xs'
+          ? 'inline-flex shrink-0 items-center'
+          : 'inline-flex shrink-0 items-center gap-1'
+      }
     >
-      {([-1, 1] as const).map((direction) => {
-        const label = direction < 0 ? 'Previous preset' : 'Next preset';
-        const name = direction < 0 ? previous : next;
-        const Icon = direction < 0 ? CaretLeft : CaretRight;
-        return (
-          <Button
-            key={direction}
-            size="icon"
-            variant="outline"
-            aria-label={name ? label + ': ' + name : label}
-            title={name ? label + ': ' + name : label}
-            disabled={disabled || !name}
-            onClick={() => onStep(direction)}
-          >
-            <Icon aria-hidden="true" />
-          </Button>
-        );
-      })}
+      {([-1, 1] as const).map(arrow)}
     </div>
   );
 }

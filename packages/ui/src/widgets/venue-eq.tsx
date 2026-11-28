@@ -206,7 +206,8 @@ export function VenueEq({
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-48 flex-1">
           <Select value={selectedProfile?.id ?? ''} onValueChange={pick}>
-            <SelectTrigger aria-label="Venue profile">
+            {/* One height with the buttons beside it. */}
+            <SelectTrigger size="sm" aria-label="Venue profile">
               <SelectValue placeholder="Unsaved output" />
             </SelectTrigger>
             <SelectContent>
@@ -251,7 +252,7 @@ export function VenueEq({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
-              size="icon"
+              size="icon-sm"
               variant="outline"
               aria-label="More for this profile"
             >

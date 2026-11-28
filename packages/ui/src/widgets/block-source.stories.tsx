@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, within } from 'storybook/test';
+import { expect, userEvent, within } from 'storybook/test';
 
 import { type BlockSource, SourceCard, SourceLine } from './block-source';
 import { SOURCES } from './block-source.data';
@@ -54,9 +54,25 @@ export const Cards: StoryObj = {
       tone.getByRole('link', { name: /View on TONE3000/ }),
     ).toHaveAttribute('href', 'https://www.tone3000.com/tones/12345');
     await expect(
-      tone.getByRole('link', { name: /Jane Capture's profile/ }),
+      tone.getByRole('link', { name: 'Jane Capture' }),
     ).toHaveAttribute('target', '_blank');
+    await expect(
+      tone.getByRole('link', { name: /Powered by/ }),
+    ).toHaveAttribute('href', 'https://www.tone3000.com');
     await expect(tone.getByText('CC BY 4.0')).toBeVisible();
+    // The small picture opens the tone's own pictures, large.
+    await userEvent.click(
+      tone.getByRole('button', { name: /^Show pictures of Plexi 50/ }),
+    );
+    const gallery = within(await within(document.body).findByRole('dialog'));
+    await expect(
+      gallery.getByRole('img', { name: /picture 1 of 2/ }),
+    ).toBeVisible();
+    await userEvent.click(gallery.getByRole('button', { name: 'Picture 2' }));
+    await expect(
+      gallery.getByRole('img', { name: /picture 2 of 2/ }),
+    ).toBeVisible();
+    await userEvent.keyboard('{Escape}');
     const lv2 = within(canvas.getByRole('region', { name: 'About Gate' }));
     await expect(lv2.getByRole('link', { name: /Calf website/ })).toBeVisible();
     const own = within(canvas.getByRole('region', { name: 'About Bloom' }));
@@ -78,6 +94,9 @@ export const UnsafeLink: StoryObj = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.queryByRole('link')).toBeNull();
+    // Only the fixed "Powered by TONE3000" credit is a link.
+    const links = canvas.getAllByRole('link');
+    await expect(links).toHaveLength(1);
+    await expect(links[0]).toHaveAttribute('href', 'https://www.tone3000.com');
   },
 };

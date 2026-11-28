@@ -214,7 +214,8 @@ export function ChainPort({
     <span
       data-slot="chain-port"
       className={cn(
-        'inline-flex h-7 shrink-0 items-center rounded-full border border-foreground px-2 small-caps text-xs font-medium',
+        // As the chain map draws its ends: a bold circle.
+        'grid size-10 shrink-0 place-items-center rounded-full border-2 border-foreground bg-background font-mono text-[11px] font-bold',
         className,
       )}
     >

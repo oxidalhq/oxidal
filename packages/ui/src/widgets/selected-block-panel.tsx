@@ -35,6 +35,8 @@ export function SelectedBlockPanel({
   changeDisabled,
   onAllControls,
   controlCount,
+  allControls,
+  switchLabel,
   beforeBypass,
   modelStepper,
   actions,
@@ -60,6 +62,16 @@ export function SelectedBlockPanel({
   changeDisabled?: boolean;
   onAllControls: () => void;
   controlCount: number;
+  /**
+   * Every control, shown in place under the curve (a laptop or wider), so
+   * tone chasing needs no sheet. Present while open; All controls closes it.
+   */
+  allControls?: ReactNode;
+  /**
+   * What the switch turns on, when it is not this block alone: an engine
+   * with one switch for all its effects says "All effects".
+   */
+  switchLabel?: string;
   beforeBypass?: ReactNode;
   modelStepper?: ReactNode;
   actions?: ReactNode;
@@ -109,7 +121,7 @@ export function SelectedBlockPanel({
           className="size-10"
         />
         <div className="grid min-w-0 shrink-0 gap-0.5">
-          <Title as="h2" size="sm" className="truncate">
+          <Title as="h2" size="sm" className="truncate" title={title}>
             {title}
           </Title>
           <Caption as="span" className="truncate small-caps text-xs">
@@ -125,12 +137,7 @@ export function SelectedBlockPanel({
             {title} on
           </label>
           {renderSwitch(switchId)}
-          <Button
-            size="sm"
-            variant="outline"
-            className="ml-2"
-            onClick={onExpand}
-          >
+          <Button size="sm" variant="ghost" className="ml-2" onClick={onExpand}>
             <CaretUp /> Show controls
           </Button>
         </span>
@@ -168,7 +175,7 @@ export function SelectedBlockPanel({
               className="size-16"
             />
             <div className="grid min-w-0 gap-0.5">
-              <Title as="h2" size="sm" className="truncate">
+              <Title as="h2" size="sm" className="truncate" title={title}>
                 {title}
               </Title>
               <Caption as="span" className="truncate small-caps text-xs">
@@ -181,7 +188,11 @@ export function SelectedBlockPanel({
         {beforeBypass}
         <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-1.5">
           <label htmlFor={switchId} className="text-sm font-medium">
-            {on ? 'Block on' : 'Bypassed'}
+            {switchLabel
+              ? `${switchLabel} ${on ? 'on' : 'off'}`
+              : on
+                ? 'Block on'
+                : 'Bypassed'}
           </label>
           {renderSwitch(switchId)}
         </div>
@@ -198,8 +209,16 @@ export function SelectedBlockPanel({
               <ArrowsLeftRight /> Change…
             </Button>
           )}
-          <Button size="sm" variant="outline" onClick={onAllControls}>
-            <Faders /> All controls · {controlCount}
+          <Button
+            size="sm"
+            variant="outline"
+            aria-expanded={allControls ? true : undefined}
+            onClick={onAllControls}
+          >
+            {allControls ? <CaretUp /> : <Faders />}
+            {allControls
+              ? 'Fewer controls'
+              : `All controls${controlCount > 0 ? ` · ${controlCount}` : ''}`}
           </Button>
           {actions}
         </div>
@@ -213,6 +232,16 @@ export function SelectedBlockPanel({
       >
         {controls}
       </div>
+      {allControls && (
+        <div
+          className="grid min-w-0 gap-3 border-t border-border pt-3 lg:col-span-2 lg:col-start-2"
+          role="region"
+          aria-label={`${title}: every control`}
+          data-slot="block-panel-all"
+        >
+          {allControls}
+        </div>
+      )}
     </BlockDock>
   );
 }

@@ -50,6 +50,8 @@ function Rig({
   const store = useModelDownloads(MODELS);
   return (
     <RigSurface
+      chainView="map"
+      className="h-dvh"
       blockTools={(b) => b.kind === 'amp' && <NamBlockToolsDemo />}
       presetName={name}
       playing
@@ -396,6 +398,8 @@ function ScenesRig() {
   const [scene, setScene] = useState('verse');
   return (
     <RigSurface
+      chainView="map"
+      className="h-dvh"
       blockTools={(b) => b.kind === 'amp' && <NamBlockToolsDemo />}
       presetName="Worship rig"
       playing
@@ -410,6 +414,7 @@ function ScenesRig() {
       onMakeDefault={rig.onMakeDefault}
       scenes={FOUR_SCENES.map((s, i) => ({ ...s, number: i + 1 }))}
       defaultSceneSettings={FOUR_SCENES}
+      savedSceneSettings={FOUR_SCENES}
       activeScene={scene}
       onScene={setScene}
       levels={rig.levels}
@@ -432,8 +437,20 @@ export const EditingScenes: StoryObj = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);
+    // Where changes go shows on the chain bar once something has changed.
+    await expect(
+      canvas.queryByRole('button', { name: /^Changes: whole preset/ }),
+    ).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: 'Edit scenes' }));
+    const grid = within(
+      await page.findByRole('dialog', { name: 'Edit scenes' }),
+    );
     await userEvent.click(
-      canvas.getByRole('button', { name: /^Changes: whole preset/ }),
+      grid.getByRole('switch', { name: 'Lead branch in Chorus' }),
+    );
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(
+      await canvas.findByRole('button', { name: /^Changes: whole preset/ }),
     );
     await userEvent.click(
       await page.findByRole('button', { name: 'Edit scenes…' }),
@@ -442,7 +459,6 @@ export const EditingScenes: StoryObj = {
       await page.findByRole('dialog', { name: 'Edit scenes' }),
     );
     const lead = sheet.getByRole('switch', { name: 'Lead branch in Chorus' });
-    await userEvent.click(lead);
     await expect(lead).toHaveAttribute('aria-checked', 'true');
     await userEvent.keyboard('{Escape}');
 

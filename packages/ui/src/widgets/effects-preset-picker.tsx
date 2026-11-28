@@ -15,7 +15,11 @@ export type EffectsPresetOption = {
   unavailable?: string;
 };
 
-/** Effects-only presets use the same name, list and step controls as Rig. */
+/**
+ * Effects-only presets use the same name, list and step controls as Rig. In
+ * the floating capsule (`capsule`) it is drawn as every preset is there:
+ * ‹ name ⌄ › at the capsule's height, the arrows borderless.
+ */
 export function EffectsPresetPicker({
   name,
   current,
@@ -24,6 +28,7 @@ export function EffectsPresetPicker({
   loading,
   stopped,
   edited,
+  capsule = false,
   onOpen,
   onChoose,
 }: {
@@ -34,6 +39,8 @@ export function EffectsPresetPicker({
   loading?: boolean;
   stopped?: boolean;
   edited?: boolean;
+  /** Drawn in the floating capsule. */
+  capsule?: boolean;
   onOpen: () => void;
   onChoose: (item: EffectsPresetOption, source: 'list' | 'step') => void;
 }) {
@@ -46,10 +53,35 @@ export function EffectsPresetPicker({
   const index = available.findIndex((item) => item.id === current);
   const previous = index >= 0 ? available[index - 1] : available.at(-1);
   const next = available[index + 1];
+  const step = (direction: -1 | 1) => {
+    const item = direction < 0 ? previous : next;
+    if (item) onChoose(item, 'step');
+  };
+  const steps = (only?: 'previous' | 'next') => (
+    <PresetSteps
+      size={capsule ? 'xs' : 'sm'}
+      only={only}
+      previous={previous?.name}
+      next={next?.name}
+      disabled={disabled || loading}
+      onStep={step}
+    />
+  );
   return (
-    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
+    <div
+      className={
+        capsule
+          ? 'flex min-w-0 items-center'
+          : 'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1'
+      }
+    >
+      {capsule && steps('previous')}
       <PresetNameButton
-        className="inline-flex min-h-touch min-w-0 items-center justify-between gap-2 text-left font-semibold [&_svg]:shrink-0"
+        className={
+          capsule
+            ? 'inline-flex min-h-control-xs max-w-[20rem] min-w-0 items-center gap-1.5 rounded-lg px-1.5 font-serif text-lg font-semibold hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 max-md:text-base [&_svg]:shrink-0 [@media(pointer:coarse)]:min-h-touch'
+            : 'inline-flex min-h-touch min-w-0 items-center justify-between gap-2 text-left font-semibold [&_svg]:shrink-0'
+        }
         name={name}
         label={stopped ? 'Choose an effects preset' : 'Playing preset'}
         disabled={disabled}
@@ -61,15 +93,7 @@ export function EffectsPresetPicker({
       >
         <span className="min-w-0 truncate">{name}</span>
       </PresetNameButton>
-      <PresetSteps
-        previous={previous?.name}
-        next={next?.name}
-        disabled={disabled || loading}
-        onStep={(direction) => {
-          const item = direction < 0 ? previous : next;
-          if (item) onChoose(item, 'step');
-        }}
-      />
+      {capsule ? steps('next') : steps()}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader title="Choose an effects preset" closeLabel="Close" />

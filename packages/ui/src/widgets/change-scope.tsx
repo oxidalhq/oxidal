@@ -24,6 +24,7 @@ export function ChangeScope({
   sceneColour,
   onScope,
   onEditScenes,
+  size = 'sm',
   className,
 }: {
   scope: ChangeScopeValue;
@@ -32,6 +33,8 @@ export function ChangeScope({
   sceneColour?: string;
   onScope: (scope: ChangeScopeValue) => void;
   onEditScenes: () => void;
+  /** `xs` for a slim bar; touch screens keep the full target either way. */
+  size?: 'sm' | 'xs';
   className?: string;
 }) {
   const [open, setOpen] = React.useState(false);
@@ -55,7 +58,8 @@ export function ChangeScope({
           type="button"
           data-slot="change-scope"
           className={cn(
-            'inline-flex min-h-9 items-center gap-1.5 rounded-md px-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+            'inline-flex items-center gap-1.5 rounded-md px-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [@media(pointer:coarse)]:min-h-touch',
+            size === 'xs' ? 'min-h-control-xs' : 'min-h-control',
             scope === 'scene' && 'text-foreground',
             className,
           )}

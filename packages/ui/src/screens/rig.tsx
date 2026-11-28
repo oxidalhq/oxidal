@@ -14,6 +14,7 @@ import { NamBlockToolsDemo } from '../patterns/nam-block.demo';
 import { PARALLEL_ROUTE, SCENES, SERIAL_ROUTE } from '../patterns/rig.fixtures';
 import { RigAudioUnavailable } from '../patterns/rig-audio-unavailable';
 import { RigSurface } from '../patterns/rig-surface';
+import { PresetRow } from '../patterns/rig-top-bar';
 import { useModelDownloads } from '../patterns/swap.demo';
 import { BLOCK_TYPES, MODELS } from '../patterns/swap.fixtures';
 import { useRigDemo } from '../patterns/use-rig.demo';
@@ -32,8 +33,22 @@ import {
 
 const PRESETS = ['Rhythm section', 'Echo lead', 'Parallel amps'] as const;
 
-/** The Rig screen: the rig surface, or the card that says why audio is not playing. */
-export function Rig({ audio = true }: { audio?: boolean }) {
+/**
+ * The Rig screen: the rig surface, or the card that says why audio is not
+ * playing. With `chainView="map"` the chain is a map with the chain bar, and
+ * the slim preset row takes the heading's place.
+ */
+export function Rig({
+  audio = true,
+  chainView = 'route',
+  className,
+}: {
+  audio?: boolean;
+  chainView?: 'route' | 'map';
+  className?: string;
+}) {
+  const [muted, setMuted] = useState(false);
+  const [protectedPreset, setProtected] = useState(false);
   const [position, setPosition] = useState(0);
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState('');
@@ -49,133 +64,179 @@ export function Rig({ audio = true }: { audio?: boolean }) {
   const rig = [rhythm, echo, parallel][position]!;
   const store = useModelDownloads(MODELS);
   if (!audio) return <RigAudioUnavailable />;
-  return (
-    <RigSurface
-      blockTools={(b) => b.kind === 'amp' && <NamBlockToolsDemo />}
-      models={store.models}
-      blockTypes={BLOCK_TYPES}
-      effects={EFFECTS}
-      downloads={store.downloads}
-      onGetModel={store.onGet}
-      catalogue={store.catalogue}
-      key={position}
-      presetName={presetName}
-      presetTitle={
-        <PresetNameButton
-          name={presetName}
-          className="inline-flex min-h-touch items-center gap-2"
-          onOpen={() => {
-            setQuery('');
-            setSearching(true);
-          }}
-        />
-      }
-      presetSteps={
-        <>
-          <Dialog open={searching} onOpenChange={setSearching}>
-            <DialogContent>
-              <DialogHeader title="Choose a preset" closeLabel="Close" />
-              <DialogBody className="grid gap-2">
-                <input
-                  type="search"
-                  aria-label="Find a preset"
-                  placeholder="Find a preset…"
-                  className="min-h-touch rounded-md border px-3"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-                {PRESETS.map(
-                  (name, i) =>
-                    name.toLowerCase().includes(query.toLowerCase().trim()) && (
-                      <Button
-                        key={name}
-                        variant="outline"
-                        aria-pressed={i === position}
-                        onClick={() => {
-                          setSearching(false);
-                          setPosition(i);
-                        }}
-                      >
-                        {name}
-                      </Button>
-                    ),
-                )}
-                {!PRESETS.some((name) =>
-                  name.toLowerCase().includes(query.toLowerCase().trim()),
-                ) && <p>No matching presets.</p>}
-              </DialogBody>
-            </DialogContent>
-          </Dialog>
-          <PresetSteps
-            previous={PRESETS[position - 1]}
-            next={PRESETS[position + 1]}
-            onStep={(dir) =>
-              setPosition((n) =>
-                Math.max(0, Math.min(PRESETS.length - 1, n + dir)),
-              )
-            }
+  const search = (
+    <Dialog open={searching} onOpenChange={setSearching}>
+      <DialogContent>
+        <DialogHeader title="Choose a preset" closeLabel="Close" />
+        <DialogBody className="grid gap-2">
+          <input
+            type="search"
+            aria-label="Find a preset"
+            placeholder="Find a preset…"
+            className="min-h-touch rounded-md border px-3"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
           />
-        </>
-      }
-      stompControls={
-        position === 2 ? (
-          <ParallelListeningDemo />
-        ) : (
-          position === 0 && (
-            <div className="px-page">
-              <Button variant="outline" onClick={() => setAssigning(true)}>
-                {stomp
-                  ? 'Edit ' + stomp.name + ' switch'
-                  : 'Assign a stomp switch'}
-              </Button>
-              {assigning && (
-                <StompAssignmentDialog
-                  initial={stomp ?? undefined}
-                  blocks={blocksOf(rig.route).map((b) => ({
-                    id: b.id,
-                    name: b.label,
-                  }))}
-                  disabled={false}
-                  onClose={() => setAssigning(false)}
-                  onRemove={
-                    stomp
-                      ? () => {
-                          saveStomp(null);
-                          setAssigning(false);
-                        }
-                      : undefined
-                  }
-                  onSave={(name, nodes) => {
-                    saveStomp({ id: 'wet', name, nodes });
-                    setAssigning(false);
+          {PRESETS.map(
+            (name, i) =>
+              name.toLowerCase().includes(query.toLowerCase().trim()) && (
+                <Button
+                  key={name}
+                  variant="outline"
+                  aria-pressed={i === position}
+                  onClick={() => {
+                    setSearching(false);
+                    setPosition(i);
                   }}
-                />
-              )}
-            </div>
+                >
+                  {name}
+                </Button>
+              ),
+          )}
+          {!PRESETS.some((name) =>
+            name.toLowerCase().includes(query.toLowerCase().trim()),
+          ) && <p>No matching presets.</p>}
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
+  );
+  const map = chainView === 'map';
+  return (
+    <>
+      {map && search}
+      <RigSurface
+        chainView={chainView}
+        className={className}
+        header={
+          map ? (
+            <PresetRow
+              name={presetName}
+              presets={[...PRESETS]}
+              onPick={(name) =>
+                setPosition(PRESETS.indexOf(name as (typeof PRESETS)[number]))
+              }
+              previousName={PRESETS[position - 1]}
+              nextName={PRESETS[position + 1]}
+              onPrevious={
+                position > 0 ? () => setPosition(position - 1) : undefined
+              }
+              onNext={
+                position < PRESETS.length - 1
+                  ? () => setPosition(position + 1)
+                  : undefined
+              }
+              muted={muted}
+              onMute={setMuted}
+              onSearch={() => {
+                setQuery('');
+                setSearching(true);
+              }}
+              onTuner={() => undefined}
+              onPerform={() => undefined}
+              protectedPreset={protectedPreset}
+              onProtect={setProtected}
+              onStopAudio={() => undefined}
+              onDiscard={
+                rig.route !== rig.saved
+                  ? () => rig.onRoute(rig.saved)
+                  : undefined
+              }
+            />
+          ) : undefined
+        }
+        blockTools={(b) => b.kind === 'amp' && <NamBlockToolsDemo />}
+        models={store.models}
+        blockTypes={BLOCK_TYPES}
+        effects={EFFECTS}
+        downloads={store.downloads}
+        onGetModel={store.onGet}
+        catalogue={store.catalogue}
+        key={position}
+        presetName={presetName}
+        presetTitle={
+          <PresetNameButton
+            name={presetName}
+            className="inline-flex min-h-touch items-center gap-2"
+            onOpen={() => {
+              setQuery('');
+              setSearching(true);
+            }}
+          />
+        }
+        presetSteps={
+          <>
+            {!map && search}
+            <PresetSteps
+              previous={PRESETS[position - 1]}
+              next={PRESETS[position + 1]}
+              onStep={(dir) =>
+                setPosition((n) =>
+                  Math.max(0, Math.min(PRESETS.length - 1, n + dir)),
+                )
+              }
+            />
+          </>
+        }
+        stompControls={
+          position === 2 ? (
+            <ParallelListeningDemo />
+          ) : (
+            position === 0 && (
+              <div className="px-page">
+                <Button variant="outline" onClick={() => setAssigning(true)}>
+                  {stomp
+                    ? 'Edit ' + stomp.name + ' switch'
+                    : 'Assign a stomp switch'}
+                </Button>
+                {assigning && (
+                  <StompAssignmentDialog
+                    initial={stomp ?? undefined}
+                    blocks={blocksOf(rig.route).map((b) => ({
+                      id: b.id,
+                      name: b.label,
+                    }))}
+                    disabled={false}
+                    onClose={() => setAssigning(false)}
+                    onRemove={
+                      stomp
+                        ? () => {
+                            saveStomp(null);
+                            setAssigning(false);
+                          }
+                        : undefined
+                    }
+                    onSave={(name, nodes) => {
+                      saveStomp({ id: 'wet', name, nodes });
+                      setAssigning(false);
+                    }}
+                  />
+                )}
+              </div>
+            )
           )
-        )
-      }
-      playing
-      route={rig.route}
-      saved={rig.saved}
-      onRoute={rig.onRoute}
-      versions={rig.versions}
-      currentVersion={rig.current}
-      onVersion={rig.onVersion}
-      onSaveVersion={rig.onSaveVersion}
-      onSaveVersionAs={rig.onSaveVersionAs}
-      onMakeDefault={rig.onMakeDefault}
-      scenes={rig.settings ?? (position === 0 ? CAPTURE_SCENES : SCENES)}
-      sceneSettings={rig.settings}
-      savedSceneSettings={rig.savedSettings}
-      onSceneSettings={rig.setSettings}
-      activeScene={rig.scene}
-      onScene={rig.onScene}
-      sceneChanged={rig.sceneChanged}
-      levels={rig.levels}
-      inputLevel={rig.input}
-      onAudition={rig.onAudition}
-      onAdd={rig.onAdd}
-    />
+        }
+        playing
+        route={rig.route}
+        saved={rig.saved}
+        onRoute={rig.onRoute}
+        versions={rig.versions}
+        currentVersion={rig.current}
+        onVersion={rig.onVersion}
+        onSaveVersion={rig.onSaveVersion}
+        onSaveVersionAs={rig.onSaveVersionAs}
+        onMakeDefault={rig.onMakeDefault}
+        scenes={rig.settings ?? (position === 0 ? CAPTURE_SCENES : SCENES)}
+        sceneSettings={rig.settings}
+        savedSceneSettings={rig.savedSettings}
+        onSceneSettings={rig.setSettings}
+        activeScene={rig.scene}
+        onScene={rig.onScene}
+        sceneChanged={rig.sceneChanged}
+        levels={rig.levels}
+        inputLevel={rig.input}
+        onAudition={rig.onAudition}
+        onAdd={rig.onAdd}
+      />
+    </>
   );
 }

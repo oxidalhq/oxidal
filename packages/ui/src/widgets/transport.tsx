@@ -132,7 +132,6 @@ export function Transport({
       {!compact && speed !== undefined && (
         <Button
           variant="outline"
-          size="sm"
           aria-label={`Speed ${speed.toFixed(2)}×`}
           disabled={disabled}
           onClick={onSpeed}

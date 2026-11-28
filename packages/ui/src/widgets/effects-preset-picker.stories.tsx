@@ -131,3 +131,19 @@ export const SwitchEffectsPreset: StoryObj = {
     ).toBeVisible();
   },
 };
+
+/** In the floating capsule: ‹ name ⌄ › at the capsule's height, as every preset is drawn there. */
+export const InTheCapsule: StoryObj = {
+  render: () => (
+    <div className="inline-flex items-center rounded-[calc(var(--radius-lg)+0.25rem)] border border-border/80 bg-card/85 p-1">
+      <EffectsPresetPicker
+        capsule
+        name="Warm echo"
+        current="echo"
+        items={presets}
+        onOpen={() => {}}
+        onChoose={() => {}}
+      />
+    </div>
+  ),
+};

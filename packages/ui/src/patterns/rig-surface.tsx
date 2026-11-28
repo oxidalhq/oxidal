@@ -23,6 +23,7 @@ import { Switch } from '../components/ui/switch';
 import { Caption, Title } from '../components/ui/text';
 import { Toggle } from '../components/ui/toggle';
 import { glyphForBlock } from '../lib/block-glyphs';
+import { useChainCanvasControl } from '../lib/chain-canvas-control';
 import { cn } from '../lib/cn';
 import { scaleFromMidi } from '../lib/midi';
 import { originOf } from '../lib/model-origin';
@@ -43,6 +44,7 @@ import {
   updateBlock,
 } from '../lib/route';
 import { type Change, diffRoutes } from '../lib/route-diff';
+import { edgeKey, type RouteAt, routeGraph } from '../lib/route-graph';
 import {
   applyScene,
   sceneDifferences,
@@ -51,6 +53,8 @@ import {
   splitSceneEdit,
 } from '../lib/scene';
 import { sceneColour } from '../lib/scene-colours';
+import { useAllControls } from '../lib/use-all-controls';
+import { useVerticalRig } from '../lib/use-media';
 import { useRemembered } from '../lib/use-remembered';
 import {
   BlockEditor,
@@ -58,10 +62,12 @@ import {
   type BlockModel,
 } from '../widgets/block-editor';
 import { SourceCard } from '../widgets/block-source';
+import { ChainCanvas } from '../widgets/chain-canvas';
 import { ChangeScope } from '../widgets/change-scope';
 import { IrFacts } from '../widgets/ir-facts';
 import { MidiTarget } from '../widgets/midi';
 import { ModelStepper } from '../widgets/model-stepper';
+import { PanZoom } from '../widgets/pan-zoom';
 import { RouteView } from '../widgets/route-view';
 import { SceneChange, type SceneChangeSettings } from '../widgets/scene-change';
 import { SceneEditor, type SceneModel } from '../widgets/scene-editor';
@@ -80,6 +86,7 @@ import {
 import { VisualControl } from '../widgets/visual-control';
 import { BlockActions } from './block-actions';
 import { BlockChooser, type EffectChoice } from './block-chooser';
+import { ChainWorkspace } from './chain-workspace';
 import type { ToneCatalogue } from './model-browser';
 import { RigHeading } from './rig-heading';
 import {
@@ -188,6 +195,8 @@ export function RigSurface({
   downloads,
   onGetModel,
   catalogue,
+  chainView = 'route',
+  header,
   className,
 }: {
   presetName: string;
@@ -244,8 +253,20 @@ export function RigSurface({
   onGetModel?: (choice: ModelChoice) => void;
   /** Search TONE3000 from the Change sheet. */
   catalogue?: ToneCatalogue;
+  /**
+   * `map` draws the chain as a map you pan and zoom (Tree switches back to
+   * the route), with the chain bar and the panel under it. The parent gives
+   * the surface its height.
+   */
+  chainView?: 'route' | 'map';
+  /** With the map: drawn instead of the heading, such as the top bar and preset row. */
+  header?: React.ReactNode;
   className?: string;
 }) {
+  const mapMode = chainView === 'map';
+  const canvas = useChainCanvasControl();
+  const [view, setView] = React.useState<'map' | 'tree'>('map');
+  const vertical = useVerticalRig();
   const phone = usePhone();
   const [swap, setSwap] = React.useState(false);
   const [adding, setAdding] = React.useState<{
@@ -303,6 +324,8 @@ export function RigSurface({
   };
   const [sheet, setSheet] = React.useState(false);
   const [full, setFull] = React.useState(false);
+  // A laptop opens every control in the block card; a narrower screen, a sheet.
+  const allControls = useAllControls();
   const activeIndex = scenes.findIndex((sc) => sc.id === activeScene);
   const sceneModel =
     scope === 'scene' && compare !== 'saved'
@@ -394,6 +417,7 @@ export function RigSurface({
       : []),
   ];
   const reading = compare === 'saved';
+  const mapped = routeGraph(shown, glyphForBlock);
 
   // Several changes can arrive in one gesture (two points of a drawing);
   // each builds on the last, not on the route as it was when drawn.
@@ -565,37 +589,33 @@ export function RigSurface({
       </MidiTarget>
     );
 
-  return (
-    <section
-      data-slot="rig-surface"
-      aria-label="Rig"
-      className={cn('grid grid-cols-[minmax(0,1fr)] gap-2', className)}
-    >
-      <RigHeading
-        playing={playing}
-        identity={
-          <>
-            <Title size="md" className="truncate" aria-label={presetName}>
-              {presetTitle ?? presetName}
-            </Title>
-            {presetSteps}
-            <VersionPicker
-              presetName={presetName}
-              versions={versions}
-              current={currentVersion}
-              changes={changes.length}
-              onSelect={onVersion}
-              onSave={onSaveVersion}
-              onSaveAs={onSaveVersionAs}
-              onMakeDefault={onMakeDefault}
-              onDiscard={
-                onDiscard ??
-                (() => {
-                  onRoute(saved);
-                  if (savedSceneSettings) setSceneModels(savedSceneSettings);
-                })
-              }
-            />
+  const heading = (
+    <RigHeading
+      playing={playing}
+      identity={
+        <>
+          <Title size="md" className="truncate" aria-label={presetName}>
+            {presetTitle ?? presetName}
+          </Title>
+          {presetSteps}
+          <VersionPicker
+            presetName={presetName}
+            versions={versions}
+            current={currentVersion}
+            changes={changes.length}
+            onSelect={onVersion}
+            onSave={onSaveVersion}
+            onSaveAs={onSaveVersionAs}
+            onMakeDefault={onMakeDefault}
+            onDiscard={
+              onDiscard ??
+              (() => {
+                onRoute(saved);
+                if (savedSceneSettings) setSceneModels(savedSceneSettings);
+              })
+            }
+          />
+          {!mapMode && (
             <ChangeScope
               scope={scope}
               sceneName={scenes[activeIndex]?.name ?? 'This scene'}
@@ -607,63 +627,59 @@ export function RigSurface({
               onScope={setScope}
               onEditScenes={() => setSceneEditor(true)}
             />
-            {reading && (
-              <Badge tone="selected">Hearing the saved version</Badge>
-            )}
-          </>
-        }
+          )}
+          {reading && <Badge tone="selected">Hearing the saved version</Badge>}
+        </>
+      }
+    >
+      {!mapMode && changes.length > 0 && (
+        <>
+          <CompareToggle value={compare} onChange={setCompare} />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="outline">
+                <ClockCounterClockwise /> {changes.length}{' '}
+                {changes.length === 1 ? 'change' : 'changes'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-96">
+              <ChangeList
+                changes={changes}
+                onRevert={(change) =>
+                  change.kind === 'value' &&
+                  control(change.block, change.control, change.from)
+                }
+              />
+            </PopoverContent>
+          </Popover>
+        </>
+      )}
+      <Toggle size="sm" pressed={showScenes} onPressedChange={setShowScenes}>
+        <SquaresFour /> Scenes
+      </Toggle>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={reading || !scenes.length}
+        onClick={() => setSceneEditor(true)}
       >
-        {changes.length > 0 && (
-          <>
-            <CompareToggle value={compare} onChange={setCompare} />
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button size="sm" variant="outline">
-                  <ClockCounterClockwise /> {changes.length}{' '}
-                  {changes.length === 1 ? 'change' : 'changes'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-96">
-                <ChangeList
-                  changes={changes}
-                  onRevert={(change) =>
-                    change.kind === 'value' &&
-                    control(change.block, change.control, change.from)
-                  }
-                />
-              </PopoverContent>
-            </Popover>
-          </>
-        )}
-        <Toggle size="sm" pressed={showScenes} onPressedChange={setShowScenes}>
-          <SquaresFour /> Scenes
-        </Toggle>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={reading || !scenes.length}
-          onClick={() => setSceneEditor(true)}
-        >
-          Edit scenes
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={!onTuner}
-          onClick={onTuner}
-        >
-          <MusicNote /> Tuner
-        </Button>
-        <Toggle
-          size="sm"
-          pressed={editing}
-          onPressedChange={setEditing}
-          disabled={reading}
-        >
-          <PencilSimple /> Edit
-        </Toggle>
-      </RigHeading>
-
+        Edit scenes
+      </Button>
+      <Button size="sm" variant="outline" disabled={!onTuner} onClick={onTuner}>
+        <MusicNote /> Tuner
+      </Button>
+      <Toggle
+        size="sm"
+        pressed={editing}
+        onPressedChange={setEditing}
+        disabled={reading}
+      >
+        <PencilSimple /> Edit
+      </Toggle>
+    </RigHeading>
+  );
+  const scenePads = (
+    <>
       {showScenes && (
         <div className="grid gap-2 px-page">
           <ScenePads
@@ -679,28 +695,31 @@ export function RigSurface({
           />
         </div>
       )}
-
-      {stompControls}
-      <RouteView
-        route={withPreview(shown)}
-        onChange={change}
-        selected={selected}
-        onSelect={select}
-        editing={editing && !reading}
-        levels={levels}
-        inputLevel={inputLevel}
-        onAudition={onAudition}
-        sceneChanged={
-          sceneModel ? sceneDifferences(route, sceneModel) : sceneChanged
-        }
-        sceneColour={
-          activeIndex >= 0
-            ? (scenes[activeIndex]?.colour ?? sceneColour(activeIndex))
-            : undefined
-        }
-        onAdd={effects ? (path, index) => setAdding({ path, index }) : onAdd}
-      />
-
+    </>
+  );
+  const routeView = (
+    <RouteView
+      route={withPreview(shown)}
+      onChange={change}
+      selected={selected}
+      onSelect={select}
+      editing={editing && !reading}
+      levels={levels}
+      inputLevel={inputLevel}
+      onAudition={onAudition}
+      sceneChanged={
+        sceneModel ? sceneDifferences(route, sceneModel) : sceneChanged
+      }
+      sceneColour={
+        activeIndex >= 0
+          ? (scenes[activeIndex]?.colour ?? sceneColour(activeIndex))
+          : undefined
+      }
+      onAdd={effects ? (path, index) => setAdding({ path, index }) : onAdd}
+    />
+  );
+  const editToolbar = (
+    <>
       {editing && block && (
         <div
           role="toolbar"
@@ -741,11 +760,17 @@ export function RigSurface({
           </Caption>
         </div>
       )}
-
+    </>
+  );
+  const blockDock = (
+    <>
       {block && !editing && (
         <div
           data-slot="block-dock"
-          className="sticky bottom-0 z-strip hidden px-page pt-1 pb-3 md:block"
+          className={cn(
+            'hidden px-page md:block',
+            mapMode ? 'pb-3' : 'sticky bottom-0 z-strip pt-1 pb-3',
+          )}
         >
           <SelectedBlockPanel
             title={block.label}
@@ -771,7 +796,20 @@ export function RigSurface({
             renderSwitch={(id) => blockSwitch(id, true)}
             onChange={canSwap ? () => openSwap(block.id) : undefined}
             changeDisabled={reading}
-            onAllControls={() => setFull(true)}
+            onAllControls={() =>
+              allControls.inPlace ? allControls.toggle() : setFull(true)
+            }
+            allControls={
+              allControls.open ? (
+                <>
+                  <BlockFullEditor
+                    block={block}
+                    onControl={(c, v) => control(block.id, c, v)}
+                  />
+                  {blockTools?.(block)}
+                </>
+              ) : undefined
+            }
             controlCount={block.controls.length}
             beforeBypass={
               sceneModel &&
@@ -895,7 +933,10 @@ export function RigSurface({
           />
         </div>
       )}
-
+    </>
+  );
+  const overlays = (
+    <>
       {phone && (
         <BlockEditor
           block={block}
@@ -986,6 +1027,211 @@ export function RigSurface({
           {blockTools?.(block)}
         </DockableSheet>
       )}
+    </>
+  );
+
+  if (mapMode) {
+    // The chain bar's compact height in the bar; the panel's own height below it.
+    const scopeControl = (size: 'sm' | 'xs' = 'sm') => (
+      <ChangeScope
+        size={size}
+        scope={scope}
+        sceneName={scenes[activeIndex]?.name ?? 'This scene'}
+        sceneColour={
+          activeIndex >= 0
+            ? (scenes[activeIndex]?.colour ?? sceneColour(activeIndex))
+            : undefined
+        }
+        onScope={setScope}
+        onEditScenes={() => setSceneEditor(true)}
+      />
+    );
+    const addHere = (at: RouteAt) =>
+      effects ? setAdding(at) : onAdd?.(at.path, at.index);
+    const canAdd = Boolean(effects || onAdd) && !reading;
+    const where = selected ? locate(route, selected) : null;
+    return (
+      <section
+        data-slot="rig-surface"
+        aria-label="Rig"
+        className={cn('flex min-h-0 flex-col', className)}
+      >
+        {header ?? heading}
+        <ChainWorkspace
+          canvas={canvas}
+          chainView={view}
+          onChainView={setView}
+          selected={block ? { name: block.label, on: block.on } : null}
+          onAdd={
+            canAdd && where
+              ? () => addHere({ path: where.path, index: where.index + 1 })
+              : undefined
+          }
+          edits={{
+            count: changes.length,
+            list: (
+              <ChangeList
+                changes={changes}
+                onRevert={(c) =>
+                  c.kind === 'value' && control(c.block, c.control, c.from)
+                }
+              />
+            ),
+            compare,
+            onCompare: setCompare,
+            scope: scopeControl('xs'),
+            onSave: onSaveVersion,
+          }}
+          chain={
+            view === 'map' ? (
+              <ChainCanvas
+                toolbar="none"
+                control={canvas}
+                graph={mapped.graph}
+                selected={selected}
+                onSelect={(id) => id && select(id)}
+                laneLabel={(lane) => mapped.lanes[lane] ?? `Path ${lane + 1}`}
+                card={(id) => {
+                  const b = blocks.find((x) => x.id === id);
+                  if (!b) return undefined;
+                  return {
+                    caption: b.caption ?? b.kind,
+                    preview: previewOf(b) || undefined,
+                    kind: b.kind,
+                    on: b.on,
+                    unsaved: b.unsaved,
+                    sceneMark: (sceneModel
+                      ? sceneDifferences(route, sceneModel)
+                      : (sceneChanged ?? [])
+                    ).includes(id),
+                  };
+                }}
+                onPlus={
+                  editing && canAdd
+                    ? (edge) => {
+                        const at = mapped.at.get(edgeKey(edge));
+                        if (at) addHere(at);
+                      }
+                    : undefined
+                }
+                plusLabel={(edge) => {
+                  const name = (id: string) =>
+                    mapped.graph.nodes.find((n) => n.id === id)?.name ?? id;
+                  return `Add a block between ${name(edge[0])} and ${name(edge[1])}`;
+                }}
+                onMove={
+                  editing && !reading
+                    ? (id, edge) => {
+                        const at = mapped.at.get(edgeKey(edge));
+                        if (at) onRoute(moveStep(route, id, at.path, at.index));
+                      }
+                    : undefined
+                }
+                disabled={reading}
+              />
+            ) : (
+              // The tree pans, zooms and centres like the map.
+              <PanZoom
+                control={canvas}
+                selected={selected}
+                still={vertical}
+                className={vertical ? 'h-full overflow-auto py-4' : undefined}
+              >
+                {routeView}
+              </PanZoom>
+            )
+          }
+        >
+          {(layout) => (
+            <div className="grid gap-2 pt-2">
+              {header && (
+                <div
+                  role="group"
+                  aria-label="Rig actions"
+                  className="flex flex-wrap items-center gap-2 px-page"
+                >
+                  <VersionPicker
+                    presetName={presetName}
+                    versions={versions}
+                    current={currentVersion}
+                    changes={changes.length}
+                    onSelect={onVersion}
+                    onSave={onSaveVersion}
+                    onSaveAs={onSaveVersionAs}
+                    onMakeDefault={onMakeDefault}
+                    onDiscard={
+                      onDiscard ??
+                      (() => {
+                        onRoute(saved);
+                        if (savedSceneSettings)
+                          setSceneModels(savedSceneSettings);
+                      })
+                    }
+                  />
+                  <Toggle
+                    size="sm"
+                    pressed={showScenes}
+                    onPressedChange={setShowScenes}
+                  >
+                    <SquaresFour /> Scenes
+                  </Toggle>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={reading || !scenes.length}
+                    onClick={() => setSceneEditor(true)}
+                  >
+                    Edit scenes
+                  </Button>
+                  <Toggle
+                    size="sm"
+                    pressed={editing}
+                    onPressedChange={setEditing}
+                    disabled={reading}
+                  >
+                    <PencilSimple /> Edit
+                  </Toggle>
+                </div>
+              )}
+              {changes.length > 0 && !layout.barHasCompare && (
+                <div
+                  data-slot="panel-changes"
+                  className="flex flex-wrap items-center gap-2 px-page"
+                >
+                  {scopeControl()}
+                  <CompareToggle value={compare} onChange={setCompare} />
+                </div>
+              )}
+              {scenePads}
+              {stompControls}
+              {editToolbar}
+              {blockDock}
+            </div>
+          )}
+        </ChainWorkspace>
+        {overlays}
+      </section>
+    );
+  }
+
+  return (
+    <section
+      data-slot="rig-surface"
+      aria-label="Rig"
+      className={cn('grid grid-cols-[minmax(0,1fr)] gap-2', className)}
+    >
+      {heading}
+
+      {scenePads}
+
+      {stompControls}
+      {routeView}
+
+      {editToolbar}
+
+      {blockDock}
+
+      {overlays}
     </section>
   );
 }

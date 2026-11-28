@@ -1,9 +1,15 @@
 import { ArrowLeft, MagnifyingGlass } from '@phosphor-icons/react';
 import * as React from 'react';
 
-import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { List, ListRow } from '../components/ui/list-row';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
 import {
   Sheet,
   SheetBody,
@@ -33,6 +39,14 @@ export type EffectOption = {
 };
 
 export type EffectChoice = EffectOption & { make: (id: string) => BlockModel };
+
+/** Who made an effect, as the Made by filter names them. */
+const makerOf = (effect: EffectOption) =>
+  effect.from === 'oxidal'
+    ? 'Oxidal'
+    : effect.from === 'engine'
+      ? 'TONE3000 engine'
+      : (effect.pack ?? 'Other');
 
 export type Placement = 'before' | 'after' | 'beside';
 
@@ -74,6 +88,8 @@ export function BlockChooser({
     'what' | 'nam' | 'ir' | 'effect' | 'where'
   >('what');
   const [query, setQuery] = React.useState('');
+  const [effectType, setEffectType] = React.useState<string | null>(null);
+  const [effectMaker, setEffectMaker] = React.useState<string | null>(null);
   const [pending, setPending] = React.useState<BlockModel | null>(null);
   // Closing starts the next visit from the first step.
   const close = (next: boolean) => {
@@ -214,11 +230,22 @@ export function BlockChooser({
           {step === 'effect' && (
             <>
               {search('Find an effect')}
+              <EffectFilters
+                types={[...new Set(effects.map((e) => e.kind))].sort()}
+                type={effectType}
+                onType={setEffectType}
+                makers={[...new Set(effects.map(makerOf))].sort()}
+                maker={effectMaker}
+                onMaker={setEffectMaker}
+              />
               <EffectChoices
-                options={effects.filter((effect) =>
-                  matches(
-                    `${effect.label} ${effect.kind} ${effect.pack ?? ''}`,
-                  ),
+                options={effects.filter(
+                  (effect) =>
+                    matches(
+                      `${effect.label} ${effect.kind} ${effect.pack ?? ''}`,
+                    ) &&
+                    (!effectType || effect.kind === effectType) &&
+                    (!effectMaker || makerOf(effect) === effectMaker),
                 )}
                 onSelect={(id) => {
                   const effect = effects.find((item) => item.id === id)!;
@@ -251,6 +278,65 @@ export function BlockChooser({
 }
 
 /** @see BlockChooser */
+/**
+ * Narrowing the effects: what kind of effect and who made it, as two
+ * drop-downs on one row under the search. A list that offers only one of a
+ * kind leaves that drop-down out.
+ */
+export function EffectFilters({
+  types,
+  type,
+  onType,
+  makers,
+  maker,
+  onMaker,
+}: {
+  types: readonly string[];
+  type: string | null;
+  onType: (type: string | null) => void;
+  makers: readonly string[];
+  maker: string | null;
+  onMaker: (maker: string | null) => void;
+}) {
+  const pick = (
+    label: string,
+    options: readonly string[],
+    value: string | null,
+    choose: (value: string | null) => void,
+  ) =>
+    options.length > 1 && (
+      <label className="grid min-w-0 flex-1 gap-1 text-xs text-muted-foreground">
+        {label}
+        <Select
+          value={value ?? 'all'}
+          onValueChange={(v) => choose(v === 'all' ? null : v)}
+        >
+          <SelectTrigger aria-label={label} size="sm" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All</SelectItem>
+            {options.map((option) => (
+              <SelectItem key={option} value={option}>
+                {option}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </label>
+    );
+  return (
+    <div
+      className="flex min-w-0 flex-wrap gap-2"
+      role="group"
+      aria-label="Filter effects"
+    >
+      {pick('Effect type', types, type, onType)}
+      {pick('Made by', makers, maker, onMaker)}
+    </div>
+  );
+}
+
 export function EffectChoices({
   options,
   onSelect,
@@ -354,9 +440,8 @@ export function EffectPlacement({
           <span className="text-sm text-muted-foreground">{caption}</span>
         </button>
       ))}
-      <Badge size="sm" className="justify-self-start whitespace-normal">
-        {note}
-      </Badge>
+      {/* A sentence, not a tag: it explains what choosing does. */}
+      <Caption>{note}</Caption>
     </div>
   );
 }

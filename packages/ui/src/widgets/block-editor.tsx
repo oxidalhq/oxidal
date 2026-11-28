@@ -109,7 +109,8 @@ export function BlockQuickEditor({
     <div data-slot="block-quick-editor" className={cn('grid gap-3', className)}>
       <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2">
         <Led kind={block.kind} on={block.on} />
-        <div className="grid min-w-0">
+        {/* Inside the Rig's block sheet the sheet's own header names the block. */}
+        <div className="grid min-w-0 [.rig-sheet_&]:hidden">
           <Title
             as={layout === 'sheet' ? 'div' : 'h2'}
             size="sm"
@@ -122,6 +123,9 @@ export function BlockQuickEditor({
           </Caption>
           {block.origin && <SourceLine source={block.origin} />}
         </div>
+        <span className="hidden text-sm font-medium [.rig-sheet_&]:block">
+          {block.on ? 'Block on' : 'Bypassed'}
+        </span>
         <Toggle
           size="sm"
           pressed={block.on}
@@ -188,7 +192,7 @@ export function BlockQuickEditor({
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-x-3 gap-y-2">
           {main.map((control) => (
             <div key={control.id} className="grid gap-0.5">
               <Label

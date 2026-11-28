@@ -6,6 +6,13 @@ import {
 } from '@phosphor-icons/react';
 import * as React from 'react';
 
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogHeader,
+  DialogTrigger,
+} from '../components/ui/dialog';
 import { glyphForSource, type GlyphKey } from '../lib/block-glyphs';
 import { cn } from '../lib/cn';
 import { safeLink } from '../lib/links';
@@ -307,6 +314,103 @@ export function SourcePicture({
   );
 }
 
+/**
+ * A TONE3000 tone's own pictures, shown large: what is in the cab or the rig
+ * is usually clearest from the creator's photos. The small picture on the
+ * card opens this; blocks from elsewhere show their plain picture.
+ */
+export function ExpandablePicture({
+  source,
+  className,
+}: {
+  source: BlockSource;
+  className?: string;
+}) {
+  const pictures =
+    source.kind === 'tone3000'
+      ? source.images?.length
+        ? source.images
+        : source.image
+          ? [source.image]
+          : []
+      : [];
+  const [at, setAt] = React.useState(0);
+  const [broken, setBroken] = React.useState<string[]>([]);
+  if (source.kind !== 'tone3000' || pictures.length === 0)
+    return <SourcePicture source={source} className={className} />;
+  const shown = pictures[Math.min(at, pictures.length - 1)]!;
+  return (
+    <Dialog onOpenChange={(open) => open && setAt(0)}>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Show pictures of ${source.title}${pictures.length > 1 ? `, ${pictures.length} pictures` : ''}`}
+          className="relative shrink-0 rounded-md focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          <SourcePicture source={source} className={className} />
+          {pictures.length > 1 && (
+            <span
+              aria-hidden="true"
+              className="absolute right-1 bottom-1 rounded-full bg-foreground/70 px-1.5 text-2xs text-background"
+            >
+              {pictures.length}
+            </span>
+          )}
+        </button>
+      </DialogTrigger>
+      <DialogContent size="lg" aria-describedby={undefined}>
+        <DialogHeader
+          title={source.title}
+          description={`Pictures by ${source.creator.name}, from TONE3000`}
+        />
+        <DialogBody className="place-items-center">
+          {broken.includes(shown) ? (
+            <p className="m-0 text-sm text-muted-foreground">
+              This picture could not be loaded. The device needs to reach
+              TONE3000 the first time it shows a picture.
+            </p>
+          ) : (
+            <img
+              src={shown}
+              alt={`${source.title}, picture ${at + 1} of ${pictures.length}`}
+              onError={() => setBroken((b) => [...b, shown])}
+              className="max-h-[65dvh] w-auto max-w-full rounded-md border border-border object-contain"
+            />
+          )}
+          {pictures.length > 1 && (
+            <ul
+              aria-label="Pictures"
+              className="m-0 flex list-none flex-wrap justify-center gap-2 p-0"
+            >
+              {pictures.map((src, i) => (
+                <li key={src}>
+                  <button
+                    type="button"
+                    aria-label={`Picture ${i + 1}`}
+                    aria-pressed={i === at}
+                    onClick={() => setAt(i)}
+                    className={cn(
+                      'block overflow-hidden rounded-md border border-border focus-visible:outline-2 focus-visible:outline-ring',
+                      i === at && 'ring-2 ring-foreground',
+                    )}
+                  >
+                    <img
+                      src={src}
+                      alt=""
+                      loading="lazy"
+                      className="size-14 object-cover"
+                    />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function Fact({
   label,
   children,
@@ -319,6 +423,119 @@ function Fact({
       <dt className="small-caps text-xs text-muted-foreground">{label}</dt>
       <dd className="m-0 min-w-0 break-words">{children}</dd>
     </div>
+  );
+}
+
+/** A small round stand-in for the creator's avatar: their first letter. */
+function CreatorBadge({ name }: { name: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="grid size-6 shrink-0 place-items-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground uppercase"
+    >
+      {name.trim().charAt(0) || <User className="size-3.5" />}
+    </span>
+  );
+}
+
+function Chip({ children }: { children: React.ReactNode }) {
+  return (
+    <li className="rounded-full border border-border bg-background px-2.5 py-0.5 text-xs">
+      {children}
+    </li>
+  );
+}
+
+/**
+ * A TONE3000 tone, laid out the way TONE3000's API terms ask: the picture,
+ * title, gear type, format, creator and licence, unaltered, with the
+ * "Powered by TONE3000" credit and a link to the tone's page.
+ * @see docs/factory-collection.md
+ */
+function ToneSourceCard({
+  source,
+  className,
+}: {
+  source: Extract<BlockSource, { kind: 'tone3000' }>;
+  className?: string;
+}) {
+  const profile = safeLink(source.creator.profile);
+  const page = safeLink(source.page);
+  const split = [
+    source.counts?.a2 && `${source.counts.a2} A2`,
+    source.counts?.standard && `${source.counts.standard} standard`,
+    source.counts?.custom && `${source.counts.custom} custom`,
+  ].filter(Boolean);
+  return (
+    <section
+      data-slot="source-card"
+      aria-label={`About ${source.title}`}
+      className={cn(
+        'grid gap-3 overflow-hidden rounded-lg border border-border bg-card p-3',
+        className,
+      )}
+    >
+      <div className="grid grid-cols-[5rem_minmax(0,1fr)] gap-3">
+        <ExpandablePicture source={source} className="size-20" />
+        <div className="grid min-w-0 content-start gap-1.5">
+          <span className="text-md leading-snug font-semibold [overflow-wrap:anywhere]">
+            {source.title}
+          </span>
+          <span className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+            <CreatorBadge name={source.creator.name} />
+            <Out href={profile}>{source.creator.name}</Out>
+            {source.creator.username && (
+              <span className="text-xs text-muted-foreground">
+                @{source.creator.username}
+              </span>
+            )}
+          </span>
+        </div>
+      </div>
+
+      <ul
+        aria-label="Details"
+        className="m-0 flex list-none flex-wrap gap-1.5 p-0"
+      >
+        {source.gear && <Chip>{source.gear}</Chip>}
+        {source.format && <Chip>{source.format}</Chip>}
+        {source.models ? (
+          <Chip>
+            {source.models} {source.models === 1 ? 'model' : 'models'}
+          </Chip>
+        ) : null}
+        <Chip>
+          <span className="text-muted-foreground">Licence </span>
+          {source.licence}
+        </Chip>
+      </ul>
+      {split.length > 1 && (
+        <p className="m-0 text-xs text-muted-foreground">
+          Models: {split.join(' · ')}
+        </p>
+      )}
+
+      <div className="-mx-3 -mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border bg-secondary/40 px-3 py-1.5 text-xs text-muted-foreground">
+        <a
+          href="https://www.tone3000.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex min-h-touch items-center gap-1.5 text-foreground no-underline hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          Powered by
+          <img
+            src="/brand/credits/tone3000.svg"
+            alt="TONE3000"
+            className="h-3.5 w-auto"
+          />
+        </a>
+        {page && (
+          <Out href={page} className="min-h-touch text-sm">
+            View on TONE3000 <ArrowSquareOut aria-hidden="true" />
+          </Out>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -335,6 +552,8 @@ export function SourceCard({
   source: BlockSource;
   className?: string;
 }) {
+  if (source.kind === 'tone3000')
+    return <ToneSourceCard source={source} className={className} />;
   return (
     <section
       data-slot="source-card"
@@ -349,81 +568,17 @@ export function SourceCard({
         <div className="grid min-w-0 gap-0.5">
           <span className="truncate text-md font-semibold">{source.title}</span>
           <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm">
-            {source.kind === 'tone3000' ? (
-              <>
-                <span>by</span>
-                <Out
-                  href={safeLink(source.creator.profile)}
-                  className="min-h-touch"
-                >
-                  <User aria-hidden="true" className="size-3.5" />
-                  {source.creator.name}
-                </Out>
-                {source.creator.username && (
-                  <span className="text-xs text-muted-foreground">
-                    @{source.creator.username}
-                  </span>
-                )}
-              </>
-            ) : maker(source) && source.kind !== 'oxidal' ? (
+            {maker(source) && source.kind !== 'oxidal' ? (
               <>by {maker(source)}</>
             ) : (
               <>Oxidal's own, from papers and our code</>
             )}
           </span>
-          <ProviderMark
-            source={source}
-            className={cn(
-              'justify-self-start',
-              source.kind === 'tone3000' && 'h-4',
-            )}
-          />
+          <ProviderMark source={source} className="justify-self-start" />
         </div>
       </div>
 
-      {source.kind === 'tone3000' && (source.images?.length ?? 0) > 1 && (
-        <ul
-          aria-label="Pictures"
-          className="m-0 flex list-none gap-2 overflow-x-auto p-0"
-        >
-          {source.images!.map((src) => (
-            <li key={src} className="shrink-0">
-              <img
-                src={src}
-                alt=""
-                loading="lazy"
-                className="h-20 w-auto rounded-md border border-border object-cover"
-              />
-            </li>
-          ))}
-        </ul>
-      )}
       <dl className="m-0 grid divide-y divide-border border-y border-border">
-        {source.kind === 'tone3000' && (
-          <>
-            {(source.gear || source.format) && (
-              <Fact label="What it is">
-                {[source.gear, source.format].filter(Boolean).join(' · ')}
-                {source.models
-                  ? ` · ${source.models} ${source.models === 1 ? 'model' : 'models'}`
-                  : ''}
-              </Fact>
-            )}
-            {source.counts && (
-              <Fact label="Models">
-                {[
-                  source.counts.a2 && `${source.counts.a2} A2`,
-                  source.counts.standard &&
-                    `${source.counts.standard} standard`,
-                  source.counts.custom && `${source.counts.custom} custom`,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </Fact>
-            )}
-            <Fact label="Licence">{source.licence}</Fact>
-          </>
-        )}
         {source.kind === 'file' && (
           <>
             <Fact label="File">
@@ -492,19 +647,6 @@ export function SourceCard({
       </dl>
 
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm [&_a]:min-h-touch">
-        {source.kind === 'tone3000' && (
-          <>
-            <Out href={safeLink(source.page)}>
-              View on TONE3000 <ArrowSquareOut aria-hidden="true" />
-            </Out>
-            {safeLink(source.creator.profile) && (
-              <Out href={safeLink(source.creator.profile)}>
-                {source.creator.name}'s profile{' '}
-                <ArrowSquareOut aria-hidden="true" />
-              </Out>
-            )}
-          </>
-        )}
         {source.kind === 'file' && safeLink(source.link) && (
           <Out href={safeLink(source.link)}>
             Where it came from <ArrowSquareOut aria-hidden="true" />

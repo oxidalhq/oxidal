@@ -88,7 +88,7 @@ export function VersionPicker({
             type="button"
             data-slot="version-picker"
             className={cn(
-              'inline-flex min-h-9 items-center gap-1 rounded-md px-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+              'inline-flex min-h-control items-center gap-1 rounded-md px-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
               className,
             )}
           >
@@ -245,18 +245,24 @@ export function CompareToggle({
   value,
   onChange,
   disabled = false,
+  size = 'sm',
 }: {
   value: 'edited' | 'saved';
   onChange: (value: 'edited' | 'saved') => void;
   disabled?: boolean;
+  /** `xs`: a light pill for a slim bar, the selected half filled. */
+  size?: 'sm' | 'xs';
 }) {
   return (
     <SegmentedControl
-      size="sm"
+      size={size}
       value={value}
       onValueChange={(v) => onChange(v as 'edited' | 'saved')}
       aria-label="Compare"
-      className={cn(disabled && 'pointer-events-none opacity-40')}
+      className={cn(
+        size === 'xs' && 'border-border bg-transparent',
+        disabled && 'pointer-events-none opacity-40',
+      )}
     >
       <Segment value="edited">Edited</Segment>
       <Segment value="saved">Saved</Segment>

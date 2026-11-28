@@ -317,6 +317,7 @@ export function PracticePanel({
           {click && timing === 'steady' && (
             <div className="w-28">
               <NumberField
+                size="sm"
                 label="Click BPM"
                 value={steady}
                 min={40}
