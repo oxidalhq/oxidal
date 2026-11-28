@@ -179,6 +179,7 @@ export function RigChainSurface({
           map={map}
           control={control}
           insetSide={insetSide}
+          flowing={running}
           toolbarExtra={
             epaper || control ? undefined : (
               <div
@@ -346,15 +347,25 @@ export function ChainDrawing({
   map,
   control,
   insetSide,
+  flowing,
   ...props
 }: RouteTreeProps & {
   map: boolean;
   control?: ChainCanvasControl;
   insetSide?: number;
+  /** Audio is running: the map's lines show the sound flowing. */
+  flowing?: boolean;
 }) {
   const vertical = useVerticalRig();
   if (map)
-    return <RouteMap {...props} control={control} insetSide={insetSide} />;
+    return (
+      <RouteMap
+        {...props}
+        control={control}
+        insetSide={insetSide}
+        flowing={flowing}
+      />
+    );
   if (!control || props.list) return <RouteTree {...props} />;
   return (
     <PanZoom

@@ -24,6 +24,8 @@ export function RouteMap(
     control?: ChainCanvasControl;
     /** Room kept clear at each side, for the edge lanes over the map. */
     insetSide?: number;
+    /** Audio is running: the lines show the sound flowing. */
+    flowing?: boolean;
   },
 ) {
   const vertical = useVerticalRig();
@@ -76,6 +78,7 @@ export function RouteMap(
         }
       >
         <ChainCanvas
+          flowing={props.flowing}
           graph={graph}
           selected={props.selected ?? null}
           onSelect={(id) => {

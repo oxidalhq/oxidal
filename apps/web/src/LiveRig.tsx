@@ -1674,6 +1674,7 @@ export function LiveRig({
       <div className="flex h-[calc(100dvh-4rem-var(--safe-top)-var(--app-bottom-height,0px)-var(--spacing-page))] min-h-[30rem]">
         <NativeChainWorkspace
           lanes={chainLanes}
+          running={state.phase === 'running'}
           selected={selectedBlock ?? undefined}
           onSelect={selectNativeBlock}
           onSlot={(id) => setSlot(id)}

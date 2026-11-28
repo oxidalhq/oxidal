@@ -724,6 +724,7 @@ export function GraphAuthor({
       >
         <NativeChainWorkspace
           lanes={lanes}
+          running={running}
           selected={selectedEffect}
           onSelect={setSelected}
           disabled={disabled}

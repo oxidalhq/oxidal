@@ -71,6 +71,7 @@ function nativeRoute(lanes: RigLaneVM[]): IdStep[] {
 
 export function NativeChainWorkspace({
   lanes,
+  running,
   selected,
   onSelect,
   onSlot,
@@ -93,6 +94,8 @@ export function NativeChainWorkspace({
 }: {
   lanes: RigLaneVM[];
   selected?: string;
+  /** Audio is running: the map's lines show the sound flowing. */
+  running?: boolean;
   onSelect: (id: string) => void;
   /** An empty slot was tapped. */
   onSlot?: (id: string) => void;
@@ -208,6 +211,7 @@ export function NativeChainWorkspace({
               {...props}
               map={view === 'map'}
               control={canvas}
+              flowing={running}
               insetSide={insetSide}
             />
           )}
