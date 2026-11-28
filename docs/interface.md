@@ -5,7 +5,7 @@
   the library.
 - **Perform** puts scenes and playing controls within easy reach.
 - **Library** is where you browse, import and edit presets and captures.
-- **Levels** shows levels and processing health.
+- **Levels** shows levels and processing health: what to fix first, then its readings as tabs (a tab with something to look at carries a light), then the output controls; Diagnostics has Live, History, Control changes and About tabs.
 - **Settings** covers audio, Wi-Fi, MIDI, display, accounts, effect packs and
   maintenance.
 
@@ -13,7 +13,7 @@ See the [screenshots](screenshots.md) for examples.
 
 ## The capsule, the chain bar and the dock
 
-Every screen has the Oxidal wordmark and one floating capsule at the top: **☰**
+Every screen has the Oxidal wordmark (press it to go to the Rig) and one floating capsule at the top: **☰**
 (tools, display mode, Protect, restart and shut down, About), the page, and
 **Mute**. On the Rig the capsule holds the playing preset with **‹ ›** and
 **Perform**; opening it (pointer, tap or keyboard) adds the pages, Tuner,
@@ -32,8 +32,17 @@ more or less room; the height and Hide are kept in this browser. **Save a
 copy…** is in **More**. The edge lanes beside the chain show the input and
 output meters, the guitar (under IN), the output level with Mono and boost
 (under OUT), the input peak and the MIDI controller, and DSP, CPU, xruns and
-clips. The scene row's **⋯** holds Edit scenes, Scene settings and Scene
+clips. A folded dock's icons sit in the lanes' bottom rows, never over a
+meter. The scene row's **⋯** holds Edit scenes, Scene settings and Scene
 change.
+
+Map and Tree draw the same block cards (type and main values) and differ only
+in their lines. While audio runs, the dashes move along the lines the sound
+takes; added or moved blocks glide into place and settle. A block that can be
+dragged shows the grab cursor and a grip above it (on a touch screen the
+selected block's grip says Drag). A + on a line offers **Add a block here** or
+**Branch a parallel path here**. None of this moves on e-paper or with reduced
+motion.
 
 Player, Stems, Sheet, Set list (Rig), Tuner and Venue EQ open from **☰** into a
 dock at the left, right or bottom of the screen; each tool's **⋯** docks it
@@ -87,8 +96,11 @@ In Rig, **Undo** and **Redo** (in the opened capsule and in **More**) step throu
 while you edit this preset (Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z or Ctrl+Y; not while
 typing in a field). Each step asks first and replays the earlier revision, with
 its MIDI assignments. MIDI assignments removed with a block do not come back.
-Undo starts again when the first edit of an Oxidal sound or TONE3000 chain makes
-your copy; Discard copy is the way back from that. **Remove** on a block asks
+Editing a preset that is not yours (an Oxidal sound or a TONE3000 chain) plays
+each change at once but keeps it as an unsaved working copy, hidden from the
+Library and the set list; **Save a copy…** keeps it under a name you choose and
+**Discard changes** plays the original again. A mixed edit restarts the mixed
+audio briefly; the chain stays on screen meanwhile. **Remove** on a block asks
 before it removes the block and its settings.
 
 ## Scenes and ready presets
