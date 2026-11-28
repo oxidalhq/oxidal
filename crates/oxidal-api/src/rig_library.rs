@@ -13,7 +13,7 @@ use axum::{
 use oxidal_audio::lifecycle::VersionTarget;
 use oxidal_presets::{
     Bundle, BundleStore, Error, OwnedStore, Store,
-    manifest::{Graph, Manifest, ResourceKind, RigSleepPlan},
+    manifest::{Graph, Manifest, NodeKind, ResourceKind, RigSleepPlan},
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -49,6 +49,86 @@ pub struct RigEntry {
     /// presets an effect-pack removal would leave unplayable (7.17).
     #[serde(default)]
     pub lv2_plugins: Vec<String>,
+    /// The preset's blocks in signal order (each path in turn after a split),
+    /// so a list can draw the chain without opening the preset. A client
+    /// names effects from the plugin URI with its own plugin catalog.
+    #[serde(default)]
+    pub blocks: Vec<RigBlock>,
+}
+/// One block of a saved preset, as a library list shows it.
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct RigBlock {
+    pub kind: RigBlockKind,
+    /// The effect's LV2 plugin URI; absent for a capture (TONE3000) block.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plugin_uri: Option<String>,
+    /// Saved turned off.
+    #[serde(default)]
+    pub bypassed: bool,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum RigBlockKind {
+    Tone3000,
+    Lv2,
+}
+/// Blocks in signal order: a node comes after every node that feeds it, and
+/// nodes that become ready together keep the order their edges are listed in,
+/// so the paths of a split come one after another before what follows them.
+fn chain_blocks(m: &Manifest) -> Vec<RigBlock> {
+    let Some(host) = m.oxidal.as_ref() else {
+        return Vec::new();
+    };
+    let graph = &host.graph;
+    let mut waiting: BTreeMap<&str, usize> = BTreeMap::new();
+    for edge in &graph.edges {
+        *waiting.entry(edge.to.node.as_str()).or_default() += 1;
+    }
+    let mut ready: std::collections::VecDeque<&str> = graph
+        .nodes
+        .iter()
+        .filter(|n| !waiting.contains_key(n.id.as_str()))
+        .map(|n| n.id.as_str())
+        .collect();
+    let mut seen = BTreeSet::new();
+    let mut blocks = Vec::new();
+    while let Some(id) = ready.pop_front() {
+        if !seen.insert(id) {
+            continue;
+        }
+        if let Some(node) = graph.nodes.iter().find(|n| n.id == id) {
+            let bypassed = node.bypassed.unwrap_or(false);
+            match node.kind {
+                NodeKind::Tone3000 => blocks.push(RigBlock {
+                    kind: RigBlockKind::Tone3000,
+                    plugin_uri: None,
+                    bypassed,
+                }),
+                NodeKind::Lv2 => blocks.push(RigBlock {
+                    kind: RigBlockKind::Lv2,
+                    plugin_uri: node.instance.as_ref().and_then(|instance| {
+                        host.lv2
+                            .iter()
+                            .find(|i| &i.id == instance)
+                            .map(|i| i.plugin_uri.clone())
+                    }),
+                    bypassed,
+                }),
+                _ => {}
+            }
+        }
+        for edge in graph.edges.iter().filter(|e| e.from.node == id) {
+            let to = edge.to.node.as_str();
+            if let Some(count) = waiting.get_mut(to) {
+                *count = count.saturating_sub(1);
+                if *count == 0 {
+                    ready.push_back(to);
+                }
+            }
+        }
+    }
+    blocks
 }
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -304,7 +384,9 @@ pub async fn list(
             } else {
                 RigTopology::Serial
             };
+            let blocks = chain_blocks(&m);
             presets.push(RigEntry {
+                blocks,
                 revision,
                 id: m.id,
                 name: m.name,
@@ -699,4 +781,65 @@ pub(crate) fn duplicate(
         source_id,
         id: manifest.id,
     })
+}
+
+#[cfg(test)]
+mod chain_block_tests {
+    use super::*;
+    use serde_json::json;
+
+    /// in → split → (a | b, off) → merge → c → out lists a, b, then c.
+    #[test]
+    fn lists_blocks_path_by_path_in_signal_order() {
+        let node = |id: &str, kind: &str, instance: Option<&str>| {
+            let mut n = json!({"id": id, "kind": kind, "audioInputs": 1, "audioOutputs": 1});
+            if let Some(i) = instance {
+                n["instance"] = json!(i);
+            }
+            n
+        };
+        let edge = |from: &str, to: &str| json!({"from": {"node": from, "port": 0}, "to": {"node": to, "port": 0}});
+        let mut b = node("b", "lv2", Some("verb"));
+        b["bypassed"] = json!(true);
+        let m: Manifest = serde_json::from_value(json!({
+            "format": "oxidal.preset", "formatVersion": 1,
+            "id": "21915afb-b95b-4b74-a88c-537f06d3594a", "name": "Paths",
+            "tone3000": {"instances": []},
+            "oxidal": {
+                "graph": {
+                    // Listed out of order on purpose: the walk follows the wires.
+                    "nodes": [
+                        node("c", "lv2", Some("echo")), node("out", "output", None),
+                        node("merge", "merge", None), b, node("a", "lv2", Some("drive")),
+                        node("split", "split", None), node("in", "input", None),
+                    ],
+                    "edges": [
+                        edge("in", "split"), edge("split", "a"), edge("split", "b"),
+                        edge("a", "merge"), edge("b", "merge"), edge("merge", "c"),
+                        edge("c", "out"),
+                    ],
+                },
+                "lv2": [
+                    {"id": "drive", "pluginUri": "urn:drive", "controls": {}, "assets": [], "requiredFeatures": []},
+                    {"id": "verb", "pluginUri": "urn:verb", "controls": {}, "assets": [], "requiredFeatures": []},
+                    {"id": "echo", "pluginUri": "urn:echo", "controls": {}, "assets": [], "requiredFeatures": []},
+                ],
+                "recall": {"tails": "cut"},
+            },
+            "resources": [], "extensions": {}, "requiredExtensions": [],
+        }))
+        .unwrap();
+        let uris: Vec<_> = chain_blocks(&m)
+            .into_iter()
+            .map(|b| (b.plugin_uri.unwrap(), b.bypassed))
+            .collect();
+        assert_eq!(
+            uris,
+            [
+                ("urn:drive".to_string(), false),
+                ("urn:verb".to_string(), true),
+                ("urn:echo".to_string(), false),
+            ]
+        );
+    }
 }
