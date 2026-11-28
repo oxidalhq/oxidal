@@ -57,6 +57,7 @@ export const SOURCES = {
     author: 'Calf Studio Gear',
     category: 'Dynamics',
     uri: 'http://calf.sourceforge.net/plugins/Gate',
+    homepage: 'https://calf-studio-gear.org/doc/Gate.html',
     pack: {
       name: 'Calf',
       version: '0.90.3',

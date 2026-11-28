@@ -71,6 +71,8 @@ export type BlockSource =
       category?: string;
       /** The plugin's LV2 URI. */
       uri?: string;
+      /** The plugin's own page, when its bundle names one. */
+      homepage?: string;
       pack: {
         name: string;
         version?: string;
@@ -134,7 +136,7 @@ function home(source: BlockSource): string | undefined {
     case 'file':
       return safeLink(source.link);
     case 'lv2':
-      return safeLink(source.pack.website);
+      return safeLink(source.homepage) ?? safeLink(source.pack.website);
     case 'oxidal':
       return safeLink(source.repo);
     case 'engine':
@@ -249,6 +251,24 @@ export function SourceLine({
           )}
         </>
       )}
+      {source.kind === 'lv2' &&
+        source.author &&
+        source.author !== source.pack.name && (
+          <>
+            <span aria-hidden="true">·</span>
+            {/* The project it ships in, such as Guitarix, with its site. */}
+            <span>
+              in{' '}
+              {plain ? (
+                source.pack.name
+              ) : (
+                <Out href={safeLink(source.pack.website)}>
+                  {source.pack.name}
+                </Out>
+              )}
+            </span>
+          </>
+        )}
       {link && (
         <a
           href={link}
@@ -654,6 +674,11 @@ export function SourceCard({
         )}
         {source.kind === 'lv2' && (
           <>
+            {safeLink(source.homepage) && (
+              <Out href={safeLink(source.homepage)}>
+                {source.title} website <ArrowSquareOut aria-hidden="true" />
+              </Out>
+            )}
             <Out href={safeLink(source.pack.website)}>
               {source.pack.name} website <ArrowSquareOut aria-hidden="true" />
             </Out>

@@ -28,6 +28,8 @@ export type Pack = {
   licence?: string;
   licenceUrl?: string;
   version?: string | null;
+  /** The Debian package it installs from, such as "guitarix-lv2". */
+  package?: string;
   effects: number;
   sizeMib: number;
   qualification: string;
@@ -319,7 +321,8 @@ export function PluginPacks({
               `${p.usedBy.length ? `Used by ${p.usedBy.length} ${p.usedBy.length === 1 ? 'preset' : 'presets'}` : 'Not used by saved presets'} · `}
             {p.effects} usable effects · about {p.sizeMib} MiB
             {p.licence && ` · ${p.licence}`} · {p.qualification}
-            {p.version && ` · ${p.version}`}
+            {(p.package || p.version) &&
+              ` · ${[p.package, p.version].filter(Boolean).join(' ')}`}
           </>
         }
         trailing={
