@@ -510,8 +510,16 @@ export function useMixedRigSession({
       if (cursor.save?.error) throw new Error(cursor.save.error);
       const copy = cursor.save?.saved_revision;
       if (!copy) throw new Error('Automatic copy did not return a revision.');
-      await playScenes(copy);
-      accept(await rigAudioState());
+      // Held as an edit until the copy's audio reports, so the state
+      // between the two never lets the chain disappear.
+      setEditing(true);
+      setApplying(true);
+      try {
+        await playScenes(copy);
+        accept(await rigAudioState());
+      } finally {
+        if (alive.current) setEditing(false);
+      }
       setCopyOnEdit({
         copy,
         source: source.revision,
@@ -864,6 +872,13 @@ export function useMixedRigSession({
     }
   }
   const [editing, setEditing] = useState(false);
+  /** An edit's new version is still starting after the edit itself is sent:
+   * the Rig keeps the chain it had until the new version plays. */
+  const [applying, setApplying] = useState(false);
+  useEffect(() => {
+    if (applying && !editing && state?.phase !== 'starting')
+      setApplying(false);
+  }, [applying, editing, state?.phase]);
   /** The stage view: scene pads and effect switches, nothing to edit. */
   const { on: performing } = usePerform();
   const setPerforming = (on: boolean) => setPerform({ on });
@@ -904,6 +919,7 @@ export function useMixedRigSession({
       if (!opened || editing) return;
       clearEdit();
       setEditing(true);
+      setApplying(true);
       generation.current++;
       sending.current = true;
       setError('');
@@ -1018,6 +1034,7 @@ export function useMixedRigSession({
     const run = async () => {
       clearEdit();
       setEditing(true);
+      setApplying(true);
       setError('');
       try {
         const earlier = await rigDocument(target);
@@ -1230,6 +1247,7 @@ export function useMixedRigSession({
           gears,
           narrow,
           switching,
+          applying: editing || applying,
         });
   // The block sheet's Close clears the selection (phones: a bottom sheet).
   const view = model && {
@@ -1246,7 +1264,9 @@ export function useMixedRigSession({
   const lastView = useRef<typeof view>(null);
   if (view && view.canvasRoute) lastView.current = view;
   const shownView =
-    (!view || !view.canvasRoute) && editing ? lastView.current : view;
+    (!view || !view.canvasRoute) && (editing || applying)
+      ? lastView.current
+      : view;
   async function saveCopy(target?: VersionTarget) {
     const cursor = current.current;
     if (
@@ -1473,7 +1493,8 @@ export function useMixedRigSession({
     setControlsTogether,
     recallScene,
     choose,
-    editing,
+    // Locked and saying "Applying the change…" until the new version plays.
+    editing: editing || applying,
     performing,
     setPerforming,
     unsaved,

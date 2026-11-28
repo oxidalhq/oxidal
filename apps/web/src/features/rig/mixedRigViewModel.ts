@@ -135,6 +135,8 @@ export type MixedRigViewInput = {
   gears: Record<string, Record<string, string>>;
   narrow: boolean;
   switching: boolean;
+  /** An edit's new version is starting: the chain stays drawn meanwhile. */
+  applying?: boolean;
 };
 
 export function mixedRigViewModel({
@@ -153,6 +155,7 @@ export function mixedRigViewModel({
   sceneUpdates,
   gears,
   switching,
+  applying = false,
 }: MixedRigViewInput) {
   const running = state.phase === 'running';
   const nodes =
@@ -807,7 +810,10 @@ export function mixedRigViewModel({
         return hold ? { ...b, on: hold.value === hold.maximum } : b;
       }),
   }));
-  const performSwitching = switching || state.phase === 'starting';
+  // Starting another preset covers the Rig; starting an edit's new version
+  // keeps the chain in view while the bar says the change is being applied.
+  const performSwitching =
+    switching || (state.phase === 'starting' && !applying);
   return {
     state,
     running,
