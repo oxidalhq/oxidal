@@ -11,6 +11,7 @@ import {
 } from '@phosphor-icons/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
 import { FormField } from '@oxidal/design-system/components/form-layout';
 import {
@@ -22,6 +23,7 @@ import {
 } from '@oxidal/design-system/components/select';
 import { StateNotice } from '@oxidal/design-system/components/states';
 import { Caption } from '@oxidal/design-system/components/text';
+import { SettingDisclosure } from '@oxidal/design-system/patterns/settings-page';
 
 import {
   applyMidiTemplate,
@@ -216,6 +218,8 @@ export function MidiMapScreen({
   const [catalog, setCatalog] = useState<LibraryCatalog | null>(null);
   const [devices, setDevices] = useState<MidiDevices | null>(null);
   const [query, setQuery] = useState('');
+  // With many presets, list the playing one and those with mappings first.
+  const [showAll, setShowAll] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [learning, setLearning] = useState<Learning | null>(null);
@@ -430,6 +434,18 @@ export function MidiMapScreen({
       return rowText.includes(needle);
     });
   }, [groups, query]);
+  const compact = !query.trim() && !showAll && visibleGroups.length > 8;
+  const shownGroups = compact
+    ? visibleGroups.filter(
+        (group) =>
+          sameEntry(current, group.entry) ||
+          (group.map?.bindings.length ?? 0) +
+            (group.map?.branch_bindings.length ?? 0) +
+            (group.map?.parameter_bindings.length ?? 0) >
+            0 ||
+          (learning && sameEntry(learning.entry, group.entry)),
+      )
+    : visibleGroups;
   const numberUse = useMemo(() => {
     const uses = new Map<string, Set<string>>();
     const add = (number: string, preset: string) => {
@@ -1010,26 +1026,19 @@ export function MidiMapScreen({
         }
       />
 
-      <details
-        className="border-y border-border open:pb-3 [&>summary]:min-h-13"
-        aria-label="MIDI mapping helpers"
+      <SettingDisclosure
+        className="border-t"
+        label="Mapping helpers"
+        caption={
+          <>
+            {map.template
+              ? `${map.template.scene_buttons} buttons · CC ${map.template.first_controller}–${map.template.first_controller + map.template.scene_buttons - 1}. `
+              : 'No unit template. '}
+            New Mine presets inherit the unit template. It assigns consecutive
+            CC buttons to up to two, four or eight scenes.
+          </>
+        }
       >
-        <summary className="cursor-pointer px-3 py-3">
-          <span className="ml-1 flex min-w-0 flex-1 flex-col pr-2">
-            <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-              <strong>Mapping helpers</strong>
-              <Caption as="span">
-                {map.template
-                  ? `${map.template.scene_buttons} buttons · CC ${map.template.first_controller}–${map.template.first_controller + map.template.scene_buttons - 1}`
-                  : 'No unit template'}
-              </Caption>
-            </span>
-            <Caption as="span" className="mt-1 flex max-w-2xl">
-              New Mine presets inherit the unit template. It assigns consecutive
-              CC buttons to up to two, four or eight scenes.
-            </Caption>
-          </span>
-        </summary>
         <div className="space-y-3 px-3 pb-3">
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem_auto] sm:items-end">
             <FormField className="min-w-0">
@@ -1139,7 +1148,7 @@ export function MidiMapScreen({
             copies of the same rig. Use the scene template for different rigs.
           </Caption>
         </div>
-      </details>
+      </SettingDisclosure>
 
       <div className="flex flex-wrap items-center justify-end gap-2">
         {groups.length > 0 && (
@@ -1343,7 +1352,7 @@ export function MidiMapScreen({
         className="border-y border-border"
         aria-label="Complete MIDI map"
       >
-        {visibleGroups.map((group) => {
+        {shownGroups.map((group) => {
           const isCurrent = sameEntry(current, group.entry);
           const local = group.map;
           const sceneNames = isCurrent
@@ -1520,14 +1529,14 @@ export function MidiMapScreen({
               key={keyOf(group.entry)}
               className="min-w-0 border-b border-border last:border-b-0"
             >
-              <div className="grid min-w-0 items-center gap-x-4 gap-y-2 bg-muted/55 p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <div className="grid min-w-0 items-center gap-x-4 gap-y-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto]">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="m-0 text-base">{group.name}</h3>
                     {isCurrent && (
-                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                      <Badge size="sm" tone="live">
                         Playing
-                      </span>
+                      </Badge>
                     )}
                     {group.orphaned && (
                       <span className="text-xs font-semibold text-destructive">
@@ -1695,6 +1704,26 @@ export function MidiMapScreen({
             </StateNotice>
           ))}
       </div>
+      {(compact || showAll) && !query.trim() && (
+        <div className="flex flex-wrap items-center gap-3 py-2">
+          <Button
+            size="sm"
+            variant="outline"
+            aria-expanded={!compact}
+            onClick={() => setShowAll((all) => !all)}
+          >
+            {compact
+              ? `Show all ${visibleGroups.length} presets`
+              : 'Show only the playing preset and presets with mappings'}
+          </Button>
+          {compact && (
+            <Caption as="span" className="text-xs">
+              {visibleGroups.length - shownGroups.length} presets without local
+              mappings are hidden. Search finds every preset.
+            </Caption>
+          )}
+        </div>
+      )}
     </div>
   );
 }

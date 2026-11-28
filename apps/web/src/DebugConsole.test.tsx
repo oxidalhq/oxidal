@@ -23,11 +23,9 @@ it('follows bounded log snapshots only while open, visible and enabled', async (
   const fetcher = vi.fn(async () => new Response('native log tail'));
   vi.stubGlobal('fetch', fetcher);
   const view = render(<DebugConsole />);
-  const details = view.container.querySelector('details')!;
-  await act(async () => {
-    details.open = true;
-    fireEvent(details, new Event('toggle'));
-  });
+  // The console starts open; its row closes it at the end.
+  const toggle = view.getByRole('button', { name: /^Debug console/ });
+  expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Follow logs' }));
   });
@@ -54,8 +52,7 @@ it('follows bounded log snapshots only while open, visible and enabled', async (
     fireEvent.click(screen.getByRole('button', { name: 'Follow logs' }));
   });
   await act(async () => {
-    details.open = false;
-    fireEvent(details, new Event('toggle'));
+    fireEvent.click(toggle);
   });
   const count = fetcher.mock.calls.length;
   await act(async () => {

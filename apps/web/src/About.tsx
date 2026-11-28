@@ -15,7 +15,9 @@ import { type ReactNode, useEffect, useState } from 'react';
 
 import { Caption, Title } from '@oxidal/design-system/components/text';
 import { STACK_CREDITS } from '@oxidal/design-system/lib/credits';
+import { OXIDAL_EFFECTS } from '@oxidal/design-system/lib/oxidal-effects';
 import { AboutPage } from '@oxidal/design-system/patterns/about-page';
+import { BlockTile } from '@oxidal/design-system/widgets/block-tile';
 
 import { capabilities } from './api';
 
@@ -23,53 +25,6 @@ type Health = Awaited<ReturnType<typeof capabilities>>;
 
 const REPOSITORY = 'https://github.com/oxidalhq/oxidal';
 const AGENTICFLOWX = 'https://github.com/AgenticFlowX/afx';
-
-/** Oxidal's own effects: original code from published research. */
-const EFFECTS: { name: string; kind: string; detail: string }[] = [
-  {
-    name: 'Bloom',
-    kind: 'Reverb',
-    detail: 'Room, Hall, Plate, Spring, Cloud, Bloom, Shimmer and Nonlinear',
-  },
-  {
-    name: 'Echo',
-    kind: 'Delay',
-    detail: 'Digital, Tape, Heads, Bucket, Reverse, Duck, Filter and Ping',
-  },
-  {
-    name: 'Motion',
-    kind: 'Modulation',
-    detail:
-      'Chorus, Flanger, Phaser, Vibe, Rotary, Tremolo, Harmonic tremolo, Vibrato and Ring',
-  },
-  {
-    name: 'Moment',
-    kind: 'Micro-looper',
-    detail:
-      'Keeps what you just played as a loop to slow, reverse, stretch or smear',
-  },
-  {
-    name: 'Sustain',
-    kind: 'Sustainer',
-    detail: 'Holds each note at a steady level; Normal, Harmonic and Mix',
-  },
-  {
-    name: 'Hold',
-    kind: 'Freeze',
-    detail: 'Keeps what you play ringing as a drone while you play over it',
-  },
-  {
-    name: 'Swell',
-    kind: 'Auto-swell',
-    detail: 'Fades each note in, like a volume pedal worked by your playing',
-  },
-  {
-    name: 'Pitch',
-    kind: 'Pitch shift',
-    detail:
-      '±24 semitones anywhere in a preset. A port of the TONE3000 pitch engine, credited in its notice.',
-  },
-];
 
 const FEATURES: { icon: ReactNode; title: string; text: string }[] = [
   {
@@ -238,16 +193,21 @@ export function About() {
           <Sparkle aria-hidden="true" /> Oxidal effects
         </Title>
         <Caption>
-          Bloom, Echo, Motion, Moment and Sustain are safe Rust, and Hold and
-          Swell native plugins, all written for Oxidal from published research
-          and its own code. Pitch is a port of a third-party engine.
+          Bloom, Echo, Motion, Moment, Sustain, Fuzz and Wah are safe Rust, and
+          Hold and Swell native plugins, all written for Oxidal from published
+          research and its own code. Pitch is a port of a third-party engine.
         </Caption>
         <dl className="m-0 grid">
-          {EFFECTS.map((effect) => (
+          {OXIDAL_EFFECTS.map((effect) => (
             <div
-              key={effect.name}
-              className="grid gap-1 border-b border-border py-2 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-3"
+              key={effect.id}
+              className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-1 border-b border-border py-2 sm:grid-cols-[auto_9rem_minmax(0,1fr)]"
             >
+              <BlockTile
+                glyph={effect.glyph}
+                tinted
+                className="row-span-2 sm:row-span-1"
+              />
               <dt className="grid">
                 <strong className="text-sm text-foreground">
                   {effect.name}
@@ -256,7 +216,9 @@ export function About() {
                   {effect.kind}
                 </Caption>
               </dt>
-              <Caption as="dd">{effect.detail}</Caption>
+              <Caption as="dd" className="col-start-2 sm:col-start-3">
+                {effect.summary}
+              </Caption>
             </div>
           ))}
         </dl>

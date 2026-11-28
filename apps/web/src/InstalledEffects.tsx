@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react';
 
 import { Loading } from '@oxidal/design-system/components/states';
 import {
+  ENGINE_EFFECTS,
+  oxidalEffectsFromCatalogue,
+} from '@oxidal/design-system/lib/oxidal-effects';
+import {
   type BuiltInEffect,
   BuiltInEffects,
 } from '@oxidal/design-system/patterns/engine-settings';
@@ -25,25 +29,8 @@ export function InstalledEffects({ connected }: { connected: boolean }) {
         );
         if (!active) return;
         setInventory({
-          own: effects
-            .filter(
-              (effect) =>
-                effect.uri.startsWith('urn:oxidal:') && !effect.unsupported,
-            )
-            .map((effect) => ({
-              name: effect.name,
-              caption: effect.comment || "Oxidal's own · Rust · built in",
-            })),
-          engine: device.native_editor
-            ? [
-                { name: 'Hold', caption: 'Freezes a note' },
-                { name: 'Swell', caption: 'Volume swells' },
-                {
-                  name: 'Pitch',
-                  caption: 'Pitch shift · enabled in NAM engine',
-                },
-              ]
-            : [],
+          own: oxidalEffectsFromCatalogue(effects),
+          engine: device.native_editor ? [...ENGINE_EFFECTS] : [],
         });
         setError('');
       })

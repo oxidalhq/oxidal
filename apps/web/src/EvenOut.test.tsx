@@ -4,6 +4,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
@@ -57,10 +58,14 @@ it('summarises the evened-out level, runs, and lists each offset', async () => {
     screen.getByText(/2 presets and scenes evened out to -20\.0 LUFS/),
   ).toBeInTheDocument();
   expect(screen.getByText('Loudest to quietest: 0.0 dB')).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Levels' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Show each sound (2)' }));
+  const levels = within(screen.getByRole('table', { name: 'Measured levels' }));
   expect(
-    screen.getByRole('list', { name: 'Measured levels' }),
-  ).toHaveTextContent('Bogner Fullstack−6.0 dBDumble Spread+6.0 dB');
+    levels.getByRole('row', { name: /Bogner Fullstack/ }),
+  ).toHaveTextContent('−6.0 dB');
+  expect(levels.getByRole('row', { name: /Dumble Spread/ })).toHaveTextContent(
+    '+6.0 dB',
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Even out all' }));
   await act(async () => {});
   expect(calibration).toHaveBeenCalledWith('run');

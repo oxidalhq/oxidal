@@ -1,8 +1,7 @@
-import { useState } from 'react';
+import { ArrowsClockwise } from '@phosphor-icons/react';
+import { type ReactNode, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
-import { Card } from '@oxidal/design-system/components/card';
-import { ActionRow } from '@oxidal/design-system/components/form-layout';
 import { Caption } from '@oxidal/design-system/components/text';
 
 import {
@@ -12,12 +11,14 @@ import {
   type GraphAudioState,
   graphAudioState,
 } from './api';
+import { AudioPlaybackRow } from './AudioPlaybackRow';
 import { AudioReconfigure } from './AudioReconfigure';
 import {
   canResumeAudio,
   checkSavedStream,
   resumeUnavailable,
 } from './audioResume';
+import { shortConfiguration } from './audioSettingsShared';
 import { RecoveryAction } from './FailureNotice';
 import { friendlyError } from './lib/friendlyError';
 import { useFailure } from './lib/useFailure';
@@ -29,12 +30,21 @@ export function EffectsPlaybackSettings({
   input,
   output,
   onState,
+  device,
+  startup,
+  after,
 }: {
   state: GraphAudioState;
   connected: boolean;
   input: AudioProbe | null;
   output: AudioProbe | null;
   onState: (state: GraphAudioState) => void;
+  /** Settings › Audio › Device, above the session card. */
+  device?: ReactNode;
+  /** When Oxidal starts, between the session card and Playback. */
+  startup?: ReactNode;
+  /** After Playback: the output test and level. */
+  after?: ReactNode;
 }) {
   const { failure: recoverFailure, fail: recoverFail } = useFailure();
   const [busy, setBusy] = useState(false);
@@ -81,62 +91,66 @@ export function EffectsPlaybackSettings({
   }
   return (
     <section
-      className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
+      className="grid min-w-0 items-start gap-6"
       aria-label="Playback controls"
     >
-      <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
-        <h3>Effects audio</h3>
-        <span role="status">
-          {state.phase === 'starting' ? 'Preparing…' : state.phase}
-        </span>
-      </div>
-      <ActionRow>
-        {state.device_owned && (
-          <Button
-            variant="outline"
-            disabled={!connected || busy || transitioning}
-            onClick={() => void command({ kind: 'stop' })}
-          >
-            Stop audio
-          </Button>
-        )}
-        <Button
-          variant="outline"
-          disabled={!connected || busy || transitioning}
-          onClick={() => void resume()}
-        >
-          {state.device_owned ? 'Restart audio' : 'Resume audio'}
-        </Button>
-      </ActionRow>
-      {!state.device_owned && !resumeReady && (
-        <Caption>{resumeUnavailable}</Caption>
-      )}
-      {(error || state.error) && <p role="alert">{error || state.error}</p>}
-      {error && <RecoveryAction failure={recoverFailure} />}
-      <Caption>
-        {stream.input.sample_rate} Hz · {stream.input.period_frames} samples ×{' '}
-        {stream.input.periods} periods
-      </Caption>
-      <Card
-        className="min-w-0 gap-3"
-        aria-label="Playback session configuration"
+      {device}
+      <AudioReconfigure
+        key={JSON.stringify(stream)}
+        cursor={{
+          owner: 'effects',
+          session: state.session,
+          expected_revision: state.revision,
+        }}
+        initial={stream}
+        checkedInput={input}
+        checkedOutput={output}
+        disabled={!connected || busy || transitioning}
+        running={state.phase === 'running'}
+        onApply={(stream) => void command({ kind: 'reconfigure', stream })}
+      />
+      {startup}
+      <AudioPlaybackRow
+        phase={state.phase}
+        status={[
+          'Effects audio',
+          state.phase !== 'stopped' ? shortConfiguration(stream.input) : '',
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+        buttons={
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              aria-label={state.device_owned ? 'Restart audio' : 'Resume audio'}
+              disabled={!connected || busy || transitioning}
+              onClick={() => void resume()}
+            >
+              <ArrowsClockwise aria-hidden="true" />
+              {state.device_owned ? 'Restart' : 'Resume'}
+            </Button>
+            {state.device_owned && (
+              <Button
+                size="sm"
+                variant="destructive"
+                aria-label="Stop audio"
+                disabled={!connected || busy || transitioning}
+                onClick={() => void command({ kind: 'stop' })}
+              >
+                Stop
+              </Button>
+            )}
+          </>
+        }
       >
-        <h4>Applied settings</h4>
-        <AudioReconfigure
-          key={JSON.stringify(stream)}
-          cursor={{
-            owner: 'effects',
-            session: state.session,
-            expected_revision: state.revision,
-          }}
-          initial={stream}
-          checkedInput={input}
-          checkedOutput={output}
-          disabled={!connected || busy || transitioning}
-          running={state.phase === 'running'}
-          onApply={(stream) => void command({ kind: 'reconfigure', stream })}
-        />
-      </Card>
+        {!state.device_owned && !resumeReady && (
+          <Caption>{resumeUnavailable}</Caption>
+        )}
+        {(error || state.error) && <p role="alert">{error || state.error}</p>}
+        {error && <RecoveryAction failure={recoverFailure} />}
+      </AudioPlaybackRow>
+      {after}
     </section>
   );
 }

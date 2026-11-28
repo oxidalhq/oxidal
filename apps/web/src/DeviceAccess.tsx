@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
-import { StateNotice } from '@oxidal/design-system/components/states';
 import { Caption } from '@oxidal/design-system/components/text';
 import {
   DeviceAddresses,
   DeviceCertificate,
 } from '@oxidal/design-system/patterns/device-access';
+import {
+  SettingGroup,
+  SettingNotice,
+} from '@oxidal/design-system/patterns/settings-page';
 
 import {
   deviceCertificate,
@@ -77,29 +80,35 @@ export function DeviceAccess({ network }: { network: NetworkState | null }) {
           }}
         />
       ) : (
-        <StateNotice
-          kind={failed ? 'error' : 'loading'}
-          title={
-            failed ? 'Certificate unavailable' : 'Reading device certificate…'
-          }
-          action={
-            failed && (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setFailed(false);
-                  setAttempt((value) => value + 1);
-                }}
-              >
-                Retry certificate
-              </Button>
-            )
-          }
-        >
-          {failed
-            ? 'The certificate is not available from this device yet. Retry after the device has been updated.'
-            : undefined}
-        </StateNotice>
+        <SettingGroup title="Certificate">
+          <SettingNotice
+            tone={failed ? 'warning' : 'info'}
+            action={
+              failed && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setFailed(false);
+                    setAttempt((value) => value + 1);
+                  }}
+                >
+                  Retry certificate
+                </Button>
+              )
+            }
+          >
+            {failed ? (
+              <>
+                <strong className="font-medium">Certificate unavailable</strong>{' '}
+                It is not available from this device yet; retry after the device
+                has been updated.
+              </>
+            ) : (
+              'Reading device certificate…'
+            )}
+          </SettingNotice>
+        </SettingGroup>
       )}
     </div>
   );

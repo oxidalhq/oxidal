@@ -70,7 +70,7 @@ function show() {
 }
 it('pins the reviewed playing B even when A is already selected for startup', async () => {
   show();
-  const pin = screen.getByRole('radio', { name: /Pinned saved version/ });
+  const pin = screen.getByRole('radio', { name: /^A preset/ });
   await waitFor(() => expect(pin).toBeEnabled());
   fireEvent.click(pin);
   await waitFor(() =>
@@ -80,7 +80,8 @@ it('pins the reviewed playing B even when A is already selected for startup', as
     }),
   );
   await waitFor(() => expect(pin).toBeChecked());
-  await screen.findByText('Startup preset: Lead');
+  expect(await screen.findByText('Startup preset')).toBeVisible();
+  await screen.findByText('Lead');
   expect(rigAudioCommand).not.toHaveBeenCalled();
 });
 it('keeps the old confirmed policy when the reviewed sound is stale or dirty', async () => {
@@ -90,14 +91,12 @@ it('keeps the old confirmed policy when the reviewed sound is stale or dirty', a
     ),
   );
   show();
-  const pin = screen.getByRole('radio', { name: /Pinned saved version/ });
+  const pin = screen.getByRole('radio', { name: /^A preset/ });
   await waitFor(() => expect(pin).toBeEnabled());
   fireEvent.click(pin);
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Save your changes',
   );
-  expect(
-    screen.getByRole('radio', { name: /Last played preset/ }),
-  ).toBeChecked();
+  expect(screen.getByRole('radio', { name: /^Last session/ })).toBeChecked();
   expect(rigAudioCommand).not.toHaveBeenCalled();
 });

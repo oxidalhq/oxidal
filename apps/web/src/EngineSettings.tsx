@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { Caption } from '@oxidal/design-system/components/text';
+import {
+  SettingGroup,
+  SettingNotice,
+  SettingRow,
+} from '@oxidal/design-system/patterns/settings-page';
 
 import {
   type AudioState,
@@ -15,7 +20,6 @@ import {
 import { formatDefault, settingHelp } from './engineHelp';
 import { friendlyError } from './lib/friendlyError';
 import { SettingDialog } from './SettingDialog';
-import { ToolRow, ToolSection } from './ToolRow';
 
 /**
  * The running native engine's unit-wide settings. They are kept across presets
@@ -73,15 +77,13 @@ export function EngineSettings({ connected }: { connected: boolean }) {
         )
       : [];
   return (
-    <ToolSection
-      title="Running engine"
-      scope="This unit · kept across presets, not saved in them"
-    >
+    <SettingGroup title="Running engine">
       {settings.length ? (
         <>
-          <Caption>
-            Applying a change restarts audio briefly. Device defaults below are
-            what a fresh start uses.
+          <Caption className="mb-1 text-xs">
+            This unit · kept across presets, not saved in them. Applying a
+            change restarts audio briefly. Device defaults below are what a
+            fresh start uses.
           </Caption>
           <div role="group" aria-label="Prepared DSP settings">
             {settings.map((setting) => {
@@ -91,22 +93,22 @@ export function EngineSettings({ connected }: { connected: boolean }) {
                   ? formatDefault(setting.target, raw)
                   : null;
               return (
-                <ToolRow
-                  inline
+                <SettingRow
                   key={setting.target}
-                  title={setting.label}
-                  value={
-                    formatDefault(setting.target, setting.value) ??
-                    setting.display
-                  }
-                  detail={
+                  label={setting.label}
+                  caption={
                     <>
                       {settingHelp[setting.target] ?? 'Engine setting.'}
                       {shown && ` Device default: ${shown}.`}
                     </>
                   }
                 >
+                  <span className="font-mono text-sm tabular-nums">
+                    {formatDefault(setting.target, setting.value) ??
+                      setting.display}
+                  </span>
                   <Button
+                    size="sm"
                     variant="outline"
                     aria-label={`${setting.label} · ${setting.display}`}
                     disabled={!connected || busy}
@@ -121,25 +123,25 @@ export function EngineSettings({ connected }: { connected: boolean }) {
                   >
                     Change…
                   </Button>
-                </ToolRow>
+                </SettingRow>
               );
             })}
           </div>
         </>
       ) : other ? (
-        <Caption role="status">
+        <SettingNotice>
           {other === 'mixed'
             ? 'A mixed preset with TONE3000 blocks is playing. Its NAM blocks use the settings saved in the preset; change them on each block in Rig.'
             : 'An effects preset is playing. It has no TONE3000 blocks, so there is no engine setting to change.'}{' '}
           The device defaults below apply at the next audio start.
-        </Caption>
+        </SettingNotice>
       ) : (
-        <Caption>
+        <SettingNotice>
           Audio is stopped. Play a TONE3000 preset to change the running engine;
           the device defaults below apply whenever audio starts.
-        </Caption>
+        </SettingNotice>
       )}
-      {error && <p role="alert">{error}</p>}
+      {error && <SettingNotice tone="error">{error}</SettingNotice>}
       {editing && state && (
         <SettingDialog
           control={editing.control}
@@ -179,6 +181,6 @@ export function EngineSettings({ connected }: { connected: boolean }) {
           }}
         />
       )}
-    </ToolSection>
+    </SettingGroup>
   );
 }

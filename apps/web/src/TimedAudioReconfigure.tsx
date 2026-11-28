@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { type ReactNode, useContext, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { AudioChange } from '@oxidal/design-system/patterns/audio-change';
+import { SettingDisclosure } from '@oxidal/design-system/patterns/settings-page';
 
 import type { AudioChangeRequest, AudioProbe, StartAudio } from './api';
 import { changeAudio, type useAudioChange } from './audioChangeFeed';
+import { InterfaceRoutingSlot } from './audioSettingsShared';
 import { BUFFER_SIZES, bufferMs } from './bufferTiming';
 import { useWorkspaceState } from './workspaceMemory';
 
@@ -12,6 +15,13 @@ export type AudioChangeCursor = Pick<
   Extract<AudioChangeRequest, { kind: 'apply' }>,
   'owner' | 'session' | 'expected_revision'
 >;
+
+/** The common choices C2 draws side by side; the current setting is always added. */
+const COMMON = {
+  rates: [44100, 48000, 88200, 96000],
+  frames: [48, 64, 96, 128, 256],
+  periods: [2, 3, 4],
+};
 
 /** The shared live-hardware editor submits to the device-owned confirmation owner. */
 export function TimedAudioReconfigure({
@@ -21,7 +31,9 @@ export function TimedAudioReconfigure({
   cursor,
   disabled,
   feed,
+  caption,
 }: {
+  caption?: ReactNode;
   initial: StartAudio['stream'];
   checkedInput: AudioProbe | null;
   checkedOutput: AudioProbe | null;
@@ -90,6 +102,90 @@ export function TimedAudioReconfigure({
     void changeAudio(request).catch(() => {});
   };
   const observation = state?.observed;
+  const slot = useContext(InterfaceRoutingSlot);
+  const changePhase =
+    !finderActive &&
+    (phase === 'restarting' || phase === 'proving' || phase === 'reverting')
+      ? phase
+      : 'idle';
+  const changeDisabled =
+    disabled || !ready || feed.pending || (feed.active && !own) || finderActive;
+  const routingSection = (
+    <SettingDisclosure label="Interface routing">
+      <div className="grid min-w-0 gap-3">
+        <p className="text-sm break-words">
+          {routing.input.endpoint} · {routing.input.channels} in /{' '}
+          {routing.output.channels} out · {routing.input.format} /{' '}
+          {routing.output.format}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Calculated input buffer {bufferMs(initial.input).toFixed(1)} ms;
+          output buffer {bufferMs(initial.output).toFixed(1)} ms. Converters and
+          USB add delay.
+        </p>
+        {checkedInput && checkedOutput && (
+          <Button
+            variant="outline"
+            className="justify-self-start"
+            onClick={() =>
+              setRouting({
+                ...routing,
+                input: checkedInput,
+                output: checkedOutput,
+                input_map: routing.input_map.map((channel) =>
+                  Math.min(channel, checkedInput.channels - 1),
+                ) as [number, number],
+                output_map: routing.output_map.map((channel) =>
+                  Math.min(channel, checkedOutput.channels - 1),
+                ) as [number, number],
+              })
+            }
+          >
+            Use checked interface
+          </Button>
+        )}
+        <div className="grid min-w-0 grid-cols-2 gap-3">
+          {(['input_map', 'output_map'] as const).flatMap((key) =>
+            ([0, 1] as const).map((index) => (
+              <label
+                key={`${key}:${index}`}
+                className="grid min-w-0 gap-1 text-sm"
+              >
+                {key === 'input_map' ? 'Input' : 'Output'}{' '}
+                {index ? 'right' : 'left'}
+                <input
+                  aria-label={`Session ${key === 'input_map' ? 'input' : 'output'} ${index ? 'right' : 'left'} channel`}
+                  className="min-h-touch min-w-0 rounded-lg border border-input bg-background px-3"
+                  type="number"
+                  min={1}
+                  max={
+                    routing[key === 'input_map' ? 'input' : 'output'].channels
+                  }
+                  value={routing[key][index] + 1}
+                  onChange={(event) => {
+                    const map: [number, number] = [...routing[key]];
+                    map[index] = Number(event.target.value) - 1;
+                    setRouting({ ...routing, [key]: map });
+                  }}
+                />
+              </label>
+            )),
+          )}
+        </div>
+        {!validMaps && (
+          <p role="alert">
+            Use matching input/output devices and channels available on that
+            interface. Apply them with Apply and restart audio.
+          </p>
+        )}
+        {slot && hardwareChanged && validMaps && (
+          <p className="text-xs text-muted-foreground">
+            Apply and restart audio uses this routing.
+          </p>
+        )}
+      </div>
+    </SettingDisclosure>
+  );
   return (
     <div className="grid gap-2">
       {feed.error && (
@@ -202,22 +298,10 @@ export function TimedAudioReconfigure({
             },
           });
         }}
-        phase={
-          !finderActive &&
-          (phase === 'restarting' ||
-            phase === 'proving' ||
-            phase === 'reverting')
-            ? phase
-            : 'idle'
-        }
+        phase={changePhase}
         secondsLeft={feed.secondsLeft}
-        disabled={
-          disabled ||
-          !ready ||
-          feed.pending ||
-          (feed.active && !own) ||
-          finderActive
-        }
+        disabled={changeDisabled}
+        caption={caption}
         canApply={validMaps}
         confirmationDisabled={feed.pending || !ready}
         waiting={
@@ -242,39 +326,37 @@ export function TimedAudioReconfigure({
           feed.secondsLeft > 0 &&
           !feed.error
         }
-        currentBufferMs={bufferMs(initial.input) + bufferMs(initial.output)}
+        // One device buffer, as the chain bar and the new setting show it;
+        // the details give input and output separately.
+        currentBufferMs={Math.max(
+          bufferMs(initial.input),
+          bufferMs(initial.output),
+        )}
         additionalChanges={hardwareChanged}
         choices={{
           rates: [
             ...new Set([
-              44100,
-              48000,
-              88200,
-              96000,
+              ...COMMON.rates,
               initial.input.sample_rate,
               routing.input.sample_rate,
             ]),
           ].sort((a, b) => a - b),
           frames: [
             ...new Set([
-              ...BUFFER_SIZES,
+              ...COMMON.frames,
               initial.input.period_frames,
               routing.input.period_frames,
             ]),
           ].sort((a, b) => a - b),
           periods: [
             ...new Set([
-              2,
-              3,
-              4,
-              5,
-              6,
-              7,
-              8,
+              ...COMMON.periods,
               initial.input.periods,
               routing.input.periods,
             ]),
           ].sort((a, b) => a - b),
+          // Every size and period count offered before stays one step away.
+          more: { frames: BUFFER_SIZES, periods: [5, 6, 7, 8] },
         }}
         onApply={(setting) => {
           const fields = {
@@ -322,81 +404,18 @@ export function TimedAudioReconfigure({
             {feed.error && <p role="alert">{feed.error}</p>}
           </div>
         }
-        details={
-          <details className="min-w-0">
-            <summary className="min-h-touch cursor-pointer py-2 text-sm font-medium">
-              Interface routing
-            </summary>
-            <div className="grid min-w-0 gap-3 pt-2">
-              <p className="text-sm break-words">
-                {routing.input.endpoint} · {routing.input.channels} in /{' '}
-                {routing.output.channels} out · {routing.input.format} /{' '}
-                {routing.output.format}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Calculated input buffer {bufferMs(initial.input).toFixed(1)} ms;
-                output buffer {bufferMs(initial.output).toFixed(1)} ms.
-                Converters and USB add delay.
-              </p>
-              {checkedInput && checkedOutput && (
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    setRouting({
-                      ...routing,
-                      input: checkedInput,
-                      output: checkedOutput,
-                      input_map: routing.input_map.map((channel) =>
-                        Math.min(channel, checkedInput.channels - 1),
-                      ) as [number, number],
-                      output_map: routing.output_map.map((channel) =>
-                        Math.min(channel, checkedOutput.channels - 1),
-                      ) as [number, number],
-                    })
-                  }
-                >
-                  Use checked interface
-                </Button>
-              )}
-              <div className="grid min-w-0 grid-cols-2 gap-3">
-                {(['input_map', 'output_map'] as const).flatMap((key) =>
-                  ([0, 1] as const).map((index) => (
-                    <label
-                      key={`${key}:${index}`}
-                      className="grid min-w-0 gap-1 text-sm"
-                    >
-                      {key === 'input_map' ? 'Input' : 'Output'}{' '}
-                      {index ? 'right' : 'left'}
-                      <input
-                        aria-label={`Session ${key === 'input_map' ? 'input' : 'output'} ${index ? 'right' : 'left'} channel`}
-                        className="min-h-touch min-w-0 rounded-lg border border-input bg-background px-3"
-                        type="number"
-                        min={1}
-                        max={
-                          routing[key === 'input_map' ? 'input' : 'output']
-                            .channels
-                        }
-                        value={routing[key][index] + 1}
-                        onChange={(event) => {
-                          const map: [number, number] = [...routing[key]];
-                          map[index] = Number(event.target.value) - 1;
-                          setRouting({ ...routing, [key]: map });
-                        }}
-                      />
-                    </label>
-                  )),
-                )}
-              </div>
-              {!validMaps && (
-                <p role="alert">
-                  Use matching input/output devices and channels available on
-                  that interface.
-                </p>
-              )}
-            </div>
-          </details>
-        }
+        details={slot ? undefined : routingSection}
       />
+      {slot &&
+        createPortal(
+          <fieldset
+            disabled={changeDisabled || changePhase !== 'idle'}
+            className="grid min-w-0"
+          >
+            {routingSection}
+          </fieldset>,
+          slot,
+        )}
     </div>
   );
 }

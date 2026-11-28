@@ -7,12 +7,12 @@ import {
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
-import { Card } from '@oxidal/design-system/components/card';
 import {
   ActionRow,
   FormField,
 } from '@oxidal/design-system/components/form-layout';
 import { Caption } from '@oxidal/design-system/components/text';
+import { SettingDisclosure } from '@oxidal/design-system/patterns/settings-page';
 
 import { type DebugCommand, debugCommand, type DebugState } from './api';
 import { friendlyError } from './lib/friendlyError';
@@ -113,11 +113,13 @@ export function DebugConsole() {
   }
   const running = state?.job?.phase === 'running';
   return (
-    <Card aria-label="Debug console">
-      <details open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
-        <summary className="min-h-touch cursor-pointer py-2 font-semibold">
-          Debug console
-        </summary>
+    <section aria-label="Debug console" className="grid min-w-0">
+      <SettingDisclosure
+        label="Debug console"
+        caption="Copy or follow logs, and run a fixed set of diagnostics for 15 minutes at a time."
+        open={open}
+        onOpenChange={setOpen}
+      >
         <ActionRow className="my-3">
           <Button
             variant="outline"
@@ -278,7 +280,7 @@ export function DebugConsole() {
             )}
           </>
         )}
-      </details>
-    </Card>
+      </SettingDisclosure>
+    </section>
   );
 }

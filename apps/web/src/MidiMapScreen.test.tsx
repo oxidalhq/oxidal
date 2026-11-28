@@ -213,6 +213,9 @@ it('saves and applies a scene-button template without hardware', async () => {
       onMapApplied={vi.fn(async () => undefined)}
     />,
   );
+  await user.click(
+    await screen.findByRole('button', { name: /^Mapping helpers/ }),
+  );
   await user.click(await screen.findByLabelText('Scene button template'));
   await user.click(screen.getByRole('option', { name: '4 buttons' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save template' }));
@@ -245,6 +248,9 @@ it('copies and preview-confirms clearing a preset map', async () => {
       mixed={rig()}
       onMapApplied={vi.fn(async () => undefined)}
     />,
+  );
+  await user.click(
+    await screen.findByRole('button', { name: /^Mapping helpers/ }),
   );
   await user.click(await screen.findByLabelText('Copy MIDI mappings from'));
   await user.click(screen.getByRole('option', { name: 'Stage Rig' }));

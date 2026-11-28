@@ -4,7 +4,6 @@ import { Terminal } from '@xterm/xterm';
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
-import { Card } from '@oxidal/design-system/components/card';
 import {
   ActionRow,
   FormField,
@@ -17,6 +16,7 @@ import {
   SelectValue,
 } from '@oxidal/design-system/components/select';
 import { Caption } from '@oxidal/design-system/components/text';
+import { SettingDisclosure } from '@oxidal/design-system/patterns/settings-page';
 
 import { terminalCommand, type TerminalState } from './api';
 
@@ -261,9 +261,13 @@ export function WebTerminal() {
   const [open, setOpen] = useState(true);
   const [mode, setMode] = useState<'unprivileged' | 'admin'>('unprivileged');
   return (
-    <Card className="min-w-0" aria-label="Web terminal">
-      <details open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
-        <summary className="min-h-touch">Interactive terminal</summary>
+    <section className="grid min-w-0" aria-label="Web terminal">
+      <SettingDisclosure
+        label="Interactive terminal"
+        caption="A shell on the device, as its own restricted account."
+        open={open}
+        onOpenChange={setOpen}
+      >
         {open && (
           <>
             <FormField className="mt-3">
@@ -290,7 +294,7 @@ export function WebTerminal() {
             <TerminalPanel key={mode} mode={mode} />
           </>
         )}
-      </details>
-    </Card>
+      </SettingDisclosure>
+    </section>
   );
 }

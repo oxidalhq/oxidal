@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 
-import { Card } from '@oxidal/design-system/components/card';
 import { Loading } from '@oxidal/design-system/components/states';
-import { Caption, Description } from '@oxidal/design-system/components/text';
+import { Caption } from '@oxidal/design-system/components/text';
 import { PluginPacks } from '@oxidal/design-system/patterns/engine-settings';
+import { SettingNotice } from '@oxidal/design-system/patterns/settings-page';
 
 import {
   changeEffectPack,
@@ -126,30 +126,30 @@ export function EffectPacks({
 
   const playing = audioRunning || Boolean(state?.audio_running);
   return (
-    <Card aria-label="Effects">
+    <section aria-label="Effects" className="grid min-w-0">
       <h2 className="sr-only">Effects</h2>
-      <Description>
+      <Caption className="mb-2 text-xs">
         Qualified collections available to the effect chooser. Unsupported
         plugins stay hidden.
-      </Description>
+      </Caption>
 
       {state && !state.storage_writable && (
-        <p role="status" className="rounded-md bg-muted px-3 py-2 text-sm">
+        <SettingNotice tone="warning">
           Unlock system storage and restart before changing effect packs.
-        </p>
+        </SettingNotice>
       )}
-      {error && <p role="alert">{error}</p>}
+      {error && <SettingNotice tone="error">{error}</SettingNotice>}
       {error && <RecoveryAction failure={recoverFailure} />}
       {state?.message && !state.job && (
-        <Caption role="status">{state.message}</Caption>
+        <SettingNotice>{state.message}</SettingNotice>
       )}
 
       {!state && !error && <Loading label="Reading installed effects…" />}
       {state && !state.available && (
-        <Caption role="status">
+        <SettingNotice>
           This device cannot install packages, so effect packs are shown for
           reference only.
-        </Caption>
+        </SettingNotice>
       )}
       {state && (
         <PluginPacks
@@ -183,6 +183,6 @@ export function EffectPacks({
           onRemove={(pack) => void change(pack.id, 'remove')}
         />
       )}
-    </Card>
+    </section>
   );
 }

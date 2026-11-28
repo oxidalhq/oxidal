@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { Card } from '@oxidal/design-system/components/card';
-import { Caption, Title } from '@oxidal/design-system/components/text';
+import { Caption } from '@oxidal/design-system/components/text';
+import { SettingNotice } from '@oxidal/design-system/patterns/settings-page';
 
 import {
   type AudioState,
@@ -129,17 +129,19 @@ export function MidiSettings({ connected }: { connected: boolean }) {
     }
   }
   return (
-    <Card className="space-y-4" aria-label="MIDI device settings">
-      <div className="space-y-1">
-        <Title as="h2" size="sm">
+    <section className="grid min-w-0 gap-4" aria-label="MIDI device settings">
+      <header className="grid gap-1">
+        <h2 className="m-0 text-sm font-medium small-caps text-muted-foreground">
           MIDI map
-        </Title>
-        <Caption>
+        </h2>
+        <Caption className="text-xs">
           Preset recall follows the Mine set-list. Scene and control mappings
           stay with each saved preset.
         </Caption>
-      </div>
-      {(applyError || error) && <p role="alert">{applyError || error}</p>}
+      </header>
+      {(applyError || error) && (
+        <SettingNotice tone="error">{applyError || error}</SettingNotice>
+      )}
       {(applyError || error) && <RecoveryAction failure={recoverFailure} />}
       <MidiMapScreen
         connected={connected && !busy && !error}
@@ -243,6 +245,6 @@ export function MidiSettings({ connected }: { connected: boolean }) {
           <Caption as="span">Edit the playing preset’s assignments</Caption>
         )}
       </div>
-    </Card>
+    </section>
   );
 }

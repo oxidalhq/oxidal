@@ -21,6 +21,7 @@ import { Slider } from '@oxidal/design-system/components/slider';
 import { StateNotice } from '@oxidal/design-system/components/states';
 import { Caption } from '@oxidal/design-system/components/text';
 import { GuitarWorkspace } from '@oxidal/design-system/patterns/guitar-workspace';
+import { GuitarSelector } from '@oxidal/design-system/widgets/guitar-selector';
 import { Meter } from '@oxidal/design-system/widgets/meter';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
@@ -28,6 +29,7 @@ import { boosts, type GuitarProfiles } from './api';
 import { CaptureListening } from './CaptureListening';
 import { guitarVerificationDetail } from './guitarVerification';
 import { useMonitorReadings } from './monitorFeed';
+import { requestScreen } from './screenNavigation';
 import { gateFor, useGuitars } from './useGuitars';
 
 type Guitar = GuitarProfiles['guitars'][number];
@@ -638,60 +640,6 @@ export function GuitarSettings() {
   );
 }
 
-/** One tap to switch guitars on stage. Hidden until two guitars exist. */
-/**
- * One tap per instrument. Compact sits beside the preset name, taking no row;
- * the default is a section of its own.
- */
-export function GuitarSwitch({
-  layout = 'section',
-}: {
-  layout?: 'section' | 'compact';
-}) {
-  const { profiles, busy, save } = useGuitars();
-  if (
-    profiles == null ||
-    profiles === 'unsupported' ||
-    profiles.guitars.length < 2
-  )
-    return null;
-  const buttons = profiles.guitars.map((g) => (
-    <Button
-      key={g.id}
-      variant={profiles.active === g.id ? 'default' : 'outline'}
-      aria-pressed={profiles.active === g.id}
-      disabled={busy}
-      onClick={() => void save({ ...profiles, active: g.id })}
-    >
-      {g.name}
-    </Button>
-  ));
-  return (
-    <div
-      className={
-        layout === 'compact'
-          ? 'flex min-w-0 flex-wrap items-center justify-center gap-2'
-          : 'grid min-w-0 gap-2'
-      }
-    >
-      {layout === 'compact' ? (
-        <span className="text-xs font-semibold small-caps text-muted-foreground">
-          Guitar
-        </span>
-      ) : (
-        <h3>Guitar</h3>
-      )}
-      <div
-        className="flex min-w-0 flex-wrap items-center gap-1"
-        role="group"
-        aria-label="Guitar"
-      >
-        {buttons}
-      </div>
-    </div>
-  );
-}
-
 /**
  * The guitar in use, as a button beside Level; it opens the choice. Rig view
  * has no room for a row of guitars, and the choice rarely changes mid-song.
@@ -721,6 +669,7 @@ export function GuitarPicker() {
   return (
     <>
       <Button
+        size="sm"
         variant="outline"
         aria-label={`Guitar: ${active.name}`}
         aria-haspopup="dialog"
@@ -728,7 +677,7 @@ export function GuitarPicker() {
         onClick={() => setOpen(true)}
       >
         <GuitarIcon aria-hidden="true" />
-        <span className="phone-hidden">{active.name}</span>
+        <span className="max-sm:sr-only">{active.name}</span>
       </Button>
       {open && (
         <AdjustmentDialog title="Guitar" onCancel={() => setOpen(false)}>
@@ -793,5 +742,68 @@ export function GuitarPicker() {
         </AdjustmentDialog>
       )}
     </>
+  );
+}
+
+/**
+ * The guitar under the Rig's IN meter: the same profiles and choices as
+ * GuitarPicker (the guitar plugged in, and whether the playing preset always
+ * switches to one), as the compact selector C2 draws there.
+ * @see docs/interface.md
+ */
+export function GuitarLane({ className }: { className?: string } = {}) {
+  const { profiles, busy, save } = useGuitars();
+  // The preset playing when the list opened: it can remember a guitar.
+  const [preset, setPreset] = useState<string | null>(null);
+  const read = () => {
+    boosts()
+      .then((state) => setPreset(state?.playing[0] ?? null))
+      .catch(() => setPreset(null));
+  };
+  if (profiles == null || profiles === 'unsupported') return null;
+  const active =
+    profiles.guitars.find((g) => g.id === profiles.active) ??
+    profiles.guitars[0];
+  const kept = preset
+    ? profiles.guitars.find((g) => g.id === profiles.presets?.[preset])
+    : undefined;
+  const rest = Object.fromEntries(
+    Object.entries(profiles.presets ?? {}).filter(([key]) => key !== preset),
+  );
+  return (
+    <GuitarSelector
+      className={className}
+      guitars={profiles.guitars}
+      active={active?.id ?? null}
+      disabled={busy}
+      onOpenChange={(open) => open && read()}
+      onSelect={(id) => void save({ ...profiles, active: id })}
+      onManage={() => requestScreen({ screen: 'guitars' })}
+      items={
+        !preset || !active
+          ? []
+          : kept
+            ? [
+                {
+                  id: 'forget',
+                  label: `Forget ${kept.name} for this preset`,
+                  disabled: busy,
+                  onSelect: () => void save({ ...profiles, presets: rest }),
+                },
+              ]
+            : [
+                {
+                  id: 'always',
+                  label: `Always use ${active.name} for this preset`,
+                  disabled: busy,
+                  onSelect: () =>
+                    void save({
+                      ...profiles,
+                      presets: { ...rest, [preset]: active.id },
+                    }),
+                },
+              ]
+      }
+    />
   );
 }

@@ -14,9 +14,22 @@ import { friendlyError } from './lib/friendlyError';
 /** Device power is separate from the audio transport and always confirmed.
  * @see docs/device-service.md
  */
-export function DevicePower({ connected }: { connected: boolean }) {
+export function DevicePower({
+  connected,
+  ask = null,
+  onAnswered,
+}: {
+  connected: boolean;
+  /**
+   * Opens this confirmation straight away, as the capsule's ☰ menu does;
+   * give the section a new key for each request.
+   */
+  ask?: 'reboot' | 'shutdown' | null;
+  /** The request was confirmed or cancelled. */
+  onAnswered?: () => void;
+}) {
   const [state, setState] = useState<NetworkState | null>(null);
-  const [action, setAction] = useState<'reboot' | 'shutdown' | null>(null);
+  const [action, setAction] = useState<'reboot' | 'shutdown' | null>(ask);
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState<'reboot' | 'shutdown' | null>(null);
   const [error, setError] = useState('');
@@ -77,8 +90,14 @@ export function DevicePower({ connected }: { connected: boolean }) {
         disabled={disabled}
         error={error}
         onRequest={setAction}
-        onCancel={() => setAction(null)}
-        onConfirm={() => void confirm()}
+        onCancel={() => {
+          setAction(null);
+          onAnswered?.();
+        }}
+        onConfirm={() => {
+          onAnswered?.();
+          void confirm();
+        }}
         notice={
           <>
             {!state && !readError && (

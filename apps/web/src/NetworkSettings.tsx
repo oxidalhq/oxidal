@@ -15,6 +15,11 @@ import {
   type NetworkDraft,
 } from '@oxidal/design-system/patterns/network-change-dialog';
 import { NetworkSettings as NetworkSettingsView } from '@oxidal/design-system/patterns/network-settings';
+import {
+  SettingDisclosure,
+  SettingNotice,
+  SettingRow,
+} from '@oxidal/design-system/patterns/settings-page';
 
 import { DeviceAccess } from './DeviceAccess';
 import { useDeviceNetwork } from './useDeviceNetwork';
@@ -66,6 +71,7 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
   }
   const refreshButton = (
     <Button
+      size="sm"
       variant="outline"
       disabled={busy || !connected}
       onClick={() => void refresh()}
@@ -178,47 +184,50 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
                 action={refreshButton}
               />
             )}
-            {readError && <Description role="alert">{readError}</Description>}
-            {error && <Description role="alert">{error}</Description>}
-            {state?.available && state.message && (
-              <Description role="status">{state.message}</Description>
+            {readError && (
+              <SettingNotice tone="error">{readError}</SettingNotice>
             )}
-            {state?.available && (
-              <Description>
-                Wi-Fi is {state.wireless_enabled ? 'on' : 'off'}
-                {current ? ` · ${current}` : ''}.
-              </Description>
+            {error && <SettingNotice tone="error">{error}</SettingNotice>}
+            {state?.available && state.message && (
+              <SettingNotice tone="warning">{state.message}</SettingNotice>
+            )}
+            {state?.available && !state.wireless_enabled && (
+              <SettingNotice tone="warning">Wi-Fi is off.</SettingNotice>
             )}
             {state?.saved_message && (
-              <Description>{state.saved_message}</Description>
+              <SettingNotice>{state.saved_message}</SettingNotice>
             )}
             {state?.available &&
               (!capabilities?.saved_connect ||
                 !capabilities.open_join ||
                 !capabilities.hotspot_radio) && (
-                <Description>
+                <SettingNotice>
                   Update the device service to enable saved-network
                   reconnection, open-network join and separate radio changes.
                   WPA2 setup remains available.
-                </Description>
+                </SettingNotice>
               )}
             {!connected && (
-              <Description role="status">
+              <SettingNotice tone="warning">
                 Reconnect to Oxidal before changing the network.
-              </Description>
+              </SettingNotice>
             )}
           </>
         }
         interfaceControl={
-          <div className="grid gap-3">
-            <label className="grid gap-1 text-sm">
-              Wireless interface
+          <>
+            <SettingRow id="wireless-interface" label="Wireless interface">
               <Select
                 value={interfaceName}
                 disabled={busy || Boolean(state?.pending)}
                 onValueChange={setIface}
               >
-                <SelectTrigger aria-label="Wireless interface">
+                <SelectTrigger
+                  id="wireless-interface"
+                  size="sm"
+                  aria-label="Wireless interface"
+                  className="w-40"
+                >
                   <SelectValue placeholder="No wireless interface" />
                 </SelectTrigger>
                 <SelectContent>
@@ -229,24 +238,30 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
                   ))}
                 </SelectContent>
               </Select>
-            </label>
-            <details>
-              <summary className="min-h-touch cursor-pointer py-3 text-sm">
-                Connection details
-              </summary>
-              <ul aria-label="Network interfaces">
+            </SettingRow>
+            <SettingDisclosure
+              label="Connection details"
+              caption="Each network interface and what it is connected to."
+            >
+              <ul aria-label="Network interfaces" className="m-0 grid p-0">
                 {state?.interfaces.map((device) => (
-                  <li key={device.name} className="py-1 text-sm">
-                    {device.name} · {device.state}
-                    {device.connection && device.connection !== '--'
-                      ? ` · ${device.connection}`
-                      : ''}
+                  <li
+                    key={device.name}
+                    className="flex justify-between gap-3 border-b border-border py-1.5 text-sm last:border-0"
+                  >
+                    <span className="font-mono">{device.name}</span>
+                    <span className="text-muted-foreground">
+                      {device.state}
+                      {device.connection && device.connection !== '--'
+                        ? ` · ${device.connection}`
+                        : ''}
+                    </span>
                   </li>
                 ))}
               </ul>
-            </details>
-            {refreshButton}
-          </div>
+              <span>{refreshButton}</span>
+            </SettingDisclosure>
+          </>
         }
         onJoin={(ssid, secured) => open({ kind: 'join', ssid, secured })}
         onManualJoin={() => open({ kind: 'join', ssid: '', secured: true })}

@@ -1,7 +1,6 @@
 import {
   CheckCircle,
   Guitar,
-  Pulse,
   SpeakerHigh,
   WarningCircle,
 } from '@phosphor-icons/react';
@@ -27,6 +26,7 @@ import {
   LEVELS_SECTIONS,
   type LevelsSection,
 } from '@oxidal/design-system/patterns/levels-sections';
+import { ReadingsTable } from '@oxidal/design-system/patterns/readings-table';
 import { SettingRow } from '@oxidal/design-system/patterns/settings-page';
 import { Workspace } from '@oxidal/design-system/patterns/workspace';
 import { Meter } from '@oxidal/design-system/widgets/meter';
@@ -55,7 +55,6 @@ import { MasterLevel } from './MasterLevel';
 import { useMonitorFeed } from './monitorFeed';
 import { Monitoring } from './Monitoring';
 import { processingHeadroom } from './processingHeadroom';
-import { ToolRow, ToolSection } from './ToolRow';
 import { useSectionLocation } from './workspaceMemory';
 
 type HealthData = {
@@ -355,6 +354,7 @@ export function SoundCheck({
         {loading && <p role="status">Reading device checks…</p>}
         {error && <p role="status">{error}</p>}
         <ReadinessList
+          plain
           title="Before you play"
           caption="What needs a look is first"
           checks={checks.sort((a, b) => Number(a.ok) - Number(b.ok))}
@@ -376,8 +376,10 @@ export function SoundCheck({
             leaveScreen(() => setView(id as LevelsSection));
         }}
       >
-        <CardHeader className="border-b border-border pb-4">
-          <div className="grid max-w-prose justify-items-start gap-2">
+        {/* The readiness check as one quiet line: its state, the question
+            and Refresh, with what it covers underneath. */}
+        <header className="grid gap-1 border-b border-border pb-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Badge
               tone={fixes.length ? 'warning' : 'neutral'}
               data-state={fixes.length ? 'attention' : 'ready'}
@@ -393,17 +395,25 @@ export function SoundCheck({
                   ? `${fixes.length} to review`
                   : 'No current software warnings'}
             </Badge>
-            <Title as="h2">Is the whole instrument ready?</Title>
-            <Description>
-              One view of the guitar, interface, loudness, intentional boosts
-              and live processing health. Digital readings cannot judge a
-              physical output knob or room loudness.
-            </Description>
+            <Title as="h2" size="sm" className="m-0">
+              Is the whole instrument ready?
+            </Title>
+            <Button
+              variant="outline"
+              size="sm"
+              className="ms-auto"
+              disabled={loading}
+              onClick={load}
+            >
+              Refresh checks
+            </Button>
           </div>
-          <Button variant="outline" disabled={loading} onClick={load}>
-            Refresh checks
-          </Button>
-        </CardHeader>
+          <Description className="max-w-prose text-xs">
+            One view of the guitar, interface, loudness, intentional boosts and
+            live processing health. Digital readings cannot judge a physical
+            output knob or room loudness.
+          </Description>
+        </header>
 
         {error && (
           <StateNotice kind="error" title="Levels could not refresh">
@@ -412,10 +422,17 @@ export function SoundCheck({
         )}
         {view === 'overview' && (
           <div className="grid min-w-0 gap-6">
-            <Card aria-label="Output controls">
-              <h3>Output</h3>
-              <MasterLevel disabled={!connected} />
-              <VenueEq connected={connected} />
+            {/* As C2: one card for what happens after the mix, the level
+                and Mono, then the venue EQ under one rule. */}
+            <Card aria-label="Output controls" className="grid gap-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <h3 className="m-0 text-base font-semibold">Output</h3>
+                <Caption as="span" className="text-xs">
+                  After the mix · not saved in presets
+                </Caption>
+              </div>
+              <MasterLevel disabled={!connected} layout="page" />
+              <VenueEq connected={connected} bare />
             </Card>
             <div
               id="sound-check-meters"
@@ -523,72 +540,69 @@ export function SoundCheck({
               />
             )}
 
-            <div className="grid min-w-0 items-start gap-5 min-[761px]:grid-cols-2">
-              <ToolSection
-                title="Loudness"
-                scope="Reference riff · before intentional Boost"
-                label="Preset loudness health"
-              >
-                <ToolRow
-                  title="Target"
-                  value={lufs(data.calibration?.target_lufs)}
-                  detail={
-                    data.coverage
-                      ? `${data.coverage.measured} current · ${data.coverage.stale} stale after changes · ${data.coverage.unmeasured} never measured · ${data.coverage.total} total.`
-                      : `${entries.length} stored measurements. Refresh checks to scan current Library coverage.`
-                  }
-                />
-                <ToolRow
-                  title="Before correction"
-                  value={
-                    spread == null ? '—' : `${spread.toFixed(1)} LU spread`
-                  }
-                  detail={
+            <ReadingsTable
+              title="Loudness"
+              note="Reference riff · before intentional Boost"
+              readings={[
+                {
+                  id: 'target',
+                  label: 'Target',
+                  value: lufs(data.calibration?.target_lufs),
+                  detail: data.coverage
+                    ? `${data.coverage.measured} current · ${data.coverage.stale} stale after changes · ${data.coverage.unmeasured} never measured · ${data.coverage.total} total.`
+                    : `${entries.length} stored measurements. Refresh checks to scan current Library coverage.`,
+                },
+                {
+                  id: 'before',
+                  label: 'Before correction',
+                  value:
+                    spread == null ? '—' : `${spread.toFixed(1)} LU spread`,
+                  attention: spread != null && spread > 6,
+                  detail:
                     loudest && quietest
                       ? `${loudest.name} ${lufs(loudest.lufs)} · ${quietest.name} ${lufs(quietest.lufs)}`
-                      : 'Run Even out to build a measured comparison.'
-                  }
-                />
-                <ToolRow
-                  title="After correction"
-                  value={
+                      : 'Run Even out to build a measured comparison.',
+                },
+                {
+                  id: 'after',
+                  label: 'After correction',
+                  value:
                     correctedSpread == null
                       ? '—'
-                      : `${correctedSpread.toFixed(1)} LU spread`
-                  }
-                  detail={
+                      : `${correctedSpread.toFixed(1)} LU spread`,
+                  detail:
                     loudest && quietest
                       ? `${loudest.name} ${lufs(loudest.lufs + loudest.offset_db)} · ${quietest.name} ${lufs(quietest.lufs + quietest.offset_db)}. Intentional Boost remains on top.`
-                      : 'Corrections appear after the first completed Even out run.'
-                  }
-                >
-                  <Button variant="outline" onClick={onLibrary}>
-                    Preset library
-                  </Button>
-                </ToolRow>
-              </ToolSection>
-
-              <ToolSection
-                title="Guitar"
-                scope="Before every rig"
-                label="Guitar health"
-              >
-                <ToolRow
-                  title={activeGuitar?.name ?? 'No active profile'}
-                  value={db(activeGuitar?.trim_db ?? 0)}
-                  detail={
-                    activeGuitar
-                      ? `Strum ${dbfs(activeGuitar.peak_dbfs)} · noise ${dbfs(activeGuitar.noise_dbfs)}`
-                      : 'Choose the instrument currently plugged into the interface.'
-                  }
-                >
-                  <Button variant="outline" onClick={onGuitars}>
-                    <Guitar aria-hidden="true" /> Guitar profiles
-                  </Button>
-                </ToolRow>
-                <ToolRow
-                  title="Profile health"
-                  value={
+                      : 'Corrections appear after the first completed Even out run.',
+                  action: (
+                    <Button variant="outline" size="sm" onClick={onLibrary}>
+                      Preset library
+                    </Button>
+                  ),
+                },
+              ]}
+            />
+            <ReadingsTable
+              title="Guitar"
+              note="Before every rig"
+              readings={[
+                {
+                  id: 'trim',
+                  label: activeGuitar?.name ?? 'No active profile',
+                  value: db(activeGuitar?.trim_db ?? 0),
+                  detail: activeGuitar
+                    ? `Trim. Strum ${dbfs(activeGuitar.peak_dbfs)} · noise ${dbfs(activeGuitar.noise_dbfs)}`
+                    : 'Choose the instrument currently plugged into the interface.',
+                  action: (
+                    <Button variant="outline" size="sm" onClick={onGuitars}>
+                      <Guitar aria-hidden="true" /> Guitar profiles
+                    </Button>
+                  ),
+                },
+                {
+                  id: 'profile',
+                  label: 'Profile health',
+                  value:
                     verification === 'current'
                       ? 'Current input verified'
                       : verification === 'stored'
@@ -597,42 +611,43 @@ export function SoundCheck({
                           ? 'Input changed'
                           : verification === 'unverified'
                             ? 'Recheck input'
-                            : 'Measurement needed'
-                  }
-                  detail={`${guitarVerificationDetail(activeGuitar)} Levels follows the active profile automatically. Remeasure after changing the physical input-gain knob or the guitar's output level; Oxidal cannot read either control.`}
-                />
-              </ToolSection>
-
-              <ToolSection
-                title="Interface"
-                scope="Current digital stream"
-                label="Audio interface health"
-              >
-                <ToolRow
-                  title={live ? 'Live' : 'No live stream'}
-                  value={
-                    monitor?.stream
-                      ? `${monitor.stream.input.sample_rate / 1000} kHz`
-                      : '—'
-                  }
-                  detail={
-                    monitor?.stream
-                      ? `${monitor.stream.input.endpoint} → ${monitor.stream.output.endpoint} · ${monitor.stream.input.period_frames} frames × ${monitor.stream.input.periods}`
-                      : 'Select a capture and playback device, then start audio.'
-                  }
-                >
-                  <Button variant="outline" onClick={onAudioSetup}>
-                    <SpeakerHigh aria-hidden="true" /> Audio setup
-                  </Button>
-                </ToolRow>
-                <ToolRow
-                  title="Input / output peak"
-                  value={`${dbfs(inputPeak)} / ${dbfs(outputPeak)}`}
-                  detail={`${inputClips} input clips · ${outputClips} output clips in this audio session.`}
-                />
-                <ToolRow
-                  title="Input gain guidance"
-                  value={
+                            : 'Measurement needed',
+                  attention:
+                    verification !== 'current' && verification !== 'stored',
+                  detail: `${guitarVerificationDetail(activeGuitar)} Levels follows the active profile automatically. Remeasure after changing the physical input-gain knob or the guitar's output level; Oxidal cannot read either control.`,
+                },
+              ]}
+            />
+            <ReadingsTable
+              title="Interface"
+              note="Current digital stream"
+              readings={[
+                {
+                  id: 'stream',
+                  label: live ? 'Live' : 'No live stream',
+                  value: monitor?.stream
+                    ? `${monitor.stream.input.sample_rate / 1000} kHz`
+                    : '—',
+                  detail: monitor?.stream
+                    ? `${monitor.stream.input.endpoint} → ${monitor.stream.output.endpoint} · ${monitor.stream.input.period_frames} frames × ${monitor.stream.input.periods}`
+                    : 'Select a capture and playback device, then start audio.',
+                  action: (
+                    <Button variant="outline" size="sm" onClick={onAudioSetup}>
+                      <SpeakerHigh aria-hidden="true" /> Audio setup
+                    </Button>
+                  ),
+                },
+                {
+                  id: 'peaks',
+                  label: 'Input / output peak',
+                  value: `${dbfs(inputPeak)} / ${dbfs(outputPeak)}`,
+                  attention: inputClips + outputClips > 0,
+                  detail: `${inputClips} input clips · ${outputClips} output clips in this audio session.`,
+                },
+                {
+                  id: 'gain',
+                  label: 'Input gain guidance',
+                  value:
                     inputClips > 0
                       ? 'Reduce physical gain'
                       : activeGuitar?.peak_dbfs == null
@@ -641,99 +656,101 @@ export function SoundCheck({
                           ? 'Very little headroom'
                           : activeGuitar.peak_dbfs < -30
                             ? 'Measured level is low'
-                            : 'Measured level is usable'
-                  }
-                  detail={
+                            : 'Measured level is usable',
+                  attention: inputClips > 0,
+                  detail:
                     activeGuitar?.peak_dbfs == null
                       ? 'Measure a strong strum. Re-measure whenever the interface input-gain knob changes.'
-                      : `Profile strum ${dbfs(activeGuitar.peak_dbfs)} before trim. Re-measure after changing the physical input-gain knob; Oxidal cannot read that knob.`
-                  }
-                />
-                <ToolRow
-                  title="Listening volume"
-                  value={
+                      : `Profile strum ${dbfs(activeGuitar.peak_dbfs)} before trim. Re-measure after changing the physical input-gain knob; Oxidal cannot read that knob.`,
+                },
+                {
+                  id: 'listening',
+                  label: 'Listening volume',
+                  value:
                     outputClips > 0
                       ? 'Digital clipping'
-                      : 'Physical level unknown'
-                  }
-                  detail={
+                      : 'Physical level unknown',
+                  attention: outputClips > 0,
+                  detail:
                     outputClips > 0
                       ? 'Reduce Boost or master Level before raising any physical output control.'
-                      : 'If the digital output is healthy but headphones or speakers are too loud or quiet, adjust the interface, amplifier or speaker controls.'
-                  }
-                />
-              </ToolSection>
-
-              <ToolSection
-                title="Processing"
-                scope="Audio thread · not total CPU"
-                label="Processing health"
-              >
-                <ToolRow
-                  title="DSP p95 / deadline"
-                  value={
+                      : 'If the digital output is healthy but headphones or speakers are too loud or quiet, adjust the interface, amplifier or speaker controls.',
+                },
+              ]}
+            />
+            <ReadingsTable
+              title="Processing"
+              note="Audio thread · not total CPU"
+              readings={[
+                {
+                  id: 'dsp',
+                  label: 'DSP p95 / deadline',
+                  value:
                     processing.p95 != null
                       ? `${processing.p95.toFixed(0)}%`
-                      : '—'
-                  }
-                  detail={`${processing.peak == null ? 'No session peak' : `${processing.peak.toFixed(0)}% session peak`} · ${monitor?.xruns ?? 0} recovered xruns · ${deadlineMisses} missed deadlines.`}
-                >
-                  <Pulse aria-hidden="true" className="size-4" />
-                </ToolRow>
-              </ToolSection>
-            </div>
-
-            <ToolSection
+                      : '—',
+                  attention: processing.tight || deadlineMisses > 0,
+                  detail: `${processing.peak == null ? 'No session peak' : `${processing.peak.toFixed(0)}% session peak`} · ${monitor?.xruns ?? 0} recovered xruns · ${deadlineMisses} missed deadlines.`,
+                },
+              ]}
+            />
+            <ReadingsTable
               title="Playing level stages"
-              scope="Shown separately so correction is not confused with solo Boost"
-              label="Playing level stages"
-            >
-              <div className="grid gap-x-4 min-[761px]:grid-cols-3">
-                <ToolRow
-                  title="Guitar trim"
-                  value={db(data.levels?.input_trim_db)}
-                  detail="Before the rig; selected by the active guitar profile."
-                />
-                <ToolRow
-                  title="Even out correction"
-                  value={db(data.boosts?.calibrated_db)}
-                  detail="Measured correction for the sounding preset or scene."
-                />
-                <ToolRow
-                  title="Preset Boost"
-                  value={db(presetBoost)}
-                  detail={
-                    playingKeys[0]
-                      ? 'Intentional extra level on the sounding preset.'
-                      : 'No sounding preset boost key.'
-                  }
-                />
-                <ToolRow
-                  title="Scene Boost"
-                  value={db(sceneBoost)}
-                  detail={
-                    playingKeys[1]
-                      ? 'Intentional extra level on the sounding scene.'
-                      : 'No separate sounding scene boost.'
-                  }
-                />
-                <ToolRow
-                  title="Applied correction + Boost"
-                  value={db(data.boosts?.applied_db)}
-                  detail="The combined bounded amount currently added before master Level."
-                />
-                <ToolRow
-                  title="Master Level"
-                  value={db(data.levels?.output_level_db)}
-                  detail="Unit-wide digital output after the rig; not the interface's physical knob."
-                />
-              </div>
-            </ToolSection>
+              note="Shown separately so correction is not confused with solo Boost"
+              readings={[
+                {
+                  id: 'trim',
+                  label: 'Guitar trim',
+                  value: db(data.levels?.input_trim_db),
+                  detail:
+                    'Before the rig; selected by the active guitar profile.',
+                },
+                {
+                  id: 'even',
+                  label: 'Even out correction',
+                  value: db(data.boosts?.calibrated_db),
+                  detail:
+                    'Measured correction for the sounding preset or scene.',
+                },
+                {
+                  id: 'preset',
+                  label: 'Preset Boost',
+                  value: db(presetBoost),
+                  detail: playingKeys[0]
+                    ? 'Intentional extra level on the sounding preset.'
+                    : 'No sounding preset boost key.',
+                },
+                {
+                  id: 'scene',
+                  label: 'Scene Boost',
+                  value: db(sceneBoost),
+                  detail: playingKeys[1]
+                    ? 'Intentional extra level on the sounding scene.'
+                    : 'No separate sounding scene boost.',
+                },
+                {
+                  id: 'applied',
+                  label: 'Applied correction + Boost',
+                  value: db(data.boosts?.applied_db),
+                  detail:
+                    'The combined bounded amount currently added before master Level.',
+                },
+                {
+                  id: 'master',
+                  label: 'Master Level',
+                  value: db(data.levels?.output_level_db),
+                  detail:
+                    "Unit-wide digital output after the rig; not the interface's physical knob.",
+                },
+              ]}
+            />
           </div>
         )}
 
         {view === 'loudness' && (
           <div className="grid min-w-0 gap-6">
+            {/* First in Loudness: it changes every preset, so it is not left for the end. */}
+            <EvenOut connected={connected} />
             <CaptureListening
               appliedTrim={data.levels?.input_trim_db ?? null}
               audition
@@ -804,8 +821,6 @@ export function SoundCheck({
                 </details>
               </Card>
             )}
-
-            <EvenOut connected={connected} />
           </div>
         )}
 

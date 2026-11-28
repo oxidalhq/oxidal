@@ -56,8 +56,11 @@ it('sends the exact hardware proposal and current cursor without replacing tone 
       disabled={false}
     />,
   );
-  await user.click(screen.getByRole('combobox', { name: 'Session buffer' }));
-  await user.click(screen.getByRole('option', { name: '256' }));
+  // Up to five common choices show side by side (C2).
+  expect(
+    screen.getByRole('radiogroup', { name: 'Session buffer' }),
+  ).toBeVisible();
+  await user.click(screen.getByRole('radio', { name: '256' }));
   expect(changeAudio).not.toHaveBeenCalled();
   await user.click(
     screen.getByRole('button', { name: 'Apply and restart audio' }),
@@ -70,6 +73,36 @@ it('sends the exact hardware proposal and current cursor without replacing tone 
     input_map: [0, 0],
     output_map: [0, 1],
   });
+});
+
+it('keeps the rarer buffer sizes and period counts one step away', () => {
+  render(
+    <TimedAudioReconfigure
+      initial={initial}
+      checkedInput={null}
+      checkedOutput={null}
+      cursor={cursor}
+      feed={{
+        state: { phase: 'idle' },
+        receivedAt: 0,
+        error: '',
+        pending: false,
+        readFailed: false,
+        active: false,
+        secondsLeft: 0,
+      }}
+      disabled={false}
+    />,
+  );
+  // 512, 1024 and 6 periods are no longer side by side, but still offered.
+  expect(
+    screen.getByRole('combobox', { name: 'Session buffer: other values' }),
+  ).toBeVisible();
+  expect(
+    screen.getByRole('combobox', {
+      name: 'Session buffer periods: other values',
+    }),
+  ).toBeVisible();
 });
 
 it('shows unknown counters and sends Revert for the confirmed trial even while editing is disabled', async () => {

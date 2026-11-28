@@ -1,7 +1,7 @@
+import { ArrowsClockwise } from '@phosphor-icons/react';
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
-import { Card } from '@oxidal/design-system/components/card';
 import {
   ActionRow,
   FormField,
@@ -15,6 +15,10 @@ import {
   SelectValue,
 } from '@oxidal/design-system/components/select';
 import { Caption } from '@oxidal/design-system/components/text';
+import {
+  SettingDisclosure,
+  SettingGroup,
+} from '@oxidal/design-system/patterns/settings-page';
 
 import {
   type AudioAction,
@@ -32,12 +36,14 @@ import {
   rigAudioState,
   type StartAudio,
 } from './api';
+import { AudioPlaybackRow } from './AudioPlaybackRow';
 import { AudioReconfigure } from './AudioReconfigure';
 import {
   canResumeAudio,
   checkSavedStream,
   resumeUnavailable,
 } from './audioResume';
+import { shortConfiguration } from './audioSettingsShared';
 import { BootPlayback } from './BootPlayback';
 import { bufferMs } from './bufferTiming';
 import { EffectsPlaybackSettings } from './EffectsPlaybackSettings';
@@ -58,24 +64,22 @@ function configurationLabel(configuration: AudioProbe) {
   return `${configuration.endpoint} · ${configuration.sample_rate} Hz · ${channels} · ${configuration.period_frames} samples × ${configuration.periods} = ${bufferMs(configuration).toFixed(1)} ms`;
 }
 
-/** Rate, buffer and queued time in a few words, for the status line. */
-function shortConfiguration(configuration: AudioProbe) {
-  return `${(configuration.sample_rate / 1000).toFixed(1)} kHz · ${configuration.period_frames} × ${configuration.periods} · ≈ ${bufferMs(configuration).toFixed(1)} ms`;
-}
-
 /** Audio ownership is independent of silent authoring. @see docs/audio.md */
 export function PlaybackSettings({
   connected,
   input,
   output,
-  interfaceCard,
+  device,
   level,
 }: {
   connected: boolean;
   input: AudioProbe | null;
   output: AudioProbe | null;
-  /** The interface and buffer check, placed after what is playing (7.29). */
-  interfaceCard?: ReactNode;
+  /**
+   * Settings › Audio › Device (C2): the interface row and its disclosures,
+   * given the session's stream when one is configured.
+   */
+  device?: (stream?: StartAudio['stream']) => ReactNode;
   /** Master level, shown with the monitor and output tests. */
   level?: ReactNode;
 }) {
@@ -324,13 +328,14 @@ export function PlaybackSettings({
         {readError && <p role="alert">{readError}</p>}
       </section>
     );
-  // Monitor and output tests with Master level, one row (7.29).
+  // Monitor and output tests with Master level (7.29), after Playback.
   const test = (
-    <Card aria-label="Test">
-      <h3>Test</h3>
-      {hostControls}
-      {level}
-    </Card>
+    <SettingGroup title="Test">
+      <div className="grid min-w-0 gap-3 pt-2">
+        {hostControls}
+        {level}
+      </div>
+    </SettingGroup>
   );
   if (
     effects?.configured &&
@@ -342,18 +347,16 @@ export function PlaybackSettings({
       (!lastOwner && effects.configured.recall && !mixed?.configured))
   )
     return (
-      <>
-        <EffectsPlaybackSettings
-          state={effects}
-          connected={connected}
-          input={input}
-          output={output}
-          onState={acceptEffects}
-        />
-        {interfaceCard}
-        {test}
-        {boot}
-      </>
+      <EffectsPlaybackSettings
+        state={effects}
+        connected={connected}
+        input={input}
+        output={output}
+        onState={acceptEffects}
+        device={device?.(effects.configured.stream)}
+        startup={boot}
+        after={test}
+      />
     );
   // The rig's panel only offers the rig's Resume, so keep the TONE3000
   // player's panel (its Resume and Start audio with…) after the player stops.
@@ -365,153 +368,147 @@ export function PlaybackSettings({
     (mixed.device_owned || lastOwner !== 'native')
   )
     return (
-      <>
-        <MixedPlaybackSettings
-          state={mixed}
-          connected={connected}
-          input={input}
-          output={output}
-          onState={acceptMixed}
-        />
-        {interfaceCard}
-        {test}
-        {boot}
-      </>
+      <MixedPlaybackSettings
+        state={mixed}
+        connected={connected}
+        input={input}
+        output={output}
+        onState={acceptMixed}
+        device={device?.(mixed.configured.stream)}
+        startup={boot}
+        after={test}
+      />
     );
+  const playbackButtons = unavailable ? null : state?.device_owned ? (
+    <>
+      <Button
+        size="sm"
+        variant="outline"
+        aria-label="Restart audio"
+        disabled={!connected || busy || transitioning || !state?.configured}
+        onClick={() => void command({ kind: 'restart' })}
+      >
+        <ArrowsClockwise aria-hidden="true" /> Restart
+      </Button>
+      <Button
+        size="sm"
+        variant="destructive"
+        aria-label="Stop audio"
+        disabled={!connected || busy || transitioning}
+        onClick={() => void command({ kind: 'stop' })}
+      >
+        Stop
+      </Button>
+    </>
+  ) : state?.configured ? (
+    <Button
+      size="sm"
+      aria-label="Resume audio"
+      disabled={!connected || busy || transitioning}
+      onClick={() => void resumeNative()}
+    >
+      <ArrowsClockwise aria-hidden="true" /> Resume
+    </Button>
+  ) : null;
   return (
     <section
-      className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
+      className="grid min-w-0 items-start gap-6"
       aria-label="Playback controls"
     >
-      <h3>Now playing</h3>
+      {device?.(state?.configured?.stream)}
       <RecoveryNotice message={mixed?.recovery_error} />
-
-      <p
-        role="status"
-        className="playback-state"
-        data-phase={state?.phase ?? 'checking'}
+      {!unavailable && state?.configured && (
+        <AudioReconfigure
+          key={JSON.stringify(state.configured.stream)}
+          cursor={{
+            owner: 'native',
+            session: state.session,
+            expected_revision: state.revision,
+          }}
+          initial={state.configured.stream}
+          checkedInput={input}
+          checkedOutput={output}
+          disabled={!connected || busy || transitioning}
+          running={state.phase === 'running'}
+          onApply={(stream) => void command({ kind: 'reconfigure', stream })}
+        />
+      )}
+      {boot}
+      <AudioPlaybackRow
+        phase={state?.phase}
+        status={[
+          state?.device_owned ? 'interface reserved' : '',
+          state?.configured && state.phase !== 'stopped'
+            ? shortConfiguration(state.configured.stream.input)
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+        buttons={playbackButtons}
       >
-        Audio: {state?.phase ?? 'checking'}
-        {state?.device_owned ? ' · interface reserved' : ''}
-        {state?.configured && state.phase !== 'stopped'
-          ? ` · ${shortConfiguration(state.configured.stream.input)}`
-          : ''}
-      </p>
-      {unavailable ? (
-        <>
-          <p className="text-sm text-muted-foreground">
+        {unavailable && (
+          <Caption>
             Audio playback is unavailable on this device. Saved tones can still
             be edited.
-          </p>
-          {interfaceCard}
-          {test}
-          {boot}
-        </>
-      ) : (
-        <>
-          <ActionRow>
-            {state?.device_owned ? (
-              <>
-                <Button
-                  variant="outline"
-                  disabled={!connected || busy || transitioning}
-                  onClick={() => void command({ kind: 'stop' })}
-                >
-                  Stop audio
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={
-                    !connected || busy || transitioning || !state?.configured
-                  }
-                  onClick={() => void command({ kind: 'restart' })}
-                >
-                  Restart audio
-                </Button>
-              </>
-            ) : state?.configured ? (
-              <Button
-                disabled={!connected || busy || transitioning}
-                onClick={() => void resumeNative()}
-              >
-                Resume audio
-              </Button>
-            ) : null}
-          </ActionRow>
-          {state?.configured && !state.device_owned && !nativeResumeReady && (
-            <Caption>{resumeUnavailable}</Caption>
-          )}
-          {state?.configured && (
-            <Card
-              className="min-w-0 gap-3"
-              aria-label="Playback session configuration"
-            >
-              <h4>Applied settings</h4>
-              <p>Input: {configurationLabel(state.configured.stream.input)}</p>
-              <p>
-                Output: {configurationLabel(state.configured.stream.output)}
-              </p>
-              <AudioReconfigure
-                key={JSON.stringify(state.configured.stream)}
-                cursor={{
-                  owner: 'native',
-                  session: state.session,
-                  expected_revision: state.revision,
-                }}
-                initial={state.configured.stream}
-                checkedInput={input}
-                checkedOutput={output}
-                disabled={!connected || busy || transitioning}
-                running={state.phase === 'running'}
-                onApply={(stream) =>
-                  void command({ kind: 'reconfigure', stream })
-                }
-              />
-            </Card>
-          )}
-          {interfaceCard}
-          {test}
-          {input && output && (
-            <ActionRow>
-              <Button
-                variant="outline"
-                disabled={!connected || busy}
-                onClick={async () => {
-                  setBusy(true);
-                  setError('');
-                  setGraphMessage('');
-                  try {
-                    const graph = await graphAudioState();
-                    acceptEffects(
-                      await graphAudioCommand(graph, {
-                        kind: 'configure',
-                        stream: {
-                          input,
-                          output,
-                          input_map: inputMap,
-                          output_map: outputMap,
-                        },
-                      }),
-                    );
-                    setGraphMessage('Audio setup ready for New preset.');
-                  } catch (cause) {
-                    setError(friendlyError(cause, 'change playback'));
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                Use for new rigs
-              </Button>
-              {graphMessage && <p role="status">{graphMessage}</p>}
-            </ActionRow>
-          )}
-          {boot}
-          <details
-            className="border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']"
-            open={!state?.configured}
+          </Caption>
+        )}
+        {state?.configured && !state.device_owned && !nativeResumeReady && (
+          <Caption>{resumeUnavailable}</Caption>
+        )}
+        {!unavailable && state?.configured && (
+          <Caption
+            aria-label="Playback session configuration"
+            className="grid text-xs"
           >
-            <summary>Start audio with…</summary>
+            <span>
+              Input: {configurationLabel(state.configured.stream.input)}
+            </span>
+            <span>
+              Output: {configurationLabel(state.configured.stream.output)}
+            </span>
+          </Caption>
+        )}
+        {!unavailable && input && output && (
+          <ActionRow>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!connected || busy}
+              onClick={async () => {
+                setBusy(true);
+                setError('');
+                setGraphMessage('');
+                try {
+                  const graph = await graphAudioState();
+                  acceptEffects(
+                    await graphAudioCommand(graph, {
+                      kind: 'configure',
+                      stream: {
+                        input,
+                        output,
+                        input_map: inputMap,
+                        output_map: outputMap,
+                      },
+                    }),
+                  );
+                  setGraphMessage('Audio setup ready for New preset.');
+                } catch (cause) {
+                  setError(friendlyError(cause, 'change playback'));
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Use for new rigs
+            </Button>
+            {graphMessage && <p role="status">{graphMessage}</p>}
+          </ActionRow>
+        )}
+        {!unavailable && (
+          <SettingDisclosure
+            label="Start audio with…"
+            defaultOpen={!state?.configured}
+          >
             <fieldset
               className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
               disabled={
@@ -519,15 +516,19 @@ export function PlaybackSettings({
               }
             >
               <legend className="sr-only">Start audio with…</legend>
-              <p>
-                Check input and output, then choose a preset. Use matching
-                device, rate and buffer settings.
-              </p>
-              <p aria-label="Checked audio configuration">
+              <Caption>
+                Check input and output under Device, then choose a preset. Use
+                matching device, rate and buffer settings.
+              </Caption>
+              <p aria-label="Checked audio configuration" className="text-sm">
                 Input: {input ? configurationLabel(input) : 'Not checked'} ·
                 Output: {output ? configurationLabel(output) : 'Not checked'}
               </p>
-              <Button variant="outline" onClick={() => void loadPresets()}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void loadPresets()}
+              >
                 Refresh presets
               </Button>
               <FormGrid>
@@ -552,45 +553,44 @@ export function PlaybackSettings({
                     </SelectContent>
                   </Select>
                 </FormField>
-                <details className="col-span-full w-full border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']">
-                  <summary>Channel routing</summary>
-                  <FormGrid>
-                    {(
-                      [
-                        'Input left',
-                        'Input right',
-                        'Output left',
-                        'Output right',
-                      ] as const
-                    ).map((label, i) => {
-                      const capture = i < 2;
-                      const index = (i % 2) as 0 | 1;
-                      const values = capture ? routedInputMap : routedOutputMap;
-                      return (
-                        <FormField key={label}>
-                          {label} channel (1-based)
-                          <input
-                            type="number"
-                            min={1}
-                            max={(capture ? input : output)?.channels ?? 64}
-                            value={values[index] + 1}
-                            onChange={(e) => {
-                              const next: [number, number] = [...values];
-                              next[index] = Number(e.target.value) - 1;
-                              if (capture) setInputMap(next);
-                              else setOutputMap(next);
-                            }}
-                          />
-                        </FormField>
-                      );
-                    })}
-                  </FormGrid>
-                  <p>
-                    Repeat an input channel for mono. Repeat an output channel
-                    to mix stereo to mono.
-                  </p>
-                </details>
               </FormGrid>
+              <SettingDisclosure label="Channel routing">
+                <FormGrid>
+                  {(
+                    [
+                      'Input left',
+                      'Input right',
+                      'Output left',
+                      'Output right',
+                    ] as const
+                  ).map((label, i) => {
+                    const capture = i < 2;
+                    const index = (i % 2) as 0 | 1;
+                    const values = capture ? routedInputMap : routedOutputMap;
+                    return (
+                      <FormField key={label}>
+                        {label} channel (1-based)
+                        <input
+                          type="number"
+                          min={1}
+                          max={(capture ? input : output)?.channels ?? 64}
+                          value={values[index] + 1}
+                          onChange={(e) => {
+                            const next: [number, number] = [...values];
+                            next[index] = Number(e.target.value) - 1;
+                            if (capture) setInputMap(next);
+                            else setOutputMap(next);
+                          }}
+                        />
+                      </FormField>
+                    );
+                  })}
+                </FormGrid>
+                <Caption>
+                  Repeat an input channel for mono. Repeat an output channel to
+                  mix stereo to mono.
+                </Caption>
+              </SettingDisclosure>
               <Button
                 disabled={!settings}
                 onClick={() =>
@@ -599,26 +599,28 @@ export function PlaybackSettings({
               >
                 Start audio
               </Button>
-            </fieldset>{' '}
-          </details>
-          <details className="border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']">
-            <summary>Playback help</summary>
-            <p>
+            </fieldset>
+          </SettingDisclosure>
+        )}
+        {!unavailable && (
+          <SettingDisclosure label="Playback help">
+            <Caption>
               Stop releases the interface and keeps Oxidal open. Resume and
               Restart retain live adjustments. The last confirmed session is
               checkpointed so it can be recovered if Oxidal restarts.
-            </p>
-            <p>
+            </Caption>
+            <Caption>
               To use another audio app, stop here first. Close that app’s audio
               session before resuming.
-            </p>
-          </details>
-        </>
-      )}
-      {(error || readError || state?.error) && (
-        <p role="alert">{error || readError || state?.error}</p>
-      )}
-      {(error || readError) && <RecoveryAction failure={recoverFailure} />}
+            </Caption>
+          </SettingDisclosure>
+        )}
+        {(error || readError || state?.error) && (
+          <p role="alert">{error || readError || state?.error}</p>
+        )}
+        {(error || readError) && <RecoveryAction failure={recoverFailure} />}
+      </AudioPlaybackRow>
+      {test}
     </section>
   );
 }

@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import {
+  Segment,
+  SegmentedControl,
+} from '@oxidal/design-system/components/segmented';
 import { Caption } from '@oxidal/design-system/components/text';
+import {
+  SettingDisclosure,
+  SettingGroup,
+  SettingNotice,
+  SettingRow,
+} from '@oxidal/design-system/patterns/settings-page';
 
 import {
   type AudioState,
@@ -19,6 +29,23 @@ import {
   startupState,
 } from './api';
 import { friendlyError } from './lib/friendlyError';
+
+type Policy = 'off' | 'follow' | 'pinned';
+
+/** The three startup choices (C2): label and what each one does. */
+const POLICIES: [Policy, string, string][] = [
+  ['off', 'Stay silent', 'Audio waits until you start it.'],
+  [
+    'follow',
+    'Last session',
+    'Plays the last preset you played, as it was saved. Each preset you start or switch to replaces it.',
+  ],
+  [
+    'pinned',
+    'A preset',
+    'Plays the saved version pinned here. Save and play a preset first if it has edits.',
+  ],
+];
 
 /** A single boot choice remains reachable regardless of the current audio owner. */
 export function BootPlayback({
@@ -89,7 +116,7 @@ export function BootPlayback({
     };
   }, [startup?.target]);
   /** Off, Last played (follows each preset you play) or Pinned (exact version). */
-  async function choose(policy: 'off' | 'follow' | 'pinned') {
+  async function choose(policy: Policy) {
     if (busy) return;
     if (policy === 'off') {
       if (selectedNow) await toggle();
@@ -196,87 +223,89 @@ export function BootPlayback({
     ? 'off'
     : (startup?.policy ?? (selected ? 'pinned' : 'off'));
   return (
-    <div className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start">
-      {invalid ? (
-        <Button
-          variant="outline"
-          disabled={disabled || busy}
-          onClick={() => void toggle()}
-        >
-          Clear invalid startup setup
-        </Button>
-      ) : (
-        <fieldset className="space-y-2" disabled={disabled || busy || !startup}>
-          <legend className="mb-1 font-medium">When Oxidal starts</legend>
-          {(
-            [
-              ['off', 'Nothing plays', 'Start audio yourself.'],
-              [
-                'follow',
-                'Last played preset',
-                'Each preset you play becomes the startup sound.',
-              ],
-              [
-                'pinned',
-                'Pinned saved version',
-                'Pins the saved version playing now. Save and play it first if you have edits.',
-              ],
-            ] as const
-          ).map(([value, label, help]) => (
-            <label
-              key={value}
-              className="flex min-h-touch items-start gap-2 rounded-md py-1 focus-within:outline-2 focus-within:outline-ring"
+    <section aria-label="When Oxidal starts" className="grid">
+      <SettingGroup title="When Oxidal starts">
+        {invalid ? (
+          <SettingRow
+            label="Startup setup"
+            caption="The saved startup can no longer play. Clear it to choose again."
+          >
+            {/* A recovery action keeps a full touch target. */}
+            <Button
+              variant="outline"
+              disabled={disabled || busy}
+              onClick={() => void toggle()}
             >
-              <input
-                type="radio"
-                name="startup-policy"
-                className="mt-1"
-                checked={policy === value}
-                disabled={
-                  value === 'pinned'
-                    ? !running
-                    : value !== 'off' && !selected && !running
-                }
-                onChange={() => void choose(value)}
-              />
-              <span className="grid flex-1 gap-0.5 text-sm sm:grid-cols-[minmax(8rem,12rem)_minmax(0,1fr)] sm:items-baseline sm:gap-4">
-                <span>{label}</span>
-                <Caption as="span">{help}</Caption>
-              </span>
-            </label>
-          ))}
-        </fieldset>
-      )}
-      {startup?.target && (
-        <Caption as="div">
-          Startup preset: {targetName || 'Reading name…'}
-          <details>
-            <summary>Saved version</summary>
-            <code>{startup.target.id}</code>
-          </details>
-        </Caption>
-      )}
-      {policy === 'pinned' && running && (
-        <Button
-          variant="outline"
-          disabled={disabled || busy || !startup}
-          onClick={() => void choose('pinned')}
-        >
-          Pin the playing saved version
-        </Button>
-      )}
-      {error && <p role="alert">{error}</p>}
-      <details className="border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']">
-        <summary>Automatic startup</summary>
-        <Caption>
-          Startup uses the confirmed sound and audio setup. With Last played,
-          each preset you start or switch to replaces it; browsing does not.
-          With Pinned saved version, later edits do not change it. Missing
-          hardware or files leave audio stopped with a message; Oxidal never
-          picks a different sound. Stop keeps this preference.
-        </Caption>
-        {native?.boot_error && <p role="alert">{native.boot_error}</p>}
-      </details>
-    </div>
+              Clear invalid startup setup
+            </Button>
+          </SettingRow>
+        ) : (
+          <SettingRow
+            stacked
+            label="Start with"
+            caption={POLICIES.find(([value]) => value === policy)?.[2]}
+          >
+            <SegmentedControl
+              size="sm"
+              className="w-full max-w-xl"
+              aria-label="When Oxidal starts"
+              value={policy}
+              disabled={disabled || busy || !startup}
+              onValueChange={(value) => void choose(value as Policy)}
+            >
+              {POLICIES.map(([value, label]) => (
+                <Segment
+                  key={value}
+                  value={value}
+                  disabled={
+                    value === 'pinned'
+                      ? !running
+                      : value !== 'off' && !selected && !running
+                  }
+                >
+                  {label}
+                </Segment>
+              ))}
+            </SegmentedControl>
+          </SettingRow>
+        )}
+        {startup?.target && (
+          <SettingRow
+            label="Startup preset"
+            caption={
+              <>
+                {targetName || 'Reading name…'}
+                <span className="block font-mono break-all">
+                  Saved version {startup.target.id}
+                </span>
+              </>
+            }
+          >
+            {policy === 'pinned' && running && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={disabled || busy || !startup}
+                onClick={() => void choose('pinned')}
+              >
+                Pin the playing saved version
+              </Button>
+            )}
+          </SettingRow>
+        )}
+        {error && <SettingNotice tone="error">{error}</SettingNotice>}
+        <SettingDisclosure label="Automatic startup">
+          <Caption>
+            Startup uses the confirmed sound and audio setup. With Last session,
+            each preset you start or switch to replaces it; browsing does not.
+            With A preset, the saved version pinned here plays, and later edits
+            do not change it. Missing hardware or files leave audio stopped with
+            a message; Oxidal never picks a different sound. Stop keeps this
+            preference.
+          </Caption>
+          {native?.boot_error && <p role="alert">{native.boot_error}</p>}
+        </SettingDisclosure>
+      </SettingGroup>
+    </section>
   );
 }

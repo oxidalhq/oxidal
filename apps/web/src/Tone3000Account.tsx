@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@oxidal/design-system/components/button';
 import { FormField } from '@oxidal/design-system/components/form-layout';
 import { Caption } from '@oxidal/design-system/components/text';
+import { SettingDisclosure } from '@oxidal/design-system/patterns/settings-page';
 import { Tone3000Account as Tone3000AccountView } from '@oxidal/design-system/patterns/tone3000';
 
 import { type AccountAction, type AccountState, tone3000Account } from './api';
@@ -157,16 +158,13 @@ export function Tone3000Account({ connected }: { connected: boolean }) {
                 After connecting, you can go back to {returnTo.label}.
               </Caption>
             )}
-            <details className="border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']">
-              <summary>Account help</summary>
-              <div className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start">
-                <Caption>
-                  Oxidal needs internet access to sign in. Account tokens stay
-                  on this device. Disconnect removes its saved sign-in; it does
-                  not delete your TONE3000 account or local presets.
-                </Caption>
-              </div>
-            </details>
+            <SettingDisclosure label="Account help">
+              <Caption>
+                Oxidal needs internet access to sign in. Account tokens stay on
+                this device. Disconnect removes its saved sign-in; it does not
+                delete your TONE3000 account or local presets.
+              </Caption>
+            </SettingDisclosure>
           </>
         }
       />
