@@ -11,6 +11,24 @@
 
 ![Oxidal Rig map showing a parallel guitar signal chain](docs/assets/screenshots/rig-view-map.png)
 
+<p align="center">
+  <a href="docs/native-tone3000.md"><img alt="TONE3000 integration" src="https://img.shields.io/badge/TONE3000-integration-E85D04?style=for-the-badge"></a>
+  <a href="https://github.com/tone-3000/tone3000-plugin"><img alt="TONE3000 plugin engine port" src="https://img.shields.io/badge/TONE3000_plugin-engine_port-B23A48?style=for-the-badge"></a>
+  <a href="docs/presets/format.md"><img alt="TONE3000 preset compatibility" src="https://img.shields.io/badge/.t3kpreset-import_+_play-9C6644?style=for-the-badge"></a>
+  <a href="https://github.com/sdatkinson/NeuralAmpModelerCore"><img alt="Neural Amp Modeler capture support" src="https://img.shields.io/badge/NAM-amp_+_cab_+_full_rig-6C5CE7?style=for-the-badge"></a>
+</p>
+
+<p align="center">
+  <a href="https://rust-lang.org/"><img alt="Rust audio engine" src="https://img.shields.io/badge/Rust-audio_engine-000000?style=flat-square&amp;logo=rust&amp;logoColor=white"></a>
+  <a href="https://www.raspberrypi.com/products/raspberry-pi-5/"><img alt="Tested on Raspberry Pi 5" src="https://img.shields.io/badge/Raspberry_Pi_5-tested-A22846?style=flat-square&amp;logo=raspberrypi&amp;logoColor=white"></a>
+  <a href="https://lv2plug.in/"><img alt="LV2 plugin host" src="https://img.shields.io/badge/LV2-plugin_host-2E7D32?style=flat-square"></a>
+</p>
+
+<p align="center">
+  <strong><a href="docs/capacity.md">Maximum tested: 15 concurrent light NAM instances</a></strong><br>
+  <sub>Raspberry Pi 5 · 48 kHz · 256 frames · At 96 frames: 7 A2 Lite or 5 A2 Full ran cleanly</sub>
+</p>
+
 Oxidal runs the audio engine, presets and library on the device. A browser on a
 phone, tablet or computer controls the rig. Internet access is not required for
 playing.
