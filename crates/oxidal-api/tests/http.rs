@@ -2246,6 +2246,7 @@ async fn portable_library_publishes_verified_revisions_without_changing_audio() 
     assert_eq!(listed["presets"][0]["native_instances"], 0);
     assert_eq!(listed["presets"][0]["lv2_instances"], 0);
     assert_eq!(listed["presets"][0]["lv2_plugins"], json!([]));
+    assert_eq!(listed["presets"][0]["blocks"], json!([]));
     let bad = m.to_string().replace(
         "\"formatVersion\":1",
         "\"formatVersion\":1,\"formatVersion\":1",
@@ -2804,6 +2805,21 @@ async fn uploaded_nam_descriptions_and_cached_tone_images_need_no_account() {
         .unwrap();
     assert_eq!(image.status(), 200);
     assert_eq!(image.bytes().await.unwrap().as_ref(), b"cached-picture");
+    std::fs::write(images.join("42-2.img"), b"third-picture").unwrap();
+    std::fs::write(images.join("42-2.type"), "image/jpeg").unwrap();
+    let third = client
+        .get(format!("{url}/tone3000/tones/42/image?n=2"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(third.status(), 200);
+    assert_eq!(third.bytes().await.unwrap().as_ref(), b"third-picture");
+    let beyond = client
+        .get(format!("{url}/tone3000/tones/42/image?n=99"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(beyond.status(), 400);
     task.abort();
     let _ = std::fs::remove_dir_all(path.with_extension("presets"));
 }

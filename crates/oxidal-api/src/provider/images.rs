@@ -4,7 +4,7 @@
 use crate::{Shared, failure};
 use axum::{
     body::Body,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
@@ -13,22 +13,38 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 const MAX_IMAGE: usize = 4 * 1024 * 1024;
 const TYPES: [&str; 4] = ["image/png", "image/jpeg", "image/webp", "image/gif"];
 
-fn paths(root: &std::path::Path, id: u64) -> (PathBuf, PathBuf) {
+/// A tone shows at most this many pictures; the first is the card picture.
+const MAX_PICTURES: usize = 8;
+
+/// The first picture keeps its original file name, so pictures kept before
+/// tones had several still show.
+fn paths(root: &std::path::Path, id: u64, n: usize) -> (PathBuf, PathBuf) {
     let dir = root.join("tone-images");
+    let name = if n == 0 {
+        id.to_string()
+    } else {
+        format!("{id}-{n}")
+    };
     (
-        dir.join(format!("{id}.img")),
-        dir.join(format!("{id}.type")),
+        dir.join(format!("{name}.img")),
+        dir.join(format!("{name}.type")),
     )
 }
-fn cached(root: &std::path::Path, id: u64) -> Option<(Vec<u8>, String)> {
-    let (image, kind) = paths(root, id);
+fn cached(root: &std::path::Path, id: u64, n: usize) -> Option<(Vec<u8>, String)> {
+    let (image, kind) = paths(root, id, n);
     let kind = std::fs::read_to_string(kind).ok()?;
     let bytes = std::fs::read(image).ok()?;
     (TYPES.contains(&kind.as_str()) && !bytes.is_empty() && bytes.len() <= MAX_IMAGE)
         .then_some((bytes, kind))
 }
-fn store(root: &std::path::Path, id: u64, bytes: &[u8], kind: &str) -> std::io::Result<()> {
-    let (image, kind_path) = paths(root, id);
+fn store(
+    root: &std::path::Path,
+    id: u64,
+    n: usize,
+    bytes: &[u8],
+    kind: &str,
+) -> std::io::Result<()> {
+    let (image, kind_path) = paths(root, id, n);
     std::fs::create_dir_all(image.parent().expect("tone-images"))?;
     let temporary = image.with_extension("tmp");
     std::fs::write(&temporary, bytes)?;
@@ -82,13 +98,24 @@ async fn fetch(url: &str) -> Result<(Vec<u8>, String), &'static str> {
     Ok((bytes, kind))
 }
 
-pub(crate) async fn tone_image(State(shared): State<Arc<Shared>>, Path(id): Path<u64>) -> Response {
-    if id == 0 {
+#[derive(serde::Deserialize)]
+pub(crate) struct PictureQuery {
+    /// Which of the tone's pictures, counting from 0 (the card picture).
+    n: Option<usize>,
+}
+
+pub(crate) async fn tone_image(
+    State(shared): State<Arc<Shared>>,
+    Path(id): Path<u64>,
+    Query(query): Query<PictureQuery>,
+) -> Response {
+    let n = query.n.unwrap_or(0);
+    if id == 0 || n >= MAX_PICTURES {
         return failure(StatusCode::BAD_REQUEST, "Invalid tone");
     }
     let root = shared.config.preset_dir.clone();
     let lookup = root.clone();
-    let found = tokio::task::spawn_blocking(move || cached(&lookup, id))
+    let found = tokio::task::spawn_blocking(move || cached(&lookup, id, n))
         .await
         .ok()
         .flatten();
@@ -99,8 +126,8 @@ pub(crate) async fn tone_image(State(shared): State<Arc<Shared>>, Path(id): Path
                 Ok(tone) => tone,
                 Err(e) => return failure(StatusCode::BAD_GATEWAY, e),
             };
-            let Some(url) = tone.images.as_ref().and_then(|i| i.first()) else {
-                return failure(StatusCode::NOT_FOUND, "This tone has no picture");
+            let Some(url) = tone.images.as_ref().and_then(|i| i.get(n)) else {
+                return failure(StatusCode::NOT_FOUND, "This tone has no such picture");
             };
             let (bytes, kind) = match fetch(url).await {
                 Ok(hit) => hit,
@@ -109,7 +136,7 @@ pub(crate) async fn tone_image(State(shared): State<Arc<Shared>>, Path(id): Path
             let (saved, saved_kind) = (bytes.clone(), kind.clone());
             // A picture that cannot be kept is still shown this time.
             let _ =
-                tokio::task::spawn_blocking(move || store(&root, id, &saved, &saved_kind)).await;
+                tokio::task::spawn_blocking(move || store(&root, id, n, &saved, &saved_kind)).await;
             (bytes, kind)
         }
     };
@@ -129,17 +156,28 @@ mod tests {
     #[test]
     fn only_known_pictures_are_kept_and_read_back() {
         let root = std::env::temp_dir().join(format!("oxidal-tone-images-{}", std::process::id()));
-        assert!(cached(&root, 7).is_none());
-        store(&root, 7, b"\x89PNG fake", "image/png").unwrap();
+        assert!(cached(&root, 7, 0).is_none());
+        store(&root, 7, 0, b"\x89PNG fake", "image/png").unwrap();
         assert_eq!(
-            cached(&root, 7).unwrap(),
+            cached(&root, 7, 0).unwrap(),
             (b"\x89PNG fake".to_vec(), "image/png".into())
         );
-        store(&root, 8, b"x", "text/html").unwrap();
+        store(&root, 8, 0, b"x", "text/html").unwrap();
         assert!(
-            cached(&root, 8).is_none(),
+            cached(&root, 8, 0).is_none(),
             "an unexpected type is never served"
         );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn later_pictures_are_kept_apart_from_the_first() {
+        let root = std::env::temp_dir().join(format!("oxidal-tone-more-{}", std::process::id()));
+        store(&root, 9, 0, b"first", "image/png").unwrap();
+        store(&root, 9, 2, b"third", "image/jpeg").unwrap();
+        assert_eq!(cached(&root, 9, 0).unwrap().0, b"first");
+        assert_eq!(cached(&root, 9, 2).unwrap().0, b"third");
+        assert!(cached(&root, 9, 1).is_none());
         std::fs::remove_dir_all(root).unwrap();
     }
 }
