@@ -119,8 +119,10 @@ export function ModelBrowser({
   beside = false,
   playing,
   downloads = {},
+  disabled = false,
   catalogue,
   onTry,
+  onPlay,
   onGet,
 }: {
   /** Models on the device; TONE3000 ones too when there is no `catalogue`. */
@@ -135,9 +137,20 @@ export function ModelBrowser({
   playing?: string | null;
   /** TONE3000 downloads in progress: model id → percent. */
   downloads?: Record<string, number>;
+  /**
+   * Nothing can be tried, played or kept for now, such as while a comparison
+   * is being prepared or after the playing preset changed.
+   */
+  disabled?: boolean;
   catalogue?: ToneCatalogue;
   /** Hear it through the rig now; `variant` is one model inside the tone. */
   onTry: (choice: ModelChoice, variant?: string) => void;
+  /**
+   * Hear it on its own, as TONE3000's own player does: the model alone, with
+   * no rig around it. Given, it is each row's main action and Try through my
+   * rig moves to the details.
+   */
+  onPlay?: (choice: ModelChoice, variant?: string) => void;
   /** Keep a TONE3000 tone on the device. */
   onGet?: (choice: ModelChoice) => void;
 }) {
@@ -240,11 +253,26 @@ export function ModelBrowser({
             className="w-full"
           />
         )}
-        {wide && playing !== m.id && (
-          <Button onClick={() => onTry(m, variant)}>Try through my rig</Button>
+        {onPlay && playing !== m.id && (
+          <Button disabled={disabled} onClick={() => onPlay(m, variant)}>
+            <Play /> Play on its own
+          </Button>
+        )}
+        {(wide || onPlay) && playing !== m.id && (
+          <Button
+            variant={onPlay ? 'outline' : 'default'}
+            disabled={disabled}
+            onClick={() => onTry(m, variant)}
+          >
+            Try through my rig
+          </Button>
         )}
         {!ready && onGet && !busy && (
-          <Button variant="outline" onClick={() => onGet(m)}>
+          <Button
+            variant="outline"
+            disabled={disabled}
+            onClick={() => onGet(m)}
+          >
             <DownloadSimple /> Keep on this device
           </Button>
         )}
@@ -313,20 +341,36 @@ export function ModelBrowser({
                     size="icon-sm"
                     variant="ghost"
                     aria-label={`Get ${m.label}`}
+                    disabled={disabled}
                     onClick={() => onGet(m)}
                   >
                     <DownloadSimple />
                   </Button>
                 )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  aria-label={`Try ${m.label}`}
-                  onClick={() => onTry(m, variant)}
-                >
-                  <Play />
-                  <span className="max-sm:sr-only">Try</span>
-                </Button>
+                {onPlay ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    aria-label={`Play ${m.label}`}
+                    title="Play it on its own, with no rig around it"
+                    disabled={disabled}
+                    onClick={() => onPlay(m, variant)}
+                  >
+                    <Play />
+                    <span className="max-sm:sr-only">Play</span>
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    aria-label={`Try ${m.label}`}
+                    disabled={disabled}
+                    onClick={() => onTry(m, variant)}
+                  >
+                    <Play />
+                    <span className="max-sm:sr-only">Try</span>
+                  </Button>
+                )}
               </>
             )
           }

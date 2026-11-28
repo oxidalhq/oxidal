@@ -62,6 +62,7 @@ function Tone3000Section() {
       downloads={store.downloads}
       catalogue={store.catalogue}
       onTry={(m) => setPlaying(m.id)}
+      onPlay={(m) => setPlaying(m.id)}
       onGet={store.onGet}
     />
   );

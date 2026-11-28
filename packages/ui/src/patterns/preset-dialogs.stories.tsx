@@ -121,3 +121,65 @@ export const NewDetailsDelete: StoryObj = {
     );
   },
 };
+
+/**
+ * After a fresh install: the preset is complete, but its pictures (and any
+ * models it does not carry) are fetched by the player before use.
+ */
+function NeedsDownloadingSample() {
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  return (
+    <PresetDetails
+      preset={{
+        ...BROWN_CRUNCH,
+        name: 'Bogner Fullstack',
+        summary: 'TONE3000 original · 10 blocks · 3 captures',
+        sources: [
+          {
+            name: 'Bogner Uberschall Rev Blue (E34L) — Amp Head',
+            caption: done
+              ? 'Amp · picture saved'
+              : 'Amp · picture not on this unit',
+            tone3000: true,
+          },
+          {
+            name: "'71 Marshall Fullstack G12M G12H Greenback Blend",
+            caption: done
+              ? 'Cab · picture saved'
+              : 'Cab · picture not on this unit',
+            tone3000: true,
+          },
+        ],
+      }}
+      download={
+        done
+          ? undefined
+          : {
+              missing:
+                '2 pictures are not on this unit yet. The models are in the preset file.',
+              label: 'Download pictures',
+              busy,
+              onDownload: () => {
+                setBusy(true);
+                setTimeout(() => {
+                  setBusy(false);
+                  setDone(true);
+                }, 600);
+              },
+            }
+      }
+      open
+      onOpenChange={() => {}}
+      onDelete={() => {}}
+      onEditOffline={() => {}}
+      onDuplicate={() => {}}
+      onExport={() => {}}
+    />
+  );
+}
+
+export const NeedsDownloading: StoryObj = {
+  name: 'Details: pictures to download',
+  render: () => <NeedsDownloadingSample />,
+};

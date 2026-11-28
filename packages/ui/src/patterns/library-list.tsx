@@ -38,13 +38,20 @@ import {
 } from '../widgets/block-source';
 import type { BlockKind } from '../widgets/chain';
 
+export type LibraryBadge = {
+  text: string;
+  tone?: 'neutral' | 'live' | 'warning' | 'selected';
+};
+
 export type LibraryItem = {
   id: string;
   title: string;
   caption?: string;
   kind?: BlockKind;
   artwork?: string;
-  badge?: { text: string; tone?: 'neutral' | 'live' | 'warning' | 'selected' };
+  badge?: LibraryBadge;
+  /** More status chips after the first: Ready, Unsaved, In set list #2. */
+  badges?: LibraryBadge[];
   playable?: boolean;
   favourite?: boolean;
   searchText?: string;
@@ -85,8 +92,50 @@ export type RowAction = {
   label: string;
   icon?: React.ReactNode;
   destructive?: boolean;
+  disabled?: boolean;
+  /** A link instead of a button, such as a file to download. */
+  href?: string;
+  download?: boolean;
   run: (id: string) => void;
 };
+
+/** One action as a button, or a link when it has an address. */
+function ActionButton({
+  action,
+  id,
+  className,
+  size = 'sm',
+  variant = 'outline',
+}: {
+  action: RowAction;
+  id: string;
+  className?: string;
+  size?: 'sm' | 'md';
+  variant?: 'outline' | 'destructive';
+}) {
+  const content = (
+    <>
+      {action.icon} <span className="truncate">{action.label}</span>
+    </>
+  );
+  return action.href && !action.disabled ? (
+    <Button size={size} variant={variant} className={className} asChild>
+      <a href={action.href} download={action.download}>
+        {content}
+      </a>
+    </Button>
+  ) : (
+    <Button
+      size={size}
+      variant={variant}
+      className={className}
+      disabled={action.disabled}
+      onClick={() => action.run(id)}
+    >
+      {content}
+    </Button>
+  );
+}
 
 function MiniChain({ chain }: { chain: NonNullable<LibraryItem['chain']> }) {
   const shown = chain.slice(0, 6);
@@ -165,7 +214,9 @@ export function LibraryRow({
         aria-pressed={active}
         onClick={onOpen}
         disabled={!onOpen}
-        className="grid min-w-0 gap-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:outline-2 focus-visible:after:outline-ring"
+        // The whole row answers a tap; the button itself is a full touch
+        // target too, even with only a title and one line.
+        className="grid min-h-touch min-w-0 content-center gap-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:outline-2 focus-visible:after:outline-ring"
       >
         {openPrefix && <span className="sr-only">{openPrefix} </span>}
         <span className="truncate font-display text-lg leading-tight font-semibold max-[399px]:line-clamp-3 max-[399px]:wrap-anywhere max-[399px]:whitespace-normal">
@@ -176,15 +227,18 @@ export function LibraryRow({
             {item.caption}
           </span>
         )}
-        {(item.chain || item.origin || item.badge) && (
+        {/* A boolean: an empty badge list must not print "0". */}
+        {!!(item.chain || item.origin || item.badge || item.badges?.length) && (
           <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 pt-0.5">
             {item.chain && <MiniChain chain={item.chain} />}
             {item.origin && <SourceLine source={item.origin} plain />}
-            {item.badge && (
-              <Badge tone={item.badge.tone} size="sm">
-                {item.badge.text}
-              </Badge>
-            )}
+            {[item.badge, ...(item.badges ?? [])]
+              .filter((badge): badge is LibraryBadge => Boolean(badge))
+              .map((badge) => (
+                <Badge key={badge.text} tone={badge.tone} size="sm">
+                  {badge.text}
+                </Badge>
+              ))}
           </span>
         )}
       </button>
@@ -195,8 +249,11 @@ export function LibraryRow({
   );
 }
 
-/** Everything about one item, with every action one tap away. */
-function ItemDetail({
+/**
+ * Everything about one item, with every action one tap away: the panel
+ * beside a list on wide screens, or the body of its sheet on phones.
+ */
+export function LibraryDetail({
   item,
   main,
   actions,
@@ -243,22 +300,23 @@ function ItemDetail({
       {item.about && <Caption className="text-sm">{item.about}</Caption>}
       {item.chain && <MiniChain chain={item.chain} />}
       {main && (
-        <Button className="w-full" onClick={() => main.run(item.id)}>
+        <Button
+          className="w-full"
+          disabled={main.disabled}
+          onClick={() => main.run(item.id)}
+        >
           {main.icon} {main.label}
         </Button>
       )}
       {others.length > 0 && (
         <div className="grid grid-cols-2 gap-2">
           {others.map((action) => (
-            <Button
+            <ActionButton
               key={action.label}
-              size="sm"
-              variant="outline"
+              action={action}
+              id={item.id}
               className="min-w-0"
-              onClick={() => action.run(item.id)}
-            >
-              {action.icon} <span className="truncate">{action.label}</span>
-            </Button>
+            />
           ))}
         </div>
       )}
@@ -280,15 +338,13 @@ function ItemDetail({
       )}
       {item.origin && <SourceCard source={item.origin} />}
       {dangerous.map((action) => (
-        <Button
+        <ActionButton
           key={action.label}
-          size="sm"
+          action={action}
+          id={item.id}
           variant="destructive"
           className="justify-self-start"
-          onClick={() => action.run(item.id)}
-        >
-          {action.icon} {action.label}
-        </Button>
+        />
       ))}
     </div>
   );
@@ -332,6 +388,9 @@ export function LibraryList({
   onSortChange,
   renderRow,
   toolbar,
+  toolbarEnd,
+  aside,
+  asideLabel = 'Details',
   className,
 }: {
   items: LibraryItem[];
@@ -373,8 +432,18 @@ export function LibraryList({
   renderRow?: (
     item: LibraryItem,
     favourite: React.ReactNode,
+    shown: LibraryItem[],
   ) => React.ReactNode;
+  /** More controls after Favourites, Sort and View, on the same line. */
   toolbar?: React.ReactNode;
+  /** Controls at the end of the toolbar line, such as a category. */
+  toolbarEnd?: React.ReactNode;
+  /**
+   * A panel beside the rows for lists that draw their own rows: given the
+   * rows shown, it returns the chosen one's details (nothing hides it).
+   */
+  aside?: (shown: LibraryItem[]) => React.ReactNode;
+  asideLabel?: string;
   className?: string;
 }) {
   const searchInput = React.useRef<HTMLInputElement>(null);
@@ -400,7 +469,7 @@ export function LibraryList({
     setSheet(true);
   };
   const details = (item: LibraryItem, showTitle: boolean) => (
-    <ItemDetail
+    <LibraryDetail
       item={item}
       main={mainAction?.(item)}
       actions={actions}
@@ -409,6 +478,7 @@ export function LibraryList({
       showTitle={showTitle}
     />
   );
+  const asideNode = shown.length > 0 && view === 'list' ? aside?.(shown) : null;
   const count =
     shown.length === items.length
       ? `${items.length} ${items.length === 1 ? noun[0] : noun[1]}`
@@ -453,14 +523,19 @@ export function LibraryList({
           <span
             className={cn(
               'flex flex-wrap gap-2',
-              layout === 'list' && 'w-full [&>*]:flex-1',
+              layout === 'list' && 'max-sm:w-full max-sm:[&>*]:flex-1',
             )}
           >
             {primary}
           </span>
         )}
       </div>
-      {(toolbar || filters || onView || sortable || onFavourite) && (
+      {(toolbar ||
+        toolbarEnd ||
+        filters ||
+        onView ||
+        sortable ||
+        onFavourite) && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           {filters && onFilter && (
             <SegmentedControl
@@ -476,7 +551,6 @@ export function LibraryList({
               ))}
             </SegmentedControl>
           )}
-          {toolbar}
           <span className="flex flex-wrap items-center gap-2">
             {onFavourite && (
               <Toggle
@@ -526,7 +600,13 @@ export function LibraryList({
                 <Segment value="artwork">Artwork</Segment>
               </SegmentedControl>
             )}
+            {toolbar}
           </span>
+          {toolbarEnd && (
+            <span className="flex flex-wrap items-center gap-2 sm:ml-auto">
+              {toolbarEnd}
+            </span>
+          )}
         </div>
       )}
       <Caption as="span" role="status" className="text-sm">
@@ -538,6 +618,7 @@ export function LibraryList({
           beside &&
             wide &&
             'grid-cols-[minmax(0,1fr)_minmax(0,24rem)] items-start',
+          asideNode && 'grid-cols-[minmax(0,1fr)_24rem] items-start',
         )}
       >
         {shown.length === 0 ? (
@@ -620,7 +701,7 @@ export function LibraryList({
               if (renderRow)
                 return (
                   <React.Fragment key={item.id}>
-                    {renderRow(item, favourite)}
+                    {renderRow(item, favourite, shown)}
                   </React.Fragment>
                 );
               const active = item.id === (current?.id ?? selected);
@@ -677,6 +758,14 @@ export function LibraryList({
           <div className="sticky top-4 rounded-lg border border-border bg-card p-4">
             {details(current, true)}
           </div>
+        )}
+        {asideNode && (
+          <aside
+            aria-label={asideLabel}
+            className="sticky top-4 rounded-lg border border-border bg-card p-4"
+          >
+            {asideNode}
+          </aside>
         )}
       </div>
       {beside && !wide && (

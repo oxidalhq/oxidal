@@ -3,8 +3,6 @@ import type { ReactNode } from 'react';
 
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
-import { Card, CardHeader, CardTitle } from '../components/ui/card';
-import { CollapsibleSection } from '../components/ui/collapsible';
 import {
   Dialog,
   DialogBody,
@@ -16,6 +14,7 @@ import { List, ListRow } from '../components/ui/list-row';
 import { Progress } from '../components/ui/states';
 import { Caption } from '../components/ui/text';
 import { PoweredByTone3000 } from './credits';
+import { SettingDisclosure } from './settings-page';
 
 export type Tone3000AccountState =
   | 'none'
@@ -71,9 +70,17 @@ export function Tone3000Account({
   headingId?: string;
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle id={headingId}>TONE3000 account</CardTitle>
+    <div
+      data-slot="setting-group"
+      className="grid gap-3 border-b border-border pb-4"
+    >
+      <header className="flex flex-wrap items-center justify-between gap-2">
+        <h3
+          id={headingId}
+          className="m-0 flex min-h-control items-center small-caps text-sm font-medium text-muted-foreground"
+        >
+          TONE3000 account
+        </h3>
         <Badge size="sm" role="status">
           {status ??
             {
@@ -86,7 +93,7 @@ export function Tone3000Account({
               error: 'Connection needs attention',
             }[state]}
         </Badge>
-      </CardHeader>
+      </header>
       {error && (
         <p role="alert" className="text-sm">
           {error}
@@ -99,6 +106,7 @@ export function Tone3000Account({
           </Caption>
           {setup}
           <Button
+            size="sm"
             className="justify-self-start"
             disabled={disabled || signInDisabled}
             onClick={onSignIn}
@@ -186,7 +194,7 @@ export function Tone3000Account({
       )}
       {footer}
       <PoweredByTone3000 className="[&_a]:min-h-touch" />
-    </Card>
+    </div>
   );
 }
 
@@ -281,9 +289,9 @@ export function GetTones({
                   {t.name} did not download: {t.error?.message}
                 </span>
                 {t.error?.details && (
-                  <CollapsibleSection title="Details">
+                  <SettingDisclosure label="Details">
                     <code className="text-xs">{t.error.details}</code>
-                  </CollapsibleSection>
+                  </SettingDisclosure>
                 )}
               </div>
             ))}

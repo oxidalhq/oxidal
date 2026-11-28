@@ -20,6 +20,11 @@ import {
 } from '../components/ui/sheet';
 import { Caption, Eyebrow } from '../components/ui/text';
 import { playingPresetCaption } from '../lib/preset-caption';
+import {
+  type BlockSource,
+  ExpandablePicture,
+  SourceLine,
+} from '../widgets/block-source';
 import { PoweredByTone3000 } from './credits';
 
 const starts = (playing: string) =>
@@ -147,8 +152,114 @@ export type PresetSummary = {
   /** Set list entries that use it, such as "Friday set, song 4". */
   usedIn: string[];
   /** Captures and IRs, with their credit, such as "NAM A2 · by Jane Capture · CC BY 4.0". */
-  sources: { name: string; caption: string; tone3000?: boolean }[];
+  sources: PresetSource[];
 };
+
+/** One capture or IR a preset uses. */
+export type PresetSource = {
+  name: string;
+  caption: string;
+  tone3000?: boolean;
+  /** Its picture, or the gear's sign when there is none yet. */
+  picture?: React.ReactNode;
+  /**
+   * Where it comes from, as the block card shows it: the picture opens full
+   * size, and the creator and the tone link to their pages.
+   */
+  source?: BlockSource;
+};
+
+/**
+ * What a preset needs before it can be used and is not on this unit yet,
+ * such as pictures or models after a fresh install: Oxidal does not ship
+ * third-party models, pictures or plugins, so the player fetches them here.
+ */
+export type PresetDownload = {
+  /** Such as "2 pictures are not on this unit yet." */
+  missing: string;
+  /** Such as "Download pictures". */
+  label: string;
+  busy?: boolean;
+  /** Why the last try failed. */
+  error?: string;
+  onDownload: () => void;
+};
+
+/** The captures and IRs a preset uses, their credits, and what to download. */
+export function PresetSources({
+  sources,
+  note,
+  download,
+}: {
+  sources: PresetSource[];
+  /** A line under the list, such as where the models are kept. */
+  note?: string;
+  download?: PresetDownload;
+}) {
+  return (
+    <section className="grid gap-1">
+      <Eyebrow>Captures and IRs</Eyebrow>
+      {sources.length ? (
+        <List>
+          {sources.map((c, i) => (
+            <ListRow
+              key={`${c.name}-${i}`}
+              leading={
+                c.source ? (
+                  <ExpandablePicture source={c.source} className="size-10" />
+                ) : (
+                  c.picture && (
+                    <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-md border border-border bg-muted [&>img]:size-full [&>img]:rounded-none [&>img]:border-0 [&>img]:object-cover">
+                      {c.picture}
+                    </span>
+                  )
+                )
+              }
+              title={c.name}
+              caption={
+                c.source ? (
+                  <span className="grid gap-0.5 whitespace-normal">
+                    <span className="truncate">{c.caption}</span>
+                    <SourceLine source={c.source} />
+                  </span>
+                ) : (
+                  c.caption
+                )
+              }
+            />
+          ))}
+        </List>
+      ) : (
+        <Caption>No captures or IRs.</Caption>
+      )}
+      {note && <Caption>{note}</Caption>}
+      {download && (
+        <div
+          className="mt-2 grid gap-2 rounded-lg border border-border p-3"
+          role="group"
+          aria-label="Needed on this unit"
+        >
+          <Caption>{download.missing}</Caption>
+          <Button
+            variant="outline"
+            size="sm"
+            className="justify-self-start"
+            disabled={download.busy}
+            onClick={download.onDownload}
+          >
+            {download.busy ? 'Downloading…' : download.label}
+          </Button>
+          {download.error && (
+            <Caption role="status" className="text-danger-ink">
+              {download.error}
+            </Caption>
+          )}
+        </div>
+      )}
+      {sources.some((c) => c.tone3000) && <PoweredByTone3000 />}
+    </section>
+  );
+}
 
 export function PresetDetails({
   preset,
@@ -158,8 +269,11 @@ export function PresetDetails({
   onEditOffline,
   onDuplicate,
   onExport,
+  download,
 }: {
   preset: PresetSummary;
+  /** Pictures or models this preset needs that are not on this unit yet. */
+  download?: PresetDownload;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDelete: () => void;
@@ -198,15 +312,7 @@ export function PresetDetails({
                 : 'No set list yet'}
             </Caption>
           </section>
-          <section className="grid gap-1">
-            <Eyebrow>Captures and IRs</Eyebrow>
-            <List>
-              {preset.sources.map((c) => (
-                <ListRow key={c.name} title={c.name} caption={c.caption} />
-              ))}
-            </List>
-            {preset.sources.some((c) => c.tone3000) && <PoweredByTone3000 />}
-          </section>
+          <PresetSources sources={preset.sources} download={download} />
         </SheetBody>
         <SheetFooter className="flex-wrap">
           <Button variant="outline" onClick={onEditOffline}>
