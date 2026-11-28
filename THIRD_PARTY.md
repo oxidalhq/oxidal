@@ -4,6 +4,9 @@ The repository-level Apache License 2.0 covers Oxidal's original code and
 documentation. It does not replace the licences of dependencies or grant rights to
 presets, captures, models, impulse responses, artwork or trademarks.
 
+The [LV2 plugin catalogue](docs/lv2-plugins.md) lists Oxidal's effects, the
+optional Linux effect collections, their project sites and Debian package names.
+
 ## JUCE
 
 Optional native components build against JUCE 9.0.3. JUCE is not covered by
@@ -43,13 +46,25 @@ locked versions and source location are in
 [`licenses/symphonia`](licenses/symphonia). Resampling (`rubato`) and loudness
 measurement (`ebur128`) are MIT-licensed.
 
+## Oxidal effects under MIT
+
+Oxidal Hold and Oxidal Swell are original project components licensed under
+MIT rather than the repository's Apache-2.0 licence. Their complete licence,
+notice and algorithm references are kept with their source and copied into the
+LV2 bundles:
+
+- [`native/hold`](native/hold)
+- [`native/swell`](native/swell)
+
+The Oxidal Pitch adapter is also MIT-licensed. It builds the separately
+licensed TONE3000 pitch engine and JUCE dependency described in
+[`native/pitch/NOTICE`](native/pitch/NOTICE).
+
 ## Other native and model code
 
-The native Hold and Swell adapters and portions of the project-owned NAM implementation retain
-their upstream MIT notices:
+The project-owned NAM implementation was developed against the pinned
+NeuralAmpModelerCore source and retains its upstream MIT notice:
 
-- [`native/hold/NOTICE`](native/hold/NOTICE)
-- [`native/swell/NOTICE`](native/swell/NOTICE)
 - [`crates/oxidal-nam/NOTICE`](crates/oxidal-nam/NOTICE)
 
 ## LittleFly LV2 bundle
@@ -63,6 +78,17 @@ its upstream Turtle metadata are unchanged.
 
 Rust, JavaScript and system dependencies retain their own licences. The locked
 dependency checks and release process must remain green before distribution.
+
+## Optional Debian effect packs
+
+The appliance can install ten fixed Debian packages from **Settings → Effects**.
+They are not vendored or relicensed by Oxidal. The running device reads the
+exact package copyright document from `/usr/share/doc/<package>/copyright` and
+links it from the effect details when available. A package may contain files
+under several licences.
+
+Project sites, package names and host qualification counts are listed in the
+[LV2 plugin catalogue](docs/lv2-plugins.md#optional-linux-effect-collections).
 
 ## Presets and audio assets
 

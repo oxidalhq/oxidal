@@ -3,161 +3,249 @@
 </p>
 
 <p align="center">
-  <strong>A multi-effects amp modeler for guitar and bass, built in Rust around Raspberry Pi 5.</strong>
-</p>
-
-<p align="center">
-  Built with <a href="https://www.rust-lang.org"><img src="apps/web/public/brand/credits/rust.svg" alt="" height="20" align="center"> Rust</a> ·
-  Powered by <a href="https://www.tone3000.com"><img src="apps/web/public/brand/credits/tone3000.svg" alt="TONE3000" height="16" align="center"></a>
-  and <a href="https://www.neuralampmodeler.com"><img src="apps/web/public/brand/credits/nam.png" alt="NAM" height="20" align="center"></a> ·
-  Built with <a href="https://github.com/AgenticFlowX/afx"><img src="apps/web/public/brand/credits/agenticflowx.svg" alt="" height="20" align="center"> AgenticFlowX</a>
+  <strong>A Linux multi-effects amp modeler for guitar and bass, built around Raspberry Pi 5.</strong>
 </p>
 
 > [!WARNING]
-> **Active development.** The software, installation process and hardware support are still evolving. Use a fresh SD card for Raspberry Pi experiments.
+> Oxidal is in active development. Use a fresh SD card for Raspberry Pi testing.
 
-![Oxidal running the Afterlight example rig](docs/assets/screenshots/rig-afterlight.jpeg)
+![Oxidal Rig map showing a parallel guitar signal chain](docs/assets/screenshots/rig-view-map.png)
 
-Oxidal turns a Raspberry Pi 5 and your audio interface into a complete
-multi-effects rig: amp and cabinet models, effects, scenes and a Set list,
-backing tracks with live stems, and practice tools, all played from a browser.
+Oxidal runs the audio engine, presets and library on the device. A browser on a
+phone, tablet or computer controls the rig. Internet access is not required for
+playing.
 
-- **Tone source:** Neural Amp Modeler (NAM) captures for amp heads, cabinets and full rigs, plus impulse responses.
-- **Effects:** Oxidal's own Rust LV2 effects and a qualified set of third-party LV2 plugins.
-- **Control:** the browser is the controller. Processing, presets and account data stay on the device.
-- **Backend:** Rust owns the control plane, library, device services and audio-worker supervision.
+## What it does
 
-## Tone and effects
+- Loads Neural Amp Modeler (NAM) captures and impulse responses.
+- Imports compatible TONE3000 presets without bundling third-party presets or models.
+- Runs Oxidal's own LV2 effects and supported third-party LV2 plugins.
+- Builds serial, parallel and scene-based rigs with MIDI control.
+- Plays backing tracks, splits songs into stems and provides practice tools.
+- Stores sounds, settings and recordings on the device.
 
-| Area               | What it does                                                                                                                                                                                | Docs                                      |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| NAM                | Loads licensed NAM captures (amp, cabinet, full chain); IRs for cabinet and room.                                                                                                           | [audio](docs/audio.md)                    |
-| TONE3000 presets   | Imports compatible `.t3kpreset` files with their native rig structure. Presets and captures are not bundled.                                                                                | [native adapter](docs/native-tone3000.md) |
-| Oxidal effects     | Bloom (reverb), Echo (delay), Motion (modulation), Moment (micro-looper and texture), Sustain (infinite sustain), Hold and Swell: Oxidal's own code. Pitch ports the TONE3000 pitch engine. | [Oxidal effects](docs/native-effects.md)  |
-| Third-party LV2    | Curated drive, fuzz, compression, filter, modulation, pitch, delay and reverb from Guitarix, Invada, MDA, SWH, x42, FOMP, Dragonfly, ZAM and DPF.                                           | [LV2 compatibility](docs/lv2.md)          |
-| Factory collection | Oxidal-authored effects-only presets, sets and rigs (worship, genre and hybrid showcases).                                                                                                  | [factory](docs/factory-collection.md)     |
+## Platforms
 
-- LV2 support is a qualified compatibility profile, not a claim that every LV2 plugin works.
-- Not distributed: TONE3000 presets, NAM captures, IRs, provider downloads. Players supply assets they are licensed to use; test `.t3kpreset` files are parser fixtures with no model weights.
-- Upstream: [Neural Amp Modeler](https://www.neuralampmodeler.com/), [TONE3000](https://www.tone3000.com/), [LV2](https://lv2plug.in/).
+| Platform             | Status                                                                                                                     |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Raspberry Pi 5, 8 GB | Tested hardware. The appliance image targets 64-bit Raspberry Pi OS Lite (Debian Trixie).                                  |
+| Other Linux systems  | Pending testing. Oxidal is built for Linux and uses ALSA, Lilv and systemd, but other distributions are not yet qualified. |
+| macOS and Windows    | Not supported as audio appliances. Their browsers can control Oxidal running on a Linux device.                            |
 
-### Oxidal effects
+Hardware support is still being qualified. See the [audio guide](docs/audio.md)
+and [capacity notes](docs/capacity.md) for the current limits.
 
-| Effect                            | Modes                                                                           |
-| --------------------------------- | ------------------------------------------------------------------------------- |
-| [Bloom](docs/native-bloom.md)     | Room, Hall, Plate, Spring, Cloud, Bloom, Shimmer, Nonlinear                     |
-| [Echo](docs/native-echo.md)       | Digital, Tape, Heads, Bucket, Reverse, Duck, Filter, Ping                       |
-| [Motion](docs/native-motion.md)   | Chorus, Flanger, Phaser, Vibe, Rotary, Tremolo, Harmonic tremolo, Vibrato, Ring |
-| [Moment](docs/native-moment.md)   | Loop: Tape, Stretch, Touch. Wet: Smear, Delay, Slip. One Clock sets the rate    |
-| [Sustain](docs/native-sustain.md) | Normal, Harmonic, Mix (note blooms into a harmonic); follows bends and vibrato  |
-| [Hold](docs/native-hold.md)       | Spectral freeze: held notes ring as a drone                                     |
-| [Swell](docs/native-swell.md)     | Auto-swell: each note fades in                                                  |
-| [Pitch](docs/native-pitch.md)     | Pitch shifting                                                                  |
+## Presets and library
 
-## Playing live
+| Area             | What Oxidal supports                                                                                                                                      |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Oxidal sounds    | 185 read-only rigs with serial, parallel or scene-based routing. Each sound names the tones and optional effect packs it needs.                           |
+| Mine             | Editable personal presets containing NAM tones, LV2 effects, scenes, MIDI assignments and named versions.                                                 |
+| TONE3000 presets | Compatible `.t3kpreset` files are checked, imported and kept in their native format. Editing creates an Oxidal-owned copy.                                |
+| Set list         | Ordered and repeated preset entries with independent scene, backing-track, stem-mix and chord-sheet links.                                                |
+| Backup           | Presets, local captures, impulse responses, set-list order and MIDI mappings can be downloaded from the device. Chord sheets have a separate backup file. |
 
-- **Rigs:** native processors and LV2 effects in serial, parallel and scene-based paths.
-- **Scenes and MIDI:** preloaded scenes, switched from the browser or a mapped MIDI controller; supported layouts keep delay and reverb trails.
-- **Sound Check:** interface setup, level matching, live audio and processing health.
-- **Backing tracks and stems:** play WAV or MP3 songs over your rig, split them into 4 or 6 stems on the device, and mute or level each part as it plays. See [session media](docs/media.md).
-- **Practice:** A–B loops, 0.5× to 1.5× speed that keeps pitch, and a click that follows the song.
+See [Library](docs/library.md), [Oxidal sounds](docs/factory-collection.md) and
+the [preset format](docs/presets/format.md).
+
+## TONE3000 engine, browser and imports
+
+Oxidal loads Neural Amp Modeler (NAM) amp, cabinet and full-rig captures. It can
+also use cabinet and room impulse responses.
+
+The native engine ports the open-source
+[TONE3000 plugin](https://github.com/tone-3000/tone3000-plugin) into Oxidal's
+supervised audio worker. Compatible `.t3kpreset` files can be imported into
+Oxidal, edited, saved and used in native or mixed rigs. The engine is optional
+because its JUCE-linked build has separate licence requirements; see
+[third-party licensing](THIRD_PARTY.md).
+
+After connecting a TONE3000 account, **Library → TONE3000** can search and
+filter the live catalogue. From there:
+
+- **Play** downloads the tone's first compatible NAM model and plays it as a
+  straight capture;
+- **Try through my rig** keeps the model and auditions it in a NAM block of the
+  rig already playing; and
+- **Get** stores the model in **Tones and IRs** for later use.
+
+This catalogue flow downloads models. Importing a local `.t3kpreset` is the
+separate full-preset path through the native TONE3000 engine. See
+[TONE3000 account setup](docs/tone3000-account.md).
+
+Oxidal does not distribute TONE3000 presets, NAM captures, impulse responses or
+provider downloads. Import only assets you are allowed to use.
+
+## How the audio engine works
+
+One supervised worker owns the Linux audio interface. It prepares the NAM
+models, LV2 plugins, routing and latency alignment before the render thread
+starts. File access, model loading and control work stay outside the audio
+callback.
 
 ```mermaid
-flowchart LR
-    In[Audio in] --> Pre[Sustain / drive]
-    Pre --> Amp[NAM amp + cab]
-    Amp --> Mod[Motion]
-    Mod --> Dly[Echo]
-    Dly --> Rev[Bloom]
-    Rev --> Out[Audio out]
-    MIDI[MIDI controller] -. scenes .-> Amp
-    MIDI -. scenes .-> Dly
+flowchart TD
+    Input["Guitar or bass input"] --> Front["Input trim and gate"]
+    Front --> Rig["Prepared native and LV2 rig"]
+    Rig --> Mix["Session mix"]
+    Backing["Backing track or live stems"] --> Mix
+    Mix --> Output["Venue EQ, mono, master and audio output"]
 ```
+
+The backing player joins after the guitar rig, so preset effects and preset
+boost do not alter the backing track. Venue EQ, mono, master level and mute
+apply to the combined output.
+
+Inside a rig, the same graph supports a single serial chain or parallel paths:
+
+```mermaid
+flowchart TD
+    In["Rig input"] --> SharedIn["Shared input effects"]
+    SharedIn --> A["Path A: LV2, NAM and cab"]
+    SharedIn --> B["Path B: NAM and LV2"]
+    A --> Merge["Latency-aligned path mix"]
+    B --> Merge
+    Merge --> SharedOut["Shared delay, reverb and output effects"]
+```
+
+A serial rig uses one path. A parallel or scene-based rig can keep several NAM
+and LV2 paths prepared at once, with shared effects before or after them.
+
+### Gapless switching
+
+- **Scenes inside a prepared rig:** scene changes adjust path gains, bypasses
+  and supported controls with sample-smoothed fades. Prepared processors stay
+  running, and delay or reverb placed after the path mix can keep its tail.
+- **Prepared whole rigs:** **Keep ready** loads a small set of alternatives
+  before playback. They share one continuous PCM owner. Switching primes the
+  incoming rig and crossfades it without loading a plugin during the switch;
+  supported outgoing tails can continue until quiet.
+- **Cold rig loads:** an unprepared rig is checked in an isolated worker and
+  replaces the current stream only after it produces audio. This path can
+  reopen the device, so Oxidal does not claim it is gapless.
+
+The prepared switching path has automated coverage, but physical no-dropout
+timing still depends on the Raspberry Pi, USB audio interface, buffer size and
+rig load. See [mixed rigs and scenes](docs/mixed-engine.md) and
+[audio setup](docs/audio.md).
+
+## Oxidal effects
+
+| Effect  | Use                           | Implementation                          |
+| ------- | ----------------------------- | --------------------------------------- |
+| Bloom   | Reverb                        | Original Rust LV2                       |
+| Echo    | Delay and echo                | Original Rust LV2                       |
+| Motion  | Modulation                    | Original Rust LV2                       |
+| Moment  | Micro-looper and texture      | Original Rust LV2                       |
+| Sustain | Sustained notes and chords    | Original Rust LV2                       |
+| Fuzz    | Waveshaping distortion        | Original Rust LV2                       |
+| Wah     | Resonant filter               | Original Rust LV2                       |
+| Hold    | Spectral hold                 | Original C++ LV2                        |
+| Swell   | Attack-triggered volume swell | Original C++ LV2                        |
+| Pitch   | Pitch shifting                | C++ LV2 using the TONE3000 pitch engine |
+
+The nine original effects keep their algorithm sources beside the code. Pitch
+keeps the TONE3000 and JUCE terms in its component notice. See
+[Oxidal effects](docs/native-effects.md) and the
+[LV2 plugin catalogue](docs/lv2-plugins.md).
+
+## Third-party LV2 plugins in factory presets
+
+These plugins are supported by Oxidal's Linux host and referenced by the
+factory preset collection. Their Debian effect packs are optional and are not
+installed in a new image.
+
+| Project                                                               | Plugins used by factory presets                                                                                                                                                                                                                |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Guitarix](https://guitarix.org/)                                     | GxAutoWah, GxBigMuffPi, GxChorus Stereo, GxCompressor, GxDuckDelay Stereo, GxEchoCat, GxOC-2, GxPhaser, GxRat, GxReverb Stereo, GxShimmizita, GxSustainer, GxTape, GxTremolo, GxTubeDelay, GxTubeScreamer, GxTubeTremelo, GxZita Reverb Stereo |
+| [Invada Studio](https://launchpad.net/invada-studio)                  | High-pass Filter Stereo, Low-pass Filter Stereo                                                                                                                                                                                                |
+| [MDA LV2](https://gitlab.com/drobilla/mda-lv2)                        | Degrade, DubDelay, Leslie, RezFilter, RingMod, SubSynth, Tracker                                                                                                                                                                               |
+| [SWH](http://plugin.org.uk/)                                          | Reverse Delay                                                                                                                                                                                                                                  |
+| [FOMP](https://drobilla.net/software/fomp/)                           | Auto-wah, Chorus, Phaser                                                                                                                                                                                                                       |
+| [Dragonfly Reverb](https://github.com/michaelwillis/dragonfly-reverb) | Hall Reverb                                                                                                                                                                                                                                    |
+| [x42](https://www.x42-plugins.com/x42/)                               | Compressor Stereo                                                                                                                                                                                                                              |
+| [Calf Studio Gear](https://github.com/calf-studio-gear/calf)          | Multi Chorus, Reverse Delay, Saturator, Vintage Delay                                                                                                                                                                                          |
+| [DISTRHO Ports](https://github.com/DISTRHO/DPF-Plugins)               | 3 Band EQ, Cycle Shifter, MaFreeverb, MaGigaverb, MVerb, Ping Pong Pan, Soul Force                                                                                                                                                             |
+
+LV2 support is capability-based; Oxidal does not claim that every plugin in a
+collection works. The [LV2 plugin catalogue](docs/lv2-plugins.md) lists all ten
+tested collections, measured plugin counts, Debian package names, project sites
+and licence locations. Host limits are in the [LV2 guide](docs/lv2.md).
 
 ## Raspberry Pi appliance
 
-| Feature            | Details                                                                                                                         |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| Custom Linux image | Headless Pi 5 image on [Raspberry Pi OS Lite](https://www.raspberrypi.com/software/operating-systems/) (64-bit, Debian Trixie). |
-| Wi-Fi and Ethernet | Built-in password-protected hotspot; can also join Wi-Fi or use Ethernet.                                                       |
-| Browser control    | `https://oxidal.local` after installing the device certificate; generated credentials. Works offline.                           |
-| Persistent storage | Presets and settings on a separate data partition.                                                                              |
-| Boot playback      | Optional: load a saved session at startup.                                                                                      |
+The image provides:
 
-- Setup: [image build and setup guide](os/README.md#phone-access-and-first-sound).
-- Limits (NAM models, effects, buffer sizes on a Pi 5 with a USB interface): [capacity guide](docs/capacity.md).
+- headless startup on Raspberry Pi OS Lite;
+- USB audio and MIDI through Linux;
+- a password-protected Wi-Fi hotspot and Ethernet access;
+- browser control at `https://oxidal.local`;
+- a separate data partition for presets and settings; and
+- optional saved-session playback at boot.
 
-## Architecture
+See the [image and first-run guide](os/README.md).
 
-```mermaid
-flowchart LR
-    UI[Browser] <-->|HTTPS + events| Proxy[Appliance nginx]
-    Proxy <--> API[Rust daemon]
-    API --> Store[Device-local library]
-    API --> Device[Wi-Fi and device helper]
-    API --> DSP[Supervised audio worker]
-    MIDI[MIDI controller] --> DSP
-    Input[Audio in] --> DSP --> Output[Audio out]
-    DSP --> Native[NAM and TONE3000-compatible rigs]
-    DSP --> LV2[LV2 host]
-    LV2 --> OX[Oxidal effects]
-    LV2 --> TP[Third-party plugins]
-```
+## Stem separator and practice tools
 
-- Control plane: API, library, device settings.
-- One supervised worker owns the audio interface.
-- Details: [architecture guide](docs/architecture.md).
+Oxidal can separate a backing track on the Raspberry Pi, then play and mix the
+stems without replacing the original song. Each stem has mute, solo and level
+controls. Saved mixes can be linked to presets and set-list entries. The player
+also provides waveform seeking, A–B loops, 0.5× to 1.5× speed, tempo detection
+and a metronome.
 
-## Tech stack
+| Split mode | Model         | Stems                                        |
+| ---------- | ------------- | -------------------------------------------- |
+| Four stems | `htdemucs`    | Vocals, drums, bass, other                   |
+| Six stems  | `htdemucs_6s` | Vocals, drums, bass, guitar, piano and other |
 
-| Layer              | Technologies                                         | Role                                                        |
-| ------------------ | ---------------------------------------------------- | ----------------------------------------------------------- |
-| Web interface      | React, TypeScript, Vite, Tailwind CSS                | Rig editing, performance, device setup.                     |
-| Backend            | Rust, Axum, Tokio                                    | Local HTTP API, event streams, library, worker supervision. |
-| Audio and DSP      | ALSA, NAM, native TONE3000 integration, LV2, Rust    | Audio I/O, capture playback, effect hosting, own effects.   |
-| Appliance services | Raspberry Pi OS Lite, systemd, NetworkManager, nginx | Headless boot, services, Wi-Fi/hotspot, HTTPS.              |
+The Pi runtime uses Rust
+[`demucs-onnx` commit `757ab9f`](https://github.com/HRSadeghi/demucs-onnx/commit/757ab9face37c20edd2e08ac82410da82320763b),
+CPU
+[ONNX Runtime 1.23.2](https://github.com/microsoft/onnxruntime/releases/tag/v1.23.2)
+and the pinned
+[Demucs ONNX export revision `9128f6e`](https://huggingface.co/HRSadeghi/demucs-onnx/tree/9128f6ee0f1b8e333b5b8d12613aefb3bebc249a).
+Model files are supplied separately and are not committed to this repository
+because redistribution rights for the exact weights are unresolved. See
+[session media and model details](docs/media.md#local-splitter-runtime).
 
-## How it is built
+Prepared WAV or MP3 stems can also be imported without installing the splitter
+models.
 
-Oxidal is built with [AgenticFlowX](https://github.com/AgenticFlowX/afx)
-spec-driven development. Every feature starts as a spec, design and task list,
-and the code links back to those documents with `@see` references.
+## Chord sheets
 
-## Rust crates
+**Library → Songbook** imports, writes and edits ChordPro, Markdown and plain
+text sheets. A sheet can be linked to a preset or backing track and opened in
+Stage or **Tools → Chord sheet**. The reader supports chord visibility, text
+size, auto-scroll, page stepping for E-paper and MIDI controls for scrolling
+and speed. Sheets can be exported individually or backed up and restored
+together. See [chord sheets](docs/media.md#chord-sheets).
 
-| Crate                                           | What it does                                                            |
-| ----------------------------------------------- | ----------------------------------------------------------------------- |
-| [`oxidal-api`](crates/oxidal-api)               | Daemon: web UI, API, audio-worker supervision.                          |
-| [`oxidal-audio`](crates/oxidal-audio)           | Linux audio device discovery, probing and ALSA streaming.               |
-| [`oxidal-control`](crates/oxidal-control)       | Rig controls, MIDI mappings, control state machine.                     |
-| [`oxidal-debug`](crates/oxidal-debug)           | Maintenance commands in a separate service.                             |
-| [`oxidal-device`](crates/oxidal-device)         | Wi-Fi, hotspot, power and effect-pack management.                       |
-| [`oxidal-engine`](crates/oxidal-engine)         | Mixed rigs: native tones, LV2 effects, preloaded scenes.                |
-| [`oxidal-graph`](crates/oxidal-graph)           | Signal-routing validation shared by the engines.                        |
-| [`oxidal-lv2`](crates/oxidal-lv2)               | LV2 discovery and hosting on Linux.                                     |
-| [`oxidal-nam`](crates/oxidal-nam)               | NAM inference in Rust for supported architectures.                      |
-| [`oxidal-presets`](crates/oxidal-presets)       | Presets, rig bundles and local model assets.                            |
-| [`oxidal-tone3000`](crates/oxidal-tone3000)     | Native TONE3000 engine wrapper for compatible presets.                  |
-| [`oxidal-dsp`](crates/oxidal-dsp)               | Shared DSP blocks for Oxidal effects (delay lines, filters, smoothing). |
-| [`oxidal-lv2-plugin`](crates/oxidal-lv2-plugin) | Safe `Plugin` trait and LV2 export macro for Oxidal effects.            |
-| [`oxidal-bloom`](crates/oxidal-bloom)           | Bloom reverb plugin.                                                    |
-| [`oxidal-echo`](crates/oxidal-echo)             | Echo delay plugin.                                                      |
-| [`oxidal-motion`](crates/oxidal-motion)         | Motion modulation plugin.                                               |
-| [`oxidal-moment`](crates/oxidal-moment)         | Moment micro-looper and texture plugin.                                 |
-| [`oxidal-sustain`](crates/oxidal-sustain)       | Sustain plugin.                                                         |
+## Technology stack
+
+| Area                  | Technologies                                      |
+| --------------------- | ------------------------------------------------- |
+| Audio engine and API  | Rust, Axum, Tokio                                 |
+| Audio and plugins     | ALSA, Lilv, LV2, NAM, native TONE3000 integration |
+| Browser interface     | React, TypeScript, Vite, Tailwind CSS             |
+| Design system         | React, Storybook                                  |
+| Appliance             | Raspberry Pi OS Lite, systemd, NetworkManager     |
+| Local HTTPS and proxy | nginx, mDNS                                       |
+| Build and checks      | pnpm, Cargo, CMake, Docker                        |
 
 ## Development
 
-- Toolchain: Node 22.21.0, pnpm 10.32.1, Rust 1.95.0.
-- No Raspberry Pi needed for browser and control-plane work.
+Requirements: Node.js 22.21, pnpm 10.32.1 and Rust 1.95.
 
 ```sh
 rustup toolchain install 1.95.0 --profile minimal --component clippy,rustfmt
 npm install --global pnpm@10.32.1
 pnpm bootstrap
 pnpm hooks:install
-pnpm dev            # http://127.0.0.1:5173
+pnpm dev
 ```
+
+The browser opens at `http://127.0.0.1:5173`. A Raspberry Pi is not required
+for web and control work.
 
 ```sh
 pnpm check
@@ -166,61 +254,21 @@ pnpm contract:check
 pnpm release:dry-run
 ```
 
-- Next: [documentation index](docs/README.md), [development guide](docs/development.md), [web interface](apps/web/README.md), [appliance image guide](os/README.md).
+Start with the [documentation index](docs/README.md),
+[development guide](docs/development.md) and [architecture](docs/architecture.md).
 
-## Screenshot gallery
+## Credits and licence
 
-Captured on a running appliance; the Wi-Fi network name is redacted. Click to enlarge.
-
-### Playing and monitoring
-
-| Perform                                                                                                        | Effect controls                                                                                                          |
-| -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| [![Perform](docs/assets/screenshots/perform-afterlight.jpeg)](docs/assets/screenshots/perform-afterlight.jpeg) | [![Effect controls](docs/assets/screenshots/rig-effect-controls.jpeg)](docs/assets/screenshots/rig-effect-controls.jpeg) |
-
-| Sound Check overview                                                                                          | Live diagnostics                                                                                                                  |
-| ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| [![Sound Check overview](docs/assets/screenshots/sound-check.jpeg)](docs/assets/screenshots/sound-check.jpeg) | [![Live diagnostics](docs/assets/screenshots/sound-check-diagnostics.jpeg)](docs/assets/screenshots/sound-check-diagnostics.jpeg) |
-
-### Settings
-
-| Audio setup                                                                                                | Running engine                                                                                                |
-| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| [![Audio setup](docs/assets/screenshots/settings-audio.jpeg)](docs/assets/screenshots/settings-audio.jpeg) | [![Running engine](docs/assets/screenshots/running-engine.jpeg)](docs/assets/screenshots/running-engine.jpeg) |
-
-| Network and hotspot                                                                                                    | TONE3000 account                                                                                                      |
-| ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| [![Network and hotspot](docs/assets/screenshots/settings-network.jpeg)](docs/assets/screenshots/settings-network.jpeg) | [![TONE3000 account](docs/assets/screenshots/settings-accounts.jpeg)](docs/assets/screenshots/settings-accounts.jpeg) |
-
-| MIDI mapping                                                                                              | Effect packs                                                                                                    |
-| --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| [![MIDI mapping](docs/assets/screenshots/settings-midi.jpeg)](docs/assets/screenshots/settings-midi.jpeg) | [![Effect packs](docs/assets/screenshots/settings-effects.jpeg)](docs/assets/screenshots/settings-effects.jpeg) |
-
-| Display modes                                                                                                    | Device storage and power                                                                                                  |
-| ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| [![Display modes](docs/assets/screenshots/settings-display.jpeg)](docs/assets/screenshots/settings-display.jpeg) | [![Device storage and power](docs/assets/screenshots/settings-device.jpeg)](docs/assets/screenshots/settings-device.jpeg) |
-
-### Maintenance and startup
-
-| Expanded maintenance terminal                                                                                                            | Unprivileged CLI prompt                                                                                                  |
-| ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| [![Expanded maintenance terminal](docs/assets/screenshots/settings-maintenance.jpeg)](docs/assets/screenshots/settings-maintenance.jpeg) | [![Unprivileged CLI prompt](docs/assets/screenshots/terminal-prompt.jpeg)](docs/assets/screenshots/terminal-prompt.jpeg) |
-
-**Boot splash artwork** from the appliance image:
-
-[![Oxidal boot splash artwork](apps/web/public/brand/boot-splash.png)](apps/web/public/brand/boot-splash.png)
-
-## Acknowledgments
-
-Initial work started locally on [PiPedal](https://github.com/rerdavies/pipedal) and the [TONE3000 plugin](https://github.com/tone-3000/tone3000-plugin). Thanks to both projects and their contributors.
-
-- [Archived PiPedal integration](https://github.com/rixrix/pipedal/pull/1)
-- [Archived TONE3000 stage bridge](https://github.com/rixrix/tone3000-plugin/pull/1)
-
-## License
+Oxidal started from local work with
+[PiPedal](https://github.com/rerdavies/pipedal) and the
+[TONE3000 plugin](https://github.com/tone-3000/tone3000-plugin). NAM format and
+inference work refers to
+[NeuralAmpModelerCore](https://github.com/sdatkinson/NeuralAmpModelerCore).
 
 Copyright © 2026 Richard Sentino.
 
-- Original code: [Apache License 2.0](LICENSE).
-- Some optional native components use separately licensed dependencies: see [third-party licensing](THIRD_PARTY.md) before building or distributing them.
-- The Oxidal name and logo are not granted under the Apache licence.
+Oxidal's original repository code and documentation use the
+[Apache License 2.0](LICENSE), except where a component says otherwise. Review
+[third-party licences and notices](THIRD_PARTY.md) before building or
+distributing native components. The Oxidal name and logo are not granted under
+the Apache licence.

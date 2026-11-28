@@ -3,7 +3,7 @@
 //! job. A reamp runs through the rig that is playing now and locks it: recall,
 //! scene changes, edits and calibration are refused until the job ends. The
 //! worker writes the audio; this service turns the finished file into a `di`
-//! or `reamp` asset with provenance, keeping a partial result if the disk
+//! or `reamp` asset with source details, keeping a partial result if the disk
 //! failed.
 //! @see docs/media.md
 use crate::media::{MediaError, MediaKind, MediaManifest, MediaPlayback, MediaRender, SCHEMA};
@@ -213,7 +213,7 @@ fn worker_capture(shared: &Shared) -> (bool, Option<CaptureStatus>) {
     }
 }
 
-/// What is playing now, for provenance.
+/// What is playing now, recorded with the captured asset.
 fn rig_identity(shared: &Shared) -> serde_json::Value {
     use oxidal_audio::lifecycle::AudioPhase;
     let native = shared.playback.snapshot();

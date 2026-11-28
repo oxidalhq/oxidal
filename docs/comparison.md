@@ -48,7 +48,7 @@ to what four other makers publish. It does not rank the units.
 
 [^media]: [session media](media.md#record-di-and-reamp).
 
-[^effects]: [LV2 host](lv2.md#debian-13-arm64-results-2026-11-12) lists per-pack results; the counts are the `usable_plugins` values in `crates/oxidal-device/src/packs.rs`. Guitarix 70, Dragonfly 4, Calf 37, Invada 14, x42 44, MDA 31, SWH 78, FOMP 4, Zam 12, DPF 9. The Zam and DPF packs are not in the Settings → Effects allowlist yet. [factory collection](factory-collection.md).
+[^effects]: [LV2 host](lv2.md#debian-13-arm64-results-2026-11-12) lists per-pack results; the counts are the `usable_plugins` values in `crates/oxidal-device/src/packs.rs`. Guitarix 70, Dragonfly 4, Calf 37, Invada 14, x42 44, MDA 31, SWH 78, FOMP 4, Zam 12, DPF 9. All ten packs are in the Settings → Effects allowlist but are optional installs. See the [factory collection](factory-collection.md).
 
 ## Where Oxidal is behind
 

@@ -14,7 +14,7 @@ using namespace oxidal_hold;
 using Complex = std::complex<float>;
 constexpr float Pi = 3.14159265358979f;
 
-/** Frame length for a rate: about 43 ms, a power of two. */
+/** Frame length for a rate: about 85 ms, a power of two. */
 uint32_t frameFor(double rate) {
     return rate <= 50000 ? FrameSize : rate <= 100000 ? FrameSize * 2 : FrameSize * 4;
 }

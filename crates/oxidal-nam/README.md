@@ -21,7 +21,7 @@ model.process(&input, &mut output)?;
 
 The public error types differ between loading/preparation and processing; handle them explicitly in a host. Passing these tests does not establish real-time Pi deadlines or audible equivalence across a model corpus.
 
-Tests compare 768 samples from project-authored synthetic Linear and one/two-layer LSTM models to independently compiled C++ NAM, for cold and warmed state and block partitions 64/7. Absolute tolerance: `4e-6`; processing allocations: zero for the measured paths. Source pins are stored in `tests/fixtures/parity.json`. No downloaded amp captures are bundled. See `NOTICE` for upstream provenance.
+Tests compare 768 samples from project-authored synthetic Linear and one/two-layer LSTM models to independently compiled C++ NAM, for cold and warmed state and block partitions 64/7. Absolute tolerance: `4e-6`; processing allocations: zero for the measured paths. Source pins are stored in `tests/fixtures/parity.json`. No downloaded amp captures are bundled. See `NOTICE` for the upstream source and licence.
 
 Normal workspace checks consume committed reference vectors and do not require the reference checkout or C++ compiler. To independently recheck/regenerate with clean pinned source and the matching Eigen headers:
 

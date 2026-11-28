@@ -1,4 +1,4 @@
-//! Immutable owned snapshots, published atomically with provenance beside the native bytes.
+//! Immutable owned snapshots, published atomically with source details beside the native bytes.
 use crate::{Error, Inspection, MAX_FILE_BYTES, Result, Store, inspect};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

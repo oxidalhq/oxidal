@@ -47,7 +47,7 @@ Run `pnpm native:check` on a supported build host. The suite exercises preset
 load and save, model playback, live edits and recovery using the native worker.
 Physical interface and real-time checks are separate.
 
-## Dependency and patch provenance
+## Dependency and patch sources
 
 - [Pinned source and patch manifest](../native/tone3000/sources.json)
 - [Native adapter implementation](../crates/oxidal-tone3000/src)

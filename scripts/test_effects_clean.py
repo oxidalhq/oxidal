@@ -5,8 +5,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 # Oxidal's own effects in Rust, and the crates they share.
-CRATES = ['oxidal-dsp', 'oxidal-lv2-plugin', 'oxidal-bloom', 'oxidal-sustain', 'oxidal-echo', 'oxidal-motion', 'oxidal-moment']
-# Earlier original effects in C++ (no references file was kept for them).
+CRATES = [
+    'oxidal-dsp', 'oxidal-lv2-plugin', 'oxidal-bloom', 'oxidal-sustain',
+    'oxidal-echo', 'oxidal-motion', 'oxidal-moment', 'oxidal-fuzz', 'oxidal-wah',
+]
+# Earlier original effects in C++.
 NATIVE = ['hold', 'swell']
 NAMES = re.compile(
     r'strymon|big ?sky|capistan|volante|sustainiac|freqout|guitarix|freeverb|'
@@ -40,11 +43,11 @@ class EffectsCleanTests(unittest.TestCase):
             self.assertIn('No third-party DSP', notice, directory.name)
 
     def test_references_file_exists(self):
-        for name in CRATES:
-            record = ROOT / 'crates' / name / 'REFERENCES.md'
-            self.assertTrue(record.is_file(), f'{name}: REFERENCES.md is missing')
+        for directory in directories():
+            record = directory / 'REFERENCES.md'
+            self.assertTrue(record.is_file(), f'{directory.name}: REFERENCES.md is missing')
             rows = [line for line in record.read_text().splitlines() if line.startswith('| ')]
-            self.assertGreaterEqual(len(rows), 3, f'{name}: references table is empty')
+            self.assertGreaterEqual(len(rows), 3, f'{directory.name}: references table is empty')
 
     def test_rust_effects_depend_only_on_oxidal_crates(self):
         for name in CRATES:

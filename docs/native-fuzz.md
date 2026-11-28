@@ -8,3 +8,4 @@ stored in a mixed-rig scene.
 - **Bundle:** `oxidal-fuzz.lv2`; binary `oxidal_fuzz.so`; no added latency.
 - **URIs:** `urn:oxidal:plugin:fuzz#mono` and `#stereo`.
 - **Source:** `crates/oxidal-fuzz`; original code and no third-party DSP.
+- **References:** [`crates/oxidal-fuzz/REFERENCES.md`](../crates/oxidal-fuzz/REFERENCES.md).

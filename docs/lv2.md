@@ -3,6 +3,8 @@
 To add an effect, install a supported pack from **Settings → Effects**, then
 choose the effect when building a preset in **Library**. See
 [effect packs](device-service.md#effect-packs) and [mixed rigs](mixed-engine.md).
+The [plugin catalogue](lv2-plugins.md) lists Oxidal effects, third-party project
+sites, package names, factory-sound plugins and attributions.
 
 | If you are looking for            | Start here                                              |
 | --------------------------------- | ------------------------------------------------------- |
@@ -36,7 +38,11 @@ Latency semantics follow the official [latency designation](https://lv2plug.in/n
 
 ## Oxidal plugins
 
-Oxidal builds its own LV2 effects in `native/`. [Oxidal Pitch](native-pitch.md) is the TONE3000 pitch engine as a standalone mono or stereo effect; [Oxidal Hold](native-hold.md) is an original spectral sustain; [Oxidal Swell](native-swell.md) is an original attack-triggered volume swell with no latency. The newer effects are Rust crates listed in [Oxidal's own effects](native-effects.md), among them [Oxidal Moment](native-moment.md), a micro-looper and texture effect.
+Oxidal ships ten LV2 effects. Hold, Swell and Pitch are native C++ components;
+Bloom, Echo, Motion, Moment, Sustain, Fuzz and Wah are Rust crates. Pitch uses
+the TONE3000 pitch engine; the other nine are original Oxidal effects with
+algorithm references stored beside their source. See
+[Oxidal effects](native-effects.md) and the [plugin catalogue](lv2-plugins.md).
 
 ## Restore controls to factory defaults
 
@@ -305,9 +311,9 @@ timeout containment.
 The maintained `pnpm lv2:check` verifies real installed SWH names/ranges/admission and
 rescanning while the graph worker continues processing. The browser uses this catalog in New preset; persistent mixed-native/LV2 rigs remain separate work.
 
-The runner also accepts `--pack zam` (`zam-plugins`) and `--pack dpf`
-(`dpf-plugins-lv2`) as harness candidates. They are not in the Settings →
-Effects allowlist, so the appliance cannot install them yet.
+ZamAudio (`zam-plugins`) and DISTRHO Ports (`dpf-plugins-lv2`) are included in
+the Settings → Effects allowlist. Like the other packs, they are optional and
+are not installed in a new image.
 
 ### Debian 13 ARM64 results (2026-11-12)
 

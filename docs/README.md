@@ -1,28 +1,34 @@
 # Oxidal documentation
 
-## Set up and play
+## Use Oxidal
 
-- [Build the Raspberry Pi image and connect to the hotspot](../os/README.md)
-- [Set up an audio interface and start playback](audio.md)
-- [Browse the Library, manage the set list and import captures](library.md)
-- [Use the browser interface](interface.md) or [browse screenshots](screenshots.md)
+- [Build the Raspberry Pi image and connect](../os/README.md)
+- [Set up audio and start playback](audio.md)
+- [Use the browser interface](interface.md)
+- [Manage sounds, models and set lists](library.md)
 - [Check levels and audio health](monitoring.md)
-- [Capacity and buffer size](capacity.md)
-- [Comparison with other amp and effects units](comparison.md)
-- [Explore Oxidal sounds](factory-collection.md)
-- [Connect a TONE3000 account](tone3000-account.md)
+- [Use backing tracks, stems and recordings](media.md)
+- [Check Raspberry Pi capacity](capacity.md)
+
+## Sounds and plugins
+
+- [Oxidal effects](native-effects.md)
+- [Supported LV2 plugins, project sites and attributions](lv2-plugins.md)
+- [LV2 host limits and engineering details](lv2.md)
+- [Factory sounds](factory-collection.md)
+- [TONE3000 account access](tone3000-account.md)
 
 ## Build and maintain
 
+- [Development setup](development.md)
 - [Architecture](architecture.md)
-- [Development setup](development.md) and [Rust daemon](core.md)
-- [Wi-Fi, effect packs and power settings](device-service.md)
+- [Rust daemon](core.md)
+- [Wi-Fi, effect packs and power](device-service.md)
 - [Maintenance console](debug-console.md)
 
-## Reference
+## Technical reference
 
 - [Mixed rigs and scenes](mixed-engine.md)
-- [Native preset and DSP adapter](native-tone3000.md)
-- [LV2 host](lv2.md), [Oxidal Hold](native-hold.md), [Oxidal Swell](native-swell.md) and [Oxidal Pitch](native-pitch.md)
-- [Preset format](presets/format.md) and [storage locking](storage-lock.md)
-- [Session media](media.md)
+- [Native preset adapter](native-tone3000.md)
+- [Preset format](presets/format.md)
+- [Storage locking](storage-lock.md)

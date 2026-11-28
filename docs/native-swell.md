@@ -28,3 +28,4 @@
 
 - **Install:** copy `build/swell/oxidal-swell.lv2` into a directory on the daemon's `LV2_PATH` (on the image, `/usr/local/lib/lv2`) and restart the daemon. The appliance build (`scripts/artifacts.mjs`) builds, tests and packages it beside Hold and Pitch.
 - **Qualify:** with the LV2 harness built (see [LV2 host](lv2.md#offline-pack-smoke-checks)), run `oxidal-plugin-check --bundle build/swell/oxidal-swell.lv2/ --sample-rate 48000 --frames 48`; both plugins should be `usable` with `latency_frames` 0.
+- **References:** [`native/swell/REFERENCES.md`](../native/swell/REFERENCES.md).

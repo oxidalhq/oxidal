@@ -6,7 +6,7 @@
 //! when a reamp has run its source plus tail. It never opens files, allocates
 //! or blocks; finished rings go back to the helper to be freed.
 //!
-//! The daemon owns the job (exclusivity, finalizing the asset, provenance);
+//! The daemon owns the job (exclusivity, finalizing the asset, source details);
 //! the worker reports how many frames were written and whether the disk
 //! failed.
 //! @see docs/media.md

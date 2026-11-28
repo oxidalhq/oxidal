@@ -9,7 +9,7 @@
 - **Settings** covers audio, Wi-Fi, MIDI, display, accounts, effect packs and
   maintenance.
 
-See the [screenshots](screenshots.md) for examples.
+The [README](../README.md) shows the current Rig map.
 
 ## The capsule, the chain bar and the dock
 

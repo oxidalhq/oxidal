@@ -533,7 +533,7 @@ fn append(
     let hash = oxidal_presets::inspect(&bytes)
         .map_err(|e| e.to_string())?
         .sha256;
-    // Allocate a fresh path rather than overwrite shared current/provenance assets.
+    // Allocate a fresh path rather than overwrite shared current or source assets.
     let (id, path) = (0usize..)
         .map(|i| (format!("saved_{i}"), format!("saved-{i}.t3kpreset")))
         .find(|(id, path)| {

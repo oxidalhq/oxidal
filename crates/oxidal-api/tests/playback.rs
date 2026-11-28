@@ -1427,7 +1427,7 @@ async fn qualify_models(
         assert_eq!(response.status(), 200);
         state = response.json().await.unwrap();
         assert_eq!(state["controls"], applied_controls);
-        // Re-selecting the same cached model also retains the existing provenance projection.
+        // Re-selecting the same cached model also retains the existing source projection.
         let response = send(
             client,
             url,

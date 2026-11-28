@@ -8,3 +8,4 @@ scene can sweep or recall them like any other rig block.
 - **Bundle:** `oxidal-wah.lv2`; binary `oxidal_wah.so`; no added latency.
 - **URIs:** `urn:oxidal:plugin:wah#mono` and `#stereo`.
 - **Source:** `crates/oxidal-wah`; original code and no third-party DSP.
+- **References:** [`crates/oxidal-wah/REFERENCES.md`](../crates/oxidal-wah/REFERENCES.md).

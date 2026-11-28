@@ -175,7 +175,7 @@ pub(crate) fn capture(instance: &mut NativeInstance, engine: &mut Engine) -> Res
     Ok(())
 }
 
-/// Rebuild model-edited pair sources for an isolated named Save. Source provenance
+/// Rebuild model-edited pair sources for an isolated named Save. Source details
 /// remains in the bundle; no host-role state is serialized as a native preset.
 pub(crate) fn model_sources(
     bundle: &Bundle,

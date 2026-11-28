@@ -91,7 +91,25 @@ Settings → Effects installs or removes only the fixed Debian package allowlist
 
 The native artifact build uses pinned source/patch hashes. The image build records installed Debian package versions; package repositories are not snapshot-pinned, so image rebuilds are auditable rather than bit-for-bit reproducible. The output includes the image, SHA-256, manifest and installed test/package evidence. No successful readiness report is produced when installation or validation fails. A failed output is a diagnostic artifact, not a candidate to flash; use a new output filename after correcting the failure.
 
-The image is 8 GiB and expects a fresh card of at least 16 GB. It retains the vendor boot partition/kernel, gives the system root 5 GiB and places writable state on a separate ext4 data partition which grows to fill the card at first boot. It uses a headless multi-user boot. The service selects the performance CPU governor and permits bounded real-time scheduling; automatic apt timers and competing network services are disabled. These baseline settings do not by themselves qualify complex audio deadlines. It installs ALSA/Lilv/native dependencies and SWH, Guitarix, Invada, MDA, x42, FOMP and Dragonfly LV2 plugins plus bundled Oxidal Hold and Pitch for the 44 factory recipes, enables the unprivileged daemon with audio-group access, and keeps persistent user and package state under the data-backed `/var/lib`. The system journal and the bounded `/tmp` and `/var/tmp` mounts are volatile. It also configures authenticated HTTPS, mDNS, SSH recovery and a WPA-protected 2.4 GHz NetworkManager hotspot on `wlan0` (New Zealand regulatory profile). Ethernet remains available. The appliance disables cloud-init and masks systemd-networkd so it cannot compete with NetworkManager or hold network-online waiting for an unmanaged link. Use the generated credentials; do not add Raspberry Pi Imager OS customizations to this already configured image. Wi-Fi radio behavior, Pi boot and actual sound still require physical verification.
+The image is 8 GiB and expects a fresh card of at least 16 GB. It keeps the
+vendor boot partition and kernel, gives the system root 5 GiB and creates a
+separate data partition that grows to fill the card on first boot. It uses a
+headless multi-user boot, selects the performance CPU governor and permits
+bounded real-time scheduling. These settings do not by themselves prove audio
+performance.
+
+The image installs the Linux audio host and Oxidal's own effects. It does not
+preinstall the optional Debian effect packs; install those from **Settings →
+Effects**. See the [LV2 plugin catalogue](../docs/lv2-plugins.md). The daemon
+runs unprivileged with audio-group access, and persistent state stays under the
+data-backed `/var/lib`. System logs and the bounded `/tmp` and `/var/tmp` mounts
+are temporary.
+
+The image also configures authenticated HTTPS, mDNS, SSH recovery, Ethernet and
+a password-protected 2.4 GHz NetworkManager hotspot on `wlan0` using the New
+Zealand regulatory profile. It disables cloud-init and masks systemd-networkd
+to avoid competing network configuration. Use the generated credentials; do
+not add Raspberry Pi Imager customizations to this prepared image.
 
 ### Phone access and first sound
 
@@ -101,7 +119,7 @@ The image is 8 GiB and expects a fresh card of at least 16 GB. It retains the ve
 - The API itself stays on `127.0.0.1:3210`. Nginx checks external Host and Origin before forwarding requests. HTTP is not an alternative authenticated control endpoint. Provider accounts and internet access are not required for local playback.
 - Initially audio is stopped. The image carries no third-party effect packs: the player installs them from Library or Settings. First boot saves only the Oxidal sounds that need nothing else; the other sounds are listed in Library → Oxidal sounds with what each needs. Choose an example or import a preset, select/probe the interface in Settings, then start the saved session. Both directions initially require the same hardware clock/endpoint. Keep output levels low for the first physical test.
 - After verifying a session, select **Use this session on boot** for headless restoration. Stop audio leaves the UI and silent native editor running. A failed boot audio attempt reports its error without switching interfaces or retrying unexpectedly.
-- Current source bundles include native, LV2 and mixed-rig workers, with shared device exclusion. The browser authors whole-native/LV2 rigs and guarded 48 kHz amp/cab pairs, including immediate controls/EQ and verified NAM/IR audition before Save. Named Save embeds models for offline recall and retains source provenance. Confirmed edits survive supported Audio Apply, recovery and explicit boot capture. Preloaded scenes and independent parallel NAM branches use sample-smoothed selection with shared downstream effect histories. The web panel configures hardware MIDI input and PC/CC scene or CC branch mappings. Missing MIDI hardware reports separately while PCM continues. Preselected whole mixed rigs also share one continuous PCM owner; whole-preset dynamic gapless/trails, full authoring/settings parity and physical audio/MIDI qualification remain open. The simulator requires explicit development access.
+- Current source bundles include native, LV2 and mixed-rig workers, with shared device exclusion. The browser authors whole-native/LV2 rigs and guarded 48 kHz amp/cab pairs, including immediate controls/EQ and verified NAM/IR audition before Save. Named Save embeds models for offline recall and retains their source details. Confirmed edits survive supported Audio Apply, recovery and explicit boot capture. Preloaded scenes and independent parallel NAM branches use sample-smoothed selection with shared downstream effect histories. The web panel configures hardware MIDI input and PC/CC scene or CC branch mappings. Missing MIDI hardware reports separately while PCM continues. Preselected whole mixed rigs also share one continuous PCM owner; whole-preset dynamic gapless/trails, full authoring/settings parity and physical audio/MIDI qualification remain open. The simulator requires explicit development access.
 - These are source capabilities, not evidence that an older card contains them. Image manifests record the exact packaged revision. Raspberry Pi 5 is the deployment target; actual NAM loading time, model capacity, thermals, xruns and transitions must be measured on that device.
 
 ### Testing and recovery

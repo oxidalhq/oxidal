@@ -1,6 +1,8 @@
 # Oxidal's own effects
 
-Oxidal ships LV2 effects of its own, installed with the appliance; no effect pack needed. The first three are C++ under `native/`; the newer ones are Rust crates in this workspace.
+Oxidal ships these LV2 effects with the appliance; no effect pack is needed.
+Hold, Swell and Pitch are C++ components under `native/`. The other effects are
+Rust crates.
 
 | Effect         | Directory               | Page                                   |
 | -------------- | ----------------------- | -------------------------------------- |
@@ -49,7 +51,7 @@ Oxidal's own effects are original code. Oxidal Pitch is the one exception: it bu
 
 **How it is kept**
 
-- Each effect has a `NOTICE` stating "Original code" and "No third-party DSP", and a `REFERENCES.md` with one row per algorithm: its published source and how its constants were chosen.
+- Each original effect has a `NOTICE` stating "Original code" and "No third-party DSP", and a `REFERENCES.md` that names its algorithm sources and explains project-selected constants.
 - `scripts/test_effects_clean.py`, run by `pnpm check`, verifies those files, that the Rust effects depend on nothing outside this workspace, and that `unsafe` appears only in the plugin interface crate.
 
 ## Conventions for a new effect

@@ -67,24 +67,28 @@ An unpacked directory with the same contents is permitted for local storage/deve
 
 The [JSON Schema](manifest.schema.json) defines field shapes, bounds, enum values and unknown-field rejection. The semantic rules below are equally mandatory. A schema-valid manifest is not a valid preset or an export authorization.
 
-| Field                              | Contract                                                                                                                                                                                                                                                                       |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `format`, `formatVersion`          | Exactly `oxidal.preset` and integer `1`. Unsupported versions fail without rewriting.                                                                                                                                                                                          |
-| `id`, `name`                       | Oxidal UUID identity and display name. Name is not a path. A modified import/new copy has a new Oxidal identity, independent of the source TONE3000 ID.                                                                                                                        |
-| `tone3000.instances`               | Zero or more native tone instances, each with a stable local ID, current `.t3kpreset` resource, compatibility profile, optional host processing role and original import provenance. An empty list requires an explicit host graph. Multiple instances make a rig Oxidal-only. |
-| `oxidal`                           | `null` for the canonical pure-native tone, otherwise the host graph, LV2 instances and recall policy. It is the only place v1 host processing/routing is described.                                                                                                            |
-| `resources`                        | Complete resource catalog: local ID, bundle-relative path, kind, lowercase SHA-256 and exact uncompressed byte count. References use IDs, not external filesystem paths.                                                                                                       |
-| `extensions`, `requiredExtensions` | URI-keyed extension objects and required extension identifiers. Required extensions MUST exist in `extensions`; an unknown required extension blocks load/edit/export. The mixed host supports scenes versions 1–4. See [mixed engine](../mixed-engine.md).                    |
+| Field                              | Contract                                                                                                                                                                                                                                                                    |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `format`, `formatVersion`          | Exactly `oxidal.preset` and integer `1`. Unsupported versions fail without rewriting.                                                                                                                                                                                       |
+| `id`, `name`                       | Oxidal UUID identity and display name. Name is not a path. A modified import/new copy has a new Oxidal identity, independent of the source TONE3000 ID.                                                                                                                     |
+| `tone3000.instances`               | Zero or more native tone instances, each with a stable local ID, current `.t3kpreset` resource, compatibility profile, optional host processing role and original import details. An empty list requires an explicit host graph. Multiple instances make a rig Oxidal-only. |
+| `oxidal`                           | `null` for the canonical pure-native tone, otherwise the host graph, LV2 instances and recall policy. It is the only place v1 host processing/routing is described.                                                                                                         |
+| `resources`                        | Complete resource catalog: local ID, bundle-relative path, kind, lowercase SHA-256 and exact uncompressed byte count. References use IDs, not external filesystem paths.                                                                                                    |
+| `extensions`, `requiredExtensions` | URI-keyed extension objects and required extension identifiers. Required extensions MUST exist in `extensions`; an unknown required extension blocks load/edit/export. The mixed host supports scenes versions 1–4. See [mixed engine](../mixed-engine.md).                 |
 
 Top-level metadata is intentionally small. Accounts, credentials, machine paths, device identifiers, live CPU/meter readings, authentication/session tokens and export-eligibility flags MUST NOT be serialized. Format extensions require an explicit capability/version contract, not arbitrary unknown top-level fields. Unknown optional extensions may be preserved as opaque metadata but MUST NOT silently affect sound. Any unrecognized extension blocks TONE3000 export until explicitly removed in a separate copy or qualified as non-sonic.
 
-### Native tone state and provenance
+### Native tone state and source details
 
 For a whole-role instance, the current native payload is its persistent tone authority. Extracted roles use the explicit source-and-derivation contract below. Browser projections and sliders are views, not a second tone store. A save MUST wait for confirmed backend changes and native serialization of that same committed revision; do not pair newer displayed controls with stale bytes. Assets embedded by upstream remain embedded. Do not copy factory/capture weights into the source repository to satisfy examples.
 
 For an unedited import, retain the original payload byte-for-byte. Once edited, store the current native payload separately from immutable `origin.resource`. Preserve unknown native bytes on no-op saves. If a selected backend would discard unknown native fields during editing, reject the incompatible edit or provide a proven preservation path; do not silently claim full fidelity. Unknown/unsupported native formats may be retained for recovery but MUST NOT be applied or declared exportable merely because their hashes match.
 
-An origin is provenance, not the active sound and not authority to overwrite a remote preset. `sourcePresetId`, when present, is opaque. Changes only to external effects MUST NOT reserialize/alter the TONE3000 payload. Backend lifecycle/build qualification and full session state remain separate from tone-preset bytes.
+An origin records where the tone came from; it is not the active sound and does
+not allow Oxidal to overwrite a remote preset. `sourcePresetId`, when present,
+is opaque. Changes only to external effects MUST NOT reserialize or alter the
+TONE3000 payload. Backend lifecycle and full session state remain separate from
+tone-preset bytes.
 
 ### Native processing roles
 
@@ -139,7 +143,7 @@ current payload. No dummy native instance or asset may be inserted to satisfy sh
 
 V1 graph nodes are logical `input`, `output`, `tone3000`, `lv2`, `split`, `merge` and extension-gated `gain`. A node declares audio input/output port counts. Each edge joins one scalar audio output port to one scalar audio input port by zero-based index. Stereo needs two explicit edges; never infer stereo or sum signals implicitly. Input/output nodes refer to logical rig I/O, not hardware addresses. V1 has one input and one output node, each with one or two channels. No feedback cycles are supported.
 
-- Node, instance and resource IDs MUST be unique in their scopes. Every reference resolves to the declared kind; every instance is used exactly once, and all nodes lie on an input-to-output path. Unused source provenance is allowed; unused processing instances are not.
+- Node, instance and resource IDs MUST be unique in their scopes. Every reference resolves to the declared kind; every instance is used exactly once, and all nodes lie on an input-to-output path. Unused source details are allowed; unused processing instances are not.
 - Ports MUST be in range; input nodes have no inputs, output nodes no outputs, and edge pairs are unique. Each destination port has at most one source. Every declared input port of a processing/output node is connected. Each source port has at most one destination; fan-out uses distinct outputs of an explicit split node.
 - TONE3000 nodes have one/two corresponding input and output channels according to a qualified backend profile. LV2 port counts match discovered audio ports in their declared index order; MIDI/Atom/Control ports are not audio edges.
 - Split nodes have one input and two or more outputs, each copying that scalar input at unity. Merge nodes have two or more inputs and one output; `inputGains.length` equals input count and output is the explicit weighted sum. Gains are linear, −4 to 4; a negative gain inverts that input's polarity. Use two split/merge nodes for independent stereo channels; different left and right gains for one input pan that path. Gain/level behavior is never implicit normalization.
@@ -203,7 +207,7 @@ Eligibility is **computed**, never a trusted manifest boolean. All of the follow
 
 - Exactly one whole-role TONE3000 instance and a fully decoded, supported, current native payload with all required assets and tone parameters intact.
 - `oxidal` is `null`. An explicit host graph, external LV2 instance/resource, alternate engine, host bypass/mix/routing/recall behavior or other non-native sonic setting blocks export. An equivalent identity graph may be converted to the canonical null form only through verified normalization; no graph is assumed equivalent just because it contains one tone node.
-- No undeclared/unreferenced processing resources, required extensions or unknown extension semantics. Immutable original-tone provenance and explicitly qualified non-sonic metadata do not affect the sound.
+- No undeclared or unreferenced processing resources, required extensions or unknown extension semantics. Immutable original-tone source details and explicitly qualified non-sonic metadata do not affect the sound.
 - Every retained tone setting is expressible by the selected TONE3000 writer/profile. No dropped effects, approximate mappings or silent routing flattening.
 
 A pure Oxidal preset stays an Oxidal preset locally even after export. Export writes only the current native `.t3kpreset`, never the manifest, host state or original payload in place of current edits. No edit: native bytes are identical. Edited: semantic equivalence is required; byte identity is not assumed. Destination overwrite, source identity updates and sync conflict handling require explicit actions. Default file export is “Save as”; it must not overwrite an imported source automatically.
@@ -218,7 +222,7 @@ Recommended structured reasons: `UNSUPPORTED_FORMAT`, `INVALID_RESOURCE`, `UNSUP
 
 1. Select a source Oxidal revision and, if needed, which TONE3000 instance to retain. Never automatically combine multiple native instances or bake external DSP into model/IR assets.
 2. Preview every removal: external plugins (including bypassed ones and external pitch), host graph/gains/bypass, tail policy and non-native/unknown extension state. Explain that the resulting sound/recall behavior can differ.
-3. After the user accepts that concrete removal preview, create a **new** Oxidal preset ID/name, keep the chosen instance's current native payload unchanged, set `oxidal: null`, and omit non-native instances/resources/extensions. Keep only its selected current/source payloads and permitted provenance; the original mixed rig remains untouched.
+3. After the user accepts that concrete removal preview, create a **new** Oxidal preset ID/name, keep the chosen instance's current native payload unchanged, set `oxidal: null`, and omit non-native instances/resources/extensions. Keep only its selected current/source payloads and permitted source details; the original mixed rig remains untouched.
 4. Re-run complete validation and native compatibility checks. Unknown data inside the retained native payload is not made supported merely by removing the host section.
 5. Save the new copy. Only then expose explicit export/sync for that copy if it passes. Do not silently fall back to the original imported tone or export a TONE3000 subsection directly from the mixed source.
 
