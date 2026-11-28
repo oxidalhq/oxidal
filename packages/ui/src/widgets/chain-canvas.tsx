@@ -40,6 +40,7 @@ import {
 import { cn } from '../lib/cn';
 import { useRemembered } from '../lib/use-remembered';
 import { BlockGlyph } from './block-glyph';
+import { DragGrip } from './chain';
 
 /**
  * The signal chain drawn as a map. It fits and centres when it can; when the
@@ -457,6 +458,9 @@ export function ChainCanvas({
       ? { x: (cx - rect.left - v.x) / v.s, y: (cy - rect.top - v.y) / v.s }
       : { x: 0, y: 0 };
   };
+  /** A block that can be dragged now: it shows the grab cursor and grip. */
+  const canMove = (n: GraphNode) =>
+    !!onMove && !disabled && n.kind === 'block' && (!movable || movable(n.id));
   const startMove = (e: ReactPointerEvent, n: GraphNode) => {
     if (
       !onMove ||
@@ -1038,8 +1042,10 @@ export function ChainCanvas({
                         .filter(Boolean)
                         .join(' ')
                 }
+                title={canMove(n) ? 'Drag onto a line to move it' : undefined}
                 className={cn(
-                  'relative size-full outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  'group/block relative size-full outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  canMove(n) && 'cursor-grab active:cursor-grabbing',
                   slot
                     ? 'grid place-items-center rounded-full border-2 border-dashed border-input bg-background text-muted-foreground hover:border-foreground hover:text-foreground'
                     : cap
@@ -1055,6 +1061,7 @@ export function ChainCanvas({
                         ),
                 )}
               >
+                {canMove(n) && <DragGrip selected={sel} />}
                 {slot ? (
                   <Plus aria-hidden="true" className="size-4" />
                 ) : cap ? (

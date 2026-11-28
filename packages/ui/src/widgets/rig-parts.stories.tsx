@@ -50,6 +50,14 @@ const STATES: { name: string; block: ChainBlockModel; props?: object }[] = [
     props: { tint: sceneColour(1) },
   },
   { name: 'Disabled', block: TS9, props: { disabled: true } },
+  // Movable: the grab cursor, and its grip on hover (or, selected on a
+  // touch screen, a grip that says Drag).
+  { name: 'Movable', block: TS9, props: { movable: true } },
+  {
+    name: 'Movable and selected',
+    block: TS9,
+    props: { movable: true, selected: true },
+  },
 ];
 
 /** Every state of one block, side by side: all the same size. */

@@ -1,4 +1,4 @@
-import { Plus } from '@phosphor-icons/react';
+import { DotsSix, Plus } from '@phosphor-icons/react';
 import * as React from 'react';
 
 import { Led } from '../components/ui/badge';
@@ -28,6 +28,33 @@ export type ChainLaneModel = {
 };
 
 /**
+ * The small tab above a block that can be dragged: it shows on hover with a
+ * mouse, and stays on the selected block, saying Drag on a touch screen, so
+ * moving a block is never a guess. The block itself shows the grab cursor.
+ */
+export function DragGrip({ selected = false }: { selected?: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      data-slot="drag-grip"
+      className={cn(
+        'pointer-events-none absolute -top-3 left-1/2 z-10 inline-flex h-5 -translate-x-1/2 items-center gap-1 rounded-full border border-input bg-card px-2 text-muted-foreground shadow-raised transition-opacity duration-[var(--duration-fast)] motion-reduce:transition-none [&_svg]:size-3.5',
+        selected
+          ? 'opacity-100'
+          : 'opacity-0 group-hover/block:opacity-100 group-focus-visible/block:opacity-100',
+      )}
+    >
+      <DotsSix weight="bold" />
+      {selected && (
+        <span className="hidden text-2xs [@media(pointer:coarse)]:inline">
+          Drag
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
  * One block in the chain: a glyph for its kind with the category LED, its
  * name, a small-caps caption, a one-line preview of its main values, and a
  * badge when it is bypassed or unsaved. The selected block inverts ink and
@@ -41,6 +68,7 @@ export function ChainBlock({
   lifted = false,
   sceneMark = false,
   muted = false,
+  movable = false,
   size = 'md',
   tint,
   onSelect,
@@ -56,6 +84,8 @@ export function ChainBlock({
   sceneMark?: boolean;
   /** Held out of the sound for a moment (hold-to-hear). */
   muted?: boolean;
+  /** It can be dragged: the grab cursor and the grip above it. */
+  movable?: boolean;
   size?: 'md' | 'lg';
   /** A scene colour: a faint wash showing the playing scene uses this block. */
   tint?: string;
@@ -110,9 +140,11 @@ export function ChainBlock({
         selected &&
           'border-foreground bg-foreground text-background shadow-raised hover:bg-foreground',
         lifted && 'z-10 scale-105 shadow-raised',
+        movable && 'cursor-grab active:cursor-grabbing',
         className,
       )}
     >
+      {movable && <DragGrip selected={selected} />}
       <span
         aria-hidden="true"
         className={cn(
