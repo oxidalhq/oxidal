@@ -69,7 +69,7 @@ export function SlotChooser({
   onEffect: (plugin: Lv2Plugin, placement: Placement) => void;
   onCancel: () => void;
 }) {
-  const [step, setStep] = useState<'kind' | 'effect' | 'place'>(
+  const [step, setStep] = useState<'kind' | 'effect' | 'place' | 'confirm'>(
     modelsAllowed ? 'kind' : 'effect',
   );
   const [returnFocus] = useState(
@@ -163,14 +163,17 @@ export function SlotChooser({
         });
     }
   }
+  // Adding an effect makes a new preset that plays on another engine: say
+  // so and ask before anything changes the sound.
+  const [where, setWhere] = useState<'before' | 'after' | 'split'>('after');
   const openEffect = (id: string) => {
     const effect = shown.find((item) => item.uri === id);
     if (!effect || !usable(effect)) return;
-    if (placement === 'here') onEffect(effect, 'after');
-    else {
-      setPlugin(effect);
-      setStep('place');
-    }
+    setPlugin(effect);
+    if (placement === 'here') {
+      setWhere('after');
+      setStep('confirm');
+    } else setStep('place');
   };
   return (
     <Sheet open onOpenChange={(open) => !open && onCancel()}>
@@ -188,7 +191,9 @@ export function SlotChooser({
               ? 'Add a block'
               : step === 'effect'
                 ? effectTitle
-                : 'Where should it go?'
+                : step === 'confirm'
+                  ? 'Make a new preset?'
+                  : 'Where should it go?'
           }
           description={
             step === 'place'
@@ -296,11 +301,47 @@ export function SlotChooser({
               )}
             </div>
           )}
+          {step === 'confirm' && plugin && (
+            <div className="grid gap-3">
+              <Caption>
+                {presetName} is a TONE3000 preset, and its engine plays TONE3000
+                captures only. Adding {plugin.name} makes a new preset in Mine
+                that keeps the whole chain and adds {plugin.name}{' '}
+                {where === 'before'
+                  ? 'before it'
+                  : where === 'split'
+                    ? 'in a split beside it'
+                    : 'after it'}
+                .
+              </Caption>
+              <Caption>
+                The sound switches to the new preset with a short gap.{' '}
+                {presetName} stays as it is.
+                {modified
+                  ? ' Your unsaved edits are not carried over: save a copy first to keep them.'
+                  : ''}
+              </Caption>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => onEffect(plugin, where)}>
+                  Make and play it
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setStep(placement === 'here' ? 'effect' : 'place')
+                  }
+                >
+                  Back
+                </Button>
+              </div>
+            </div>
+          )}
           {step === 'place' && plugin && (
             <EffectPlacement
-              onPlace={(where) =>
-                onEffect(plugin, where === 'beside' ? 'split' : where)
-              }
+              onPlace={(place) => {
+                setWhere(place === 'beside' ? 'split' : place);
+                setStep('confirm');
+              }}
               note={`Makes a new preset with ${plugin.name}. ${presetName} stays as it is.${modified ? ' Save your current edits first to keep them.' : ''}`}
             />
           )}

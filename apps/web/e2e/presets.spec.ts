@@ -6110,6 +6110,9 @@ test('rig controls add a searched effect after the native chain', async ({
       new URL(req.url()).pathname === '/api/v1/presets/rigs',
   );
   await page.getByRole('button', { name: /^After the TONE3000 chain/ }).click();
+  // It makes a new preset on another engine: the player confirms first.
+  await expect(page.getByText(/makes a new preset in Mine/)).toBeVisible();
+  await page.getByRole('button', { name: 'Make and play it' }).click();
   const command = (await publishing).postDataJSON();
   const manifest = JSON.parse(command.manifest_json);
   expect(command.resources['preset-0']).toMatchObject({
