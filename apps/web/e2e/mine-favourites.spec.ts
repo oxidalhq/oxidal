@@ -7,7 +7,11 @@ import type {
   LibraryCatalog,
   RigPage,
 } from '../src/api';
-import { selectWorkspaceSection } from './display';
+import {
+  mineHasPanel,
+  openImportedTone3000,
+  selectWorkspaceSection,
+} from './display';
 
 test('Mine sorts saved presets with owned native rows, stars an entry and remembers its search', async ({
   page,
@@ -103,8 +107,11 @@ test('Mine sorts saved presets with owned native rows, stars an entry and rememb
   await expect(
     rows.getByRole('button', { name: `Play ${ownedName}` }),
   ).toBeVisible();
+  // Its other actions: the row's ⋯, or the details panel on wide screens.
   await expect(
-    rows.getByRole('button', { name: `More for ${rigName}` }),
+    mineHasPanel(page)
+      ? page.getByRole('complementary', { name: 'Preset details' })
+      : rows.getByRole('button', { name: `More for ${rigName}` }),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Keep ready' })).toBeVisible();
 
@@ -119,6 +126,7 @@ test('Mine sorts saved presets with owned native rows, stars an entry and rememb
   await search.fill(tag);
   await expect(rigStar).toBeVisible();
   await selectWorkspaceSection(page, 'Library', 'TONE3000');
+  await openImportedTone3000(page);
   await selectWorkspaceSection(page, 'Library', 'Mine');
   await expect(search).toHaveValue(tag);
   await page.reload();

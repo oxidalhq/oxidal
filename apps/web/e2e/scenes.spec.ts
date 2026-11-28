@@ -10,7 +10,14 @@ import { readFileSync } from 'node:fs';
 import type { MidiMap, Preset, RigControl } from '../src/api';
 import type { RigPublish } from '../src/generated/contract';
 import { sceneRig } from '../src/rigDraft';
-import { expectWorkspaceSection, selectWorkspaceSection } from './display';
+import {
+  chooseBoard,
+  expectWorkspaceSection,
+  minePresetAction,
+  openCapsule,
+  selectWorkspaceSection,
+  useTreeChain,
+} from './display';
 
 /**
  * Set list, Duplicate and scene management against the real daemon: Duplicate leaves "Name copy" outside the set list and opens it
@@ -91,6 +98,29 @@ type Item = {
   origin: string;
   in_set_list?: boolean;
 };
+/**
+ * A scene's own menu: its ⋯ on a wide screen; a phone shows the ⋯ only on
+ * the playing tab, so the menu opens by holding (here, right-clicking) the tab.
+ */
+async function sceneMenu(page: Page, name: string) {
+  const tab = page.getByRole('button', {
+    name: new RegExp(`^Scene \\d+: ${name}$`),
+  });
+  await expect(tab).toBeVisible();
+  const more = page.getByRole('button', { name: `More for scene ${name}` });
+  if (await more.isVisible()) await more.click();
+  // Held at its start, clear of the playing tab's own ⋯.
+  else await tab.click({ button: 'right', position: { x: 6, y: 10 } });
+}
+
+/** Edit scenes is behind the scene row's ⋯ (C2). */
+async function openEditScenes(page: Page) {
+  await page
+    .getByRole('button', { name: 'Scene options', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Edit scenes', exact: true }).click();
+}
+
 async function catalog(request: APIRequestContext) {
   return (await (await request.get('/api/v1/presets/catalog')).json()) as {
     revision: string;
@@ -178,7 +208,10 @@ test('library sections: Duplicate makes "Name copy" in Mine outside the set list
     await page.goto('/#library/mine');
     await page.getByRole('searchbox', { name: 'Search presets' }).fill(name);
     // Mine is paged: on a unit that ran many journeys the row can be later.
-    const row = page.getByRole('button', { name: `More for ${name}` });
+    const row = page.getByRole('button', {
+      name: `Favourite ${name}`,
+      exact: true,
+    });
     // Disabled while a page loads, gone after the last page.
     const more = page.getByRole('button', {
       name: 'Load more',
@@ -189,8 +222,7 @@ test('library sections: Duplicate makes "Name copy" in Mine outside the set list
       await expect(row.or(more).first()).toBeVisible();
       if ((await row.count()) === 0) await more.click();
     }
-    await row.click();
-    await page.getByRole('menuitem', { name: 'Duplicate' }).click();
+    await minePresetAction(page, name, 'Duplicate');
     // Opened stopped: the editor that never changes audio.
     const editor = page.getByRole('dialog', { name: 'Edit without playing' });
     await expect(editor.getByLabel('Name')).toHaveValue(`${name} copy`);
@@ -604,10 +636,7 @@ test('mixed rig authoring: preset switches persist both gestures and release Fre
     expect(assigned.ok(), await assigned.text()).toBe(true);
     await page.goto('/#rig');
     await page.getByRole('button', { name: 'Perform view' }).click();
-    await page
-      .getByRole('combobox', { name: 'On-screen controller layout' })
-      .click();
-    await page.getByRole('option', { name: 'Four switches' }).click();
+    await chooseBoard(page, 'Four switches');
     const edit = page.getByRole('button', { name: 'Edit preset switches' });
     const dialog = page.getByRole('dialog', { name: 'Edit preset switches' });
     await edit.click();
@@ -798,11 +827,7 @@ test('mixed rig authoring: four- and ten-switch Stage follows confirmed scenes a
     await page.goto('/#rig');
     await page.getByRole('button', { name: 'Perform view' }).click();
     const stage = page.getByRole('region', { name: 'Perform' });
-    const layout = stage.getByRole('combobox', {
-      name: 'On-screen controller layout',
-    });
-    await layout.click();
-    await page.getByRole('option', { name: 'Four switches' }).click();
+    await chooseBoard(page, 'Four switches');
     const board = stage.getByRole('group', {
       name: /Footswitches.*4 switches/,
     });
@@ -823,15 +848,21 @@ test('mixed rig authoring: four- and ten-switch Stage follows confirmed scenes a
       stage.getByRole('heading', { name: 'Ambient swell' }),
     ).toBeVisible();
     expect(steps).toBe(1);
-    await stage.getByRole('button', { name: /^Set list:/ }).click();
+    // The set-list steps sit behind the capsule's ⋯ in Perform.
+    await openCapsule(page);
+    await page
+      .getByRole('button', { name: 'Set list and songs', exact: true })
+      .click();
+    await page.getByRole('button', { name: /^Set list:/ }).click();
     const list = page.getByRole('dialog', { name: 'Set list' });
     await list.getByRole('button', { name: '4 · Brown Crunch' }).click();
     await expect(
       stage.getByRole('heading', { name: 'Brown Crunch' }),
     ).toBeVisible();
     expect(jumps).toBe(1);
-    await layout.click();
-    await page.getByRole('option', { name: 'Ten switches' }).click();
+    // Close the capsule's set-list ⋯ again.
+    await page.keyboard.press('Escape');
+    await chooseBoard(page, 'Ten switches');
     const ten = stage.getByRole('group', { name: /Footswitches.*10 switches/ });
     await expect(ten.getByRole('button')).toHaveCount(10);
     await ten.getByRole('button', { name: '3 Lead' }).click();
@@ -933,9 +964,7 @@ test('mixed rig authoring: duplicate a pedal for one saved scene with a checked 
   let saved = first;
   try {
     await page.goto('/#rig');
-    await page
-      .getByRole('button', { name: 'Edit scenes', exact: true })
-      .click();
+    await openEditScenes(page);
     const grid = page.getByRole('dialog', { name: 'Edit scenes' });
     const dialog = page.getByRole('dialog', { name: 'Duplicate TS9 tight' });
     const save = dialog.getByRole('button', { name: 'Duplicate and save' });
@@ -997,9 +1026,7 @@ test('mixed rig authoring: duplicate a pedal for one saved scene with a checked 
     });
     await playing.recall(saved);
     await page.reload();
-    await page
-      .getByRole('button', { name: 'Edit scenes', exact: true })
-      .click();
+    await openEditScenes(page);
     await expect(
       grid.getByRole('button', { name: 'TS9 tight (2) in Chorus' }),
     ).toHaveAttribute('aria-pressed', 'true');
@@ -1016,6 +1043,7 @@ for (const count of [5, 7, 10]) {
     page,
     request,
   }) => {
+    await useTreeChain(page);
     const original = await request.post('/api/v1/presets', {
       data: readFileSync(
         new URL(
@@ -1073,6 +1101,9 @@ for (const count of [5, 7, 10]) {
       const phone = page.viewportSize()!.width < 768;
       const paths = route.locator('.route-path');
       await expect(paths).toHaveCount(phone ? 1 : count);
+      // A tall tree opens at a readable size; fit it to reach its far end.
+      if (!phone)
+        await page.getByRole('button', { name: 'Fit the whole chain' }).click();
       const initialFold = route.getByRole('button', {
         name: phone
           ? new RegExp(`^Show ${count - 1} silent`)
@@ -1085,9 +1116,7 @@ for (const count of [5, 7, 10]) {
         route.getByRole('group', { name: 'Scene 3 Crunch, sounding' }),
       ).toBeVisible();
       if (count === 5) {
-        await page
-          .getByRole('button', { name: 'Edit scenes', exact: true })
-          .click();
+        await openEditScenes(page);
         const grid = page.getByRole('dialog', { name: 'Edit scenes' });
         const chimeInCrunch = grid.getByRole('switch', {
           name: 'Chime branch in Crunch',
@@ -1174,9 +1203,7 @@ test('mixed rig authoring: scene grid saves block On/Off in version 3 and reopen
   const playing = await mockRig(page, request, first);
   try {
     await page.goto('/#rig');
-    await page
-      .getByRole('button', { name: 'Edit scenes', exact: true })
-      .click();
+    await openEditScenes(page);
     const grid = page.getByRole('dialog', { name: 'Edit scenes' });
     const cleanEcho = grid.getByRole('button', {
       name: 'Echo in Clean',
@@ -1188,24 +1215,7 @@ test('mixed rig authoring: scene grid saves block On/Off in version 3 and reopen
     await expect(
       grid.getByRole('button', { name: 'Echo in Lead', exact: true }),
     ).toHaveAttribute('aria-pressed', 'true');
-    const pin = grid.getByRole('button', { name: 'Pin right: Edit scenes' });
-    if (await pin.isVisible()) {
-      await pin.click();
-      const panel = page.getByRole('region', { name: 'Edit scenes tool' });
-      await expect(panel).toHaveAttribute('data-place', 'right');
-      await expect(
-        panel.getByRole('button', { name: 'Echo in Clean' }),
-      ).toHaveAttribute('aria-pressed', 'false');
-      await panel.getByRole('button', { name: 'Close Edit scenes' }).click();
-      await page
-        .getByRole('button', { name: 'Edit scenes', exact: true })
-        .click();
-      await expect(panel).toHaveAttribute('data-place', 'right');
-      await panel
-        .getByRole('button', { name: 'Open as a sheet: Edit scenes' })
-        .click();
-      await expect(cleanEcho).toHaveAttribute('aria-pressed', 'false');
-    }
+    // Edit scenes stays a sheet (the dock holds the C2 tools only).
     const saveScenes = grid.getByRole('button', {
       name: 'Save scenes',
       exact: true,
@@ -1224,9 +1234,7 @@ test('mixed rig authoring: scene grid saves block On/Off in version 3 and reopen
       [{ node: 'echo', value: false }],
     ]);
     await page.reload();
-    await page
-      .getByRole('button', { name: 'Edit scenes', exact: true })
-      .click();
+    await openEditScenes(page);
     await expect(
       page
         .getByRole('dialog', { name: 'Edit scenes' })
@@ -1301,7 +1309,7 @@ test('mixed rig authoring: scenes move with their MIDI bindings and the last sce
       pads.getByRole('button', { name: 'Scene 2: Lead' }),
     ).toBeVisible();
     // Move left from the pad's menu. The binding follows the scene.
-    await page.getByRole('button', { name: 'More for scene Lead' }).click();
+    await sceneMenu(page, 'Lead');
     const menu = page.getByRole('dialog', { name: 'Scene 2: Lead' });
     await expect(
       menu.getByRole('menuitem', { name: 'Move right' }),
@@ -1325,7 +1333,7 @@ test('mixed rig authoring: scenes move with their MIDI bindings and the last sce
     const items = (await catalog(request)).items;
     expect(items.find((i) => i.id === moved)!.name).toBe(name);
     // Delete Clean, then the last scene is refused with the reason.
-    await page.getByRole('button', { name: 'More for scene Clean' }).click();
+    await sceneMenu(page, 'Clean');
     await page
       .getByRole('dialog', { name: 'Scene 2: Clean' })
       .getByRole('menuitem', { name: 'Delete…' })
@@ -1337,7 +1345,7 @@ test('mixed rig authoring: scenes move with their MIDI bindings and the last sce
     await expect(pads.getByRole('button')).toHaveCount(2);
     expect(await bindings(request, playing())).toEqual([['lead', 71]]);
     const last = playing();
-    await page.getByRole('button', { name: 'Scene menu for Lead' }).click();
+    await sceneMenu(page, 'Lead');
     await page
       .getByRole('dialog', { name: 'Scene 1: Lead' })
       .getByRole('menuitem', { name: 'Delete…' })
@@ -1382,7 +1390,7 @@ test('mixed rig authoring: Copy to preset says what copies and refuses presets w
   await mockRig(page, request, source);
   try {
     await page.goto('/#rig');
-    await page.getByRole('button', { name: 'More for scene Lead' }).click();
+    await sceneMenu(page, 'Lead');
     await page
       .getByRole('dialog', { name: 'Scene 2: Lead' })
       .getByRole('menuitem', { name: 'Copy to preset…' })
@@ -1563,7 +1571,7 @@ test('mixed rig authoring: copy one block into a saved scene and refuse a stale 
     return playing;
   };
   const review = async () => {
-    await page.getByRole('button', { name: 'Scene menu for Lead' }).click();
+    await sceneMenu(page, 'Lead');
     await page.getByRole('menuitem', { name: 'Copy block settings…' }).click();
     const dialog = page.getByRole('dialog', { name: 'Copy block settings' });
     await dialog.getByLabel('Destination scene').selectOption('dirt');

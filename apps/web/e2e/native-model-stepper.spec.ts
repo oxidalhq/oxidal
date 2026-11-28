@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import type { AudioState, LocalModel } from '../src/api';
+import { openCapsule } from './display';
 
 const origin = 'a'.repeat(64);
 const second = 'b'.repeat(64);
@@ -286,19 +287,28 @@ test('native global controls stay compact on desktop and phone', async ({
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true);
-    const actionSizes = await page
+    // The Rig's actions sit in the opened capsule (on a phone, its tray).
+    await openCapsule(page);
+    const actions = page
       .getByRole('group', { name: 'Rig actions', exact: true })
-      .getByRole('button')
-      .evaluateAll((buttons) =>
-        buttons.map((button) => {
-          const { width, height } = button.getBoundingClientRect();
-          return { width, height };
-        }),
-      );
+      .getByRole('button');
+    await expect(actions.first()).toBeVisible();
+    const actionSizes = await actions.evaluateAll((buttons) =>
+      buttons.map((button) => {
+        const { width, height } = button.getBoundingClientRect();
+        return { width, height };
+      }),
+    );
     expect(new Set(actionSizes.map(({ height }) => height)).size).toBe(1);
+    // In the capsule a mouse gets its compact height (C2); a touch screen
+    // keeps the 44 px target.
+    const touch = await page.evaluate(
+      () => matchMedia('(pointer: coarse)').matches,
+    );
+    const least = touch ? 44 : 28;
     for (const { width, height } of actionSizes) {
-      expect(width).toBeGreaterThanOrEqual(44);
-      expect(height).toBeGreaterThanOrEqual(44);
+      expect(width).toBeGreaterThanOrEqual(least);
+      expect(height).toBeGreaterThanOrEqual(least);
     }
     await page.screenshot({
       path: testInfo.outputPath(`native-controls-${viewport.width}.png`),

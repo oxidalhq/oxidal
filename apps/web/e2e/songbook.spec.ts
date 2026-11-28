@@ -1,5 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 
+import { openTool } from './display';
+
 async function openSheet(page: Page, title: string) {
   await page.goto('/#library/songbook');
   await page.getByRole('button', { name: new RegExp(`^${title}`) }).click();
@@ -128,8 +130,9 @@ test('songbook dock remembers placement through close, rotation and reload witho
   page,
 }) => {
   await page.goto('/#library/songbook');
+  // The tools are in the capsule's ☰ menu.
   await expect(
-    page.getByRole('button', { name: 'Tools', exact: true }),
+    page.getByRole('button', { name: 'Menu', exact: true }),
   ).toBeVisible();
   const writes: string[] = [];
   page.on('request', (request) => {
@@ -141,61 +144,40 @@ test('songbook dock remembers placement through close, rotation and reload witho
     )
       writes.push(request.url());
   });
-  const open = async () => {
-    await page.getByRole('button', { name: 'Tools', exact: true }).click();
-    await page
-      .getByRole('menuitemcheckbox', { name: 'Chord sheet', exact: true })
-      .click();
-  };
-  await open();
-  await expect(
-    page.getByRole('heading', { name: 'Chord sheet', exact: true }),
-  ).toBeVisible();
+  const original = page.viewportSize()!;
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page
-    .getByRole('button', { name: 'Float: Chord sheet', exact: true })
-    .click();
+  await openTool(page, 'Sheet');
+  // A wide screen docks it at the right, as a tab.
+  const dock = page.getByRole('region', { name: 'Right dock', exact: true });
+  await expect(dock.getByRole('tab', { name: 'Sheet' })).toBeVisible();
+  await dock.getByRole('button', { name: 'Sheet: where to keep it' }).click();
+  await page.getByRole('menuitem', { name: 'Float', exact: true }).click();
   const panel = page.getByRole('region', {
-    name: 'Chord sheet tool',
+    name: 'Sheet, floating',
     exact: true,
   });
-  await expect(panel).toHaveAttribute('data-place', 'float');
-  await panel
-    .getByRole('button', { name: 'Close Chord sheet', exact: true })
-    .click();
-  await open();
-  await expect(panel).toHaveAttribute('data-place', 'float');
-  const floatingLeft = await panel.evaluate(
-    (element) => getComputedStyle(element).left,
-  );
-  const floatingWidth = await panel.evaluate(
-    (element) => getComputedStyle(element).width,
-  );
+  await expect(panel).toBeVisible();
+  const box = (await panel.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(1280);
+  // A phone shows the same tool in its one bottom sheet.
   await page.setViewportSize({ width: 393, height: 852 });
-  await expect(
-    page.getByRole('heading', { name: 'Chord sheet', exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: 'Float: Chord sheet', exact: true }),
-  ).toHaveCount(0);
+  await openTool(page, 'Sheet');
+  const sheet = page.getByRole('dialog');
+  await expect(sheet.getByRole('tab', { name: 'Sheet' })).toBeVisible();
+  await page.keyboard.press('Escape');
   await page.setViewportSize({ width: 1280, height: 800 });
-  await expect(panel).toHaveAttribute('data-place', 'float');
-  await expect(panel).toHaveCSS('left', floatingLeft);
-  await expect(panel).toHaveCSS('width', floatingWidth);
-  const box = await panel.boundingBox();
-  expect(box).not.toBeNull();
-  expect(box!.x).toBeGreaterThanOrEqual(0);
-  expect(box!.x + box!.width).toBeLessThanOrEqual(1280);
+  // This browser keeps where the tool is.
+  await expect(panel).toBeVisible();
   await page.reload();
-  await expect(
-    page.getByRole('region', { name: 'Chord sheet tool', exact: true }),
-  ).toHaveCount(0);
-  await open();
-  await expect(panel).toHaveAttribute('data-place', 'float');
+  await expect(panel).toBeVisible();
+  await panel.getByRole('button', { name: 'Close Sheet', exact: true }).click();
+  await expect(panel).toHaveCount(0);
+  await page.setViewportSize(original);
   expect(writes).toEqual([]);
 });
 
-test('opening and moving backing, tuner and venue tools leaves the device controls alone', async ({
+test('opening and moving the player, tuner and venue tools leaves the device controls alone', async ({
   page,
 }) => {
   const writes: string[] = [];
@@ -209,29 +191,24 @@ test('opening and moving backing, tuner and venue tools leaves the device contro
       writes.push(request.url());
   });
   await page.goto('/#library/songbook');
-  const original = page.viewportSize()!;
-  for (const title of ['Backing', 'Tuner', 'Venue EQ']) {
-    await page.setViewportSize(original);
-    await page.getByRole('button', { name: 'Tools', exact: true }).click();
-    await page
-      .getByRole('menuitemcheckbox', { name: title, exact: true })
+  await page.setViewportSize({ width: 1280, height: 800 });
+  for (const title of ['Player', 'Tuner', 'Venue EQ']) {
+    await openTool(page, title);
+    const dock = page.getByRole('region', { name: 'Right dock', exact: true });
+    await expect(dock.getByRole('tab', { name: title })).toBeVisible();
+    await dock
+      .getByRole('button', { name: `${title}: where to keep it` })
       .click();
-    await expect(
-      page.getByRole('heading', { name: title, exact: true }).first(),
-    ).toBeVisible();
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await page
-      .getByRole('button', { name: 'Float: ' + title, exact: true })
-      .click();
+    await page.getByRole('menuitem', { name: 'Float', exact: true }).click();
     const panel = page.getByRole('region', {
-      name: title + ' tool',
+      name: `${title}, floating`,
       exact: true,
     });
     await expect(panel).toBeVisible();
     await panel
       .getByRole('button', { name: 'Close ' + title, exact: true })
       .click();
-    await expect(panel).toBeHidden();
+    await expect(panel).toHaveCount(0);
   }
   expect(writes).toEqual([]);
 });

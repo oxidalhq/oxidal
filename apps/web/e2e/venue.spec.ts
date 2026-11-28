@@ -6,7 +6,7 @@ import {
   test,
 } from '@playwright/test';
 
-import { setDisplayMode } from './display';
+import { goTo, setDisplayMode } from './display';
 
 /**
  * Sprint 09 venue EQ against the real daemon: profiles, an owned preview,
@@ -83,9 +83,7 @@ test('Levels overview exposes the output controls and guards an unsaved venue ch
 }) => {
   await page.goto('/#levels/overview');
   const output = page.getByRole('region', { name: 'Output controls' });
-  await expect(
-    output.getByRole('button', { name: 'Mono', exact: true }),
-  ).toBeVisible();
+  await expect(output.getByRole('switch', { name: 'Mono' })).toBeVisible();
   const panel = output.getByRole('region', { name: 'Venue EQ' });
   await panel.getByRole('button', { name: 'Raise Gain' }).click();
   await expect(edited(panel)).toBeVisible();
@@ -201,10 +199,7 @@ test('venue EQ asks before leaving an unsaved edit', async ({
   await expect(dialog).toContainText("You're hearing them now.");
   await dialog.getByRole('button', { name: 'Keep editing' }).click();
   await expect(edited(panel)).toBeVisible();
-  await page
-    .getByRole('navigation', { name: 'Instrument navigation' })
-    .getByRole('button', { name: 'Library', exact: true })
-    .click();
+  await goTo(page, 'Library');
   await page
     .getByRole('dialog', { name: 'Unsaved venue edit' })
     .getByRole('button', { name: 'Revert and leave' })
@@ -218,10 +213,7 @@ test('venue EQ guards browser Back and manual section hashes without losing the 
   request,
 }) => {
   await page.goto('/#library/mine');
-  await page
-    .getByRole('navigation', { name: 'Instrument navigation' })
-    .getByRole('button', { name: 'Settings', exact: true })
-    .click();
+  await goTo(page, 'Settings');
   await page
     .getByRole('tablist', { name: 'Audio sections' })
     .getByRole('tab', { name: 'Output', exact: true })
@@ -354,7 +346,7 @@ test('venue EQ on e-paper edits with step buttons', async ({
   await setDisplayMode(page, 'epaper');
   const panel = page.getByRole('region', { name: 'Venue EQ' });
   await panel.getByRole('button', { name: /^HP.*off.*High-pass$/ }).click();
-  await panel.getByRole('button', { name: 'High-pass on' }).click();
+  await panel.getByRole('switch', { name: 'High-pass on' }).click();
   await expect(edited(panel)).toBeVisible();
   await panel.getByRole('button', { name: 'Raise Frequency' }).click();
   await expect(panel.getByLabel('Frequency value')).toHaveText('90 Hz');

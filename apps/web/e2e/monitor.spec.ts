@@ -4,6 +4,8 @@ import { mkdir, readFile } from 'node:fs/promises';
 
 import type { Monitoring } from '../src/api';
 import {
+  goTo,
+  openCapsule,
   selectSettingsSection,
   selectWorkspaceSection,
   setDisplayMode,
@@ -111,43 +113,97 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
     name: 'DSP and system resources',
   });
   const deviceHealth = strip.getByRole('button', { name: /device health/ });
-  const dsp = strip.getByRole('group', { name: /^DSP: 17%/ });
-  await expect(dsp).toBeVisible();
-  await expect(deviceHealth).toHaveCount(0);
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await selectSettingsSection(page, 'Display');
-  const statusMode = page.getByRole('radiogroup', {
-    name: 'Status at the top',
-    exact: true,
-  });
-  await expect(
-    statusMode.getByRole('radio', { name: 'Detailed', exact: true }),
-  ).toBeChecked();
-  await statusMode.getByRole('radio', { name: 'Simple', exact: true }).click();
-  await expect(deviceHealth).toBeVisible();
-  await expect(dsp).toHaveCount(0);
-  await deviceHealth.click();
-  const health = page.getByRole('dialog', { name: 'Device health' });
-  await expect(health.getByText('Clips', { exact: true })).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(health).toHaveCount(0);
-  await statusMode
-    .getByRole('radio', { name: 'Detailed', exact: true })
-    .click();
-  await expect(strip.getByTestId('resource-state')).toHaveText('Audio running');
-  await expect(strip.getByRole('group', { name: /^DSP: 17%/ })).toBeVisible();
-  await expect(
-    strip.getByRole('group', { name: 'CPU: 23%', exact: true }),
-  ).toBeVisible();
-  await expect(
-    strip.getByRole('group', { name: 'RAM: 0.5 GiB, of 4', exact: true }),
-  ).toBeVisible();
-  await expect(
-    strip.getByRole('group', { name: 'Dropouts: —', exact: true }),
-  ).toBeVisible();
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  if (
+    await page
+      .locator('[data-slot="display-bar"], [data-slot="capsule-header"]')
+      .first()
+      .isVisible()
+  ) {
+    // The floating capsule (and the older display bar) keep the health chip in
+    // reach; its popover holds every reading.
+    await expect(strip.getByTestId('resource-state')).toHaveText(
+      'Audio running',
+    );
+    // Simple (the default, as C2): the status shows when the capsule opens.
+    await openCapsule(page);
+    await deviceHealth.click();
+    const health = page.getByRole('dialog', { name: 'Device health' });
+    await expect(
+      health.getByRole('group', { name: /^Processing/ }),
+    ).toBeVisible();
+    await expect(
+      health.getByRole('group', { name: /^Whole device: 23%/ }),
+    ).toBeVisible();
+    await expect(health.getByText('Clips', { exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(health).toHaveCount(0);
+    // Detailed keeps the light and its word in the closed capsule too.
+    await goTo(page, 'Settings');
+    await selectSettingsSection(page, 'Display');
+    const statusMode = page.getByRole('radiogroup', {
+      name: 'Status at the top',
+      exact: true,
+    });
+    await expect(
+      statusMode.getByRole('radio', { name: 'Simple', exact: true }),
+    ).toBeChecked();
+    await statusMode
+      .getByRole('radio', { name: 'Detailed', exact: true })
+      .click();
+    await page.mouse.move(5, 500);
+    await expect(
+      page.locator('[data-slot="floating-capsule"][data-phase="rest"]'),
+    ).toBeVisible();
+    // Audio is running here, so the capsule may fold into its bubble; the
+    // choice itself is what the capsule follows.
+    const capsule = page.locator('[data-slot="floating-capsule"]');
+    await expect(capsule).toHaveAttribute('data-status', 'always');
+    await statusMode
+      .getByRole('radio', { name: 'Simple', exact: true })
+      .click();
+  } else {
+    const dsp = strip.getByRole('group', { name: /^DSP: 17%/ });
+    await expect(dsp).toBeVisible();
+    await expect(deviceHealth).toHaveCount(0);
+    await goTo(page, 'Settings');
+    await selectSettingsSection(page, 'Display');
+    const statusMode = page.getByRole('radiogroup', {
+      name: 'Status at the top',
+      exact: true,
+    });
+    await expect(
+      statusMode.getByRole('radio', { name: 'Detailed', exact: true }),
+    ).toBeChecked();
+    await statusMode
+      .getByRole('radio', { name: 'Simple', exact: true })
+      .click();
+    await expect(deviceHealth).toBeVisible();
+    await expect(dsp).toHaveCount(0);
+    await deviceHealth.click();
+    const health = page.getByRole('dialog', { name: 'Device health' });
+    await expect(health.getByText('Clips', { exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(health).toHaveCount(0);
+    await statusMode
+      .getByRole('radio', { name: 'Detailed', exact: true })
+      .click();
+    await expect(strip.getByTestId('resource-state')).toHaveText(
+      'Audio running',
+    );
+    await expect(strip.getByRole('group', { name: /^DSP: 17%/ })).toBeVisible();
+    await expect(
+      strip.getByRole('group', { name: 'CPU: 23%', exact: true }),
+    ).toBeVisible();
+    await expect(
+      strip.getByRole('group', { name: 'RAM: 0.5 GiB, of 4', exact: true }),
+    ).toBeVisible();
+    await expect(
+      strip.getByRole('group', { name: 'Dropouts: —', exact: true }),
+    ).toBeVisible();
+  }
+  await goTo(page, 'Library');
   await expect(strip).toBeVisible();
-  await page.getByRole('button', { name: 'Levels', exact: true }).click();
+  await goTo(page, 'Levels');
   await expect(page.getByText('Current input verified')).toBeVisible();
   await selectWorkspaceSection(page, 'Levels', 'Diagnostics');
   const panel = page.getByRole('region', {
@@ -291,7 +347,7 @@ test('monitor shows device history after browser reload and exports retained sam
     .toBeGreaterThan(0);
   const initial = await (await request.get('/api/v1/monitor/history')).json();
   await page.goto('/#rig');
-  await page.getByRole('button', { name: 'Levels', exact: true }).click();
+  await goTo(page, 'Levels');
   await selectWorkspaceSection(page, 'Levels', 'Diagnostics');
   await page.getByText('Device history', { exact: true }).click();
   await expect(
@@ -336,7 +392,7 @@ test('monitor shows device history after browser reload and exports retained sam
   );
   await page.getByRole('button', { name: 'Reset view', exact: true }).click();
   await page.reload();
-  await page.getByRole('button', { name: 'Levels', exact: true }).click();
+  await goTo(page, 'Levels');
   await selectWorkspaceSection(page, 'Levels', 'Diagnostics');
   await page.getByText('Device history', { exact: true }).click();
   await expect(
@@ -376,7 +432,7 @@ test('monitor shows redacted control audit with filters and reload persistence',
     })
     .toBe(true);
   await page.goto('/#rig');
-  await page.getByRole('button', { name: 'Levels', exact: true }).click();
+  await goTo(page, 'Levels');
   await selectWorkspaceSection(page, 'Levels', 'Diagnostics');
   const recent = page.getByRole('list', { name: 'Audit log entries' });
   await page.getByRole('radio', { name: 'Refused' }).click();
@@ -449,7 +505,7 @@ test('monitor shows redacted control audit with filters and reload persistence',
     fullPage: true,
   });
   await page.reload();
-  await page.getByRole('button', { name: 'Levels', exact: true }).click();
+  await goTo(page, 'Levels');
   await selectWorkspaceSection(page, 'Levels', 'Diagnostics');
   await page.getByText('Control audit', { exact: true }).click();
   await expect(page.getByRole('list', { name: 'Audit entries' })).toContainText(

@@ -2,13 +2,13 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
 import type { AccountState } from '../src/api';
-import { selectSettingsSection, setDisplayMode } from './display';
+import { goTo, selectSettingsSection, setDisplayMode } from './display';
 
 test('TONE3000 account rejects secret keys before any sign-in request', async ({
   page,
 }) => {
   await page.goto('/#rig');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   await selectSettingsSection(page, 'Accounts');
   const panel = page.getByRole('region', { name: 'TONE3000 account' });
   await expect(panel.getByRole('status')).toHaveText('Not connected');
@@ -79,7 +79,7 @@ test('TONE3000 account offers code sign-in and preserves it through rotation', a
   });
   await page.goto('/#rig');
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   await selectSettingsSection(page, 'Accounts');
   const panel = page.getByRole('region', { name: 'TONE3000 account' });
   await panel.getByLabel('Publishable API key').fill('fixture-publishable');

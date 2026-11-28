@@ -3,7 +3,10 @@ import { expect, type Page, test } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 
 import {
+  currentDestination,
   expectSettingsSection,
+  goTo,
+  mainNavigation,
   selectSettingsSection,
   setDisplayMode,
 } from './display';
@@ -53,6 +56,36 @@ test.beforeEach(async ({ request }) => {
   }
 });
 
+/**
+ * Settings › Audio › Device (C2): Interface and buffers and Configuration
+ * check are disclosures; open both (the second only exists while the device
+ * can list interfaces).
+ */
+async function openAudioDevice(page: Page) {
+  const panel = page.getByRole('region', { name: 'Audio devices' });
+  const refresh = panel.getByRole('button', {
+    name: 'Interface and buffers',
+    exact: true,
+  });
+  await expect(refresh).toBeVisible();
+  if ((await refresh.getAttribute('aria-expanded')) !== 'true')
+    await refresh.click();
+  const check = panel.getByRole('button', {
+    name: 'Configuration check',
+    exact: true,
+  });
+  if (
+    (await check.count()) > 0 &&
+    (await check.getAttribute('aria-expanded')) !== 'true'
+  )
+    await check.click();
+  return {
+    panel,
+    setup: panel.getByRole('region', { name: 'Interface and buffers' }),
+    fields: panel.getByRole('group', { name: 'Configuration check' }),
+  };
+}
+
 test('parallel rig validation and MIDI/web state converge across browsers', async ({
   page,
   context,
@@ -74,7 +107,7 @@ test('parallel rig validation and MIDI/web state converge across browsers', asyn
   await expect(
     page.getByRole('heading', { name: 'Custom routing' }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   await selectSettingsSection(page, 'Maintenance');
   await page.getByText('Rig validation inspector').click();
   await page.getByRole('button', { name: 'Validate rig', exact: true }).click();
@@ -91,7 +124,7 @@ test('parallel rig validation and MIDI/web state converge across browsers', asyn
   await expect(
     second.getByRole('complementary', { name: 'DSP and system resources' }),
   ).toHaveAttribute('data-connected', 'true');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   await selectSettingsSection(page, 'MIDI');
   await page.getByLabel('MIDI value', { exact: true }).fill('127');
   await page.getByRole('button', { name: 'Send MIDI CC' }).click();
@@ -242,9 +275,7 @@ test('a failed editor download keeps navigation and device readback available', 
   const level = page.getByRole('button', { name: 'Adjust NAM A level value' });
   await expect(level).toBeEnabled();
   const value = await level.innerText();
-  await expect(
-    page.getByRole('navigation', { name: 'Instrument navigation' }),
-  ).toBeVisible();
+  await expect(mainNavigation(page)).toBeVisible();
   await page.unroute(editor);
   const downloaded = page.waitForResponse(
     (response) =>
@@ -288,7 +319,7 @@ test('quiet interface has no detected WCAG AA violations', async ({
     path: `../../.local/previews/${testInfo.project.name}-rig.png`,
     fullPage: true,
   });
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   const settings = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
     .analyze();
@@ -330,7 +361,7 @@ test('guitar profiles explain automatic Levels use and guard removal', async ({
   expect(configured.ok()).toBe(true);
 
   await page.goto('/?development=simulator');
-  await page.getByRole('button', { name: 'Guitars', exact: true }).click();
+  await goTo(page, 'Guitars');
   await expect(
     page.getByRole('heading', { name: 'Your guitars', exact: true }),
   ).toBeVisible();
@@ -393,7 +424,7 @@ test('about opens from settings and returns to the sections', async ({
   page,
 }) => {
   await page.goto('/?development=simulator');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   // About is a normal Settings destination, not a header toggle (7.18).
   await expect(
     page
@@ -411,7 +442,7 @@ test('settings navigation stays coherent across narrow and rotated layouts', asy
   page,
 }, testInfo) => {
   await page.goto('/?development=simulator');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   const sections = [
     ['Audio', 'Audio'],
     ['Network', 'Network'],
@@ -497,9 +528,6 @@ test('shared surfaces retain their theme and width contracts', async ({
 }, testInfo) => {
   test.setTimeout(120000);
   await page.goto('/?development=simulator');
-  const navigation = page.getByRole('navigation', {
-    name: 'Instrument navigation',
-  });
   const modes = ['default', 'stage', 'sunlight', 'epaper'] as const;
   const views = ['Rig', 'Guitars', 'Library', 'Levels', 'Settings'] as const;
   const sizes = [
@@ -513,12 +541,8 @@ test('shared surfaces retain their theme and width contracts', async ({
     for (const size of sizes) {
       await page.setViewportSize(size);
       for (const view of views) {
-        await navigation
-          .getByRole('button', { name: view, exact: true })
-          .click();
-        await expect(
-          navigation.getByRole('button', { name: view, exact: true }),
-        ).toHaveAttribute('aria-current', 'page');
+        await goTo(page, view);
+        await expect.poll(() => currentDestination(page)).toBe(view);
         const overflow = await page.evaluate(() =>
           [...document.body.querySelectorAll<HTMLElement>('*')]
             .filter((element) => {
@@ -574,7 +598,7 @@ test('MIDI learn persists a bypass mapping and preset controls reflect both ways
   await expect(
     page.getByRole('complementary', { name: 'DSP and system resources' }),
   ).toHaveAttribute('data-connected', 'true');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   await selectSettingsSection(page, 'MIDI');
   await page.setViewportSize({ width: 1280, height: 720 });
   const midiPanel = await page
@@ -614,7 +638,7 @@ test('MIDI learn persists a bypass mapping and preset controls reflect both ways
     page.getByText(/Current mapping: CC 99 → rig.bypass/),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Send MIDI CC' }).click();
-  await page.getByRole('button', { name: 'Rig', exact: true }).click();
+  await goTo(page, 'Rig');
   await expect(
     page.getByRole('button', { name: 'Bypass on', exact: true }),
   ).toHaveAttribute('aria-pressed', 'true');
@@ -638,7 +662,7 @@ test('MIDI learn persists a bypass mapping and preset controls reflect both ways
   await expect(
     page.getByRole('complementary', { name: 'DSP and system resources' }),
   ).toHaveAttribute('data-connected', 'true');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   await selectSettingsSection(page, 'MIDI');
   await expect(page.getByLabel('CC number', { exact: true })).toHaveValue('99');
   await expect(page.getByLabel('Target', { exact: true })).toHaveText(
@@ -727,7 +751,7 @@ test('owned previews cancel, commit exactly, and preserve independent client cha
   await expect(second.getByTestId('value-nam-a.level')).toHaveText('90%');
   await page.keyboard.press('Escape');
   await page.unroute('**/api/v1/commands');
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await goTo(page, 'Library');
   await expect(second.getByTestId('value-nam-a.level')).toHaveText('73%');
   const state = (await (await request.get('/api/v1/state')).json()) as {
     edit: unknown;
@@ -789,12 +813,8 @@ test('audio inspection keeps the authoring service connected', async ({
   await expect(
     page.getByRole('complementary', { name: 'DSP and system resources' }),
   ).toHaveAttribute('data-connected', 'true');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const panel = page.getByRole('region', { name: 'Audio devices' });
-  const setup = panel.getByRole('region', { name: 'Interface and buffers' });
-  await expect(
-    setup.getByRole('heading', { name: 'Interface and buffers' }),
-  ).toBeVisible();
+  await goTo(page, 'Settings');
+  const { setup } = await openAudioDevice(page);
   await expect(
     setup.getByRole('button', { name: 'Refresh audio devices' }),
   ).toBeEnabled();
@@ -805,7 +825,7 @@ test('audio inspection keeps the authoring service connected', async ({
   await expect(
     page.getByRole('complementary', { name: 'DSP and system resources' }),
   ).toHaveAttribute('data-connected', 'true');
-  await page.getByRole('button', { name: 'Rig', exact: true }).click();
+  await goTo(page, 'Rig');
   await expect(
     page.getByText('Development simulator · no audio.', { exact: true }),
   ).toBeVisible();
@@ -908,28 +928,28 @@ test('audio setup recovers a late USB interface without losing its draft', async
     }),
   );
   await page.goto('/#rig');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const setup = page.getByRole('region', { name: 'Interface and buffers' });
-  await expect(setup.getByLabel('Input', { exact: true })).toBeDisabled();
-  await expect(setup).toContainText('playback-only devices');
-  await setup.getByLabel('Sample rate (Hz)').fill('44100');
-  await setup.getByLabel('Buffer size (samples per period)').fill('256');
+  await goTo(page, 'Settings');
+  const { setup, fields } = await openAudioDevice(page);
+  await expect(fields.getByLabel('Input', { exact: true })).toBeDisabled();
+  await expect(fields).toContainText('playback-only devices');
+  await fields.getByLabel('Sample rate (Hz)').fill('44100');
+  await fields.getByLabel('Buffer size (samples per period)').fill('256');
 
   connected = true;
   await setup.getByRole('button', { name: 'Refresh audio devices' }).click();
 
-  await expect(setup.getByLabel('Input', { exact: true })).toHaveText(
+  await expect(fields.getByLabel('Input', { exact: true })).toHaveText(
     'Jogg USB Audio · hw:CARD=Jogg,DEV=0',
   );
-  await expect(setup.getByLabel('Output', { exact: true })).toHaveText(
+  await expect(fields.getByLabel('Output', { exact: true })).toHaveText(
     'Jogg USB Audio · hw:CARD=Jogg,DEV=0',
   );
-  await expect(setup.getByLabel('Sample rate (Hz)')).toHaveValue('44100');
+  await expect(fields.getByLabel('Sample rate (Hz)')).toHaveValue('44100');
   await expect(
-    setup.getByLabel('Buffer size (samples per period)'),
+    fields.getByLabel('Buffer size (samples per period)'),
   ).toHaveValue('256');
   await expect(
-    setup.getByRole('button', { name: 'Check input and output' }),
+    fields.getByRole('button', { name: 'Check input and output' }),
   ).toBeEnabled();
 });
 
@@ -993,17 +1013,17 @@ test('audio configuration exposes buffers and discards changed or failed checks'
     }),
   );
   await page.goto('/#rig');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const panel = page.getByRole('region', { name: 'Audio devices' });
-  const setup = panel.getByRole('region', { name: 'Interface and buffers' });
+  await goTo(page, 'Settings');
+  const { panel, setup, fields } = await openAudioDevice(page);
+  // The Audio interface row names the interface the check uses.
   await expect(
-    setup.getByRole('heading', { name: 'Interface and buffers' }),
-  ).toBeVisible();
+    panel.getByRole('combobox', { name: 'Interface to check', exact: true }),
+  ).toHaveText('Test interface');
   await expect(
-    setup.getByRole('combobox', { name: 'Input', exact: true }),
+    fields.getByRole('combobox', { name: 'Input', exact: true }),
   ).toHaveText('Test interface · hw:USB,0');
   await expect(
-    setup.getByRole('combobox', { name: 'Output', exact: true }),
+    fields.getByRole('combobox', { name: 'Output', exact: true }),
   ).toHaveText('Test interface · hw:USB,0');
   await expect(panel.getByLabel('Sample rate (Hz)')).toHaveValue('48000');
   await expect(panel.getByLabel('Input channels')).toHaveValue('1');
@@ -1012,15 +1032,19 @@ test('audio configuration exposes buffers and discards changed or failed checks'
     panel.getByLabel('Buffer size (samples per period)'),
   ).toHaveValue('128');
   await expect(panel.getByLabel('Buffer periods')).toHaveValue('3');
-  // Rate and buffer are visible with their queued time, never collapsed (7.29).
-  await expect(setup.getByLabel('Queued audio')).toHaveText(
+  // Rate and buffer show their queued time in Configuration check (C2 makes
+  // it a disclosure under Device; it stays open once opened).
+  await expect(fields.getByLabel('Queued audio')).toHaveText(
     /≈ 8\.0 ms queued \(128 × 3 at 48\.0 kHz\)/,
   );
-  await expect(setup.locator('details')).toHaveCount(0);
   await panel.getByRole('button', { name: 'Check input and output' }).click();
   const checked = panel.getByLabel('Checked audio configuration');
   await expect(checked).toContainText('128 samples × 3 = 8.0 ms');
   await expect(checked).not.toContainText('Not checked');
+  // Channel routing is a disclosure inside Start audio with….
+  await panel
+    .getByRole('button', { name: 'Channel routing', exact: true })
+    .click();
   await expect(panel.getByLabel('Input left channel (1-based)')).toHaveValue(
     '1',
   );
@@ -1058,7 +1082,7 @@ test('native device defaults save independently of the playing tone', async ({
   const initial = await (await request.get(endpoint)).json();
   try {
     await page.goto('/#rig');
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await goTo(page, 'Settings');
     // Engine settings are their own Audio tab, peer of the device (7.17).
     await page
       .getByRole('tab', { name: 'TONE3000 engine', exact: true })
@@ -1089,7 +1113,7 @@ test('native device defaults save independently of the playing tone', async ({
     expect(saved.settings.multi_core).toBe(true);
     expect(saved.settings.parameters.osEnabled).toBe(0);
     await page.reload();
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await goTo(page, 'Settings');
     await page
       .getByRole('tab', { name: 'TONE3000 engine', exact: true })
       .click();
@@ -1116,8 +1140,8 @@ test('rig tuner is accessible outside preset authoring and survives rotation', a
   page,
 }) => {
   await page.goto('/?development=simulator');
-  for (const view of ['Rig']) {
-    await page.getByRole('button', { name: view, exact: true }).click();
+  for (const view of ['Rig'] as const) {
+    await goTo(page, view);
     await page.getByRole('button', { name: 'Open tuner', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Tuner', exact: true });
     await expect(dialog).toBeVisible();

@@ -137,6 +137,8 @@ test('maintenance opens the Songbook JSON restore review', async ({ page }) => {
   ).toHaveAttribute('href', '/api/v1/backup/library');
   await page.getByRole('link', { name: 'Open Songbook' }).click();
   await expect(page).toHaveURL(/#library\/songbook$/);
+  // Restore is in the Backup and restore row under the Songbook.
+  await page.getByRole('button', { name: /^Backup and restore/ }).click();
   const chooseFile = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'Restore Songbook backup…' }).click();
   await (

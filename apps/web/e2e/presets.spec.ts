@@ -19,11 +19,19 @@ import { addSceneEffect } from '../src/sceneEdit';
 import {
   expectSettingsSection,
   expectWorkspaceSection,
+  goTo,
+  openCapsule,
   openComposer,
+  openImportedTone3000,
   openSounds,
+  openTool,
+  rigButton,
+  saveCopyButton,
   selectSettingsSection,
   selectWorkspaceSection,
   setDisplayMode,
+  stopAudio,
+  useTreeChain,
 } from './display';
 
 async function keepAudioSettings(page: Page) {
@@ -192,6 +200,8 @@ test('rig controls follow the actual session without example effects', async ({
   page,
   request,
 }, info) => {
+  // Rotations and full-page pictures take most of 30 s on the e-paper project.
+  test.setTimeout(60000);
   // Presentation contract fixture; the real worker lifecycle below verifies the same boundary.
   const baseline = await (await request.get('/api/v1/audio')).json();
   let audio = {
@@ -236,12 +246,12 @@ test('rig controls follow the actual session without example effects', async ({
     page.getByRole('heading', { name: 'Library', exact: true }),
   ).toBeVisible();
   await page.getByRole('searchbox', { name: 'Search presets' }).fill('Bogner');
-  await page.getByRole('button', { name: 'Rig', exact: true }).click();
+  await goTo(page, 'Rig');
   await page.goBack();
   await expect(
     page.getByRole('searchbox', { name: 'Search presets' }),
   ).toHaveValue('Bogner');
-  await page.getByRole('button', { name: 'Rig', exact: true }).click();
+  await goTo(page, 'Rig');
   audio = {
     ...audio,
     phase: 'running',
@@ -294,15 +304,15 @@ test('rig controls follow the actual session without example effects', async ({
   await expect(page.getByText(/delay|reverb/i)).toHaveCount(0);
   await expect(selectedControl).toBeInViewport();
   await closePhoneEditor();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   await selectSettingsSection(page, 'Display');
-  await page.getByRole('button', { name: 'Rig', exact: true }).click();
+  await goTo(page, 'Rig');
   await reopenPhoneEditor();
   await expect(selectedControl).toBeVisible();
   await closePhoneEditor();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   await expectSettingsSection(page, 'Display');
-  await page.getByRole('button', { name: 'Rig', exact: true }).click();
+  await goTo(page, 'Rig');
   await reopenPhoneEditor();
   await page.screenshot({
     path: info.outputPath('rig-selected-block.png'),
@@ -329,9 +339,14 @@ test('rig controls follow the actual session without example effects', async ({
   await rotatedControl.scrollIntoViewIfNeeded();
   await expect(rotatedControl).toBeInViewport();
   if (!verticalAfterRotation) {
-    const chainBounds = (await rig.locator('.rig-chain-column').boundingBox())!;
+    // The C2 workspace: the chain above, the panel with the selected block
+    // under it at the same width.
+    const chainBounds = (await rig
+      .locator('[data-slot=chain-workspace] > div')
+      .first()
+      .boundingBox())!;
     const inspectorBounds = (await rig
-      .locator('.rig-inspector-column')
+      .getByRole('region', { name: 'Sound controls and the selected block' })
       .boundingBox())!;
     expect(inspectorBounds.y).toBeGreaterThanOrEqual(
       chainBounds.y + chainBounds.height,
@@ -344,8 +359,11 @@ test('rig controls follow the actual session without example effects', async ({
   });
   await page.setViewportSize(initialViewport);
   await closePhoneEditor();
-  const picker = rig.getByRole('button', { name: /^Playing preset/ });
-  const retry = rig.getByRole('button', { name: 'Retry presets' });
+  // The preset picker is in the top bar on a wide screen and in the rig region on a phone.
+  const picker = page.getByRole('button', { name: /^Playing preset/ });
+  // A phone's capsule keeps its row for the name: Retry waits in the
+  // opened capsule's tray.
+  const retry = await rigButton(page, 'Retry presets');
   await expect(retry).toBeVisible();
   const pickerBox = (await picker.boundingBox())!;
   const retryBox = (await retry.boundingBox())!;
@@ -356,40 +374,39 @@ test('rig controls follow the actual session without example effects', async ({
       retryBox.x >= pickerBox.x + pickerBox.width,
   ).toBe(true);
   await expect(retry).toBeEnabled();
-  expect(pickerBox.width).toBeGreaterThan(95);
+  // The capsule's picker is compact: name and ‹ › at the capsule's height;
+  // a phone also fits Retry presets beside them.
+  expect(pickerBox.width).toBeGreaterThan(
+    page.viewportSize()!.width < 768 ? 40 : 60,
+  );
   await expect(rig.getByRole('group', { name: 'Block position' })).toHaveCount(
     0,
   );
-  await rig
-    .getByRole('button', { name: 'Preset actions', exact: true })
-    .click();
+  await (await rigButton(page, 'Preset actions')).click();
   await page
     .getByRole('button', { name: 'Model artwork', exact: true })
     .click();
   await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
-  await expect(rig.locator('.chain-view')).toHaveAttribute(
-    'data-chain-view',
-    'artwork',
-  );
+  // The C2 chain keeps the choice and draws the model pictures in its tiles.
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem('oxidal-chain-view')))
+    .toBe('artwork');
   await expect(
-    rig.locator('[data-slot="chain-block"] [data-slot="led"]'),
-  ).toHaveCount(1);
+    rig.getByRole('group', { name: 'Sounding tone blocks' }),
+  ).toBeVisible();
   await page.screenshot({
     path: info.outputPath('rig-artwork-mobile.png'),
     fullPage: true,
   });
-  await rig
-    .getByRole('button', { name: 'Preset actions', exact: true })
-    .click();
+  await (await rigButton(page, 'Preset actions')).click();
   await page
     .getByRole('button', { name: 'Connected icons', exact: true })
     .click();
   await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
-  await expect(rig.locator('[data-slot="route"]')).toBeVisible();
-  await expect(
-    rig.locator('.chain-view[data-chain-view="artwork"]'),
-  ).toHaveCount(0);
-  await rig.getByRole('button', { name: 'Save copy', exact: true }).click();
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem('oxidal-chain-view')))
+    .toBe('compact');
+  await (await rigButton(page, 'Save copy')).click();
   const saveDialog = page.getByRole('dialog', { name: 'Save copy' });
   await expect(saveDialog.getByLabel('Name for sounding copy')).toHaveValue(
     'Amp only',
@@ -413,7 +430,7 @@ test('rig controls follow the actual session without example effects', async ({
   expect(saves).toBe(0);
   await saveDialog.getByRole('button', { name: 'Close dialog' }).click();
   await page.setViewportSize(portrait);
-  await rig.getByRole('button', { name: 'Save copy', exact: true }).click();
+  await (await rigButton(page, 'Save copy')).click();
   await saveDialog.getByLabel('Name for sounding copy').fill('My live sound');
   await saveDialog.getByRole('button', { name: 'Save a copy' }).click();
   await expect(saveDialog).toHaveCount(0);
@@ -426,9 +443,14 @@ test('rig controls follow the actual session without example effects', async ({
       { target: 'slot-right', position: { lane: 1, index: 2 } },
     ],
   };
-  await rig.getByRole('button', { name: 'Edit', exact: true }).click();
-  await expect(rig.getByRole('button', { name: 'Add block' })).toBeVisible();
-  await rig.getByRole('button', { name: 'Add block' }).click();
+  // Add is on the chain bar (a phone adds from the chain's + tiles).
+  const add = rig.getByRole('button', { name: /^Add a block/ });
+  if (await add.isVisible()) await add.click();
+  else
+    await rig
+      .getByRole('button', { name: /^Empty slot|^Add/ })
+      .first()
+      .click();
   await page
     .getByRole('dialog', { name: 'Add a block' })
     .getByRole('button', { name: 'Add NAM', exact: true })
@@ -486,8 +508,9 @@ test('native preset upload, durable library, exact download and rejected replace
   await expect(
     page.getByRole('complementary', { name: 'DSP and system resources' }),
   ).toHaveAttribute('data-connected', 'true');
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await goTo(page, 'Library');
   await selectWorkspaceSection(page, 'Library', 'TONE3000');
+  await openImportedTone3000(page);
   const fixtureNames = [
     'authored-current.t3kpreset',
     'authored-legacy.t3kpreset',
@@ -501,15 +524,12 @@ test('native preset upload, durable library, exact download and rejected replace
     await page
       .getByLabel('TONE3000 preset file')
       .setInputFiles(fileURLToPath(new URL(name, fixtures)));
-    await page.getByRole('button', { name: 'Import', exact: true }).click();
     await expect(
       page
         .getByRole('status')
         .filter({ hasText: 'The original file is kept unchanged.' }),
     ).toBeVisible();
-    await expect(
-      page.getByRole('button', { name: 'Import', exact: true }),
-    ).toBeEnabled();
+    await expect(page.getByRole('button', { name: /^Import…/ })).toBeEnabled();
   }
   const rowSelector = fixtureIds
     .map((id) => `[data-testid="preset-${id}"]`)
@@ -520,14 +540,13 @@ test('native preset upload, durable library, exact download and rejected replace
   await expect(rows).toHaveCount(2);
   // Importing the same file again keeps one copy.
   await selectWorkspaceSection(page, 'Library', 'TONE3000');
+  await openImportedTone3000(page);
   await page
     .getByLabel('TONE3000 preset file')
     .setInputFiles(fileURLToPath(new URL(fixtureNames[0]!, fixtures)));
-  await page.getByRole('button', { name: 'Import', exact: true }).click();
-  await expect(
-    page.getByRole('button', { name: 'Import', exact: true }),
-  ).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^Import…/ })).toBeEnabled();
   await selectWorkspaceSection(page, 'Library', 'TONE3000');
+  await openImportedTone3000(page);
   await expect(rows).toHaveCount(2);
   // Rows mark only the exception (legacy format); the current-format row has no tag.
   const current = page.locator(`[data-testid="preset-${fixtureIds[0]}"]`);
@@ -552,24 +571,27 @@ test('native preset upload, durable library, exact download and rejected replace
   );
   const second = await context.newPage();
   await second.goto('/');
-  await second.getByRole('button', { name: 'Library', exact: true }).click();
+  await goTo(second, 'Library');
   await selectWorkspaceSection(second, 'Library', 'TONE3000');
+  await openImportedTone3000(second);
   await expect(second.locator(rowSelector)).toHaveCount(2);
   await page.reload();
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await goTo(page, 'Library');
   await selectWorkspaceSection(page, 'Library', 'TONE3000');
+  await openImportedTone3000(page);
   await expect(rows).toHaveCount(2);
   await selectWorkspaceSection(page, 'Library', 'TONE3000');
+  await openImportedTone3000(page);
   await page.getByLabel('TONE3000 preset file').setInputFiles({
     name: 'bad.t3kpreset',
     mimeType: 'application/octet-stream',
     buffer: Buffer.from('corrupt'),
   });
-  await page.getByRole('button', { name: 'Import', exact: true }).click();
   await expect(
     page.getByRole('alert').filter({ hasText: 'Not a TONE3000 preset' }),
   ).toContainText('Not a TONE3000 preset');
   await selectWorkspaceSection(page, 'Library', 'TONE3000');
+  await openImportedTone3000(page);
   await expect(rows).toHaveCount(2);
   expect(await (await request.get('/api/v1/state')).json()).toEqual(before);
   await selectWorkspaceSection(page, 'Library', 'Mine');
@@ -610,10 +632,10 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   const preset = await imported.json();
   await page.goto('/#rig');
   if (test.info().project.name === 'boox-air3c') {
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await goTo(page, 'Settings');
     await setDisplayMode(page, 'epaper');
   }
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await goTo(page, 'Library');
   await openComposer(page, 'tone3000');
   const editor = page.getByRole('region', { name: 'Native preset editor' });
   await expect(editor).toBeVisible();
@@ -940,7 +962,7 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   );
   await expect(page.getByTestId('native-readback')).toHaveText(before!);
   await page.reload();
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await goTo(page, 'Library');
   await openComposer(page, 'tone3000');
   await editor.getByTestId('native-preset-loader').locator('summary').click();
   await chooseSelectValue(
@@ -1003,11 +1025,11 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
     'normalized 0',
   );
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Rig', exact: true }).click();
+  await goTo(page, 'Rig');
   await expect
     .poll(async () => (await (await request.get('/api/v1/native')).json()).edit)
     .toBeNull();
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await goTo(page, 'Library');
   // Library remembers the open editor; otherwise open it from the Presets pane.
   if (!(await page.getByTestId('native-readback').count()))
     await openComposer(page, 'tone3000');
@@ -1215,7 +1237,7 @@ test('playback lifecycle clears a corrupt boot preference without a worker', asy
   );
   await page.goto('/#rig');
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   await selectSettingsSection(page, 'Audio');
   const panel = page.getByRole('region', { name: 'Playback controls' });
   const clear = panel.getByRole('button', {
@@ -1311,10 +1333,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
     expect(recallCopy.ok()).toBe(true);
     running = await recallCopy.json();
     await page.goto('/#rig');
-    await page
-      .getByRole('navigation', { name: 'Instrument navigation' })
-      .getByRole('button', { name: 'Library', exact: true })
-      .click();
+    await goTo(page, 'Library');
     await page
       .getByRole('button', { name: 'Play Live recall test', exact: true })
       .click();
@@ -1670,9 +1689,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
     await expect(
       sounding.getByRole('button', { name: 'Done', exact: true }),
     ).toHaveCount(0);
-    await sounding
-      .getByRole('button', { name: 'Save copy', exact: true })
-      .click();
+    await (await rigButton(page, 'Save copy')).click();
     await sounding
       .getByLabel('Name for sounding copy')
       .fill(`Live ${test.info().project.name}`);
@@ -1704,18 +1721,19 @@ test('playback lifecycle keeps native authoring available after stop and restart
       fullPage: true,
     });
 
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await goTo(page, 'Settings');
     const audio = page.getByRole('region', { name: 'Playback controls' });
-    await expect(audio.getByRole('status')).toContainText('Audio: running');
+    await expect(audio.getByRole('status')).toContainText('Running');
     const currentBuffers = audio.getByRole('region', {
       name: 'Adjust current session',
     });
-    await currentBuffers.getByLabel('Session buffer').click();
-    await page.getByRole('option', { name: '256', exact: true }).click();
     await currentBuffers
-      .getByText('Interface routing', { exact: true })
+      .getByRole('radiogroup', { name: 'Session buffer' })
+      .getByRole('radio', { name: '256', exact: true })
       .click();
-    await currentBuffers.getByLabel('Session input right channel').fill('1');
+    // Interface routing sits under Device; Apply still sends it.
+    await audio.getByText('Interface routing', { exact: true }).click();
+    await audio.getByLabel('Session input right channel').fill('1');
     const appliedResponse = page.waitForResponse(
       (response) =>
         response.url().endsWith('/api/v1/audio/change') &&
@@ -1738,8 +1756,10 @@ test('playback lifecycle keeps native authoring available after stop and restart
       savedLive.configured.preset_id,
     );
     expect(reconfigured.controls).toEqual(savedLive.controls);
-    await expect(audio.getByRole('status')).toContainText('Audio: running');
-    await expect(currentBuffers.getByLabel('Session buffer')).toHaveText('256');
+    await expect(audio.getByRole('status')).toContainText('Running');
+    await expect(
+      currentBuffers.getByRole('radio', { name: '256', exact: true }),
+    ).toHaveAttribute('aria-checked', 'true');
     await expect(
       currentBuffers.getByRole('button', {
         name: 'Apply and restart audio',
@@ -1772,11 +1792,11 @@ test('playback lifecycle keeps native authoring available after stop and restart
     await audio
       .getByRole('button', { name: 'Stop audio', exact: true })
       .click();
-    await expect(audio.getByRole('status')).toHaveText('Audio: stopped');
+    await expect(audio.getByRole('status')).toHaveText('Stopped');
     await expect(
       page.getByRole('complementary', { name: 'DSP and system resources' }),
     ).toHaveAttribute('data-connected', 'true');
-    await page.getByRole('button', { name: 'Library', exact: true }).click();
+    await goTo(page, 'Library');
     await openComposer(page, 'tone3000');
     const editor = page.getByRole('region', { name: 'Native preset editor' });
     await expect(editor).toBeVisible();
@@ -1802,7 +1822,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
     expect(saved.owned.some((p: { id: string }) => p.id === saved.loaded)).toBe(
       true,
     );
-    await page.getByRole('button', { name: 'Rig', exact: true }).click();
+    await goTo(page, 'Rig');
     await expect(
       page.getByRole('heading', { name: 'Audio stopped', exact: true }),
     ).toBeVisible();
@@ -1812,9 +1832,9 @@ test('playback lifecycle keeps native authoring available after stop and restart
     await expect(
       page.getByLabel('Example preset', { exact: true }),
     ).toHaveCount(0);
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await goTo(page, 'Settings');
     await audio.getByRole('button', { name: 'Resume audio' }).click();
-    await expect(audio.getByRole('status')).toContainText('Audio: running');
+    await expect(audio.getByRole('status')).toContainText('Running');
     expect(
       (await (await request.get('/api/v1/audio')).json()).controls,
     ).toEqual(savedLive.controls);
@@ -1833,11 +1853,11 @@ test('playback lifecycle keeps native authoring available after stop and restart
     await expect(
       audio.getByRole('button', { name: 'Stop audio', exact: true }),
     ).toBeEnabled();
-    await expect(audio.getByRole('status')).toContainText('Audio: running');
+    await expect(audio.getByRole('status')).toContainText('Running');
     await audio
       .getByRole('button', { name: 'Stop audio', exact: true })
       .click();
-    await expect(audio.getByRole('status')).toHaveText('Audio: stopped');
+    await expect(audio.getByRole('status')).toHaveText('Stopped');
     expect((await (await request.get('/api/v1/native')).json()).loaded).toBe(
       saved.loaded,
     );
@@ -1860,7 +1880,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
     const originalsBeforeNew = await (
       await request.get('/api/v1/presets')
     ).json();
-    await page.getByRole('button', { name: 'Library', exact: true }).click();
+    await goTo(page, 'Library');
     await openComposer(page, 'effects');
     const newRig = page.getByRole('region', { name: 'Effects authoring' });
     await newRig
@@ -2003,9 +2023,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
       });
     }
     await page.setViewportSize(portrait);
-    await sounding
-      .getByRole('button', { name: 'Save copy', exact: true })
-      .click();
+    await (await rigButton(page, 'Save copy')).click();
     await sounding
       .getByLabel('Name for sounding copy')
       .fill(`New NAM ${test.info().project.name}`);
@@ -2110,12 +2128,13 @@ test('asset artwork stays identifiable offline in portrait and landscape', async
   });
   await page.goto('/#rig');
   if (testInfo.project.name === 'boox-air3c') {
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await goTo(page, 'Settings');
     await setDisplayMode(page, 'epaper');
   }
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await goTo(page, 'Library');
   // The fixture is a TONE3000 original, which lives in the TONE3000 section.
   await selectWorkspaceSection(page, 'Library', 'TONE3000');
+  await openImportedTone3000(page);
   const image = page.getByRole('img', {
     name: 'Shared name · amp',
     exact: true,
@@ -2174,7 +2193,7 @@ test('asset artwork stays identifiable offline in portrait and landscape', async
     fullPage: true,
   });
   await page.reload();
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await goTo(page, 'Library');
   await expect(image).toBeVisible();
   expect(external).toEqual([]);
 });
@@ -2246,7 +2265,7 @@ test('graph authoring creates an installed effect rig and saves live controls', 
   await page.goto('/#rig');
   if (testInfo.project.name === 'boox-air3c')
     await setDisplayMode(page, 'epaper');
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await goTo(page, 'Library');
   await openComposer(page, 'effects');
   const editor = page.getByRole('region', { name: 'Effects authoring' });
   const name = `Practice ${testInfo.project.name}`;
@@ -2302,8 +2321,9 @@ test('graph authoring creates an installed effect rig and saves live controls', 
   await editor
     .getByRole('button', { name: 'Audition preset', exact: true })
     .click();
+  // Save is on the chain bar, as on every Rig.
   await expect(
-    editor.getByRole('button', { name: 'Save preset', exact: true }),
+    editor.getByRole('button', { name: 'Save', exact: true }),
   ).toBeVisible();
   const adjust = editor.getByRole('button', {
     name: `Adjust ${gainLabel} value`,
@@ -2326,12 +2346,12 @@ test('graph authoring creates an installed effect rig and saves live controls', 
     .poll(async () => (await read()).native_values[0].value)
     .toBe(-35);
   // Audio settings must operate on the sounding effects owner, not native playback.
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   await selectSettingsSection(page, 'Audio');
   const playback = page.getByRole('region', { name: 'Playback controls' });
-  await expect(
-    playback.getByRole('heading', { name: 'Effects audio' }),
-  ).toBeVisible();
+  await expect(playback.getByRole('status').first()).toContainText(
+    'Effects audio',
+  );
   await playback
     .getByRole('button', {
       name: 'Start automatically on future boots',
@@ -2346,19 +2366,23 @@ test('graph authoring creates an installed effect rig and saves live controls', 
     .getByRole('button', { name: 'Stop audio', exact: true })
     .click();
   await expect.poll(async () => (await read()).device_owned).toBe(false);
-  await expect(
-    playback.getByRole('heading', { name: 'Effects audio' }),
-  ).toBeVisible();
+  await expect(playback.getByRole('status').first()).toContainText(
+    'Effects audio',
+  );
   await playback
     .getByRole('button', { name: 'Resume audio', exact: true })
     .click();
   await expect
     .poll(async () => (await read()).native_values[0]?.value)
     .toBe(-35);
-  await playback.getByLabel('Session sample rate', { exact: true }).click();
-  await page.getByRole('option', { name: '44.1 kHz', exact: true }).click();
-  await playback.getByLabel('Session buffer', { exact: true }).click();
-  await page.getByRole('option', { name: '256', exact: true }).click();
+  await playback
+    .getByRole('radiogroup', { name: 'Session sample rate', exact: true })
+    .getByRole('radio', { name: '44.1 kHz', exact: true })
+    .click();
+  await playback
+    .getByRole('radiogroup', { name: 'Session buffer', exact: true })
+    .getByRole('radio', { name: '256', exact: true })
+    .click();
   const apply = playback.getByRole('button', {
     name: 'Apply and restart audio',
     exact: true,
@@ -2406,16 +2430,19 @@ test('graph authoring creates an installed effect rig and saves live controls', 
     .getByRole('button', { name: 'Disable boot playback', exact: true })
     .click();
   await expect.poll(async () => (await read()).start_on_boot).toBe(false);
-  await page.getByRole('button', { name: 'Rig', exact: true }).click();
+  await goTo(page, 'Rig');
   await expect(editor).toBeVisible();
-  await expect(editor.getByLabel('Save as', { exact: true })).toHaveValue(name);
-  await editor
+  await editor.getByRole('button', { name: 'Save', exact: true }).click();
+  const saving = page.getByRole('dialog', { name: 'Save preset' });
+  await expect(saving.getByLabel('Save as', { exact: true })).toHaveValue(name);
+  await saving
     .getByRole('button', { name: 'Save preset', exact: true })
     .click();
+  await expect(saving).toHaveCount(0);
   await expect(editor.getByText('Saved copy', { exact: true })).toBeVisible();
   const saved = (await read()).saved_copy;
   expect(saved).toMatch(/^[a-f0-9]{64}$/);
-  await page.getByRole('button', { name: 'Rig', exact: true }).click();
+  await goTo(page, 'Rig');
   await expect(
     page.getByRole('region', { name: 'Effects authoring' }),
   ).toBeVisible();
@@ -2437,10 +2464,10 @@ test('graph authoring creates an installed effect rig and saves live controls', 
     path: testInfo.outputPath('effects-live.png'),
     fullPage: true,
   });
-  await page.getByRole('button', { name: 'Stop audio', exact: true }).click();
+  await stopAudio(page);
   await expect.poll(async () => (await read()).device_owned).toBe(false);
   await page.reload();
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await goTo(page, 'Library');
   await openComposer(page, 'effects');
   await editor.getByRole('button', { name, exact: true }).click();
   await editor
@@ -2858,27 +2885,31 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     contentType: 'image/png',
   });
   // Settings must follow this sounding owner, preserving edits before named Save.
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   const audioSettings = page.getByRole('region', { name: 'Playback controls' });
   await expect(
-    audioSettings.getByRole('heading', { name: 'Now playing' }),
+    audioSettings.getByRole('button', { name: 'Restart audio', exact: true }),
   ).toBeVisible();
   const buffers = audioSettings.getByRole('region', {
     name: 'Adjust current session',
   });
-  await buffers.getByLabel('Session buffer').click();
-  await expect(page.getByRole('option', { name: /^129/ })).toHaveCount(0);
-  await page.keyboard.press('Escape');
+  const bufferChoices = buffers.getByRole('radiogroup', {
+    name: 'Session buffer',
+  });
+  await expect(bufferChoices.getByRole('radio', { name: /^129/ })).toHaveCount(
+    0,
+  );
   await expect(
     buffers.getByRole('button', {
       name: 'Apply and restart audio',
       exact: true,
     }),
   ).toBeDisabled();
-  await buffers.getByLabel('Session buffer').click();
-  await page.getByRole('option', { name: '256', exact: true }).click();
-  await buffers.getByLabel('Session sample rate').click();
-  await page.getByRole('option', { name: '44.1 kHz', exact: true }).click();
+  await bufferChoices.getByRole('radio', { name: '256', exact: true }).click();
+  await buffers
+    .getByRole('radiogroup', { name: 'Session sample rate' })
+    .getByRole('radio', { name: '44.1 kHz', exact: true })
+    .click();
   await buffers
     .getByRole('button', { name: 'Apply and restart audio', exact: true })
     .click();
@@ -2938,12 +2969,11 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     await pendingDocument;
     await route.continue();
   });
-  await page.getByRole('button', { name: 'Rig', exact: true }).click();
-  await expect(
-    rig.getByRole('button', { name: 'Save copy', exact: true }),
-  ).toBeDisabled();
+  await goTo(page, 'Rig');
+  const saveCopy = await saveCopyButton(page);
+  await expect(saveCopy).toBeDisabled();
   releaseDocument();
-  await rig.getByRole('button', { name: 'Save copy', exact: true }).click();
+  await saveCopy.click();
   const nameInput = rig.getByLabel('Preset name', { exact: true });
   const name = `Offline mixed ${info.project.name}`;
   await nameInput.fill(name);
@@ -2953,9 +2983,9 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     rig.getByText('Saved for offline use', { exact: true }),
   ).toBeVisible();
   await expect.poll(async () => (await get()).phase).toBe('running');
-  await rig.getByRole('button', { name: 'Stop audio', exact: true }).click();
+  await stopAudio(page);
   await expect.poll(async () => (await get()).phase).toBe('stopped');
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await goTo(page, 'Library');
   const savedLibrary = page.getByRole('region', {
     name: 'Saved rigs',
     exact: true,
@@ -3079,7 +3109,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   );
   await expect(notice.getByText(warning, { exact: true })).not.toBeVisible();
   await expect(
-    rig.getByRole('button', { name: 'Stop audio', exact: true }),
+    page.getByRole('button', { name: 'Stop audio', exact: true }),
   ).toBeEnabled();
   const recoveryViewport = page.viewportSize()!;
   for (const viewport of [
@@ -3105,7 +3135,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
       fullPage: true,
     });
   }
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   await selectSettingsSection(page, 'Audio');
   await expect(
     page
@@ -3125,7 +3155,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   const originalDocument = await (
     await request.get(`/api/v1/presets/rigs/${managedRevision}`)
   ).json();
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await goTo(page, 'Library');
   await selectWorkspaceSection(page, 'Library', 'Set list');
   const management = page.getByRole('region', {
     name: 'Set list',
@@ -3241,7 +3271,7 @@ for (const layout of ['serial', 'scenes'] as const) {
     await page.goto('/#rig');
     if (info.project.name === 'boox-air3c')
       await setDisplayMode(page, 'epaper');
-    await page.getByRole('button', { name: 'Library', exact: true }).click();
+    await goTo(page, 'Library');
     await openComposer(page, 'effects');
     await page
       .getByRole('button', { name: 'Add saved tone', exact: true })
@@ -3391,7 +3421,7 @@ for (const layout of ['serial', 'scenes'] as const) {
           },
         }),
       );
-      await rig
+      await page
         .getByRole('button', { name: 'More preset actions', exact: true })
         .click();
       await page.getByRole('button', { name: /^MIDI assignments/ }).click();
@@ -3495,7 +3525,7 @@ for (const layout of ['serial', 'scenes'] as const) {
         .getByRole('button', { name: 'Disable MIDI', exact: true })
         .click();
       await expect.poll(async () => (await state()).configured.midi).toBeNull();
-      await rig
+      await page
         .getByRole('button', { name: 'More preset actions', exact: true })
         .click();
       await page.getByRole('button', { name: /^MIDI assignments/ }).click();
@@ -3533,9 +3563,9 @@ for (const layout of ['serial', 'scenes'] as const) {
     expect(savedDoc.manifest.extensions['urn:oxidal:authoring'].labels).toEqual(
       document.manifest.extensions['urn:oxidal:authoring'].labels,
     );
-    await rig.getByRole('button', { name: 'Stop audio', exact: true }).click();
+    await stopAudio(page);
     await expect.poll(async () => (await state()).phase).toBe('stopped');
-    await page.getByRole('button', { name: 'Library', exact: true }).click();
+    await goTo(page, 'Library');
     await playSavedRig(page, name);
     await expect
       .poll(async () => {
@@ -3632,7 +3662,7 @@ test('mixed rig authoring separates guarded amp/cab stages and saves their live 
   const tone = await imported.json();
   await page.goto('/#rig');
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await goTo(page, 'Library');
   await openComposer(page, 'effects');
   await page
     .getByRole('button', { name: 'Add saved tone', exact: true })
@@ -3924,10 +3954,10 @@ test('mixed rig authoring separates guarded amp/cab stages and saves their live 
         (n: { id: string }) => n.id === change.node,
       ).partition.controls[change.parameter],
     ).toBe(change.value);
-  await rig.getByRole('button', { name: 'Stop audio', exact: true }).click();
+  await stopAudio(page);
   await expect.poll(async () => (await state()).phase).toBe('stopped');
   await page.reload();
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await goTo(page, 'Library');
   await playSavedRig(page, name);
   await expect.poll(async () => (await state()).phase).toBe('running');
   expect((await state()).configured.revision).toBe(saved);
@@ -3943,7 +3973,7 @@ test('mixed rig authoring separates guarded amp/cab stages and saves their live 
     ).toBe(change.value);
   await expect(rig).toBeVisible();
   await expect(
-    rig.getByRole('button', { name: 'Stop audio', exact: true }),
+    page.getByRole('button', { name: 'Stop audio', exact: true }),
   ).toBeVisible();
   // Lifecycle invalidation bypasses the BOOX five-second meter poll.
   await expect(page.getByTestId('resource-state')).toHaveText('Audio running', {
@@ -3984,7 +4014,7 @@ test('native editor loads draft structure commands and preserves history', async
   expect(imported.ok()).toBeTruthy();
   const preset = await imported.json();
   await page.goto('/#rig');
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await goTo(page, 'Library');
   await openComposer(page, 'tone3000');
   const editor = page.getByRole('region', { name: 'Native preset editor' });
   await expect(editor).toBeVisible();
@@ -4114,9 +4144,7 @@ test('playback lifecycle applies live chain edits and prepared DSP settings befo
         },
       }),
     );
-    await sounding
-      .getByRole('button', { name: 'Preset actions', exact: true })
-      .click();
+    await (await rigButton(page, 'Preset actions')).click();
     await page.getByRole('button', { name: /^MIDI assignments/ }).click();
     await sounding.getByLabel('MIDI input', { exact: true }).click();
     await page
@@ -4170,9 +4198,7 @@ test('playback lifecycle applies live chain edits and prepared DSP settings befo
           (await (await request.get('/api/v1/audio')).json()).configured.midi,
       )
       .toBeUndefined();
-    await sounding
-      .getByRole('button', { name: 'Preset actions', exact: true })
-      .click();
+    await (await rigButton(page, 'Preset actions')).click();
     await page.getByRole('button', { name: /^MIDI assignments/ }).click();
     const actions = sounding.getByRole('group', { name: 'Live chain actions' });
     await actions
@@ -4194,10 +4220,7 @@ test('playback lifecycle applies live chain edits and prepared DSP settings befo
       .click();
     await expect.poll(count).toBe(2);
     // Engine settings are unit-wide and live in Settings → Audio.
-    await page
-      .getByRole('navigation', { name: 'Instrument navigation' })
-      .getByRole('button', { name: 'Settings', exact: true })
-      .click();
+    await goTo(page, 'Settings');
     await selectSettingsSection(page, 'Audio');
     const settings = page.getByRole('group', {
       name: 'Prepared DSP settings',
@@ -4461,7 +4484,7 @@ test('mixed rig authoring: local NAM and IR collections audition without provide
     .poll(async () => (await get()).control.model_change?.progress.phase)
     .toBe('applied');
   const edited = (await get()).control;
-  await rig.getByRole('button', { name: 'Save copy', exact: true }).click();
+  await (await saveCopyButton(page)).click();
   await rig
     .getByLabel('Preset name', { exact: true })
     .fill('Offline local NAM and IR');
@@ -4490,7 +4513,7 @@ test('mixed rig authoring: local NAM and IR collections audition without provide
     })),
   );
   expect((await get()).control.eq).toEqual(edited.eq);
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   await selectSettingsSection(page, 'Audio');
   const utilities = page.getByRole('region', {
     name: 'Audio monitoring and output test',
@@ -4509,7 +4532,7 @@ test('mixed rig authoring: local NAM and IR collections audition without provide
   expect((await get()).control.controls).toEqual(beforeHost);
   await command({ kind: 'restart' });
   await page.reload();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   await selectSettingsSection(page, 'Audio');
   await expect(
     utilities.getByRole('button', {
@@ -4676,19 +4699,8 @@ test('live model comparison stays open, waits for application and rejects a chan
   await expect(
     picker.getByRole('button', { name: /Clean fixture/ }),
   ).toHaveAttribute('aria-pressed', 'false');
-  if ((page.viewportSize()?.width ?? 0) >= 1024) {
-    await picker
-      .getByRole('button', { name: 'Pin left: Choose model' })
-      .click();
-    const pinned = page.getByRole('region', { name: 'Choose model tool' });
-    await expect(pinned.getByRole('status')).toContainText(
-      'Auditioning Drive fixture',
-    );
-    await pinned
-      .getByRole('button', { name: 'Open as a sheet: Choose model' })
-      .click();
-    expect(assignments).toBe(2);
-  }
+  // The model chooser stays a sheet: the dock beside the chain is for the
+  // Player, Stems, Sheet, Set list, Tuner and Venue EQ (C2).
   audio = { ...audio, session: 'replacement-session' };
   await expect(
     picker.getByRole('button', { name: /Clean fixture/ }),
@@ -4702,6 +4714,11 @@ test('mixed rig authoring presents parallel routing and guarded Save on small sc
   page,
   request,
 }, info) => {
+  test.skip(
+    info.project.name === 'chromium',
+    'The wide screen opens routing from the block box (Routing…); the phone project covers this sheet.',
+  );
+  await useTreeChain(page);
   // Presentation/API contract fixture; no DSP qualification is implied.
   const baseline = await (await request.get('/api/v1/rig-audio')).json();
   const input = {
@@ -4844,7 +4861,9 @@ test('mixed rig authoring presents parallel routing and guarded Save on small sc
     name: 'Block controls',
     exact: true,
   });
-  const title = selected.locator('.rig-sheet-title strong');
+  // The block box names the block beside its picture; the sheet keeps the
+  // name for screen readers only.
+  const title = selected.locator('[data-slot=block-panel-identity] h2');
   const titleBox = (await title.boundingBox())!;
   expect(titleBox.width).toBeGreaterThan(160);
   expect(titleBox.height).toBeLessThan(100);
@@ -4868,7 +4887,8 @@ test('mixed rig authoring presents parallel routing and guarded Save on small sc
     path: info.outputPath('mixed-routing-portrait.png'),
     fullPage: true,
   });
-  await rig.getByRole('button', { name: 'Save copy', exact: true }).click();
+  // Save a copy is in More, outside the rig region.
+  await (await saveCopyButton(page)).click();
   const dialog = page.getByRole('dialog', { name: 'Save copy' });
   await expect(dialog.getByLabel('Preset name')).toHaveValue('Parallel sound');
   state = { ...state, control: { ...state.control, revision: 2 } };
@@ -4877,7 +4897,7 @@ test('mixed rig authoring presents parallel routing and guarded Save on small sc
   ).toBeDisabled();
   await expect(dialog.getByRole('status')).toContainText('The rig changed');
   await dialog.getByRole('button', { name: 'Close dialog' }).click();
-  await rig.getByRole('button', { name: 'Save copy', exact: true }).click();
+  await (await saveCopyButton(page)).click();
   await dialog.getByLabel('Preset name').fill('My parallel sound');
   const viewport = page.viewportSize()!;
   await page.setViewportSize({
@@ -5019,7 +5039,7 @@ test('mixed rig authoring keeps a long selected block name on its own row beside
   await page.goto('/#rig');
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
   const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
-  for (const width of [345, 690, 930]) {
+  for (const width of [345, 690, 760]) {
     await page.setViewportSize({ width, height: 900 });
     await rig
       .getByRole('group', { name: 'Signal chain' })
@@ -5029,28 +5049,25 @@ test('mixed rig authoring keeps a long selected block name on its own row beside
       name: 'Block controls',
       exact: true,
     });
-    const routing = selected.getByRole('group', {
-      name: `Routing for ${long}`,
-    });
-    for (const name of ['Split here', 'Add path', 'Copy path', 'Remove path'])
-      await expect(routing.getByRole('button', { name })).toBeVisible();
-    const title = selected.locator('.rig-sheet-title strong');
-    const titleBox = (await title.boundingBox())!;
-    const toggleBox = (await selected
-      .getByRole('button', { name: 'Hide controls' })
-      .boundingBox())!;
-    const routingBox = (await routing.boundingBox())!;
-    // Its own row, the panel's full width, one line high, never per letter.
-    expect(titleBox.width).toBeGreaterThan(160);
-    // The selected block header uses a half-rem gap at the shared root size.
-    const halfRem = await page.evaluate(
-      () => parseFloat(getComputedStyle(document.documentElement).fontSize) / 2,
-    );
-    expect(toggleBox.x - titleBox.x - titleBox.width).toBeCloseTo(halfRem, 1);
-    expect(titleBox.height).toBeLessThan(48);
-    expect(routingBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
+    // The block box names the block on one truncated line, with its full
+    // name on hover, and keeps its buttons on their own row below.
+    const title = selected.getByRole('heading', { name: long });
+    await expect(title).toBeVisible();
     await expect(title).toHaveCSS('text-overflow', 'ellipsis');
     await expect(title).toHaveAttribute('title', long);
+    const titleBox = (await title.boundingBox())!;
+    expect(titleBox.height).toBeLessThan(48);
+    const more = selected.getByRole('button', { name: 'Routing…' });
+    expect((await more.boundingBox())!.y).toBeGreaterThanOrEqual(
+      titleBox.y + titleBox.height,
+    );
+    // Routing opens from the box's ⋯ button with all four path actions.
+    await more.click();
+    const routing = page.getByRole('group', { name: `Routing for ${long}` });
+    for (const name of ['Split here', 'Add path', 'Copy path', 'Remove path'])
+      await expect(routing.getByRole('button', { name })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(routing).toBeHidden();
     expect(
       await page.evaluate(
         () => window.document.documentElement.scrollWidth <= innerWidth,
@@ -5107,7 +5124,7 @@ test('playback lifecycle distinguishes loading and offers readable buffer choice
     await route.fulfill({ json: audio });
   });
   await page.goto('/#rig');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   await expect(
     page.getByText('Reading audio settings…', { exact: true }),
   ).toBeVisible();
@@ -5117,27 +5134,34 @@ test('playback lifecycle distinguishes loading and offers readable buffer choice
     page.getByRole('button', { name: 'Stop audio', exact: true }),
   ).toBeVisible();
   const group = page.getByRole('region', { name: 'Adjust current session' });
-  const buffer = group.getByRole('combobox', {
+  // The common buffers show side by side (C2), the current one chosen.
+  const buffer = group.getByRole('radiogroup', {
     name: 'Session buffer',
     exact: true,
   });
-  await buffer.click();
-  await page.getByRole('option', { name: '256', exact: true }).click();
+  await expect(
+    buffer.getByRole('radio', { name: '64', exact: true }),
+  ).toHaveAttribute('aria-checked', 'true');
+  await buffer.getByRole('radio', { name: '256', exact: true }).click();
   await expect(group.getByText(/one period 5\.33 ms/)).toBeVisible();
   await expect(
     group.getByRole('button', { name: 'Apply and restart audio' }),
   ).toBeEnabled();
-  await group.getByText('Interface routing', { exact: true }).click();
-  const left = (await group
+  // Interface routing is a disclosure under Device, above the session card.
+  const controls = page.getByRole('region', { name: 'Playback controls' });
+  await controls.getByText('Interface routing', { exact: true }).click();
+  const left = (await controls
     .getByLabel('Session input left channel')
     .boundingBox())!;
-  const right = (await group
+  const right = (await controls
     .getByLabel('Session input right channel')
     .boundingBox())!;
   expect(Math.abs(left.y - right.y)).toBeLessThan(2);
   expect(right.x).toBeGreaterThan(left.x);
   await group.getByRole('button', { name: 'Reset changes' }).click();
-  await expect(buffer).toHaveText('64');
+  await expect(
+    buffer.getByRole('radio', { name: '64', exact: true }),
+  ).toHaveAttribute('aria-checked', 'true');
   await expect(
     group.getByRole('button', { name: 'Apply and restart audio' }),
   ).toBeDisabled();
@@ -5189,13 +5213,14 @@ test('native preset library keeps originals accessible when saved copies cannot 
     await route.continue();
   });
   await page.goto('/#rig');
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await goTo(page, 'Library');
   await expect(page.getByText('Saved copies could not be read.')).toBeVisible();
   await expect(
     page.getByRole('searchbox', { name: 'Search presets' }),
   ).toBeEnabled();
   // Originals live in TONE3000 and stay playable while Mine's copies fail.
   await selectWorkspaceSection(page, 'Library', 'TONE3000');
+  await openImportedTone3000(page);
   await expect(
     page.getByRole('button', { name: 'Play Available original' }),
   ).toBeEnabled();
@@ -5224,7 +5249,7 @@ test('device portrait shared NAM and IR libraries import, search and page indepe
     expect(response.status()).toBe(201);
   }
   await page.goto('/#rig');
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await goTo(page, 'Library');
   await openSounds(page, 'ir');
   await page.getByRole('searchbox', { name: 'Search IRs' }).fill(prefix);
   await expect(page.getByRole('heading', { level: 4 })).toHaveCount(64);
@@ -5454,6 +5479,7 @@ test('device portrait TONE3000 original deletes from its row after a review', as
   expect(imported.ok()).toBe(true);
   const preset = await imported.json();
   await page.goto('/#library/tone3000');
+  await openImportedTone3000(page);
   const row = page.locator(`[data-testid="preset-${preset.sha256}"]`);
   await row.getByRole('button', { name: /^More for / }).click();
   await page.getByRole('menuitem', { name: 'Delete…' }).click();
@@ -5673,7 +5699,7 @@ test('device portrait set-list drag and keyboard order agree with picker and Per
     });
     await route.fulfill({ json: body });
   });
-  await page.getByRole('button', { name: 'Rig', exact: true }).click();
+  await goTo(page, 'Rig');
   await page
     .getByRole('button', { name: /^Playing preset:/ })
     .filter({ hasText: secondName })
@@ -5764,14 +5790,12 @@ test('device portrait preset details edit and category search never recall audio
       commands.push(r.url());
   });
   await page.goto('/#library/tone3000');
+  await openImportedTone3000(page);
   await page
     .getByTestId(`preset-${imported.sha256}`)
     .getByRole('button', { name: /^Details:/ })
     .click();
-  const dialog = page.getByRole('dialog', {
-    name: 'Preset details',
-    exact: true,
-  });
+  const dialog = page.getByRole('dialog').filter({ hasText: 'Preset details' });
   await expect(dialog.getByText('No description yet.')).toBeVisible();
   await dialog
     .getByRole('button', { name: 'Edit details', exact: true })
@@ -5801,9 +5825,7 @@ test('device portrait preset details edit and category search never recall audio
     path: info.outputPath('preset-details.png'),
     fullPage: true,
   });
-  await dialog
-    .getByRole('button', { name: 'Close dialog', exact: true })
-    .click();
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
   await page
     .getByRole('searchbox', { name: 'Search presets', exact: true })
     .fill('neck pickup');
@@ -5822,7 +5844,8 @@ test('device portrait preset details edit and category search never recall audio
     .click();
   await expect(
     page
-      .getByRole('dialog', { name: 'Preset details' })
+      .getByRole('dialog')
+      .filter({ hasText: 'Preset details' })
       .getByText(/Warm neck pickup/),
   ).toBeVisible();
   expect(commands).toEqual([]);
@@ -5871,6 +5894,18 @@ const canvasEffect = (name: string) => ({
   id: name.toLowerCase(),
   name,
 });
+/** Routing opens from the block box's ⋯ button on every screen size. */
+async function openRouting(page: Page, rig: Locator, name: string) {
+  await rig.getByRole('button', { name: 'Routing…' }).click();
+  const routing = page.getByRole('group', { name: `Routing for ${name}` });
+  await expect(routing).toBeVisible();
+  return routing;
+}
+async function closeRouting(page: Page, routing: Locator) {
+  await page.keyboard.press('Escape');
+  await expect(routing).toBeHidden();
+}
+
 type CanvasManifest = {
   oxidal: {
     graph: {
@@ -6063,8 +6098,8 @@ test('rig controls add a searched effect after the native chain', async ({
   );
   await page.goto('/#rig');
   const rig = page.getByRole('region', { name: 'Sounding rig' });
-  await rig.getByRole('button', { name: 'Edit', exact: true }).click();
-  await rig.getByRole('button', { name: 'Add block', exact: true }).click();
+  // Add is on the chain bar, as on a mixed preset.
+  await rig.getByRole('button', { name: /^Add a block/ }).click();
   await page.getByRole('button', { name: 'Effect', exact: true }).click();
   await page.getByRole('searchbox', { name: 'Find an effect' }).fill('echo');
   await expect(page.getByRole('button', { name: 'Add Hall' })).toHaveCount(0);
@@ -6098,6 +6133,10 @@ test('mixed rig authoring splits inside scene lanes and asks before removing a p
   page,
   request,
 }, info) => {
+  test.skip(
+    info.project.name === 'chromium',
+    'The wide screen opens routing from the block box (Routing…); the phone project covers this sheet.',
+  );
   // Adding and splitting on a preset with two scenes; an echo sits after Lead's tone.
   const preset = {
     sha256: 'a'.repeat(64),
@@ -6129,18 +6168,15 @@ test('mixed rig authoring splits inside scene lanes and asks before removing a p
   await page.goto('/#rig');
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
   const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
-  const selected = rig.getByRole('region', {
-    name: 'Block controls',
-    exact: true,
-  });
   await rig.getByRole('button', { name: /^Echo(?: (?:time|lv2))?$/i }).click();
-  const routing = selected.getByRole('group', { name: 'Routing for Echo' });
+  let routing = await openRouting(page, rig, 'Echo');
   await expect(routing).toContainText('Scene 2 · Lead');
   // No hidden routing actions: all four are shown; Split here works here.
   for (const name of ['Split here', 'Add path', 'Copy path', 'Remove path'])
     await expect(routing.getByRole('button', { name })).toBeVisible();
   await routing.getByRole('button', { name: 'Split here' }).click();
   await expect.poll(() => unit.published.length).toBe(1);
+  await closeRouting(page, routing);
   expect(unit.route()).toMatchObject([
     { branches: [['clean'], ['lead', { branches: [['echo'], []] }]] },
   ]);
@@ -6161,6 +6197,7 @@ test('mixed rig authoring splits inside scene lanes and asks before removing a p
   ]);
   // removing a path with effects names the path and how many.
   await rig.getByRole('button', { name: /^Echo(?: (?:time|lv2))?$/i }).click();
+  routing = await openRouting(page, rig, 'Echo');
   await expect(routing).toContainText('Path 1 of 2');
   await routing.getByRole('button', { name: 'Remove path' }).click();
   const confirm = page.getByRole('dialog', { name: 'Remove Path 1' });
@@ -6189,6 +6226,10 @@ test('mixed rig authoring builds a split and changes a level with buttons only o
   page,
   request,
 }, info) => {
+  test.skip(
+    info.project.name === 'chromium',
+    'The wide screen opens routing from the block box (Routing…); the phone project covers this sheet.',
+  );
   // no drag and no sliders; the chain is a numbered list.
   const route: Route = [canvasEffect('Echo'), canvasEffect('Verb')];
   const unit = await mockCanvasUnit(
@@ -6205,29 +6246,28 @@ test('mixed rig authoring builds a split and changes a level with buttons only o
     0,
   );
   await list.getByRole('button', { name: 'Echo', exact: true }).click();
-  const selected = rig.getByRole('region', {
-    name: 'Block controls',
-    exact: true,
-  });
-  await selected.getByRole('button', { name: 'Split here' }).click();
+  let routing = await openRouting(page, rig, 'Echo');
+  await routing.getByRole('button', { name: 'Split here' }).click();
   await expect.poll(() => unit.published.length).toBe(1);
+  await closeRouting(page, routing);
   expect(unit.route()).toMatchObject([{ branches: [['echo'], []] }, 'verb']);
   await expect(list).toContainText('Split, 2 paths');
   await expect(
     list.getByRole('button', { name: 'Add effect to path 2' }),
   ).toBeVisible();
   await list.getByRole('button', { name: 'Echo', exact: true }).click();
+  routing = await openRouting(page, rig, 'Echo');
   await expect(
-    selected.getByLabel('Path 1 level', { exact: true }),
+    routing.getByLabel('Path 1 level', { exact: true }),
   ).toBeHidden();
-  await selected.getByRole('button', { name: 'Lower path 1 level' }).click();
+  await routing.getByRole('button', { name: 'Lower path 1 level' }).click();
   await expect
     .poll(() => unit.writes.map((w) => [w.node.split('-').pop(), w.value]))
     .toEqual([
       ['left', 0.9],
       ['right', 0.9],
     ]);
-  await expect(selected).toContainText('Path 1 level · 90%');
+  await expect(routing).toContainText('Path 1 level · 90%');
   await page.screenshot({
     path: info.outputPath('rig-canvas-epaper.png'),
     fullPage: true,
@@ -6238,6 +6278,10 @@ test('mixed rig authoring moves blocks across paths by keys, buttons and drag', 
   page,
   request,
 }, info) => {
+  test.skip(
+    info.project.name === 'chromium',
+    'The wide screen opens routing from the block box (Routing…); the phone project covers this sheet.',
+  );
   const route: Route = [
     {
       kind: 'split',
@@ -6256,10 +6300,6 @@ test('mixed rig authoring moves blocks across paths by keys, buttons and drag', 
   await page.goto('/#rig');
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
   const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
-  const selected = rig.getByRole('region', {
-    name: 'Block controls',
-    exact: true,
-  });
   const epaper = info.project.name === 'boox-air3c';
   // Keyboard: Alt+Down moves the focused block to the path below.
   if (!epaper) {
@@ -6275,10 +6315,13 @@ test('mixed rig authoring moves blocks across paths by keys, buttons and drag', 
   }
   // Buttons: the same moves without a pointer or keys (and on E-paper).
   await rig.getByRole('button', { name: /^Verb(?: (?:time|lv2))?$/i }).click();
-  await selected
+  let routing = await openRouting(page, rig, 'Verb');
+  await page
+    .getByRole('group', { name: 'Arrange' })
     .getByRole('button', { name: 'Move Verb left', exact: true })
     .click();
   await expect.poll(() => unit.published.length).toBe(epaper ? 1 : 2);
+  await closeRouting(page, routing);
   // Move left from after a split lands at the end of its first path.
   expect(unit.route()).toMatchObject([
     {
@@ -6288,10 +6331,13 @@ test('mixed rig authoring moves blocks across paths by keys, buttons and drag', 
     },
   ]);
   await rig.getByRole('button', { name: /^Verb(?: (?:time|lv2))?$/i }).click();
-  await selected
+  routing = await openRouting(page, rig, 'Verb');
+  await page
+    .getByRole('group', { name: 'Arrange' })
     .getByRole('button', { name: 'Move Verb to the path below', exact: true })
     .click();
   await expect.poll(() => unit.published.length).toBe(epaper ? 2 : 3);
+  await closeRouting(page, routing);
   expect(JSON.stringify(unit.route())).toContain('verb');
   // Drag: a mouse drops a block on the gap nearest the pointer.
   if (info.project.name === 'chromium') {
@@ -6319,6 +6365,11 @@ test('unfolded Rig keeps its signal chain, output controls and block panel insid
   page,
   request,
 }, info) => {
+  test.skip(
+    info.project.name === 'chromium',
+    'The wide screen opens routing from the block box (Routing…); the phone project covers this sheet.',
+  );
+  await useTreeChain(page);
   test.skip(
     info.project.name !== 'chromium',
     'Checks three Fold viewport widths',
@@ -6421,4 +6472,246 @@ test('unfolded Rig keeps its signal chain, output controls and block panel insid
     exact: true,
   });
   await check(sounding, sounding.locator('.native-signal-route'), true);
+});
+
+test('wide screen: the block box opens routing and every control from its own buttons', async ({
+  page,
+  request,
+}, info) => {
+  test.skip(
+    info.project.name !== 'chromium',
+    'Wide screens only; the phone project uses the block sheet.',
+  );
+  const preset = {
+    sha256: 'a'.repeat(64),
+    name: 'Tone',
+    size_bytes: 100,
+  } as Preset;
+  const tone = (id: string, name: string): NativeDraft => ({
+    id,
+    kind: 'native',
+    name,
+    preset,
+    source: { kind: 'original', preset: preset.sha256 },
+  });
+  const scenes = sceneRig(
+    'canvas',
+    'Two scenes',
+    [tone('clean', 'Clean'), tone('lead', 'Lead')],
+    'prof',
+  );
+  const document = {
+    revision: 'canvas-0',
+    manifest: JSON.parse(scenes.manifest_json),
+  };
+  const manifest = JSON.parse(
+    addSceneEffect(document as never, 'lead', canvasEffect('Echo'))
+      .manifest_json,
+  );
+  const unit = await mockCanvasUnit(page, request, manifest, 'lead');
+  await page.goto('/#rig');
+  const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
+  await rig.getByRole('button', { name: /^Echo(?: (?:time|lv2))?$/i }).click();
+  const box = rig.getByRole('region', { name: /Echo controls$/ });
+  await expect(box.getByText('Block on')).toBeVisible();
+  await box.getByRole('button', { name: 'Routing…' }).click();
+  const routing = page.getByRole('dialog', { name: /routing$/ });
+  await expect(
+    routing.getByRole('button', { name: 'Split here' }),
+  ).toBeVisible();
+  await routing.getByRole('button', { name: 'Split here' }).click();
+  await expect.poll(() => unit.published.length).toBe(1);
+  await page.keyboard.press('Escape');
+  await box.getByRole('button', { name: /^All controls/ }).click();
+  const sheet = page.getByRole('dialog', { name: 'Echo' });
+  await expect(sheet.getByRole('button', { name: 'Done' })).toBeVisible();
+  await sheet.getByRole('button', { name: 'Done' }).click();
+  await expect(sheet).toBeHidden();
+});
+
+/**
+ * Buttons that sit on one line share one height, nothing runs off the screen
+ * and no page is wider than the screen, on every main screen. Chain blocks and
+ * their small add buttons are drawings, not button rows, and are left out.
+ */
+test('every main screen keeps buttons on a line the same height and on screen', async ({
+  page,
+  request,
+}, info) => {
+  test.skip(info.project.name === 'boox-air3c', 'E-paper has its own sizes.');
+  const preset = {
+    sha256: 'a'.repeat(64),
+    name: 'Tone',
+    size_bytes: 100,
+  } as Preset;
+  const tone = (id: string, name: string): NativeDraft => ({
+    id,
+    kind: 'native',
+    name,
+    preset,
+    source: { kind: 'original', preset: preset.sha256 },
+  });
+  const scenes = sceneRig(
+    'canvas',
+    'Two scenes',
+    [tone('clean', 'Clean'), tone('lead', 'Lead')],
+    'prof',
+  );
+  const opened = {
+    revision: 'canvas-0',
+    manifest: JSON.parse(scenes.manifest_json),
+  };
+  await mockCanvasUnit(
+    page,
+    request,
+    JSON.parse(
+      addSceneEffect(opened as never, 'lead', canvasEffect('Echo'))
+        .manifest_json,
+    ),
+    'lead',
+  );
+  const faults = async () =>
+    page.evaluate(() => {
+      const found: string[] = [];
+      const name = (el: Element) =>
+        (el.getAttribute('aria-label') || el.textContent || '')
+          .trim()
+          .replace(/\s+/g, ' ')
+          .slice(0, 30);
+      // A segmented switch is one control at its outline's height; its
+      // segments sit inside it. On a touch screen each segment is itself a
+      // 44 px target, so the switch lines up by its segments, not its frame.
+      const all = Array.from(
+        document.querySelectorAll(
+          'button:not([data-slot=segment]), [role=combobox], a[data-slot=button], select, [data-slot=segmented]',
+        ),
+      )
+        .filter(
+          (el) =>
+            !el.closest(
+              // A library row's whole-row button is the row itself, not a
+              // button in a row of buttons.
+              '[role=application], [aria-label="Signal chain"], [aria-label="Scene lanes"], .route-path, [aria-hidden=true], [data-slot=library-row] > button',
+            ),
+        )
+        .map((el) => {
+          const r = el.getBoundingClientRect();
+          const touch =
+            matchMedia('(pointer: coarse)').matches || innerWidth <= 600;
+          const segment =
+            touch && el.matches('[data-slot=segmented]')
+              ? el.querySelector('[data-slot=segment]')?.getBoundingClientRect()
+              : undefined;
+          return {
+            el,
+            r: segment
+              ? new DOMRect(r.x, segment.y, r.width, segment.height)
+              : r,
+          };
+        })
+        .filter(({ r }) => r.width > 0 && r.height > 0)
+        // A button drawn inside another (a tab's own ⋯ menu) is part of it.
+        .filter(
+          (b, _, list) =>
+            !list.some(
+              (o) =>
+                o !== b &&
+                o.r.left <= b.r.left &&
+                o.r.right >= b.r.right &&
+                o.r.top <= b.r.top &&
+                o.r.bottom >= b.r.bottom,
+            ),
+        );
+      for (const { el, r } of all)
+        if (r.right > innerWidth + 1 || r.left < -1)
+          found.push(`off screen: ${name(el)}`);
+      if (document.documentElement.scrollWidth > innerWidth)
+        found.push(`page wider than the screen`);
+      const lines: (typeof all)[] = [];
+      for (const b of all) {
+        const mid = b.r.top + b.r.height / 2;
+        const line = lines.find(
+          (l) => Math.abs(l[0]!.r.top + l[0]!.r.height / 2 - mid) < 4,
+        );
+        if (line) line.push(b);
+        else lines.push([b]);
+      }
+      for (const line of lines) {
+        line.sort((a, b) => a.r.left - b.r.left);
+        let run = [line[0]!];
+        const flush = () => {
+          const heights = run.map((b) => Math.round(b.r.height));
+          if (run.length > 1 && Math.max(...heights) - Math.min(...heights) > 2)
+            found.push(
+              run.map((b, i) => `${name(b.el)}=${heights[i]}`).join(' | '),
+            );
+        };
+        for (const b of line.slice(1)) {
+          const last = run[run.length - 1]!;
+          if (b.r.left - last.r.right <= 24 && b.r.left >= last.r.right - 1)
+            run.push(b);
+          else {
+            flush();
+            run = [b];
+          }
+        }
+        flush();
+      }
+      return found;
+    });
+  // OXIDAL_E2E_SCREENSHOTS=<folder> keeps a picture of each screen checked.
+  const pictures = process.env.OXIDAL_E2E_SCREENSHOTS;
+  const check = async (screen: string) => {
+    await page.waitForTimeout(800);
+    if (pictures)
+      await page.screenshot({
+        path: `${pictures}/${info.project.name}-${screen.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')}.png`,
+      });
+    expect(await faults(), screen).toEqual([]);
+  };
+  await page.goto('/#rig');
+  await check('Rig');
+  // The capsule opened: its pages, search, the device health, Tuner, Save and More.
+  await openCapsule(page);
+  await check('Rig, capsule opened');
+  await page.mouse.move(5, 500);
+  // The chain bar under the chain, and (wider than a phone) the edge lanes.
+  const bar = page.getByRole('toolbar', { name: 'Chain tools', exact: true });
+  await expect(bar).toBeVisible();
+  const phone = (page.viewportSize()?.width ?? 0) < 768;
+  if (!phone)
+    await expect(page.locator('[data-slot=edge-lanes]')).toBeVisible();
+  await bar.getByRole('button', { name: 'Hide panel' }).click();
+  await check('Rig, panel hidden');
+  await bar.getByRole('button', { name: /^Show panel/ }).click();
+  // The dock: Player and Sheet together (a phone's one bottom sheet).
+  await openTool(page, 'Player');
+  if (!phone) await openTool(page, 'Sheet');
+  await page.mouse.move(5, 500);
+  await check('Rig, dock open');
+  if (phone) await page.keyboard.press('Escape');
+  else {
+    // Close them again, so the screens after start as before.
+    await openTool(page, 'Player');
+    await openTool(page, 'Sheet');
+  }
+  await page.mouse.move(5, 500);
+  await page.getByRole('button', { name: 'Perform view', exact: true }).click();
+  await check('Perform');
+  for (const route of [
+    '#guitars',
+    '#levels',
+    '#library',
+    '#settings/essentials/setup',
+    '#settings/audio',
+    '#settings/network',
+    '#settings/midi',
+    '#settings/display',
+    '#settings/device',
+    '#settings/maintenance',
+    '#settings/about',
+  ]) {
+    await page.goto(`/${route}`);
+    await check(route);
+  }
 });

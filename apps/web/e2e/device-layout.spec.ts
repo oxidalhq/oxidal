@@ -2,12 +2,24 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 
-import { selectSettingsSection, setDisplayMode } from './display';
+import {
+  goTo,
+  openCapsule,
+  selectSettingsSection,
+  setDisplayMode,
+} from './display';
 import { horizontalProblems } from './horizontal-layout';
 
 // CSS viewports are representative: Android density, browser chrome and zoom vary.
 // Hardware resolution is not the browser viewport. See README.md for the matrix.
 async function fits(page: Page) {
+  // Measure settled layout: the capsule's parts slide and scale for a moment
+  // after a resize or rotation.
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .every((animation) => animation.playState !== 'running'),
+  );
   const failures = await page.evaluate(() => {
     const problems: string[] = [];
     for (const element of document.querySelectorAll<HTMLElement>(
@@ -15,7 +27,15 @@ async function fits(page: Page) {
     )) {
       // WebKit can retain native select geometry inside a closed disclosure.
       // Such controls are neither rendered nor reachable until it opens.
-      if (!element.checkVisibility()) continue;
+      // Nor are controls that are hidden or faded out, such as the folded
+      // capsule's bubble while the capsule is open.
+      if (
+        !element.checkVisibility({
+          visibilityProperty: true,
+          opacityProperty: true,
+        })
+      )
+        continue;
       const rect = element.getBoundingClientRect();
       if (!rect.width || !rect.height) continue;
       const name =
@@ -176,9 +196,9 @@ test('device portrait and landscape keep controls accessible and preserve a rota
   const landscape = { width: portrait.height, height: portrait.width };
   const epaper = testInfo.project.name === 'boox-air3c';
   if (epaper) {
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await goTo(page, 'Settings');
     await setDisplayMode(page, 'epaper');
-    await page.getByRole('button', { name: 'Rig', exact: true }).click();
+    await goTo(page, 'Rig');
   }
   await expect(page.locator('.masthead select')).toHaveCount(0);
   const parallel = page.getByRole('button', { name: 'Parallel', exact: true });
@@ -206,14 +226,15 @@ test('device portrait and landscape keep controls accessible and preserve a rota
     const navigation = page.getByRole('navigation', {
       name: 'Instrument navigation',
     });
-    const positions = await navigation
-      .getByRole('button')
-      .evaluateAll((buttons) =>
-        buttons.map((button) => ({
-          top: button.getBoundingClientRect().top,
-          height: button.getBoundingClientRect().height,
-        })),
-      );
+    // A wide screen has the display bar instead of the bottom navigation.
+    const positions = (await navigation.isVisible())
+      ? await navigation.getByRole('button').evaluateAll((buttons) =>
+          buttons.map((button) => ({
+            top: button.getBoundingClientRect().top,
+            height: button.getBoundingClientRect().height,
+          })),
+        )
+      : [];
     for (const position of positions) {
       expect(Math.abs(position.top - positions[0]!.top)).toBeLessThan(1);
       expect(Math.abs(position.height - positions[0]!.height)).toBeLessThan(1);
@@ -244,7 +265,7 @@ test('device portrait and landscape keep controls accessible and preserve a rota
         path: `../../.local/previews/devices/${testInfo.project.name}-${orientation}.png`,
         fullPage: true,
       });
-      await page.getByRole('button', { name: 'Settings', exact: true }).click();
+      await goTo(page, 'Settings');
       for (const section of [
         'Audio',
         'Network',
@@ -274,10 +295,10 @@ test('device portrait and landscape keep controls accessible and preserve a rota
           });
         }
       }
-      await page.getByRole('button', { name: 'Library', exact: true }).click();
+      await goTo(page, 'Library');
       await fits(page);
       await accessible(page);
-      await page.getByRole('button', { name: 'Rig', exact: true }).click();
+      await goTo(page, 'Rig');
     });
   }
   if (epaper) {
@@ -292,7 +313,7 @@ test('device portrait and landscape keep controls accessible and preserve a rota
     ).toHaveCSS('transition-duration', '0s');
     await page.setViewportSize({ width: 768, height: 1024 });
     await fits(page);
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await goTo(page, 'Settings');
     await selectSettingsSection(page, 'Display');
     await expect(
       page
@@ -306,7 +327,7 @@ test('device portrait and landscape keep controls accessible and preserve a rota
       'default',
     );
     // A reload reopens the last view (Settings here); return to Rig explicitly.
-    await page.getByRole('button', { name: 'Rig', exact: true }).click();
+    await goTo(page, 'Rig');
     await page.getByRole('button', { name: 'Parallel', exact: true }).waitFor();
   }
 });
@@ -465,7 +486,7 @@ test('stage display modes persist and stay accessible in both orientations', asy
         path: `../../.local/previews/stage/${testInfo.project.name}-${mode}-${orientation}.png`,
         fullPage: true,
       });
-      await page.getByRole('button', { name: 'Settings', exact: true }).click();
+      await goTo(page, 'Settings');
       for (const section of [
         'Audio',
         'Network',
@@ -489,10 +510,10 @@ test('stage display modes persist and stay accessible in both orientations', asy
           });
         }
       }
-      await page.getByRole('button', { name: 'Library', exact: true }).click();
+      await goTo(page, 'Library');
       await fits(page);
       await accessible(page);
-      await page.getByRole('button', { name: 'Rig', exact: true }).click();
+      await goTo(page, 'Rig');
     }
   }
 });
@@ -620,13 +641,8 @@ test('stage display keeps screen awake across views and exposes fullscreen avail
     });
   });
   await page.goto('/#rig');
-  const navigation = page.getByRole('navigation', {
-    name: 'Instrument navigation',
-  });
   const showDisplay = async () => {
-    await navigation
-      .getByRole('button', { name: 'Settings', exact: true })
-      .click();
+    await goTo(page, 'Settings');
     await selectSettingsSection(page, 'Display');
   };
   await showDisplay();
@@ -644,7 +660,7 @@ test('stage display keeps screen awake across views and exposes fullscreen avail
   await expect(
     page.getByRole('status', { name: 'Screen awake status' }),
   ).toHaveText('Screen awake: active');
-  await navigation.getByRole('button', { name: 'Rig', exact: true }).click();
+  await goTo(page, 'Rig');
   await showDisplay();
   await expect(wake).toBeChecked();
   await expect(
@@ -710,29 +726,39 @@ test('stage display navigation retains contrast after touch and hover', async ({
     await mouse.goto('/?development=simulator');
     for (const target of [page, mouse]) {
       const pointer = target === page ? 'touch' : 'mouse';
-      const navigation = target.getByRole('navigation', {
-        name: 'Instrument navigation',
-      });
       for (const mode of ['default', 'stage', 'sunlight', 'epaper'] as const) {
         await setDisplayMode(target, mode);
-        await navigation
-          .getByRole('button', { name: 'Rig', exact: true })
-          .click();
-        for (const label of ['Rig', 'Library']) {
-          await navigation
-            .getByRole('button', { name: label, exact: true })
-            .hover();
+        await goTo(target, 'Rig');
+        // A phone has its navigation along the bottom; wider screens reach
+        // the pages through the floating capsule.
+        const tabs = target.getByRole('navigation', {
+          name: 'Instrument navigation',
+        });
+        const phone = await tabs.isVisible();
+        if (!phone) await openCapsule(target);
+        const navigation = phone
+          ? tabs
+          : target.getByRole('navigation', { name: 'Main menu', exact: true });
+        for (const control of [
+          navigation.getByRole('button', { name: 'Menu', exact: true }),
+          navigation.getByRole('button', { name: 'Rig', exact: true }),
+          navigation.getByRole('button', { name: 'Library', exact: true }),
+        ]) {
+          if (!(await control.isVisible())) continue;
+          await control.hover();
           const result = await new AxeBuilder({ page: target })
-            .include('nav[aria-label="Instrument navigation"]')
+            .include(
+              phone
+                ? 'nav[aria-label="Instrument navigation"]'
+                : '[data-slot="floating-capsule"]',
+            )
             .withRules(['color-contrast'])
             .analyze();
-          await navigation.screenshot({
-            path: testInfo.outputPath(
-              `navigation-${pointer}-${mode}-${label}.png`,
-            ),
-          });
-          expect(result.violations, `${pointer} ${mode}: ${label}`).toEqual([]);
+          expect(result.violations, `${pointer} ${mode}`).toEqual([]);
         }
+        await navigation.screenshot({
+          path: testInfo.outputPath(`navigation-${pointer}-${mode}.png`),
+        });
       }
     }
   } finally {

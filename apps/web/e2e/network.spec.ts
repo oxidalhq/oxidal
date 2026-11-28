@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import type { NetworkCommand, NetworkState } from '../src/api';
-import { selectSettingsSection } from './display';
+import { goTo, selectSettingsSection } from './display';
 
 test('network setup exposes current addresses and the public certificate', async ({
   page,
@@ -287,7 +287,7 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
   await expect(
     page.getByRole('complementary', { name: 'DSP and system resources' }),
   ).toHaveAttribute('data-connected', 'true');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   await selectSettingsSection(page, 'Network');
   const panel = page.getByRole('region', { name: 'Wi-Fi and hotspot' });
   await expect(

@@ -1,11 +1,11 @@
 import { expect, type Locator, test } from '@playwright/test';
 
 import type { DebugCommand, DebugState } from '../src/api';
-import { selectSettingsSection, setDisplayMode } from './display';
+import { goTo, selectSettingsSection, setDisplayMode } from './display';
 
 async function expand(panel: Locator, summary: string) {
-  if ((await panel.locator('details').getAttribute('open')) === null)
-    await panel.getByText(summary, { exact: true }).click();
+  const row = panel.getByRole('button', { name: new RegExp(`^${summary}`) });
+  if ((await row.getAttribute('aria-expanded')) !== 'true') await row.click();
 }
 
 test('debug requires enablement, executes once, cancels and keeps commands out of storage', async ({
@@ -47,7 +47,7 @@ test('debug requires enablement, executes once, cancels and keeps commands out o
     await route.fulfill({ json: state });
   });
   await page.goto('/#rig');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   await selectSettingsSection(page, 'Maintenance');
   const panel = page.getByRole('region', { name: 'Debug console' });
   await expand(panel, 'Debug console');
@@ -64,7 +64,7 @@ test('debug requires enablement, executes once, cancels and keeps commands out o
     '<script>sample output</script>',
   );
   await page.reload();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   await selectSettingsSection(page, 'Maintenance');
   await expand(panel, 'Debug console');
   await panel
@@ -138,7 +138,7 @@ test('interactive terminal reconnects without replaying input and stays usable a
     });
   });
   async function open() {
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await goTo(page, 'Settings');
     await selectSettingsSection(page, 'Maintenance');
     await expand(
       page.getByRole('region', { name: 'Web terminal' }),
@@ -217,7 +217,7 @@ test('interactive terminal reconnects without replaying input and stays usable a
   await expect(
     panel.getByRole('button', { name: 'Start terminal', exact: true }),
   ).toBeEnabled();
-  await page.getByRole('button', { name: 'Rig', exact: true }).click();
+  await goTo(page, 'Rig');
   await expect(page.getByRole('region', { name: 'Web terminal' })).toHaveCount(
     0,
   );
@@ -245,7 +245,7 @@ test('administrator terminal is explicit and mode changes never start a shell', 
     });
   });
   await page.goto('/#rig');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await goTo(page, 'Settings');
   await selectSettingsSection(page, 'Maintenance');
   const panel = page.getByRole('region', { name: 'Web terminal' });
   await expand(panel, 'Interactive terminal');

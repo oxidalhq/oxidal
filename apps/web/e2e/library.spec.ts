@@ -5,8 +5,11 @@ import { readFileSync } from 'node:fs';
 import type { EffectPacks } from '../src/api';
 import { serialRig } from '../src/rigDraft';
 import {
+  currentDestination,
   expectSettingsSection,
   expectWorkspaceSection,
+  minePresetAction,
+  openImportedTone3000,
   openSounds,
   selectSettingsSection,
   selectWorkspaceSection,
@@ -33,6 +36,7 @@ test('library sections have their own links and old links redirect', async ({
   await expectWorkspaceSection(page, 'Library', 'Tones and IRs');
   await expect(page).toHaveURL(/#library\/tones$/);
   await selectWorkspaceSection(page, 'Library', 'TONE3000');
+  await openImportedTone3000(page);
   await expect(page).toHaveURL(/#library\/tone3000$/);
   await page.reload();
   await expectWorkspaceSection(page, 'Library', 'TONE3000');
@@ -52,11 +56,7 @@ test('library sections have their own links and old links redirect', async ({
   await expectWorkspaceSection(page, 'Library', 'DI and reamps');
   // The old Sound Check link still opens the renamed Levels workspace.
   await page.goto('/#monitor');
-  await expect(
-    page
-      .getByRole('navigation', { name: 'Instrument navigation' })
-      .getByRole('button', { name: 'Levels', exact: true }),
-  ).toHaveAttribute('aria-current', 'page');
+  await expect.poll(() => currentDestination(page)).toBe('Levels');
 });
 
 test('library sections keep the Mine search after a reload', async ({
@@ -66,6 +66,7 @@ test('library sections keep the Mine search after a reload', async ({
   const search = page.getByRole('searchbox', { name: 'Search presets' });
   await search.fill('no-such-preset-unique');
   await selectWorkspaceSection(page, 'Library', 'TONE3000');
+  await openImportedTone3000(page);
   const providerSearch = page.getByRole('searchbox', {
     name: 'Search presets',
   });
@@ -253,7 +254,10 @@ test('new preset creates an empty preset of your own without hardware', async ({
   await editor.getByRole('button', { name: 'Save' }).click();
   await expect(editor).toHaveCount(0);
   // Mine is paged: on a device that ran many tests the row can be on a later page.
-  const edited = page.getByText(`${name} edited`, { exact: true });
+  // The row itself; on wide screens the details panel may name it too.
+  const edited = page
+    .getByRole('list', { name: 'presets', exact: true })
+    .getByText(`${name} edited`, { exact: true });
   // Only an enabled button can be clicked: it is disabled while a page loads
   // and gone after the last page.
   const more = page.getByRole('button', {
@@ -272,8 +276,7 @@ test('new preset creates an empty preset of your own without hardware', async ({
   expect(afterEdit.some((p) => p.name === name)).toBe(false);
   expect(audioWrites).toEqual([]);
   // Reopening the edited preset offline shows the saved name.
-  await page.getByRole('button', { name: `More for ${name} edited` }).click();
-  await page.getByRole('menuitem', { name: 'Edit' }).click();
+  await minePresetAction(page, `${name} edited`, 'Edit');
   await expect(
     page
       .getByRole('dialog', { name: 'Edit without playing' })

@@ -27,10 +27,12 @@ test('level actions stay above a long chart on desktop and phone', async ({
     await page.setViewportSize({ width, height: 852 });
     await page.goto('/#levels/loudness');
     const section = page.getByRole('region', { name: 'Even out all' });
-    const chart = section.getByRole('list', { name: 'Preset loudness' });
+    const chart = section.getByRole('figure', {
+      name: 'Loudness after correction',
+    });
     await expect(chart).toBeVisible();
     const top = (await chart.boundingBox())!.y;
-    for (const name of ['Levels', 'Measure all again', 'Reset']) {
+    for (const name of [/^Show each sound/, 'Measure all again', 'Reset']) {
       const button = section.getByRole('button', { name, exact: true });
       const box = (await button.boundingBox())!;
       expect(box.y + box.height).toBeLessThan(top);
@@ -41,6 +43,11 @@ test('level actions stay above a long chart on desktop and phone', async ({
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true);
+    // What the button opens appears right under it, in view.
+    await section.getByRole('button', { name: /^Show each sound/ }).click();
+    const table = section.getByRole('table', { name: 'Measured levels' });
+    await expect(table).toBeInViewport();
     await page.screenshot({ path: info.outputPath(`levels-${width}.png`) });
+    await section.getByRole('button', { name: 'Hide each sound' }).click();
   }
 });

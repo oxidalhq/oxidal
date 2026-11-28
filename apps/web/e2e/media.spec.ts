@@ -5,7 +5,7 @@ import {
   test,
 } from '@playwright/test';
 
-import { expectWorkspaceSection, setDisplayMode } from './display';
+import { expectWorkspaceSection, goTo, setDisplayMode } from './display';
 
 /**
  * Sprint 09 backing player against the real daemon (its own temporary media
@@ -19,7 +19,8 @@ const title = 'tone-44k-mono-vbr';
 
 async function expectBottomPlayerClear(page: Page) {
   const chrome = page.locator('[data-slot=app-bottom]');
-  const player = chrome.getByRole('region', { name: 'Now playing' });
+  // A phone's mini player; wider screens show the track in the capsule.
+  const player = chrome.locator('[data-slot=mini-player]');
   if (!(await player.isVisible())) return;
   await expect
     .poll(async () =>
@@ -65,7 +66,7 @@ async function expectBottomPlayerClear(page: Page) {
     // Read both edges in one frame while the responsive navigation settles.
     const overlap = await navigation.evaluate((nav) => {
       const player = nav.parentElement!.querySelector(
-        '[role="region"][aria-label="Now playing"]',
+        '[data-slot="mini-player"]',
       )!;
       return (
         player.getBoundingClientRect().bottom - nav.getBoundingClientRect().top
@@ -119,17 +120,47 @@ async function importFixture(page: Page) {
   await page.goto('/#library/backing');
   await expectWorkspaceSection(page, 'Library', 'Backing tracks');
   await page.getByLabel('Choose WAV or MP3 files').setInputFiles(fixture);
-  const list = page.getByRole('list', { name: 'Backing list' });
-  await expect(list.getByRole('listitem', { name: title })).toBeVisible({
-    timeout: 20000,
-  });
+  const list = page.getByRole('region', { name: 'Backing tracks' });
+  await expect(
+    list.getByRole('button', { name: `Play ${title}`, exact: true }),
+  ).toBeVisible({ timeout: 20000 });
   await expect(page.getByRole('region', { name: 'Importing' })).toHaveCount(0);
   return list;
 }
 
-/** The mini-player that fits this width (chip, strip or phone bar). */
+/** Opens a track's details in the shared Library list and runs one of its actions. */
+async function trackAction(page: Page, name: string, action: string) {
+  await page
+    .getByRole('region', { name: 'Backing tracks' })
+    .getByRole('button', { name: new RegExp(`^${name}`) })
+    .first()
+    .click();
+  await page.getByRole('button', { name: action, exact: true }).click();
+}
+
+/** The track now playing: the phone's mini player, or the capsule's now-playing part. */
 const nowPlaying = (page: Page) =>
-  page.getByRole('region', { name: 'Now playing' });
+  page
+    .locator('[data-slot="mini-player"], [data-slot="capsule-media"]')
+    .filter({ visible: true });
+
+/** Opens the dock's Player from the track now playing. */
+async function openPlayerTool(page: Page) {
+  const now = nowPlaying(page);
+  const phone = await page.locator('[data-slot="mini-player"]').isVisible();
+  if (phone) await now.locator('button').first().click();
+  else await now.click();
+  return phone
+    ? page.getByRole('dialog')
+    : page.getByRole('region', { name: 'Right dock', exact: true });
+}
+
+/** The full backing player, one step on from the dock's Player. */
+async function openFullPlayer(page: Page) {
+  const tool = await openPlayerTool(page);
+  await tool.getByRole('button', { name: 'Open full player' }).click();
+  return page.getByRole('dialog', { name: 'Backing player' });
+}
 
 test.beforeEach(async ({ request }) => {
   await resetMedia(request);
@@ -143,7 +174,9 @@ test('backing tracks import an MP3 through the device and play needs running aud
   page,
 }) => {
   const list = await importFixture(page);
-  const row = list.getByRole('listitem', { name: title });
+  const row = list
+    .locator('[data-slot=library-row]')
+    .filter({ hasText: title });
   await expect(row).toContainText('Mono · MP3');
   // Nothing is cued yet, so no mini-player.
   await expect(nowPlaying(page)).toHaveCount(0);
@@ -156,7 +189,7 @@ test('backing tracks import an MP3 through the device and play needs running aud
   ).toBeVisible();
   await expect(row.getByText('Cued')).toBeVisible();
   await expect(nowPlaying(page)).toContainText(title);
-  await expect(nowPlaying(page)).toContainText('Ready');
+  await expect(nowPlaying(page)).toContainText('0:00');
 });
 
 test('backing mini-player stays on every page and opens the full player', async ({
@@ -168,25 +201,16 @@ test('backing mini-player stays on every page and opens the full player', async 
       duplicateKeys.push(entry.text());
   });
   const list = await importFixture(page);
-  await list
-    .getByRole('listitem', { name: title })
-    .getByRole('button', { name: `More for ${title}` })
-    .click();
-  await page.getByRole('menuitem', { name: 'Cue' }).click();
+  await list.getByRole('button', { name: `Cue: ${title}` }).click();
   await expect(nowPlaying(page)).toContainText(title);
-  const navigation = page.getByRole('navigation', {
-    name: 'Instrument navigation',
-  });
   for (const destination of [
     'Rig',
     'Guitars',
     'Library',
     'Levels',
     'Settings',
-  ]) {
-    await navigation
-      .getByRole('button', { name: destination, exact: true })
-      .click();
+  ] as const) {
+    await goTo(page, destination);
     await expect(nowPlaying(page)).toBeVisible();
     await expect(nowPlaying(page)).toContainText(title);
     await expectBottomPlayerClear(page);
@@ -213,10 +237,7 @@ test('backing mini-player stays on every page and opens the full player', async 
   await page.reload();
   await expect(nowPlaying(page)).toContainText(title);
   const before = page.url();
-  await nowPlaying(page)
-    .getByRole('button', { name: new RegExp(`Open backing player: ${title}`) })
-    .click();
-  const sheet = page.getByRole('dialog', { name: 'Backing player' });
+  const sheet = await openFullPlayer(page);
   await expect(sheet).toBeVisible();
   for (const viewport of [
     original,
@@ -270,18 +291,16 @@ test('backing tracks rename and delete, and say why a playing track stays', asyn
   page,
 }) => {
   const list = await importFixture(page);
-  const more = (name: string) =>
-    list
-      .getByRole('listitem', { name })
-      .getByRole('button', { name: `More for ${name}` });
-  await more(title).click();
-  await page.getByRole('menuitem', { name: 'Rename' }).click();
+  await trackAction(page, title, 'Rename');
   const rename = page.getByRole('dialog', { name: 'Rename track' });
   await rename.getByLabel('Name').fill('Rehearsal 01');
   await rename.getByRole('button', { name: 'Save' }).click();
   await expect(rename).toHaveCount(0);
+  // A phone shows the details over the list: close them to see the row.
+  if (await page.getByRole('dialog').count())
+    await page.keyboard.press('Escape');
   await expect(
-    list.getByRole('listitem', { name: 'Rehearsal 01' }),
+    list.getByRole('button', { name: 'Play Rehearsal 01', exact: true }),
   ).toBeVisible();
 
   await page.route('**/api/v1/media/assets/*', async (route) => {
@@ -294,8 +313,7 @@ test('backing tracks rename and delete, and say why a playing track stays', asyn
       },
     });
   });
-  await more('Rehearsal 01').click();
-  await page.getByRole('menuitem', { name: 'Delete…' }).click();
+  await trackAction(page, 'Rehearsal 01', 'Delete…');
   const confirm = page.getByRole('dialog', { name: 'Delete “Rehearsal 01”?' });
   await confirm.getByRole('button', { name: 'Delete' }).click();
   await expect(confirm.getByRole('alert')).toHaveText(
@@ -304,8 +322,10 @@ test('backing tracks rename and delete, and say why a playing track stays', asyn
   await page.unroute('**/api/v1/media/assets/*');
   await confirm.getByRole('button', { name: 'Delete' }).click();
   await expect(confirm).toHaveCount(0);
-  await expect(list).toHaveCount(0);
-  await expect(page.getByText('No backing tracks yet.')).toBeVisible();
+  if (await page.getByRole('dialog').count())
+    await page.keyboard.press('Escape');
+  await expect(list.getByRole('button', { name: /^Play / })).toHaveCount(0);
+  await expect(page.getByText('No backing tracks yet')).toBeVisible();
 });
 
 test('backing player shows Playing with Pause and Stop track from the device stream', async ({
@@ -357,12 +377,17 @@ test('backing player shows Playing with Pause and Stop track from the device str
   await page.goto('/#rig');
   const bar = nowPlaying(page);
   await expect(bar).toContainText('Rehearsal 01');
-  await expect(bar).toContainText(/1:1\d \/ 3:42/);
-  await expect(bar).toContainText('Track continued after a 0.6 s gap');
-  await expect(bar.getByRole('button', { name: 'Pause' })).toBeVisible();
-  await bar.getByRole('button', { name: 'Stop track' }).click();
-  await expect(bar).toContainText('0:00 / 3:42');
-  await expect(bar).toContainText('Ready');
+  await expect(bar).toContainText(/1:1\d/);
+  // The dock's Player has the transport and says why the track moved on.
+  const tool = await openPlayerTool(page);
+  await expect(tool).toContainText('Track continued after a 0.6 s gap');
+  await expect(
+    tool.getByRole('button', { name: 'Pause', exact: true }),
+  ).toBeVisible();
+  await tool.getByRole('button', { name: 'Stop track' }).click();
+  await expect(
+    tool.getByRole('button', { name: 'Play', exact: true }),
+  ).toBeVisible();
   expect(commands).toEqual([
     expect.objectContaining({
       origin: 'ui',
@@ -431,19 +456,14 @@ test('backing player on e-paper uses the bottom bar, words and step buttons', as
   page,
 }) => {
   const list = await importFixture(page);
-  await list
-    .getByRole('listitem', { name: title })
-    .getByRole('button', { name: `More for ${title}` })
-    .click();
-  await page.getByRole('menuitem', { name: 'Cue' }).click();
+  await list.getByRole('button', { name: `Cue: ${title}` }).click();
   await setDisplayMode(page, 'epaper');
   const bar = nowPlaying(page);
-  await expect(bar).toContainText('Ready');
-  // The shared bottom area keeps the player above phone navigation and clear
-  // of scrollable content; on wide screens it contains just the player.
+  await expect(bar).toContainText('0:00');
+  // The shared bottom area keeps the phone's mini player above its
+  // navigation and clear of scrollable content.
   await expectBottomPlayerClear(page);
-  await bar.getByRole('button', { name: /Open backing player/ }).click();
-  const sheet = page.getByRole('dialog', { name: 'Backing player' });
+  const sheet = await openFullPlayer(page);
   await expect(sheet.getByRole('slider')).toHaveCount(0);
   await expect(sheet).toContainText('READY · Position 0:00');
   for (const label of ['Previous', 'Back 10 s', 'Play', 'Fwd 10 s', 'Next'])
@@ -486,13 +506,7 @@ test('backing click level follows two viewers without replacing the timing or lo
   const second = await context.newPage();
   try {
     await second.goto('/#rig');
-    for (const viewer of [page, second]) {
-      await nowPlaying(viewer)
-        .getByRole('button', {
-          name: new RegExp(`Open backing player: ${title}`),
-        })
-        .click();
-    }
+    for (const viewer of [page, second]) await openFullPlayer(viewer);
     const knob = (viewer: Page) =>
       viewer.getByRole('slider', { name: 'Click level' });
     await expect(knob(second)).toHaveAttribute('aria-valuenow', '-18');
