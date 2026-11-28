@@ -16,7 +16,8 @@ const toggleVariants = cva(
   {
     variants: {
       size: {
-        sm: 'h-[max(36px,2.25rem)] px-3 text-sm',
+        xs: 'h-control-xs px-2 text-sm [&_svg]:size-4',
+        sm: 'h-control px-3 text-sm',
         md: 'min-h-touch px-4 text-sm',
         lg: 'min-h-13 px-5 text-md',
         icon: 'size-touch p-0',

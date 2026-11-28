@@ -265,6 +265,10 @@
   --spacing-page: clamp(0.75rem, 2vw, 1.5rem);
   --spacing-panel: clamp(0.75rem, 1.5vw, 1.125rem);
   --spacing-touch: max(44px, 2.75rem);
+  /* Every small control (button, select, field, toggle) shares this height. */
+  --spacing-control: max(36px, 2.25rem);
+  /* Controls in a slim bar on a fine pointer; touch keeps --spacing-touch. */
+  --spacing-control-xs: max(28px, 1.75rem);
 
   /* Radius: one 4px radius; pads and tiles use 8px. */
   --radius-*: initial;
@@ -476,4 +480,36 @@
   :is(:root, .display-sample)[data-display='epaper'] {
     --touch-target: max(48px, 3rem);
   }
+}
+
+/*
+ * Anything drawn on the ink masthead keeps its normal look by remapping the
+ * colours it uses to the faceplate pair. Menus that open into the page stay
+ * on the page colours.
+ */
+.on-enclosure {
+  --background: var(--enclosure);
+  --foreground: var(--enclosure-foreground);
+  --card: var(--enclosure);
+  --card-foreground: var(--enclosure-foreground);
+  --border: var(--enclosure-border);
+  --input: var(--enclosure-border);
+  --muted: color-mix(
+    in srgb,
+    var(--enclosure-foreground) 12%,
+    var(--enclosure)
+  );
+  --muted-foreground: color-mix(
+    in srgb,
+    var(--enclosure-foreground) 70%,
+    var(--enclosure)
+  );
+  --accent: var(--enclosure-border);
+  --accent-foreground: var(--enclosure-foreground);
+  --secondary: var(--enclosure-border);
+  --secondary-foreground: var(--enclosure-foreground);
+  --primary: var(--enclosure-foreground);
+  --primary-foreground: var(--enclosure);
+  --wire: color-mix(in srgb, var(--enclosure-foreground) 45%, var(--enclosure));
+  color: var(--enclosure-foreground);
 }

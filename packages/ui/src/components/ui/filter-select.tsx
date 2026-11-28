@@ -37,7 +37,7 @@ export function FilterSelect({
       <SelectTrigger
         aria-label={label}
         className={cn(
-          'h-9 w-auto min-w-36',
+          'h-control w-auto min-w-36',
           value !== base && 'border-foreground',
           className,
         )}

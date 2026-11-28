@@ -4,6 +4,7 @@ import { expect, userEvent, within } from 'storybook/test';
 import { Library } from './library';
 import { Perform } from './perform';
 import { Rig } from './rig';
+import { RigScreen } from './rig-shell';
 import { Screen } from './shell';
 
 /**
@@ -20,15 +21,15 @@ export default meta;
 export const RigPlaying: StoryObj = {
   name: 'Rig · playing',
   render: () => (
-    <Screen destination="rig">
-      <Rig />
-    </Screen>
+    <RigScreen>
+      <Rig chainView="map" className="min-h-0 flex-1" />
+    </RigScreen>
   ),
 };
 
 RigPlaying.play = async ({ canvasElement }) => {
   const canvas = within(canvasElement);
-  const switcher = within(canvas.getByRole('group', { name: 'Switch preset' }));
+  const switcher = within(canvas.getByRole('group', { name: 'Preset' }));
   await expect(
     switcher.getByRole('button', { name: 'Previous preset' }),
   ).toBeDisabled();
@@ -41,7 +42,7 @@ RigPlaying.play = async ({ canvasElement }) => {
   await expect(
     canvas.queryByRole('button', { name: 'Edit Wet switch' }),
   ).toBeNull();
-  const current = within(canvas.getByRole('group', { name: 'Switch preset' }));
+  const current = within(canvas.getByRole('group', { name: 'Preset' }));
   await expect(
     current.getByRole('button', { name: 'Next preset: Parallel amps' }),
   ).toBeEnabled();
@@ -51,9 +52,18 @@ RigPlaying.play = async ({ canvasElement }) => {
   await expect(
     canvas.getByRole('heading', { name: 'Rhythm section' }),
   ).toBeVisible();
-  await userEvent.click(
-    canvas.getByRole('button', { name: 'Playing preset: Rhythm section' }),
-  );
+  // Search finds a preset by name: in the preset row, or its ⋯ menu on a phone.
+  const page = within(canvasElement.ownerDocument.body);
+  const search = canvas.queryByRole('button', { name: 'Search' });
+  if (search) await userEvent.click(search);
+  else {
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'More preset actions' }),
+    );
+    await userEvent.click(
+      await page.findByRole('menuitem', { name: 'Search' }),
+    );
+  }
   const dialog = within(
     within(canvasElement.ownerDocument.body).getByRole('dialog', {
       name: 'Choose a preset',
@@ -72,18 +82,18 @@ RigPlaying.play = async ({ canvasElement }) => {
 export const RigDetailedStatus: StoryObj = {
   name: 'Rig · detailed status strip',
   render: () => (
-    <Screen destination="rig" status="detailed">
-      <Rig />
-    </Screen>
+    <RigScreen status="detailed">
+      <Rig chainView="map" className="min-h-0 flex-1" />
+    </RigScreen>
   ),
 };
 
 export const RigNoAudio: StoryObj = {
   name: 'Rig · audio unavailable',
   render: () => (
-    <Screen destination="rig" playing={null}>
+    <RigScreen>
       <Rig audio={false} />
-    </Screen>
+    </RigScreen>
   ),
 };
 

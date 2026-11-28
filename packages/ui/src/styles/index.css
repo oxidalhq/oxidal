@@ -17,6 +17,11 @@ body,
   -webkit-font-smoothing: antialiased;
 }
 
+/* Something scrolled into view stops below the sticky header and status strip, not behind them. */
+html {
+  scroll-padding-top: calc(8rem + var(--safe-top, 0px));
+}
+
 @layer base {
   :where(
     button:not(:disabled),
