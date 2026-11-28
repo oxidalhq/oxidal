@@ -39,6 +39,11 @@ export const PRESETS: LibraryItem[] = [
     title: 'Rhythm section',
     caption: '4 full-rig NAM captures · 4 scenes',
     about: 'One full-rig capture per scene, with TS9 drive on Lead and Dirt.',
+    // Each capture's picture: the artwork view shows them as one mosaic.
+    artworks: ['Clean', 'Crunch', 'Lead', 'Dirt', 'TS9'].map((name, i) => ({
+      src: i % 2 ? '/examples/plugin-art.svg' : '/examples/amp-head.svg',
+      title: name,
+    })),
     badge: { text: 'Playing', tone: 'live' },
     chain: CAPTURE_ROUTE,
     facts: [

@@ -28,6 +28,7 @@ import { Caption } from '../components/ui/text';
 import { Toggle } from '../components/ui/toggle';
 import { glyphForBlock } from '../lib/block-glyphs';
 import { cn } from '../lib/cn';
+import { ArtworkMosaic } from '../widgets/artwork-mosaic';
 import { useMedia } from '../lib/use-media';
 import { BlockGlyph } from '../widgets/block-glyph';
 import {
@@ -49,6 +50,8 @@ export type LibraryItem = {
   caption?: string;
   kind?: BlockKind;
   artwork?: string;
+  /** Every model's picture: the artwork view draws them as one mosaic cover. */
+  artworks?: { src: string; title: string }[];
   badge?: LibraryBadge;
   /** More status chips after the first: Ready, Unsaved, In set list #2. */
   badges?: LibraryBadge[];
@@ -659,7 +662,9 @@ export function LibraryList({
                   )}
                 >
                   <span className="grid aspect-square w-full place-items-center overflow-hidden rounded-pad border border-border bg-card">
-                    {item.artwork ? (
+                    {item.artworks?.length ? (
+                      <ArtworkMosaic sources={item.artworks} />
+                    ) : item.artwork ? (
                       <img
                         src={item.artwork}
                         alt=""
