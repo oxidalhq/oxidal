@@ -6162,7 +6162,7 @@ test('mixed rig authoring splits inside scene lanes and asks before removing a p
   await page.goto('/#rig');
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
   const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
-  await rig.getByRole('button', { name: /^Echo(?: (?:time|lv2))?$/i }).click();
+  await rig.getByRole('button', { name: /^Echo(?: (?:time|lv2|Delay · Reverb))?$/i }).click();
   let routing = await openRouting(page, rig, 'Echo');
   await expect(routing).toContainText('Scene 2 · Lead');
   // No hidden routing actions: all four are shown; Split here works here.
@@ -6190,7 +6190,7 @@ test('mixed rig authoring splits inside scene lanes and asks before removing a p
     },
   ]);
   // removing a path with effects names the path and how many.
-  await rig.getByRole('button', { name: /^Echo(?: (?:time|lv2))?$/i }).click();
+  await rig.getByRole('button', { name: /^Echo(?: (?:time|lv2|Delay · Reverb))?$/i }).click();
   routing = await openRouting(page, rig, 'Echo');
   await expect(routing).toContainText('Path 1 of 2');
   await routing.getByRole('button', { name: 'Remove path' }).click();
@@ -6396,7 +6396,7 @@ test('mixed rig authoring moves blocks across paths by keys, buttons and drag', 
   // Keyboard: Alt+Down moves the focused block to the path below.
   if (!epaper) {
     await rig
-      .getByRole('button', { name: /^Echo(?: (?:time|lv2))?$/i })
+      .getByRole('button', { name: /^Echo(?: (?:time|lv2|Delay · Reverb))?$/i })
       .focus();
     await page.keyboard.press('Alt+ArrowDown');
     await expect.poll(() => unit.published.length).toBe(1);
@@ -6603,7 +6603,7 @@ test('wide screen: the block box opens routing and every control from its own bu
   const unit = await mockCanvasUnit(page, request, manifest, 'lead');
   await page.goto('/#rig');
   const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
-  await rig.getByRole('button', { name: /^Echo(?: (?:time|lv2))?$/i }).click();
+  await rig.getByRole('button', { name: /^Echo(?: (?:time|lv2|Delay · Reverb))?$/i }).click();
   const box = rig.getByRole('region', { name: /Echo controls$/ });
   await expect(box.getByText('Block on')).toBeVisible();
   await box.getByRole('button', { name: 'Routing…' }).click();

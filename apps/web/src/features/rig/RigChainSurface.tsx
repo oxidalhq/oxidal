@@ -225,8 +225,9 @@ export function RigChainSurface({
             ).filter(
               (t) => !lane || ('stereoLane' in t && t.stereoLane === lane),
             );
-            // The map shows each block as a card: its type and main values.
-            const card = view === 'map' && !epaper;
+            // Map and tree show each block as the same card, its type and
+            // main values; they differ only in how the lines are drawn.
+            const card = !epaper;
             const host = rig.matching?.manifest.oxidal;
             const uri =
               card && n.kind === 'lv2'
