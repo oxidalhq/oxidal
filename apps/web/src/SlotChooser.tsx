@@ -49,6 +49,7 @@ export function SlotChooser({
   allowEffects,
   modelsAllowed = true,
   placement,
+  newPreset = false,
   effectTitle = 'Add an effect',
   onModel,
   onEffect,
@@ -63,6 +64,11 @@ export function SlotChooser({
   modelsAllowed?: boolean;
   /** 'here' adds an effect at this slot, with no before/after/split step. */
   placement?: 'here';
+  /**
+   * Adding an effect makes a new preset on another engine (a TONE3000-only
+   * preset): the chooser says so and asks first. Otherwise it adds at once.
+   */
+  newPreset?: boolean;
   /** The effect step's title, such as "Replace with…" for Replace…. */
   effectTitle?: string;
   onModel: (format: 'nam' | 'ir') => void;
@@ -169,6 +175,7 @@ export function SlotChooser({
   const openEffect = (id: string) => {
     const effect = shown.find((item) => item.uri === id);
     if (!effect || !usable(effect)) return;
+    if (placement === 'here' && !newPreset) return onEffect(effect, 'after');
     setPlugin(effect);
     if (placement === 'here') {
       setWhere('after');
@@ -339,7 +346,9 @@ export function SlotChooser({
           {step === 'place' && plugin && (
             <EffectPlacement
               onPlace={(place) => {
-                setWhere(place === 'beside' ? 'split' : place);
+                const at = place === 'beside' ? 'split' : place;
+                if (!newPreset) return onEffect(plugin, at);
+                setWhere(at);
                 setStep('confirm');
               }}
               note={`Makes a new preset with ${plugin.name}. ${presetName} stays as it is.${modified ? ' Save your current edits first to keep them.' : ''}`}

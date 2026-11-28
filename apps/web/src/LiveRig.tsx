@@ -1985,6 +1985,7 @@ export function LiveRig({
                   presetName={state.preset_name ?? 'this preset'}
                   modified={state.modified}
                   allowEffects={!state.configured.draft}
+                  newPreset
                   onCancel={() => {
                     setSlot(null);
                     setAdding(false);
