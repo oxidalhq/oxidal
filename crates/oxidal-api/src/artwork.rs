@@ -30,6 +30,18 @@ pub struct AssetArtwork {
     /// Hash of the metadata URL; URLs (potentially signed) never reach the browser or logs.
     pub key: Option<String>,
     pub cached: bool,
+    /// The capture's TONE3000 tone, creator, pages and licence, from the
+    /// preset file itself; absent when the block carries no TONE3000 record.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tone_id: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub creator: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub creator_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub licence: Option<String>,
 }
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -80,6 +92,7 @@ fn sources(
                 .and_then(|v| v.as_str())
                 .filter(|s| !s.is_empty() && s.len() <= 4096)
                 .map(str::to_owned),
+            credit: oxidal_presets::tone_credit(&asset.tone),
         }]);
     }
     let bytes = if selection.owned {
@@ -333,6 +346,11 @@ pub(super) async fn list(
                         gear: s.gear,
                         key,
                         cached: ready,
+                        tone_id: s.credit.tone_id,
+                        creator: s.credit.creator,
+                        creator_url: s.credit.creator_url,
+                        page: s.credit.page,
+                        licence: s.credit.licence,
                     }
                 })
                 .collect::<Vec<_>>(),

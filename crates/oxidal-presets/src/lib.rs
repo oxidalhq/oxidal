@@ -41,7 +41,8 @@ pub use removal::{
 };
 mod store;
 pub use native::{
-    ArtworkSource, Framing, Inspection, MAX_FILE_BYTES, artwork, embedded_digests, inspect,
+    ArtworkSource, Framing, Inspection, MAX_FILE_BYTES, ToneCredit, artwork, embedded_digests,
+    inspect, tone_credit,
 };
 pub use store::{Library, Store};
 

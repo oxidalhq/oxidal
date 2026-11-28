@@ -385,6 +385,46 @@ pub struct ArtworkSource {
     pub title: String,
     pub gear: String,
     pub url: Option<String>,
+    /// Who made the capture and where they and the tone are on TONE3000,
+    /// read from the block's own TONE3000 record so it shows offline.
+    pub credit: ToneCredit,
+}
+
+/// A TONE3000 tone's credit as its record carries it. Display only.
+#[derive(Debug, Clone, Default)]
+pub struct ToneCredit {
+    pub tone_id: Option<u64>,
+    /// The creator's display name, or their user name.
+    pub creator: Option<String>,
+    /// The creator's TONE3000 page.
+    pub creator_url: Option<String>,
+    /// The tone's TONE3000 page.
+    pub page: Option<String>,
+    pub licence: Option<String>,
+}
+
+/// Reads a tone's credit from its TONE3000 record; missing or odd values are left out.
+pub fn tone_credit(tone: &serde_json::Value) -> ToneCredit {
+    let text = |v: Option<&serde_json::Value>| {
+        v.and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.chars().take(256).collect::<String>())
+    };
+    let link = |v: Option<&serde_json::Value>| {
+        v.and_then(|v| v.as_str())
+            .filter(|s| s.starts_with("https://") && s.len() <= 2048)
+            .map(str::to_owned)
+    };
+    let user = tone.get("user");
+    ToneCredit {
+        tone_id: tone.get("id").and_then(|v| v.as_u64()),
+        creator: text(user.and_then(|u| u.get("display_name")))
+            .or_else(|| text(user.and_then(|u| u.get("username")))),
+        creator_url: link(user.and_then(|u| u.get("url"))),
+        page: link(tone.get("url")),
+        licence: text(tone.get("license")),
+    }
 }
 pub fn artwork(bytes: &[u8]) -> Result<Vec<ArtworkSource>> {
     inspect(bytes)?;
@@ -429,6 +469,7 @@ pub fn artwork(bytes: &[u8]) -> Result<Vec<ArtworkSource>> {
                     .and_then(|v| v.as_str())
                     .filter(|s| !s.is_empty() && s.len() <= 4096)
                     .map(str::to_owned),
+                credit: tone_credit(&tone),
             });
         }
     }

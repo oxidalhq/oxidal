@@ -3,19 +3,25 @@
 export type AccountAction =
   | {
       client_id: string;
-      kind: "connect";
+      kind: 'connect';
     }
   | {
-      kind: "cancel";
+      kind: 'cancel';
     }
   | {
-      kind: "disconnect";
+      kind: 'disconnect';
     };
-export type AccountPhase = "disconnected" | "requesting" | "waiting" | "connected" | "reconnecting" | "error";
+export type AccountPhase =
+  | 'disconnected'
+  | 'requesting'
+  | 'waiting'
+  | 'connected'
+  | 'reconnecting'
+  | 'error';
 export type AudioChangeRequest =
   | {
       expected_revision: number;
-      kind: "find_buffer";
+      kind: 'find_buffer';
       owner: AudioChangeOwner;
       session: string;
     }
@@ -27,7 +33,7 @@ export type AudioChangeRequest =
        * @maxItems 2
        */
       input_map: [number, number];
-      kind: "apply";
+      kind: 'apply';
       output: AudioProbe;
       /**
        * @minItems 2
@@ -39,104 +45,112 @@ export type AudioChangeRequest =
     }
   | {
       id: string;
-      kind: "keep";
+      kind: 'keep';
     }
   | {
       id: string;
-      kind: "revert";
+      kind: 'revert';
     }
   | {
       id: string;
-      kind: "stop";
+      kind: 'stop';
     };
-export type AudioChangeOwner = "native" | "mixed" | "effects";
-export type Direction = "capture" | "playback";
-export type SampleFormat = "s16" | "s24" | "s24_packed" | "s32" | "float";
-export type BufferFinderPhase = "running" | "cancelling" | "done" | "cancelled" | "failed";
-export type BufferTrialOutcome = "clean" | "failed" | "unavailable";
-export type AudioChangePhase = "idle" | "restarting" | "proving" | "reverting" | "kept" | "reverted" | "failed";
+export type AudioChangeOwner = 'native' | 'mixed' | 'effects';
+export type Direction = 'capture' | 'playback';
+export type SampleFormat = 's16' | 's24' | 's24_packed' | 's32' | 'float';
+export type BufferFinderPhase =
+  'running' | 'cancelling' | 'done' | 'cancelled' | 'failed';
+export type BufferTrialOutcome = 'clean' | 'failed' | 'unavailable';
+export type AudioChangePhase =
+  | 'idle'
+  | 'restarting'
+  | 'proving'
+  | 'reverting'
+  | 'kept'
+  | 'reverted'
+  | 'failed';
 export type AudioAction =
   | {
       command: HostUtility;
-      kind: "host_utility";
+      kind: 'host_utility';
     }
   | {
-      kind: "midi";
+      kind: 'midi';
       settings?: Settings2 | null;
     }
   | {
-      kind: "midi_test";
+      kind: 'midi_test';
       message: Message;
     }
   | {
-      kind: "midi_learn";
+      kind: 'midi_learn';
       on: boolean;
     }
   | {
-      kind: "create";
+      kind: 'create';
       name: string;
       stream: StreamConfig;
     }
   | {
-      kind: "start";
+      kind: 'start';
       settings: StartAudio;
     }
   | {
-      kind: "load_preset";
+      kind: 'load_preset';
       owned: boolean;
       preset_id: string;
     }
   | {
-      kind: "stop";
+      kind: 'stop';
     }
   | {
-      kind: "restart";
+      kind: 'restart';
     }
   | {
-      kind: "resume";
+      kind: 'resume';
     }
   | {
-      kind: "reconfigure";
+      kind: 'reconfigure';
       stream: StreamConfig;
     }
   | {
       enabled: boolean;
-      kind: "set_boot";
+      kind: 'set_boot';
     }
   | {
       block_id: string;
       edit: EqEdit;
-      kind: "set_eq";
+      kind: 'set_eq';
     }
   | {
-      kind: "set_control";
+      kind: 'set_control';
       target: string;
       value: number;
     }
   | {
       assignment: ModelAssignment;
-      kind: "replace_model";
+      kind: 'replace_model';
     }
   | {
-      kind: "cancel_model";
+      kind: 'cancel_model';
       request: number;
     }
   | {
-      kind: "save_copy";
+      kind: 'save_copy';
       name: string;
     }
   | {
-      kind: "save_version";
+      kind: 'save_version';
       name: string;
       target: VersionTarget;
     }
   | {
       keep: boolean;
-      kind: "resolve_copy";
+      kind: 'resolve_copy';
     }
   | {
       action: AuthoringAction;
-      kind: "authoring";
+      kind: 'authoring';
     };
 /**
  * Device/session utilities, deliberately outside native or portable tone state.
@@ -144,52 +158,52 @@ export type AudioAction =
 export type HostUtility =
   | {
       enabled: boolean;
-      kind: "hear_yourself";
+      kind: 'hear_yourself';
     }
   | {
       enabled: boolean;
-      kind: "output_mute";
+      kind: 'output_mute';
     }
   | {
-      kind: "output_mute_toggle";
+      kind: 'output_mute_toggle';
     }
   | {
-      kind: "boost_toggle";
+      kind: 'boost_toggle';
     }
   | {
-      kind: "output_level";
+      kind: 'output_level';
       value: number;
     }
   | {
       enabled: boolean;
-      kind: "tuner";
+      kind: 'tuner';
     }
   | {
-      kind: "test_tone";
+      kind: 'test_tone';
     }
   | {
-      kind: "stop_test_tone";
+      kind: 'stop_test_tone';
     }
   | {
-      kind: "levels";
+      kind: 'levels';
       levels: HostLevels;
     }
   | {
       enabled: boolean;
-      kind: "reference";
+      kind: 'reference';
       peak_db: number;
     }
   | {
       command: BackingCommand;
-      kind: "backing";
+      kind: 'backing';
     }
   | {
       command: CaptureCommand;
-      kind: "capture";
+      kind: 'capture';
     }
   | {
       crossfade: boolean;
-      kind: "venue";
+      kind: 'venue';
       venue?: VenueApplied | null;
     };
 export type BackingCommand =
@@ -200,7 +214,7 @@ export type BackingCommand =
       frames: number;
       from: number;
       gain_db: number;
-      kind: "play";
+      kind: 'play';
       range?: LoopRange | null;
       repeat: boolean;
       seq: number;
@@ -216,22 +230,22 @@ export type BackingCommand =
        * @maxItems 6
        */
       gains: [number, number, number, number, number, number];
-      kind: "stem_gains";
+      kind: 'stem_gains';
     }
   | {
-      kind: "stop";
+      kind: 'stop';
       seq: number;
     }
   | {
       gain_db: number;
-      kind: "gain";
+      kind: 'gain';
     }
   | {
-      kind: "click_level";
+      kind: 'click_level';
       level_db: number;
     }
   | {
-      kind: "repeat";
+      kind: 'repeat';
       repeat: boolean;
     };
 export type MediaId = string;
@@ -239,17 +253,17 @@ export type Click =
   | {
       bpm_tenths: number;
       first_frame: number;
-      kind: "manual";
+      kind: 'manual';
       level_db: number;
     }
   | {
-      kind: "detected";
+      kind: 'detected';
       level_db: number;
       timing: MediaId;
     };
 export type CaptureCommand =
   | {
-      kind: "record_di";
+      kind: 'record_di';
       output: MediaId;
       seq: number;
     }
@@ -260,7 +274,7 @@ export type CaptureCommand =
        */
       channels: number;
       frames: number;
-      kind: "reamp";
+      kind: 'reamp';
       latency_frames: number;
       /**
        * Hear the reamp while it runs; off mutes the outputs (not the result).
@@ -274,45 +288,45 @@ export type CaptureCommand =
     }
   | {
       keep: boolean;
-      kind: "stop";
+      kind: 'stop';
       seq: number;
     };
-export type BranchMode = "toggle" | "gate";
-export type ExpressionCurve = "linear" | "slow_start" | "fast_start";
+export type BranchMode = 'toggle' | 'gate';
+export type ExpressionCurve = 'linear' | 'slow_start' | 'fast_start';
 export type Target2 =
   | {
-      kind: "native";
+      kind: 'native';
       node: string;
       parameter: string;
     }
   | {
-      kind: "lv2";
+      kind: 'lv2';
       node: string;
       symbol: string;
     }
   | {
-      kind: "bypass";
+      kind: 'bypass';
       node: string;
     }
   | {
-      kind: "merge";
+      kind: 'merge';
       node: string;
       port: number;
     }
   | {
       group: string;
-      kind: "stomp_group";
+      kind: 'stomp_group';
     };
 export type Message =
   | {
       channel: number;
-      kind: "program";
+      kind: 'program';
       program: number;
     }
   | {
       channel: number;
       controller: number;
-      kind: "control";
+      kind: 'control';
       value: number;
     };
 /**
@@ -320,187 +334,196 @@ export type Message =
  */
 export type EqEdit =
   | {
-      kind: "reset";
+      kind: 'reset';
     }
   | {
-      kind: "enabled";
+      kind: 'enabled';
       value: boolean;
     }
   | {
-      kind: "pre";
+      kind: 'pre';
       value: boolean;
     }
   | {
       band: EqBand;
       index: number;
-      kind: "band";
+      kind: 'band';
     };
-export type EqType = "lowcut" | "lowshelf" | "bell" | "highshelf" | "highcut";
+export type EqType = 'lowcut' | 'lowshelf' | 'bell' | 'highshelf' | 'highcut';
 export type AuthoringAction =
   | {
       block_id: string;
-      kind: "refresh_metadata";
+      kind: 'refresh_metadata';
       tone: any;
     }
   | {
       block_id: string;
       enabled: boolean;
-      kind: "spectrum";
+      kind: 'spectrum';
     }
   | {
       block_id: string;
-      kind: "select_model";
+      kind: 'select_model';
       model_id: number;
     }
   | {
       block_id: string;
       edit: EqEdit;
-      kind: "eq";
+      kind: 'eq';
     }
   | {
       edit: LiveGesture;
-      kind: "gesture";
+      kind: 'gesture';
     }
   | {
       command: Command4;
-      kind: "utility";
+      kind: 'utility';
     }
   | {
       block_id: string;
-      kind: "copy";
+      kind: 'copy';
     }
   | {
-      kind: "inspect";
+      kind: 'inspect';
     }
   | {
-      kind: "parameter";
+      kind: 'parameter';
       parameter: string;
       value: number;
     }
   | {
       edit: StructureEdit;
-      kind: "edit";
+      kind: 'edit';
     }
   | {
       block_id: string;
-      kind: "remove";
+      kind: 'remove';
     }
   | {
-      kind: "undo";
+      kind: 'undo';
     }
   | {
-      kind: "redo";
+      kind: 'redo';
     };
 export type LiveGesture =
   | {
       owner: string;
-      phase: "begin";
+      phase: 'begin';
       target: string;
       token: string;
     }
   | {
       owner: string;
-      phase: "preview";
+      phase: 'preview';
       sequence: number;
       token: string;
       value: number;
     }
   | {
       owner: string;
-      phase: "commit";
+      phase: 'commit';
       sequence: number;
       token: string;
       value: number;
     }
   | {
       owner: string;
-      phase: "cancel";
+      phase: 'cancel';
       token: string;
     };
 export type Command4 =
   | {
-      kind: "solo";
+      kind: 'solo';
       side: Solo;
     }
   | {
       enabled: boolean;
-      kind: "tuner";
+      kind: 'tuner';
     }
   | {
-      kind: "balance";
+      kind: 'balance';
     }
   | {
-      kind: "align";
+      kind: 'align';
     }
   | {
-      kind: "cancel";
+      kind: 'cancel';
     }
   | {
-      kind: "poll";
+      kind: 'poll';
     };
-export type Solo = "none" | "left" | "right";
+export type Solo = 'none' | 'left' | 'right';
 export type StructureEdit =
   | {
-      kind: "reset";
+      kind: 'reset';
     }
   | {
-      kind: "swap";
+      kind: 'swap';
     }
   | {
       index: number;
-      kind: "paste";
+      kind: 'paste';
       lane: ChainLane;
     }
   | {
-      kind: "input";
+      kind: 'input';
       mode: InputMode;
     }
   | {
       block_ids: string[];
-      kind: "reorder";
+      kind: 'reorder';
       lane: ChainLane;
     }
   | {
       block_id: string;
       index: number;
-      kind: "move";
+      kind: 'move';
       lane: ChainLane;
     }
   | {
       block_id: string;
       index: number;
-      kind: "duplicate";
+      kind: 'duplicate';
       lane: ChainLane;
     }
   | {
       enabled: boolean;
-      kind: "stereo";
+      kind: 'stereo';
     };
-export type ChainLane = "left" | "right";
-export type InputMode = "stereo" | "left" | "right" | "dual";
-export type Phase2 = "idle" | "listening" | "done" | "timeout";
-export type ModelPhase = "verifying" | "preparing" | "ready" | "applying" | "applied" | "failed" | "cancelled";
-export type AudioPhase = "unavailable" | "stopped" | "starting" | "running" | "stopping" | "failed";
+export type ChainLane = 'left' | 'right';
+export type InputMode = 'stereo' | 'left' | 'right' | 'dual';
+export type Phase2 = 'idle' | 'listening' | 'done' | 'timeout';
+export type ModelPhase =
+  | 'verifying'
+  | 'preparing'
+  | 'ready'
+  | 'applying'
+  | 'applied'
+  | 'failed'
+  | 'cancelled';
+export type AudioPhase =
+  'unavailable' | 'stopped' | 'starting' | 'running' | 'stopping' | 'failed';
 export type BlockSettingsCommand =
   | {
       entry: NamedBlockSettings;
-      kind: "create";
+      kind: 'create';
       revision: number;
     }
   | {
       entry: NamedBlockSettings;
-      kind: "replace";
+      kind: 'replace';
       revision: number;
     }
   | {
       id: string;
-      kind: "delete";
+      kind: 'delete';
       revision: number;
     };
-export type CalibrationAction = "run" | "run_all" | "cancel" | "reset";
-export type CaptureRole = "amp" | "full_rig";
-export type CaptureKind = "di" | "reamp";
-export type JobPhase = ("running" | "done" | "failed" | "cancelled") | "starting" | "finishing";
+export type CalibrationAction = 'run' | 'run_all' | 'cancel' | 'reset';
+export type CaptureRole = 'amp' | 'full_rig';
+export type CaptureKind = 'di' | 'reamp';
+export type JobPhase =
+  ('running' | 'done' | 'failed' | 'cancelled') | 'starting' | 'finishing';
 /**
  * One command entry point; relative edits are applied to current authoritative state.
  * @see docs/architecture.md
@@ -508,327 +531,329 @@ export type JobPhase = ("running" | "done" | "failed" | "cancelled") | "starting
 export type Action =
   | {
       target: string;
-      type: "set";
+      type: 'set';
       value: number;
     }
   | {
       delta: number;
       target: string;
-      type: "adjust";
+      type: 'adjust';
     }
   | {
       rig: Rig;
-      type: "routing";
+      type: 'routing';
     }
   | {
       file: MappingFile;
-      type: "mappings";
+      type: 'mappings';
     }
   | {
       input: MidiInput;
-      type: "midi";
+      type: 'midi';
     }
   | {
       edit: Edit;
-      type: "edit";
+      type: 'edit';
     };
-export type BlockKind = ("input" | "nam" | "cabinet" | "lv2" | "delay" | "reverb" | "output") | "native";
+export type BlockKind =
+  | ('input' | 'nam' | 'cabinet' | 'lv2' | 'delay' | 'reverb' | 'output')
+  | 'native';
 /**
  * Scaling policy for a mapped absolute knob.
  * @see docs/architecture.md
  */
-export type MidiCurve = "linear" | "logarithmic";
-export type MidiMode = "absolute" | "relative_twos_complement";
+export type MidiCurve = 'linear' | 'logarithmic';
+export type MidiMode = 'absolute' | 'relative_twos_complement';
 export type Edit =
   | {
       owner: string;
-      phase: "begin";
+      phase: 'begin';
       target: string;
       token: string;
     }
   | {
       owner: string;
-      phase: "preview";
+      phase: 'preview';
       sequence: number;
       token: string;
       value: number;
     }
   | {
       owner: string;
-      phase: "commit";
+      phase: 'commit';
       sequence: number;
       token: string;
       value: number;
     }
   | {
       owner: string;
-      phase: "cancel";
+      phase: 'cancel';
       token: string;
     };
 export type Operation =
-  | "native_audio"
-  | "mixed_audio"
-  | "effects_audio"
-  | "effect_packs"
-  | "storage"
-  | "network"
-  | "account"
-  | "native_editor"
-  | "native_defaults"
-  | "preset_import"
-  | "preset_library"
-  | "rig_save"
-  | "model_import"
-  | "model_collection"
-  | "model_download"
-  | "controls";
-export type Outcome = "accepted" | "rejected" | "failed";
+  | 'native_audio'
+  | 'mixed_audio'
+  | 'effects_audio'
+  | 'effect_packs'
+  | 'storage'
+  | 'network'
+  | 'account'
+  | 'native_editor'
+  | 'native_defaults'
+  | 'preset_import'
+  | 'preset_library'
+  | 'rig_save'
+  | 'model_import'
+  | 'model_collection'
+  | 'model_download'
+  | 'controls';
+export type Outcome = 'accepted' | 'rejected' | 'failed';
 export type Command2 =
   | {
-      type: "status";
+      type: 'status';
     }
   | {
-      type: "enable";
+      type: 'enable';
     }
   | {
-      type: "disable";
+      type: 'disable';
     }
   | {
       command: string;
-      type: "run";
+      type: 'run';
     }
   | {
       id: string;
-      type: "cancel";
+      type: 'cancel';
     };
-export type PackAction = "install" | "remove";
+export type PackAction = 'install' | 'remove';
 export type GraphAudioAction =
   | {
-      kind: "midi_learn";
+      kind: 'midi_learn';
       on: boolean;
     }
   | {
       command: PluginDefaultsCommand;
-      kind: "restore_plugin_defaults";
+      kind: 'restore_plugin_defaults';
     }
   | {
       command: PluginDefaultsCommand;
       controls: {
         [k: string]: number;
       };
-      kind: "apply_block_settings";
+      kind: 'apply_block_settings';
       plugin: string;
     }
   | {
       command: HostUtility;
-      kind: "host_utility";
+      kind: 'host_utility';
     }
   | {
       enabled: boolean;
-      kind: "set_boot";
+      kind: 'set_boot';
     }
   | {
-      kind: "reconfigure";
+      kind: 'reconfigure';
       stream: StreamConfig;
     }
   | {
-      kind: "configure";
+      kind: 'configure';
       stream: StreamConfig;
     }
   | {
-      kind: "start";
+      kind: 'start';
       settings: StartGraph;
     }
   | {
       discard_changes: boolean;
       id: string;
-      kind: "recall_saved";
+      kind: 'recall_saved';
     }
   | {
-      kind: "stop";
+      kind: 'stop';
     }
   | {
-      kind: "restart";
+      kind: 'restart';
     }
   | {
-      kind: "copy_playing";
+      kind: 'copy_playing';
       name: string;
     }
   | {
-      kind: "save_copy";
+      kind: 'save_copy';
       name: string;
     }
   | {
-      kind: "save_version";
+      kind: 'save_version';
       name: string;
       target: VersionTarget;
     }
   | {
       command: Command;
-      kind: "control";
+      kind: 'control';
     };
-export type CaptureFault = "disk" | "source" | "overflow";
-export type Framing = "legacy" | "current";
-export type LibraryKind = ("original" | "owned" | "graph") | "rig";
+export type CaptureFault = 'disk' | 'source' | 'overflow';
+export type Framing = 'legacy' | 'current';
+export type LibraryKind = ('original' | 'owned' | 'graph') | 'rig';
 export type LibraryAction =
   | {
-      kind: "rename";
+      kind: 'rename';
       name: string;
     }
   | {
       archived: boolean;
-      kind: "visibility";
+      kind: 'visibility';
     }
   | {
-      kind: "move";
+      kind: 'move';
       up: boolean;
     }
   | {
       before?: LibraryReference | null;
-      kind: "place";
+      kind: 'place';
     }
   | {
-      kind: "set_list";
+      kind: 'set_list';
       member: boolean;
     }
   | {
       entries: LibraryReference[];
-      kind: "starter";
+      kind: 'starter';
     }
   | {
       entries: LibraryReference[];
-      kind: "append_set";
+      kind: 'append_set';
     }
   | {
-      kind: "duplicate";
+      kind: 'duplicate';
     };
-export type MediaKind = "backing" | "di" | "reamp";
-export type UploadFormat = "wav" | "mp3";
+export type MediaKind = 'backing' | 'di' | 'reamp';
+export type UploadFormat = 'wav' | 'mp3';
 /**
  * Where a received file is in the import pipeline.
  */
 export type ImportPhase =
   | {
-      state: "receiving";
+      state: 'receiving';
     }
   | {
-      state: "queued";
+      state: 'queued';
     }
   | {
       progress: number;
-      state: "preparing";
+      state: 'preparing';
     }
   | {
       asset: string;
-      state: "ready";
+      state: 'ready';
     }
   | {
       existing: string;
-      state: "duplicate";
+      state: 'duplicate';
       title: string;
     }
   | {
       reason: string;
-      state: "failed";
+      state: 'failed';
     };
 /**
  * Which kind of preset assignment a [`Disabled`] marker refers to.
  */
-export type AssignmentKind = "scene" | "branch" | "parameter";
-export type MidiDirection = "previous" | "next";
-export type TempoSource = "tap" | "song" | "preset";
+export type AssignmentKind = 'scene' | 'branch' | 'parameter';
+export type MidiDirection = 'previous' | 'next';
+export type TempoSource = 'tap' | 'song' | 'preset';
 /**
  * Delay repeat selected for the device's Tap tempo action.
  */
-export type TapNote = "quarter" | "dotted_eighth" | "eighth" | "eighth_triplet";
+export type TapNote = 'quarter' | 'dotted_eighth' | 'eighth' | 'eighth_triplet';
 export type EditorAction =
   | {
       id: string;
-      kind: "load";
+      kind: 'load';
       owned: boolean;
     }
   | {
-      kind: "begin";
+      kind: 'begin';
       owner: string;
       target: string;
       token: string;
     }
   | {
-      kind: "preview";
+      kind: 'preview';
       owner: string;
       sequence: number;
       token: string;
       value: number;
     }
   | {
-      kind: "commit";
+      kind: 'commit';
       owner: string;
       sequence: number;
       token: string;
       value: number;
     }
   | {
-      kind: "cancel";
+      kind: 'cancel';
       owner: string;
       token: string;
     }
   | {
-      kind: "save";
+      kind: 'save';
       name: string;
     }
   | {
       block_id: string;
-      kind: "remove_block";
+      kind: 'remove_block';
     }
   | {
       edit: StructureEdit;
-      kind: "structure";
+      kind: 'structure';
     }
   | {
-      kind: "undo";
+      kind: 'undo';
     }
   | {
-      kind: "redo";
+      kind: 'redo';
     };
 export type Command3 =
   | {
       action: PowerAction;
-      type: "power";
+      type: 'power';
     }
   | {
       expected_mode: StorageMode;
-      type: "restart_storage";
+      type: 'restart_storage';
     }
   | {
-      type: "status";
+      type: 'status';
     }
   | {
-      type: "scan";
+      type: 'scan';
     }
   | {
-      type: "network_capabilities";
+      type: 'network_capabilities';
     }
   | {
       interface: string;
       ssid: string;
-      type: "join_open";
+      type: 'join_open';
     }
   | {
       channel: number;
       country: string;
       interface: string;
-      type: "hotspot_radio";
+      type: 'hotspot_radio';
     }
   | {
       interface: string;
-      type: "connect";
+      type: 'connect';
       uuid: string;
     }
   | {
       interface: string;
       password: string;
       ssid: string;
-      type: "join";
+      type: 'join';
     }
   | {
       channel?: number | null;
@@ -836,145 +861,146 @@ export type Command3 =
       interface: string;
       password: string;
       ssid: string;
-      type: "hotspot";
+      type: 'hotspot';
     }
   | {
       settings: Settings;
-      type: "policy";
+      type: 'policy';
     }
   | {
       transaction: string;
-      type: "confirm";
+      type: 'confirm';
     }
   | {
       transaction: string;
-      type: "cancel";
+      type: 'cancel';
     }
   | {
-      type: "forget";
+      type: 'forget';
       uuid: string;
     }
   | {
-      type: "packs";
+      type: 'packs';
     }
   | {
       action: PackAction;
       id: string;
-      type: "pack";
+      type: 'pack';
     }
   | {
-      type: "storage_status";
+      type: 'storage_status';
     }
   | {
       mode: StorageMode;
-      type: "storage";
+      type: 'storage';
     };
-export type PowerAction = "reboot" | "shutdown";
-export type StorageMode = "unlocked" | "locked";
-export type Mode = "never" | "no_ethernet" | "not_at_home" | "no_remembered" | "always";
+export type PowerAction = 'reboot' | 'shutdown';
+export type StorageMode = 'unlocked' | 'locked';
+export type Mode =
+  'never' | 'no_ethernet' | 'not_at_home' | 'no_remembered' | 'always';
 export type OccurrenceAction =
   | {
-      kind: "repeat";
+      kind: 'repeat';
       new_id: string;
     }
   | {
-      kind: "change";
+      kind: 'change';
       settings: EntrySettings;
     }
   | {
       before?: string | null;
-      kind: "place";
+      kind: 'place';
     }
   | {
-      kind: "remove";
+      kind: 'remove';
     };
 export type PlayerCommand =
   | {
-      kind: "toggle_play";
+      kind: 'toggle_play';
     }
   | {
-      kind: "toggle_repeat";
+      kind: 'toggle_repeat';
     }
   | {
-      kind: "toggle_click";
+      kind: 'toggle_click';
     }
   | {
-      kind: "play";
+      kind: 'play';
     }
   | {
-      kind: "pause";
+      kind: 'pause';
     }
   | {
-      kind: "stop";
+      kind: 'stop';
     }
   | {
-      kind: "skip_by";
+      kind: 'skip_by';
       seconds: number;
     }
   | {
       frame: number;
-      kind: "seek_to";
+      kind: 'seek_to';
     }
   | {
-      kind: "previous";
+      kind: 'previous';
     }
   | {
-      kind: "next";
+      kind: 'next';
     }
   | {
       asset: MediaId;
-      kind: "cue";
+      kind: 'cue';
     }
   | {
-      kind: "set_repeat";
+      kind: 'set_repeat';
       repeat: boolean;
     }
   | {
-      kind: "set_practice_range";
+      kind: 'set_practice_range';
       range?: LoopRange | null;
     }
   | {
       click?: Click | null;
-      kind: "set_click";
+      kind: 'set_click';
     }
   | {
-      kind: "set_click_level";
+      kind: 'set_click_level';
       level_db: number;
     }
   | {
-      kind: "set_speed";
+      kind: 'set_speed';
       percent: number;
     }
   | {
-      kind: "cue_stems";
+      kind: 'cue_stems';
       recipe: MixRecipe;
       source: MediaId;
       split: MediaId;
     }
   | {
       expected?: MixRecipe | null;
-      kind: "set_stem_mix";
+      kind: 'set_stem_mix';
       recipe: MixRecipe;
       split?: MediaId | null;
     }
   | {
       edit: StemEdit;
-      kind: "edit_stem";
+      kind: 'edit_stem';
       role: StemRole;
       split: MediaId;
     }
   | {
-      kind: "set_muted_part";
+      kind: 'set_muted_part';
       part?: PlayerPart | null;
       split: MediaId;
     }
   | {
       db: number;
-      kind: "set_level";
+      kind: 'set_level';
     }
   | {
       delta_db: number;
-      kind: "adjust_level";
+      kind: 'adjust_level';
     };
 /**
  * The editable settings saved with a generated stereo mix.
@@ -984,7 +1010,7 @@ export type MixRecipe =
   | {
       bass: StemMix;
       drums: StemMix;
-      mode: "four";
+      mode: 'four';
       other: StemMix;
       vocals: StemMix;
     }
@@ -992,321 +1018,339 @@ export type MixRecipe =
       bass: StemMix;
       drums: StemMix;
       guitar: StemMix;
-      mode: "six";
+      mode: 'six';
       other: StemMix;
       piano: StemMix;
       vocals: StemMix;
     };
 export type StemEdit =
   | {
-      field: "mute";
+      field: 'mute';
       value: boolean;
     }
   | {
-      field: "solo";
+      field: 'solo';
       value: boolean;
     }
   | {
-      field: "gain";
+      field: 'gain';
       value: number;
     };
 /**
  * The role from the split manifest, independent of the model's tensor order.
  */
-export type StemRole = "vocals" | "drums" | "bass" | "other" | "guitar" | "piano";
+export type StemRole =
+  'vocals' | 'drums' | 'bass' | 'other' | 'guitar' | 'piano';
 /**
  * Temporary performance mute, independent of the saved stem recipe.
  */
-export type PlayerPart = "bass" | "guitar";
-export type Origin = "ui" | "midi" | "api";
-export type PlayerState = ("empty" | "ready" | "playing" | "paused" | "ended") | "interrupted" | "unavailable";
+export type PlayerPart = 'bass' | 'guitar';
+export type Origin = 'ui' | 'midi' | 'api';
+export type PlayerState =
+  | ('empty' | 'ready' | 'playing' | 'paused' | 'ended')
+  | 'interrupted'
+  | 'unavailable';
 export type VersionAction =
   | {
-      action: "create";
+      action: 'create';
       name: string;
     }
   | {
-      action: "rename";
+      action: 'rename';
       name: string;
     }
   | {
-      action: "publish";
+      action: 'publish';
       content: string;
     }
   | {
-      action: "set_default";
+      action: 'set_default';
     }
   | {
-      action: "delete";
+      action: 'delete';
     };
-export type RehearsalStatus = "prepared" | "loads_on_recall" | "blocked";
+export type RehearsalStatus = 'prepared' | 'loads_on_recall' | 'blocked';
 export type RigAudioAction =
   | {
       command: PluginDefaultsCommand;
-      kind: "restore_plugin_defaults";
+      kind: 'restore_plugin_defaults';
     }
   | {
       command: PluginDefaultsCommand;
       controls: {
         [k: string]: number;
       };
-      kind: "apply_block_settings";
+      kind: 'apply_block_settings';
       plugin: string;
     }
   | {
       command: HostUtility;
-      kind: "host_utility";
+      kind: 'host_utility';
     }
   | {
       command: AuthoringCommand;
-      kind: "authoring";
+      kind: 'authoring';
     }
   | {
       enabled: boolean;
-      kind: "set_boot";
+      kind: 'set_boot';
     }
   | {
-      kind: "start";
+      kind: 'start';
       settings: StartRig;
     }
   | {
-      kind: "stop";
+      kind: 'stop';
     }
   | {
-      kind: "restart";
+      kind: 'restart';
     }
   | {
-      kind: "discard_changes";
+      kind: 'discard_changes';
     }
   | {
-      kind: "reconfigure";
+      kind: 'reconfigure';
       stream: StreamConfig;
     }
   | {
       command: ControlCommand;
-      kind: "control";
+      kind: 'control';
     }
   | {
       command: EqCommand;
-      kind: "eq";
+      kind: 'eq';
     }
   | {
       command: SwitchCommand;
-      kind: "switch";
+      kind: 'switch';
     }
   | {
       command: SceneCommand;
-      kind: "scene";
+      kind: 'scene';
     }
   | {
       command: BranchCommand;
-      kind: "branch";
+      kind: 'branch';
     }
   | {
       command: StompGroupCommand;
-      kind: "stomp_group";
+      kind: 'stomp_group';
     }
   | {
       command: BranchSleepCommand;
-      kind: "branch_sleep";
+      kind: 'branch_sleep';
     }
   | {
-      kind: "midi";
+      kind: 'midi';
       settings?: Settings2 | null;
     }
   | {
-      kind: "midi_test";
+      kind: 'midi_test';
       message: Message;
     }
   | {
-      kind: "midi_learn";
+      kind: 'midi_learn';
       on: boolean;
     }
   | {
       command: ModelCommand;
-      kind: "model";
+      kind: 'model';
     }
   | {
       copy_id: string;
-      kind: "copy_playing";
+      kind: 'copy_playing';
       name: string;
     }
   | {
-      kind: "save";
+      kind: 'save';
       name: string;
     }
   | {
-      kind: "save_version";
+      kind: 'save_version';
       name: string;
       target: VersionTarget;
     };
 export type ModelOperation =
   | {
       assignment: ModelAssignment;
-      kind: "prepare";
+      kind: 'prepare';
     }
   | {
-      kind: "poll";
+      kind: 'poll';
     }
   | {
-      kind: "commit";
+      kind: 'commit';
     }
   | {
-      kind: "cancel";
+      kind: 'cancel';
     };
-export type BranchSleepPhase = "playing" | "priming" | "draining" | "asleep" | "failed";
-export type PortableNodeKind = "input" | "output" | "tone3000" | "lv2" | "split" | "merge" | "gain";
-export type PortableTails = "cut" | "preserve";
-export type PortableResourceKind = "tone3000-preset" | "tone3000-source" | "lv2-state" | "lv2-asset";
-export type PortablePartitionInput = "left" | "right";
-export type PortableProcessingRole = "whole" | "amp" | "cab";
-export type LibraryOrigin = "tone3000" | "oxidal_example" | "mine";
-export type RigTopology = "serial" | "parallel" | "scenes";
+export type BranchSleepPhase =
+  'playing' | 'priming' | 'draining' | 'asleep' | 'failed';
+export type PortableNodeKind =
+  'input' | 'output' | 'tone3000' | 'lv2' | 'split' | 'merge' | 'gain';
+export type PortableTails = 'cut' | 'preserve';
+export type PortableResourceKind =
+  'tone3000-preset' | 'tone3000-source' | 'lv2-state' | 'lv2-asset';
+export type PortablePartitionInput = 'left' | 'right';
+export type PortableProcessingRole = 'whole' | 'amp' | 'cab';
+export type RigBlockKind = 'tone3000' | 'lv2';
+export type LibraryOrigin = 'tone3000' | 'oxidal_example' | 'mine';
+export type RigTopology = 'serial' | 'parallel' | 'scenes';
 export type ResourceSource =
   | {
-      kind: "original";
+      kind: 'original';
       preset: string;
     }
   | {
-      kind: "owned";
+      kind: 'owned';
       preset: string;
     }
   | {
-      kind: "bundle";
+      kind: 'bundle';
       resource: string;
       revision: string;
     };
 export type SheetTarget =
   | {
-      kind: "preset";
+      kind: 'preset';
       preset: LibraryReference;
     }
   | {
       asset: string;
-      kind: "track";
+      kind: 'track';
     };
-export type SheetFormat = "chordpro" | "markdown" | "text";
+export type SheetFormat = 'chordpro' | 'markdown' | 'text';
 /**
  * Stable failure kinds shared by every endpoint.
  * @see docs/architecture.md
  */
 export type ErrorCode =
-  "invalid" | "not_found" | "conflict" | "busy" | "locked" | "unavailable" | "timeout" | "storage" | "internal";
-export type SplitMode = "four" | "six";
-export type Phase = "running" | "ready" | "failed" | "cancelled" | "interrupted";
+  | 'invalid'
+  | 'not_found'
+  | 'conflict'
+  | 'busy'
+  | 'locked'
+  | 'unavailable'
+  | 'timeout'
+  | 'storage'
+  | 'internal';
+export type SplitMode = 'four' | 'six';
+export type Phase =
+  'running' | 'ready' | 'failed' | 'cancelled' | 'interrupted';
 /**
  * What a running split is doing, with an overall percentage for one bar.
  */
-export type SplitStage = "preparing" | "separating" | "saving";
-export type Scope = "rig" | "set_list";
+export type SplitStage = 'preparing' | 'separating' | 'saving';
+export type Scope = 'rig' | 'set_list';
 /**
  * What starts when Oxidal starts (7.25). `Pinned` keeps the exact saved
  * session; `Follow` replaces it with each preset the player explicitly plays.
  */
-export type StartupPolicy = "off" | "follow" | "pinned";
-export type StartupOwner = "native" | "mixed" | "effects";
+export type StartupPolicy = 'off' | 'follow' | 'pinned';
+export type StartupOwner = 'native' | 'mixed' | 'effects';
 export type SwitchAction =
   | {
-      kind: "tap_tempo";
+      kind: 'tap_tempo';
       note: SwitchNote;
     }
   | {
-      kind: "freeze";
+      kind: 'freeze';
       mode: FreezeMode;
       node: string;
       symbol: string;
     };
-export type SwitchNote = "quarter" | "dotted_eighth" | "eighth" | "triplet";
-export type FreezeMode = "toggle" | "gate";
-export type SwitchGesture = "tap" | "hold";
-export type SwitchProfile = "four" | "ten";
+export type SwitchNote = 'quarter' | 'dotted_eighth' | 'eighth' | 'triplet';
+export type FreezeMode = 'toggle' | 'gate';
+export type SwitchGesture = 'tap' | 'hold';
+export type SwitchProfile = 'four' | 'ten';
 export type TempoCommand =
   | {
-      kind: "tap";
+      kind: 'tap';
     }
   | {
       expected_revision: number;
-      kind: "set_tap_note";
+      kind: 'set_tap_note';
       tap_note?: TapNote | null;
     }
   | {
       expected_revision: number;
-      kind: "select";
+      kind: 'select';
       source: SelectTempoSource;
     };
-export type SelectTempoSource = "song" | "preset";
+export type SelectTempoSource = 'song' | 'preset';
 export type TerminalCommand =
   | {
       cursor: number;
       id?: string | null;
-      type: "read";
+      type: 'read';
     }
   | {
       cols: number;
       id: string;
       rows: number;
-      type: "start";
+      type: 'start';
     }
   | {
       bytes: number[];
       id: string;
       sequence: number;
-      type: "input";
+      type: 'input';
     }
   | {
       cols: number;
       id: string;
       rows: number;
-      type: "resize";
+      type: 'resize';
     }
   | {
       id: string;
-      type: "end";
+      type: 'end';
     };
 /**
  * TONE3000 gear types a tone list can be narrowed to.
  */
-export type Gear = "amp" | "amp-cab" | "pedal" | "outboard" | "cab" | "space" | "experimental";
+export type Gear =
+  'amp' | 'amp-cab' | 'pedal' | 'outboard' | 'cab' | 'space' | 'experimental';
 export type VenueCommand =
   | {
-      kind: "activate";
+      kind: 'activate';
       profile: string;
     }
   | {
       bypass: boolean;
-      kind: "set_bypass";
+      kind: 'set_bypass';
     }
   | {
       eq: VenueSettings;
-      kind: "preview";
+      kind: 'preview';
     }
   | {
-      kind: "compare_saved";
+      kind: 'compare_saved';
       saved: boolean;
     }
   | {
-      kind: "revert";
+      kind: 'revert';
     }
   | {
-      kind: "save";
+      kind: 'save';
     }
   | {
-      kind: "save_as";
+      kind: 'save_as';
       name: string;
       notes?: string;
     }
   | {
-      kind: "rename";
+      kind: 'rename';
       name: string;
       notes?: string | null;
       profile: string;
     }
   | {
-      kind: "duplicate";
+      kind: 'duplicate';
       profile: string;
     }
   | {
-      kind: "delete";
+      kind: 'delete';
       profile: string;
     };
 
@@ -1481,12 +1525,21 @@ export interface AccountState {
 export interface AssetArtwork {
   block_id: string;
   cached: boolean;
+  creator?: string | null;
+  creator_url?: string | null;
   gear: string;
   /**
    * Hash of the metadata URL; URLs (potentially signed) never reach the browser or logs.
    */
   key?: string | null;
+  licence?: string | null;
+  page?: string | null;
   title: string;
+  /**
+   * The capture's TONE3000 tone, creator, pages and licence, from the
+   * preset file itself; absent when the block carries no TONE3000 record.
+   */
+  tone_id?: number | null;
 }
 export interface AudioProbe {
   channels: number;
@@ -1639,7 +1692,7 @@ export interface VenueSettings {
     VenueBandSettings,
     VenueBandSettings,
     VenueBandSettings,
-    VenueBandSettings
+    VenueBandSettings,
   ];
   trimDb: number;
 }
@@ -1703,7 +1756,8 @@ export interface ExtraInput {
 export interface ParameterBinding {
   controller: number;
   expression?: ExpressionPedal | null;
-  mode?: "absolute" | "toggle" | "relative_twos_complement" | "relative_offset64";
+  mode?:
+    'absolute' | 'toggle' | 'relative_twos_complement' | 'relative_offset64';
   target: Target2;
 }
 /**
@@ -1911,7 +1965,7 @@ export interface GestureOwner {
   token: string;
 }
 export interface ChainLayout {
-  input_mode?: "stereo" | "left" | "right" | "dual";
+  input_mode?: 'stereo' | 'left' | 'right' | 'dual';
   left: ChainBlock[];
   right: ChainBlock[];
   stereo: boolean;
@@ -1944,7 +1998,7 @@ export interface State2 {
   alignment: Measurement;
   balance: Measurement;
   error?: string | null;
-  solo?: "none" | "left" | "right";
+  solo?: 'none' | 'left' | 'right';
   spectrum?: Spectrum | null;
   tuner?: TunerReading | null;
   tuner_enabled: boolean;
@@ -2338,7 +2392,16 @@ export interface ApiError {
    * What kind of failure this is, so a client can choose one recovery
    * action without parsing the sentence (Sprint 07 7.24).
    */
-  code: "invalid" | "not_found" | "conflict" | "busy" | "locked" | "unavailable" | "timeout" | "storage" | "internal";
+  code:
+    | 'invalid'
+    | 'not_found'
+    | 'conflict'
+    | 'busy'
+    | 'locked'
+    | 'unavailable'
+    | 'timeout'
+    | 'storage'
+    | 'internal';
   error: string;
 }
 export interface GraphAudioCommand {
@@ -2782,7 +2845,7 @@ export interface LibraryItem {
   in_set_list?: boolean;
   kind: LibraryKind;
   name: string;
-  origin?: "tone3000" | "oxidal_example" | "mine";
+  origin?: 'tone3000' | 'oxidal_example' | 'mine';
   source_name: string;
   /**
    * An earlier saved revision of a preset that was saved again. It is kept
@@ -2792,7 +2855,7 @@ export interface LibraryItem {
 }
 export interface LibraryUpdate {
   action: LibraryAction;
-  entry_kind?: ("original" | "owned" | "graph") | "rig";
+  entry_kind?: ('original' | 'owned' | 'graph') | 'rig';
   expected_revision: string;
   id?: string;
 }
@@ -3296,7 +3359,7 @@ export interface Model {
   tone_id: number;
 }
 export interface ModelQuery {
-  architecture?: ("1" | "2" | "custom") | "any";
+  architecture?: ('1' | '2' | 'custom') | 'any';
   page?: number;
   tone_id: number;
 }
@@ -3441,7 +3504,7 @@ export interface Editing {
   target: string;
 }
 export interface ChainLayout1 {
-  input_mode?: "stereo" | "left" | "right" | "dual";
+  input_mode?: 'stereo' | 'left' | 'right' | 'dual';
   left: ChainBlock[];
   right: ChainBlock[];
   stereo: boolean;
@@ -3742,7 +3805,7 @@ export interface ReampRequest {
   /**
    * No default: the user must choose (calibration applied once).
    */
-  processing: "current" | "none";
+  processing: 'current' | 'none';
   source: string;
   tailSeconds?: number;
 }
@@ -4002,6 +4065,11 @@ export interface Control {
   maximum: number;
   minimum: number;
   /**
+   * The value the saved preset holds, present only while the playing value
+   * differs from it, so any client can list and undo live edits.
+   */
+  saved?: number | null;
+  /**
    * Named values of an LV2 port (`lv2:scalePoint`), sorted by value, so an
    * edit dialog can offer "Ping-pong" rather than "2"; empty when none.
    */
@@ -4223,6 +4291,12 @@ export interface RigPage {
   presets: RigEntry[];
 }
 export interface RigEntry {
+  /**
+   * The preset's blocks in signal order (each path in turn after a split),
+   * so a list can draw the chain without opening the preset. A client
+   * names effects from the plugin URI with its own plugin catalog.
+   */
+  blocks?: RigBlock[];
   id: string;
   lv2_instances: number;
   /**
@@ -4239,6 +4313,20 @@ export interface RigEntry {
    */
   scenes?: string[];
   topology: RigTopology;
+}
+/**
+ * One block of a saved preset, as a library list shows it.
+ */
+export interface RigBlock {
+  /**
+   * Saved turned off.
+   */
+  bypassed?: boolean;
+  kind: RigBlockKind;
+  /**
+   * The effect's LV2 plugin URI; absent for a capture (TONE3000) block.
+   */
+  plugin_uri?: string | null;
 }
 export interface RigNativeSource {
   preset: Inspection;
@@ -4667,7 +4755,7 @@ export interface Page {
   total_pages?: number;
 }
 export interface ToneQuery {
-  collection?: "favorites" | "downloaded" | "created" | "trending" | "latest";
+  collection?: 'favorites' | 'downloaded' | 'created' | 'trending' | 'latest';
   /**
    * Only tones of this gear type; none lists every type.
    */

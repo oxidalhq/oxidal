@@ -1245,7 +1245,8 @@ const localModelsValidator = ajv.compile<LocalModelPage>({
   $ref: '#/$defs/LocalModelPage',
 });
 /** A tone's picture, fetched once through the unit and kept there. */
-export const toneImage = (id: number) => `/api/v1/tone3000/tones/${id}/image`;
+export const toneImage = (id: number, n = 0) =>
+  `/api/v1/tone3000/tones/${id}/image${n ? `?n=${n}` : ''}`;
 export async function localModels(
   after: string | null,
   signal: AbortSignal,
