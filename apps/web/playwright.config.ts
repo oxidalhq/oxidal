@@ -13,6 +13,11 @@ if (apiPort === webPort) throw new Error('E2E API and web ports must differ');
 const apiOrigin = `http://127.0.0.1:${apiPort}`;
 const webOrigin = `http://127.0.0.1:${webPort}`;
 
+// The Rig draws its chain as a map by default. Most browser tests were written
+// for the tree, so they start with the tree chosen; set OXIDAL_E2E_CHAIN_VIEW=map
+// to run them against the map.
+const chainView = process.env.OXIDAL_E2E_CHAIN_VIEW === 'map' ? 'map' : 'tree';
+
 // Reuse the native load/edit/save scenario on each device when explicitly enabled.
 const deviceCoverage = {
   testMatch:
@@ -28,7 +33,24 @@ export default defineConfig({
   timeout: 30000,
   expect: { timeout: 7000 },
   reporter: [['list'], ['html', { open: 'never' }]],
-  use: { baseURL: webOrigin, trace: 'retain-on-failure' },
+  use: {
+    baseURL: webOrigin,
+    trace: 'retain-on-failure',
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: webOrigin,
+          localStorage: [
+            {
+              name: 'oxidal.rig.chain-view.2',
+              value: JSON.stringify(chainView),
+            },
+          ],
+        },
+      ],
+    },
+  },
   projects: [
     {
       name: 'chromium',

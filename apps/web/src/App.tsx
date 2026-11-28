@@ -1,9 +1,19 @@
-import { ArrowsSplit, Power, WarningCircle } from '@phosphor-icons/react';
+import {
+  ArrowsSplit,
+  Info,
+  LockSimple,
+  Monitor,
+  Power,
+  Repeat,
+  WarningCircle,
+  Waveform,
+} from '@phosphor-icons/react';
 import {
   lazy,
   Suspense,
   useCallback,
   useEffect,
+  useEffectEvent,
   useRef,
   useState,
 } from 'react';
@@ -24,9 +34,12 @@ import {
 import { Loading } from '@oxidal/design-system/components/states';
 import { Switch } from '@oxidal/design-system/components/switch';
 import { Caption, Eyebrow, Title } from '@oxidal/design-system/components/text';
+import { healthOf } from '@oxidal/design-system/lib/health';
+import { useVerticalRig } from '@oxidal/design-system/lib/use-media';
 import { useNotice } from '@oxidal/design-system/notices';
 import {
   AppShell,
+  type Destination,
   PageHeading,
   PlayingPreset,
 } from '@oxidal/design-system/patterns/app-shell';
@@ -37,6 +50,7 @@ import {
 } from '@oxidal/design-system/patterns/first-run';
 import { SettingsPage } from '@oxidal/design-system/patterns/settings-page';
 import {
+  SettingDisclosure,
   SettingGroup,
   SettingRow,
 } from '@oxidal/design-system/patterns/settings-page';
@@ -64,9 +78,11 @@ import {
   type Snapshot,
   type StorageState,
 } from './api';
+import { AppSearch } from './AppSearch';
 import { AudioSettings } from './AudioSettings';
-import { NowPlaying, SplitStatus } from './components/media/NowPlaying';
+import { SplitStatus } from './components/media/NowPlaying';
 import { MediaSheets } from './components/media/PlayerSheet';
+import { useSessionMedia } from './components/media/sessionMedia';
 import { SessionMediaProvider } from './components/media/SessionMediaProvider';
 import { ControlEditor } from './ControlEditor';
 import { DebugConsole } from './DebugConsole';
@@ -74,7 +90,11 @@ import { DevicePower } from './DevicePower';
 import { EffectPacks } from './EffectPacks';
 import { EngineSettings } from './EngineSettings';
 import { FeatureBoundary } from './FeatureBoundary';
+import { PhoneMiniPlayer, PlayerTime } from './features/dock/AppDock';
+import { requestTool } from './features/dock/toolNavigation';
 import { PerformanceTools } from './features/library/PerformanceTools';
+import { ProtectOffDialog } from './features/stage/StageControls';
+import { useOutputMute, useProtect } from './features/stage/stageState';
 import { GlobalTuner } from './GlobalTuner';
 import { GuitarSettings } from './GuitarSettings';
 import { InstalledEffects } from './InstalledEffects';
@@ -87,6 +107,8 @@ import { MidiSettings } from './MidiSettings';
 import { refreshMonitorFeed } from './monitorFeed';
 import { NativeDefaults } from './NativeDefaults';
 import { NetworkSettings } from './NetworkSettings';
+import { ResourceContext } from './resourceContext';
+import { OPEN_SCREEN_EVENT, type ScreenTarget } from './screenNavigation';
 import { publishSheetMidi } from './sheetMidi';
 import { SignalChain } from './SignalChain';
 import { StorageLock } from './StorageLock';
@@ -122,6 +144,25 @@ const WebTerminal = lazy(() =>
 
 const settingsSections = SETTINGS_SECTIONS.map((section) => section.id);
 
+/** What each page says once at its top (C2). */
+const PAGE_WORDS = {
+  library: {
+    eyebrow: 'On this unit',
+    title: 'Library',
+    caption: 'Your presets, Oxidal sounds, set lists, tones and stems.',
+  },
+  monitor: {
+    eyebrow: 'Loudness',
+    title: 'Levels',
+    caption: 'Sound check and readings for every preset.',
+  },
+  settings: {
+    eyebrow: 'This unit',
+    title: 'Settings',
+    caption: 'Audio, MIDI, network, display and the device itself.',
+  },
+} as const;
+
 function InstrumentApp() {
   const screen = useScreenSession();
   const [playingName, setPlayingName] = useState<string | null>(null);
@@ -155,7 +196,20 @@ function InstrumentApp() {
     new URLSearchParams(window.location.search).get('development') ===
       'simulator';
   const [view, setView] = useWorkspaceNavigation();
+  const phone = useVerticalRig();
   const [tunerOpen, setTunerOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  // ⌘K or Ctrl+K opens the one search from anywhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchOpen((o) => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   useEffect(() => {
     const open = () => setTunerOpen(true);
     window.addEventListener(OPEN_TUNER_EVENT, open);
@@ -180,13 +234,36 @@ function InstrumentApp() {
   });
   const [statusMode, setStatusMode] = useState<'simple' | 'detailed'>(() => {
     try {
-      return localStorage.getItem('oxidal.status') === 'simple'
-        ? 'simple'
-        : 'detailed';
+      // Simple (as C2: the light only on a problem) unless chosen.
+      return localStorage.getItem('oxidal.status') === 'detailed'
+        ? 'detailed'
+        : 'simple';
     } catch {
-      return 'detailed';
+      return 'simple';
     }
   });
+  // Settings › Display: keep the capsule open while playing (this browser only).
+  const [keepMenuOpen, setKeepMenuOpen] = useState(() => {
+    try {
+      return localStorage.getItem('oxidal.capsule.keep-open') === 'on';
+    } catch {
+      return false;
+    }
+  });
+  const changeKeepMenuOpen = (keep: boolean) => {
+    setKeepMenuOpen(keep);
+    try {
+      localStorage.setItem('oxidal.capsule.keep-open', keep ? 'on' : 'off');
+    } catch {
+      /* Session preference still works. */
+    }
+  };
+  // Restart and Shut down from the capsule's ☰ open Settings › Device with
+  // their usual confirmation; each request remounts that section.
+  const [powerAsk, setPowerAsk] = useState<{
+    action: 'reboot' | 'shutdown';
+    key: number;
+  } | null>(null);
   const changeStatus = (mode: 'simple' | 'detailed') => {
     setStatusMode(mode);
     try {
@@ -523,808 +600,993 @@ function InstrumentApp() {
     output: 'Output',
   };
 
+  const mute = useOutputMute(connected);
+  const lock = useProtect(connected);
+  useNotice(
+    'stage-controls',
+    mute.error || lock.error
+      ? { tone: 'error', text: mute.error || lock.error }
+      : null,
+  );
+  const health = healthOf(resource.readings, resource.state);
+  const media = useSessionMedia();
+  const openSettings = (section: (typeof settingsSections)[number]) =>
+    leaveScreen(() => {
+      showSettings();
+      setSettingsSection(section);
+    });
+  // Other screens ask for a screen by event (the chain bar, the edge lanes).
+  const openScreen = useEffectEvent((target: ScreenTarget) => {
+    if (target.screen === 'settings') openSettings(target.section);
+    else leaveScreen(() => setView(target.screen));
+  });
+  useEffect(() => {
+    const on = (event: Event) =>
+      openScreen((event as CustomEvent<ScreenTarget>).detail);
+    window.addEventListener(OPEN_SCREEN_EVENT, on);
+    return () => window.removeEventListener(OPEN_SCREEN_EVENT, on);
+  }, []);
+  const capsuleMenu = [
+    [
+      {
+        id: 'display',
+        label: 'Display mode',
+        icon: <Monitor />,
+        onSelect: () => openSettings('display'),
+      },
+      {
+        id: 'protect',
+        label: lock.protect ? 'Protected' : 'Protect',
+        icon: <LockSimple />,
+        checked: !!lock.protect,
+        disabled: lock.disabled,
+        onSelect: lock.request,
+      },
+    ],
+    [
+      {
+        id: 'restart-audio',
+        label: 'Restart audio',
+        icon: <Waveform />,
+        onSelect: () => openSettings('audio'),
+      },
+      {
+        id: 'restart-device',
+        label: 'Restart device',
+        icon: <Repeat />,
+        onSelect: () => {
+          setPowerAsk({ action: 'reboot', key: Date.now() });
+          openSettings('device');
+        },
+      },
+      {
+        id: 'shut-down',
+        label: 'Shut down device',
+        icon: <Power />,
+        destructive: true,
+        onSelect: () => {
+          setPowerAsk({ action: 'shutdown', key: Date.now() });
+          openSettings('device');
+        },
+      },
+    ],
+    [
+      {
+        id: 'about',
+        label: 'About',
+        icon: <Info />,
+        onSelect: () => openSettings('about'),
+      },
+    ],
+  ];
+
+  const navigate = (target: Destination) => {
+    const destination = target === 'levels' ? 'monitor' : target;
+    const go = () =>
+      destination === 'settings' ? showSettings() : setView(destination);
+    if (destination === view) go();
+    else leaveScreen(go);
+  };
+
   return (
-    <AppShell
-      destination={view === 'monitor' ? 'levels' : view}
-      onNavigate={(target) => {
-        const destination = target === 'levels' ? 'monitor' : target;
-        const go = () =>
-          destination === 'settings' ? showSettings() : setView(destination);
-        if (destination === view) go();
-        else leaveScreen(go);
-      }}
-      nowPlaying={
-        <>
-          <PlayingPreset name={headerName} />
-          <SplitStatus />
-        </>
-      }
-      readings={resource.readings}
-      resourceState={resource.state}
-      resourceConnected={resource.connected}
-      resourceLabel={resource.label}
-      status={statusMode}
-      bottomBar={<NowPlaying />}
-    >
-      <PerformanceTools
-        stage={displayMode === 'stage'}
-        tunerOpen={tunerOpen}
-        connected={connected}
-        slow={displayMode === 'epaper'}
+    <ResourceContext.Provider value={resource}>
+      <AppShell
+        destination={view === 'monitor' ? 'levels' : view}
+        onNavigate={navigate}
+        onSearch={() => setSearchOpen(true)}
+        nowPlaying={
+          <>
+            <PlayingPreset name={headerName} />
+            <SplitStatus />
+          </>
+        }
+        readings={resource.readings}
+        resourceState={resource.state}
+        resourceConnected={resource.connected}
+        resourceLabel={resource.label}
+        status={statusMode}
+        bar="capsule"
+        capsule={{
+          status: {
+            word: health.word,
+            problem: health.tone === 'hot' || resource.state === 'disconnected',
+          },
+          muted: !!mute.muted,
+          onMute: mute.toggle,
+          muteDisabled: mute.disabled,
+          menu: capsuleMenu,
+          playing: resource.running,
+          inputLevel: resource.levels?.input[0] ?? null,
+          keepOpen: keepMenuOpen,
+          rig: view === 'rig',
+          presetName: headerName,
+          // A track that is playing or paused partway: the capsule's
+          // now-playing part opens the Player. A track only cued at the
+          // start, or played to the end, waits in the Player instead, so the
+          // capsule does not carry a track nobody is using.
+          media:
+            media.ready &&
+            media.player?.track &&
+            (['playing', 'stalled', 'paused', 'interrupted'].includes(
+              media.shown,
+            ) ||
+              (media.shown === 'ready' && media.player.frame > 0))
+              ? {
+                  title: media.player.track.title,
+                  playing:
+                    media.shown === 'playing' || media.shown === 'stalled',
+                  position: <PlayerTime />,
+                  work:
+                    media.split?.phase === 'running'
+                      ? `Splitting ${media.split.percent}%`
+                      : undefined,
+                  onOpen: () => requestTool('player'),
+                }
+              : undefined,
+          wordmark:
+            displayMode === 'stage'
+              ? '/brand/wordmark-white.svg'
+              : '/brand/wordmark.svg',
+        }}
+        tempo={resource.tempo}
+        levels={resource.levels}
+        bottomBar={<PhoneMiniPlayer />}
       >
-        {tunerOpen && (
-          <GlobalTuner
-            onClose={() => setTunerOpen(false)}
-            slow={displayMode === 'epaper'}
-          />
+        {lock.confirmOff && (
+          <ProtectOffDialog onKeep={lock.keepOn} onTurnOff={lock.turnOff} />
         )}
-        <div
-          className={
-            'workspace-content px-page' +
-            (view === 'rig' && !audioRunning ? ' pt-4' : '')
-          }
+        <AppSearch
+          open={searchOpen}
+          onOpenChange={setSearchOpen}
+          onNavigate={navigate}
+          onTuner={() => setTunerOpen(true)}
+        />
+        <PerformanceTools
+          rig={view === 'rig'}
+          stage={displayMode === 'stage'}
+          tunerOpen={tunerOpen}
+          connected={connected}
+          slow={displayMode === 'epaper'}
         >
+          {tunerOpen && (
+            <GlobalTuner
+              onClose={() => setTunerOpen(false)}
+              slow={displayMode === 'epaper'}
+            />
+          )}
           <div
-            aria-hidden={
-              (view === 'rig' &&
-                (playingName !== null || mixedName !== null)) ||
-              undefined
-            }
             className={
-              view === 'settings' ||
-              view === 'library' ||
-              view === 'monitor' ||
-              view === 'guitars'
-                ? 'contents'
-                : view === 'rig' && audioRunning
-                  ? 'sr-only'
-                  : 'page-heading'
+              'workspace-content px-page' +
+              (view === 'rig' && !audioRunning ? ' pt-4' : '')
             }
           >
-            {view === 'guitars' ? null : view === 'settings' ? (
-              <PageHeading
-                eyebrow="Settings"
-                title="Settings"
-                className="px-0 md:hidden"
-              />
-            ) : view === 'library' || view === 'monitor' ? (
-              <PageHeading
-                title={view === 'library' ? 'Library' : 'Levels'}
-                className="px-0"
-              />
-            ) : (
-              <div>
-                <Eyebrow>
-                  {view === 'rig'
-                    ? audioRunning
-                      ? 'Playing'
-                      : developmentSimulator
-                        ? 'Development simulator'
-                        : 'Rig'
-                    : 'Rig'}
-                </Eyebrow>
-                <Title size="md" data-testid="active-preset">
-                  {view === 'rig'
-                    ? (playingName ??
-                      graphName ??
-                      mixedName ??
-                      (!developmentSimulator
-                        ? 'No preset playing'
-                        : !state
-                          ? 'Connecting'
-                          : state.preset === 'custom'
-                            ? 'Custom routing'
-                            : state.preset === 'parallel'
-                              ? 'Parallel rig'
-                              : 'Serial rig'))
-                    : SETTINGS_SECTIONS.find(({ id }) => id === settingsSection)
-                        ?.label}
-                </Title>
-              </div>
-            )}
-            {state &&
-              view === 'rig' &&
-              developmentSimulator &&
-              !audioRunning && (
-                <div className="m-0 flex shrink-0 flex-nowrap items-end justify-between gap-3 text-xs max-[380px]:flex-wrap min-[761px]:justify-start min-[761px]:gap-4 [&>[data-slot=form-field]]:m-0 max-[760px]:[&>[data-slot=form-field]]:min-w-0 max-[760px]:[&>[data-slot=form-field]]:flex-1 max-[380px]:[&>[data-slot=form-field]]:basis-full min-[761px]:[&>[data-slot=form-field]]:min-w-40">
-                  <FormField>
-                    Example preset
-                    <Select
-                      disabled={!connected}
-                      value={state.preset}
-                      onValueChange={(value) =>
-                        void run(
-                          {
-                            type: 'set',
-                            target: 'rig.preset',
-                            value: value === 'parallel' ? 1 : 0,
-                          },
-                          true,
-                        )
-                      }
-                    >
-                      <SelectTrigger aria-label="Example preset">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="custom" disabled>
-                          Custom routing
-                        </SelectItem>
-                        <SelectItem value="serial">Serial</SelectItem>
-                        <SelectItem value="parallel">Parallel</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </FormField>
-                  <TunerButton />
-                  <Button
-                    className="min-h-[max(48px,3rem)] min-w-[136px] max-[380px]:w-full"
-                    variant="outline"
-                    disabled={!connected}
-                    aria-pressed={state.bypassed}
-                    onClick={() =>
-                      void run({
-                        type: 'set',
-                        target: 'rig.bypass',
-                        value: state.bypassed ? 0 : 1,
-                      })
-                    }
-                  >
-                    <Power size={20} aria-hidden="true" />
-                    {state.bypassed ? 'Bypass on' : 'Bypass off'}
-                  </Button>
+            <div
+              aria-hidden={
+                (view === 'rig' &&
+                  (playingName !== null || mixedName !== null)) ||
+                undefined
+              }
+              className={
+                view === 'settings' ||
+                view === 'library' ||
+                view === 'monitor' ||
+                view === 'guitars'
+                  ? 'contents'
+                  : view === 'rig' && audioRunning
+                    ? 'sr-only'
+                    : 'page-heading'
+              }
+            >
+              {view === 'guitars' ||
+              (view === 'settings' &&
+                settingsSection === 'essentials' &&
+                setupOpen) ? null : view === 'settings' ||
+                view === 'library' ||
+                view === 'monitor' ? (
+                // The page name once (C2); on a phone the section picker
+                // follows, so the eyebrow and caption step aside.
+                <PageHeading
+                  size="lg"
+                  eyebrow={phone ? undefined : PAGE_WORDS[view].eyebrow}
+                  title={PAGE_WORDS[view].title}
+                  caption={phone ? undefined : PAGE_WORDS[view].caption}
+                  className="px-0 pt-6 pb-4 max-md:pt-4 max-md:pb-3"
+                />
+              ) : (
+                <div>
+                  <Eyebrow>
+                    {view === 'rig'
+                      ? audioRunning
+                        ? 'Playing'
+                        : developmentSimulator
+                          ? 'Development simulator'
+                          : 'Rig'
+                      : 'Rig'}
+                  </Eyebrow>
+                  <Title size="md" data-testid="active-preset">
+                    {view === 'rig'
+                      ? (playingName ??
+                        graphName ??
+                        mixedName ??
+                        (!developmentSimulator
+                          ? 'No preset playing'
+                          : !state
+                            ? 'Connecting'
+                            : state.preset === 'custom'
+                              ? 'Custom routing'
+                              : state.preset === 'parallel'
+                                ? 'Parallel rig'
+                                : 'Serial rig'))
+                      : SETTINGS_SECTIONS.find(
+                          ({ id }) => id === settingsSection,
+                        )?.label}
+                  </Title>
                 </div>
               )}
-          </div>
-          {view === 'rig' && developmentSimulator && !audioRunning && (
-            <div className="mb-2 flex flex-wrap items-center gap-2 gap-2.5 border border-l-2 border-border border-muted-foreground bg-muted bg-transparent px-2.5 px-3 py-1 py-2.5 text-sm text-muted-foreground [&_svg]:shrink-0 [&>button]:ml-auto">
-              <WarningCircle size={18} aria-hidden="true" />
-              <span>
-                <strong>Development simulator · no audio.</strong>
-              </span>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  showSettings();
-                  setSettingsSection('audio');
-                }}
-              >
-                Audio setup
-              </Button>
+              {state &&
+                view === 'rig' &&
+                developmentSimulator &&
+                !audioRunning && (
+                  <div className="m-0 flex shrink-0 flex-nowrap items-end justify-between gap-3 text-xs max-[380px]:flex-wrap min-[761px]:justify-start min-[761px]:gap-4 [&>[data-slot=form-field]]:m-0 max-[760px]:[&>[data-slot=form-field]]:min-w-0 max-[760px]:[&>[data-slot=form-field]]:flex-1 max-[380px]:[&>[data-slot=form-field]]:basis-full min-[761px]:[&>[data-slot=form-field]]:min-w-40">
+                    <FormField>
+                      Example preset
+                      <Select
+                        disabled={!connected}
+                        value={state.preset}
+                        onValueChange={(value) =>
+                          void run(
+                            {
+                              type: 'set',
+                              target: 'rig.preset',
+                              value: value === 'parallel' ? 1 : 0,
+                            },
+                            true,
+                          )
+                        }
+                      >
+                        <SelectTrigger aria-label="Example preset">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="custom" disabled>
+                            Custom routing
+                          </SelectItem>
+                          <SelectItem value="serial">Serial</SelectItem>
+                          <SelectItem value="parallel">Parallel</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormField>
+                    <TunerButton />
+                    <Button
+                      className="min-h-[max(48px,3rem)] min-w-[136px] max-[380px]:w-full"
+                      variant="outline"
+                      disabled={!connected}
+                      aria-pressed={state.bypassed}
+                      onClick={() =>
+                        void run({
+                          type: 'set',
+                          target: 'rig.bypass',
+                          value: state.bypassed ? 0 : 1,
+                        })
+                      }
+                    >
+                      <Power size={20} aria-hidden="true" />
+                      {state.bypassed ? 'Bypass on' : 'Bypass off'}
+                    </Button>
+                  </div>
+                )}
             </div>
-          )}
-          {!state ? (
-            <LoadingScreen
-              label="Connecting to Oxidal"
-              skeleton={
-                view === 'library' ? (
-                  location.hash === '#library/backing' ? (
-                    <PlayerSkeleton />
+            {view === 'rig' && developmentSimulator && !audioRunning && (
+              <div className="mb-2 flex flex-wrap items-center gap-2 gap-2.5 border border-l-2 border-border border-muted-foreground bg-muted bg-transparent px-2.5 px-3 py-1 py-2.5 text-sm text-muted-foreground [&_svg]:shrink-0 [&>button]:ml-auto">
+                <WarningCircle size={18} aria-hidden="true" />
+                <span>
+                  <strong>Development simulator · no audio.</strong>
+                </span>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    showSettings();
+                    setSettingsSection('audio');
+                  }}
+                >
+                  Audio setup
+                </Button>
+              </div>
+            )}
+            {!state ? (
+              <LoadingScreen
+                label="Connecting to Oxidal"
+                skeleton={
+                  view === 'library' ? (
+                    location.hash === '#library/backing' ? (
+                      <PlayerSkeleton />
+                    ) : (
+                      <LibrarySkeleton
+                        artwork={location.hash === '#library/tone3000'}
+                      />
+                    )
+                  ) : view === 'rig' ? (
+                    <RigSkeleton />
                   ) : (
-                    <LibrarySkeleton
-                      artwork={location.hash === '#library/tone3000'}
-                    />
+                    <SettingsSkeleton />
                   )
-                ) : view === 'rig' ? (
-                  <RigSkeleton />
-                ) : (
-                  <SettingsSkeleton />
-                )
-              }
-            />
-          ) : view === 'guitars' ? (
-            <div className="-mx-page">
-              <GuitarSettings />
-            </div>
-          ) : view === 'monitor' ? (
-            <FeatureBoundary name="Levels">
-              <Suspense fallback={<Loading label="Loading Levels…" />}>
-                <SoundCheck
+                }
+              />
+            ) : view === 'guitars' ? (
+              <div className="-mx-page">
+                <GuitarSettings />
+              </div>
+            ) : view === 'monitor' ? (
+              <FeatureBoundary name="Levels">
+                <Suspense fallback={<Loading label="Loading Levels…" />}>
+                  <SoundCheck
+                    connected={connected}
+                    displayMode={displayMode}
+                    onGuitars={() => setView('guitars')}
+                    onLibrary={() => setView('library')}
+                    onAudioSetup={() => {
+                      showSettings();
+                      setSettingsSection('audio');
+                    }}
+                  />
+                </Suspense>
+              </FeatureBoundary>
+            ) : view === 'library' ? (
+              <FeatureBoundary name="the Library">
+                <Suspense fallback={<Loading label="Loading Library…" />}>
+                  <Library
+                    connected={connected}
+                    onOpenRig={() => setView('rig')}
+                  />
+                </Suspense>
+              </FeatureBoundary>
+            ) : view === 'rig' ? (
+              <>
+                {/* Every Rig view's header holds Mute/Protect (7.28). */}
+                <LiveRig
                   connected={connected}
-                  displayMode={displayMode}
-                  onGuitars={() => setView('guitars')}
+                  onPlaying={setPlayingName}
                   onLibrary={() => setView('library')}
                   onAudioSetup={() => {
                     showSettings();
                     setSettingsSection('audio');
                   }}
-                />
-              </Suspense>
-            </FeatureBoundary>
-          ) : view === 'library' ? (
-            <FeatureBoundary name="the Library">
-              <Suspense fallback={<Loading label="Loading Library…" />}>
-                <Library
-                  connected={connected}
-                  onOpenRig={() => setView('rig')}
-                />
-              </Suspense>
-            </FeatureBoundary>
-          ) : view === 'rig' ? (
-            <>
-              {/* Every Rig view's header holds Mute/Protect (7.28). */}
-              <LiveRig
-                connected={connected}
-                onPlaying={setPlayingName}
-                onLibrary={() => setView('library')}
-                onAudioSetup={() => {
-                  showSettings();
-                  setSettingsSection('audio');
-                }}
-                hideInactive={
-                  developmentSimulator || graphPresent || mixedPresent
-                }
-              />
-              <Suspense
-                fallback={
-                  <LoadingScreen
-                    label="Loading the rig"
-                    skeleton={<RigSkeleton />}
-                  />
-                }
-              >
-                <FeatureBoundary name="the mixed rig">
-                  <MixedRig
-                    connected={connected}
-                    onPlaying={setMixedName}
-                    onPresent={setMixedPresent}
-                    otherPlaying={
-                      playingName !== null || graphName !== null || graphPresent
-                    }
-                  />
-                </FeatureBoundary>
-                <FeatureBoundary name="the effects rig">
-                  <GraphAuthor
-                    connected={connected}
-                    liveOnly
-                    onPlaying={setGraphName}
-                    onPresent={setGraphPresent}
-                    onBrowseLibrary={() => setView('library')}
-                    otherPlaying={playingName !== null || mixedName !== null}
-                    otherPresent={mixedPresent}
-                  />
-                </FeatureBoundary>
-              </Suspense>
-              {developmentSimulator && !audioRunning && (
-                <>
-                  <Card
-                    className="chain-panel mb-0 rounded-b-none bg-background text-foreground [box-shadow:none] [&_h2]:font-mono"
-                    aria-label="Signal chain"
-                  >
-                    <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <Title as="h2" size="sm">
-                          Signal chain
-                        </Title>
-                      </div>
-                      <div
-                        className="flex flex-wrap gap-1.5"
-                        aria-label="Routing mode"
-                      >
-                        <Button
-                          variant="outline"
-                          aria-pressed={!parallel}
-                          disabled={!connected}
-                          onClick={() => void routing(false)}
-                        >
-                          Serial
-                        </Button>
-                        <Button
-                          variant="outline"
-                          aria-pressed={parallel}
-                          disabled={!connected}
-                          onClick={() => void routing(true)}
-                        >
-                          <ArrowsSplit size={17} />
-                          Parallel
-                        </Button>
-                      </div>
-                    </div>
-                    <SignalChain
-                      state={state}
-                      parallel={!!parallel}
-                      selectedBlock={selectedBlock}
-                      connected={connected}
-                      onSelect={(id, parameter) => {
-                        setFocusedBlock(id);
-                        document
-                          .getElementById(`control-${parameter}`)
-                          ?.scrollIntoView({ block: 'nearest' });
-                      }}
-                    />
-                    <details className="[&>summary]:justify-end [&>summary]:text-xs [&>summary]:text-muted-foreground">
-                      <summary className="min-h-touch">Routing details</summary>
-                      <Caption>
-                        {parallel
-                          ? 'Input splits into A and B, then merges before the shared delay and reverb.'
-                          : 'One NAM path feeds the shared delay and reverb.'}{' '}
-                        Routing validation is active; this preview does not
-                        process audio.
-                      </Caption>
-                    </details>
-                  </Card>
-                  <Card
-                    className="rounded-t-none border-t-0"
-                    aria-label="Rig controls"
-                  >
-                    <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <Eyebrow>Quick controls</Eyebrow>
-                        <Title as="h2" size="sm">
-                          {blockNames[selectedBlock]}{' '}
-                          <span className="text-sm text-muted-foreground">
-                            / selected
-                          </span>
-                        </Title>
-                      </div>
-                      <span className="input-source" title="Last control input">
-                        Input:
-                        <strong data-testid="last-origin">
-                          {state.origin}
-                        </strong>
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 min-[680px]:grid-cols-4">
-                      {state.parameters.map((parameter) => (
-                        <div
-                          className="grid min-w-0 gap-1.5 rounded-md border border-border bg-card p-2 data-[selected=true]:border-foreground [&_output]:font-mono [&_output]:tabular-nums"
-                          key={parameter.id}
-                          id={`control-${parameter.id}`}
-                          data-selected={parameter.id.startsWith(
-                            `${selectedBlock}.`,
-                          )}
-                          onFocusCapture={() =>
-                            setFocusedBlock(
-                              parameter.id.split('.')[0] ?? 'nam-a',
-                            )
-                          }
-                        >
-                          <span className="text-base">{parameter.label}</span>
-                          <ControlEditor
-                            parameter={parameter}
-                            state={state}
-                            connected={connected}
-                            accept={accept}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
-                </>
-              )}
-            </>
-          ) : (
-            <SettingsPage
-              className="px-0 pt-4"
-              sections={SETTINGS_SECTIONS}
-              current={settingsSection}
-              onSelect={(value) => {
-                const section = SETTINGS_SECTIONS.find(
-                  ({ id }) => id === value,
-                );
-                if (section && section.id !== settingsSection)
-                  leaveScreen(() => setSettingsSection(section.id));
-              }}
-            >
-              {settingsSection === 'essentials' &&
-                (setupOpen ? (
-                  <FirstRun
-                    onStep={(route) => {
-                      setSetupOpen(false);
-                      openSetupStep(route);
-                    }}
-                    onDone={() => {
-                      setSetupOpen(false);
-                      setView('rig');
-                    }}
-                  />
-                ) : (
-                  <>
-                    <Suspense
-                      fallback={<Loading label="Reading device checks…" />}
-                    >
-                      <SoundCheck
-                        connected={connected}
-                        displayMode={displayMode}
-                        onGuitars={() => setView('guitars')}
-                        onLibrary={() => setView('library')}
-                        onAudioSetup={() => setSettingsSection('audio')}
-                        beforePlay={{
-                          storage: storage?.available
-                            ? (storage.current ?? null)
-                            : null,
-                          onStorage: () => setSettingsSection('maintenance'),
-                          onLevels: () => setView('monitor'),
-                        }}
-                      />
-                    </Suspense>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        window.location.hash = 'settings/essentials/setup';
-                      }}
-                    >
-                      Open setup guide
-                    </Button>
-                  </>
-                ))}
-              {settingsSection === 'display' && (
-                <DisplaySettings
-                  mode={displayMode}
-                  onModeChange={setDisplayMode}
-                  status={statusMode}
-                  onStatusChange={changeStatus}
-                  keepAwake={screen.keepAwake}
-                  onKeepAwakeChange={screen.setKeepAwake}
-                  wakeSupported={screen.wakeSupported}
-                  wakeStatus={screen.wakeStatus}
-                  onRetryWake={screen.retryWake}
-                  fullscreen={screen.fullscreen}
-                  fullscreenSupported={screen.fullscreenSupported}
-                  fullscreenError={screen.fullscreenError}
-                  onToggleFullscreen={() => void screen.toggleFullscreen()}
-                  help={
-                    <details className="border-y border-border py-1 text-sm [&>p]:mb-3 [&>p]:text-muted-foreground [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:justify-between [&>summary]:gap-3 [&>summary]:font-medium [&>summary]:after:text-lg [&>summary]:after:text-muted-foreground [&>summary]:after:content-['›'] open:[&>summary]:after:content-['−']">
-                      <summary>Display &amp; screen help</summary>
-                      <p>
-                        Preferences are saved on this browser. Keep-awake works
-                        while Oxidal is visible and retries when you return.
-                        Browser power settings can release it; fullscreen alone
-                        does not prevent sleep.
-                      </p>
-                      <p>
-                        Night darkens every surface for a dark stage. Sunlight
-                        is pure black on white. E-paper removes colour and
-                        motion. Set brightness and e-paper refresh on your
-                        device.
-                      </p>
-                    </details>
+                  hideInactive={
+                    developmentSimulator || graphPresent || mixedPresent
                   }
                 />
-              )}
-              {settingsSection === 'connections' && (
-                <NetworkSettings connected={connected} />
-              )}
-              {settingsSection === 'accounts' && (
-                <Tone3000Account connected={connected} />
-              )}
-              {settingsSection === 'audio' && (
-                <AudioSettings connected={connected} />
-              )}
-              {settingsSection === 'nam' && (
-                <section
-                  className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
-                  aria-label="NAM engine controls"
+                <Suspense
+                  fallback={
+                    <LoadingScreen
+                      label="Loading the rig"
+                      skeleton={<RigSkeleton />}
+                    />
+                  }
                 >
-                  <EngineSettings connected={connected} />
-                  <NativeDefaults connected={connected} />
-                </section>
-              )}
-              {settingsSection === 'effects' && (
-                <InstalledEffects connected={connected} />
-              )}
-              {settingsSection === 'plugins' && (
-                <EffectPacks
-                  connected={connected}
-                  audioRunning={audioRunning}
-                />
-              )}
-              {settingsSection === 'device' && (
-                <>
-                  <SettingGroup title="This device">
-                    <SettingRow label="Memory">
-                      {resource.readings.ram
-                        ? `${(resource.readings.ram.total / 1024).toFixed(1)} GiB`
-                        : 'Unavailable'}
-                    </SettingRow>
-                    <SettingRow label="Temperature">
-                      {resource.readings.temperature != null
-                        ? `${resource.readings.temperature.toFixed(0)} °C`
-                        : 'Unavailable'}
-                    </SettingRow>
-                  </SettingGroup>
-                  <DevicePower connected={connected} />
-                </>
-              )}
-              {settingsSection === 'maintenance' && (
-                <>
-                  <SettingGroup title="Storage">
-                    <SettingRow
-                      label="Backup"
-                      caption="Presets, set lists, descriptions, MIDI maps and local NAM and IR files."
-                    >
-                      <Button size="sm" variant="outline" asChild>
-                        <a href="/api/v1/backup/library" download>
-                          Download backup
-                        </a>
-                      </Button>
-                    </SettingRow>
-                    <SettingRow
-                      label="Restore chord sheets"
-                      caption="Open Songbook to review and restore a Songbook JSON backup."
-                    >
-                      <Button size="sm" variant="outline" asChild>
-                        <a href="#library/songbook">Open Songbook</a>
-                      </Button>
-                    </SettingRow>
-                  </SettingGroup>
-                  <StorageLock
-                    connected={connected}
-                    state={storage}
-                    onState={setStorage}
-                  />
-                  <FeatureBoundary name="the terminal">
-                    <Suspense fallback={<Loading label="Loading terminal…" />}>
-                      <WebTerminal />
-                    </Suspense>
+                  <FeatureBoundary name="the mixed rig">
+                    <MixedRig
+                      connected={connected}
+                      onPlaying={setMixedName}
+                      onPresent={setMixedPresent}
+                      otherPlaying={
+                        playingName !== null ||
+                        graphName !== null ||
+                        graphPresent
+                      }
+                    />
                   </FeatureBoundary>
-                  <DebugConsole />
-                  {developmentSimulator && (
-                    <details className="grid gap-3 rounded-lg border border-border bg-card p-4">
-                      <summary className="min-h-touch">
-                        Rig validation inspector
-                      </summary>
-                      <FormField>
-                        Rig JSON
-                        <textarea
-                          aria-label="Rig JSON"
-                          rows={8}
-                          value={draft || JSON.stringify(state.rig, null, 2)}
-                          onChange={(event) => setDraft(event.target.value)}
-                          spellCheck={false}
-                        />
-                      </FormField>
-                      <Button
-                        variant="outline"
-                        onClick={() => void validateDraft()}
-                        disabled={!connected}
+                  <FeatureBoundary name="the effects rig">
+                    <GraphAuthor
+                      connected={connected}
+                      liveOnly
+                      onPlaying={setGraphName}
+                      onPresent={setGraphPresent}
+                      onBrowseLibrary={() => setView('library')}
+                      otherPlaying={playingName !== null || mixedName !== null}
+                      otherPresent={mixedPresent}
+                    />
+                  </FeatureBoundary>
+                </Suspense>
+                {developmentSimulator && !audioRunning && (
+                  <>
+                    <Card
+                      className="chain-panel mb-0 rounded-b-none bg-background text-foreground [box-shadow:none] [&_h2]:font-mono"
+                      aria-label="Signal chain"
+                    >
+                      <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <Title as="h2" size="sm">
+                            Signal chain
+                          </Title>
+                        </div>
+                        <div
+                          className="flex flex-wrap gap-1.5"
+                          aria-label="Routing mode"
+                        >
+                          <Button
+                            variant="outline"
+                            aria-pressed={!parallel}
+                            disabled={!connected}
+                            onClick={() => void routing(false)}
+                          >
+                            Serial
+                          </Button>
+                          <Button
+                            variant="outline"
+                            aria-pressed={parallel}
+                            disabled={!connected}
+                            onClick={() => void routing(true)}
+                          >
+                            <ArrowsSplit size={17} />
+                            Parallel
+                          </Button>
+                        </div>
+                      </div>
+                      <SignalChain
+                        state={state}
+                        parallel={!!parallel}
+                        selectedBlock={selectedBlock}
+                        connected={connected}
+                        onSelect={(id, parameter) => {
+                          setFocusedBlock(id);
+                          document
+                            .getElementById(`control-${parameter}`)
+                            ?.scrollIntoView({ block: 'nearest' });
+                        }}
+                      />
+                      <details className="[&>summary]:justify-end [&>summary]:text-xs [&>summary]:text-muted-foreground">
+                        <summary className="min-h-touch">
+                          Routing details
+                        </summary>
+                        <Caption>
+                          {parallel
+                            ? 'Input splits into A and B, then merges before the shared delay and reverb.'
+                            : 'One NAM path feeds the shared delay and reverb.'}{' '}
+                          Routing validation is active; this preview does not
+                          process audio.
+                        </Caption>
+                      </details>
+                    </Card>
+                    <Card
+                      className="rounded-t-none border-t-0"
+                      aria-label="Rig controls"
+                    >
+                      <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <Eyebrow>Quick controls</Eyebrow>
+                          <Title as="h2" size="sm">
+                            {blockNames[selectedBlock]}{' '}
+                            <span className="text-sm text-muted-foreground">
+                              / selected
+                            </span>
+                          </Title>
+                        </div>
+                        <span
+                          className="input-source"
+                          title="Last control input"
+                        >
+                          Input:
+                          <strong data-testid="last-origin">
+                            {state.origin}
+                          </strong>
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 min-[680px]:grid-cols-4">
+                        {state.parameters.map((parameter) => (
+                          <div
+                            className="grid min-w-0 gap-1.5 rounded-md border border-border bg-card p-2 data-[selected=true]:border-foreground [&_output]:font-mono [&_output]:tabular-nums"
+                            key={parameter.id}
+                            id={`control-${parameter.id}`}
+                            data-selected={parameter.id.startsWith(
+                              `${selectedBlock}.`,
+                            )}
+                            onFocusCapture={() =>
+                              setFocusedBlock(
+                                parameter.id.split('.')[0] ?? 'nam-a',
+                              )
+                            }
+                          >
+                            <span className="text-base">{parameter.label}</span>
+                            <ControlEditor
+                              parameter={parameter}
+                              state={state}
+                              connected={connected}
+                              accept={accept}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  </>
+                )}
+              </>
+            ) : settingsSection === 'essentials' && setupOpen ? (
+              // The first-run welcome stands on its own under the capsule
+              // (C2), which already carries the wordmark.
+              <FirstRun
+                wordmark={false}
+                onStep={(route) => {
+                  setSetupOpen(false);
+                  openSetupStep(route);
+                }}
+                onDone={() => {
+                  setSetupOpen(false);
+                  setView('rig');
+                }}
+              />
+            ) : (
+              <SettingsPage
+                className="px-0 pt-4"
+                sections={SETTINGS_SECTIONS}
+                current={settingsSection}
+                onSelect={(value) => {
+                  const section = SETTINGS_SECTIONS.find(
+                    ({ id }) => id === value,
+                  );
+                  if (section && section.id !== settingsSection)
+                    leaveScreen(() => setSettingsSection(section.id));
+                }}
+              >
+                {settingsSection === 'essentials' &&
+                  (setupOpen ? (
+                    <FirstRun
+                      onStep={(route) => {
+                        setSetupOpen(false);
+                        openSetupStep(route);
+                      }}
+                      onDone={() => {
+                        setSetupOpen(false);
+                        setView('rig');
+                      }}
+                    />
+                  ) : (
+                    <>
+                      <Suspense
+                        fallback={<Loading label="Reading device checks…" />}
                       >
-                        Validate rig
-                      </Button>
-                      <p role="status">{validation}</p>
-                    </details>
-                  )}
-                </>
-              )}
-              {settingsSection === 'about' && <About />}
-              {settingsSection === 'midi' && !developmentSimulator && (
-                <MidiSettings connected={connected} />
-              )}
-              {settingsSection === 'midi' && developmentSimulator && (
-                <>
-                  <Card>
-                    <Title as="h2" size="sm">
-                      MIDI mapping
-                    </Title>
-                    <p className="text-sm text-muted-foreground">
-                      Current mapping:{' '}
-                      {state.mappings.mappings
-                        .map(
-                          (mapping) => `CC ${mapping.cc} → ${mapping.target}`,
-                        )
-                        .join(', ') || 'none'}
-                      . This form replaces the PoC knob mapping.
-                    </p>
-                    <FormGrid>
-                      <FormField>
-                        Target
-                        <Select value={target} onValueChange={setTarget}>
-                          <SelectTrigger aria-label="Target">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {state.parameters.map((p) => (
-                              <SelectItem key={p.id} value={p.id}>
-                                {p.label}
-                              </SelectItem>
-                            ))}
-                            {state.actions.map((action) => (
-                              <SelectItem key={action.id} value={action.id}>
-                                {action.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </FormField>
-                      <FormField>
-                        MIDI channel
-                        <input
-                          type="number"
-                          min="1"
-                          max="16"
-                          value={channel}
-                          onChange={(e) => setChannel(Number(e.target.value))}
+                        <SoundCheck
+                          connected={connected}
+                          displayMode={displayMode}
+                          onGuitars={() => setView('guitars')}
+                          onLibrary={() => setView('library')}
+                          onAudioSetup={() => setSettingsSection('audio')}
+                          beforePlay={{
+                            storage: storage?.available
+                              ? (storage.current ?? null)
+                              : null,
+                            onStorage: () => setSettingsSection('maintenance'),
+                            onLevels: () => setView('monitor'),
+                          }}
                         />
-                      </FormField>
+                      </Suspense>
+                      <SettingGroup title="Setup">
+                        <SettingRow
+                          label="Setup guide"
+                          caption="Step through audio, guitar, controller and network again."
+                        >
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              window.location.hash =
+                                'settings/essentials/setup';
+                            }}
+                          >
+                            Open setup guide
+                          </Button>
+                        </SettingRow>
+                      </SettingGroup>
+                    </>
+                  ))}
+                {settingsSection === 'display' && (
+                  <DisplaySettings
+                    mode={displayMode}
+                    onModeChange={setDisplayMode}
+                    status={statusMode}
+                    onStatusChange={changeStatus}
+                    keepAwake={screen.keepAwake}
+                    onKeepAwakeChange={screen.setKeepAwake}
+                    wakeSupported={screen.wakeSupported}
+                    wakeStatus={screen.wakeStatus}
+                    onRetryWake={screen.retryWake}
+                    fullscreen={screen.fullscreen}
+                    fullscreenSupported={screen.fullscreenSupported}
+                    fullscreenError={screen.fullscreenError}
+                    onToggleFullscreen={() => void screen.toggleFullscreen()}
+                    keepMenuOpen={keepMenuOpen}
+                    onKeepMenuOpenChange={changeKeepMenuOpen}
+                    help={
+                      <SettingDisclosure label="Display & screen help">
+                        <Caption>
+                          Preferences are saved on this browser. Keep-awake
+                          works while Oxidal is visible and retries when you
+                          return. Browser power settings can release it;
+                          fullscreen alone does not prevent sleep.
+                        </Caption>
+                        <Caption>
+                          Night darkens every surface for a dark stage. Sunlight
+                          is pure black on white. E-paper removes colour and
+                          motion. Set brightness and e-paper refresh on your
+                          device.
+                        </Caption>
+                      </SettingDisclosure>
+                    }
+                  />
+                )}
+                {settingsSection === 'connections' && (
+                  <NetworkSettings connected={connected} />
+                )}
+                {settingsSection === 'accounts' && (
+                  <Tone3000Account connected={connected} />
+                )}
+                {settingsSection === 'audio' && (
+                  <AudioSettings connected={connected} />
+                )}
+                {settingsSection === 'nam' && (
+                  <section
+                    className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start"
+                    aria-label="NAM engine controls"
+                  >
+                    <EngineSettings connected={connected} />
+                    <NativeDefaults connected={connected} />
+                  </section>
+                )}
+                {settingsSection === 'effects' && (
+                  <InstalledEffects connected={connected} />
+                )}
+                {settingsSection === 'plugins' && (
+                  <EffectPacks
+                    connected={connected}
+                    audioRunning={audioRunning}
+                  />
+                )}
+                {settingsSection === 'device' && (
+                  <>
+                    <SettingGroup title="This device">
+                      <SettingRow label="Memory">
+                        {resource.readings.ram
+                          ? `${(resource.readings.ram.total / 1024).toFixed(1)} GiB`
+                          : 'Unavailable'}
+                      </SettingRow>
+                      <SettingRow label="Temperature">
+                        {resource.readings.temperature != null
+                          ? `${resource.readings.temperature.toFixed(0)} °C`
+                          : 'Unavailable'}
+                      </SettingRow>
+                    </SettingGroup>
+                    <DevicePower
+                      key={powerAsk?.key ?? 0}
+                      connected={connected}
+                      ask={powerAsk?.action ?? null}
+                      onAnswered={() => setPowerAsk(null)}
+                    />
+                  </>
+                )}
+                {settingsSection === 'maintenance' && (
+                  <>
+                    <SettingGroup title="Storage">
+                      <SettingRow
+                        label="Backup"
+                        caption="Presets, set lists, descriptions, MIDI maps and local NAM and IR files."
+                      >
+                        <Button size="sm" variant="outline" asChild>
+                          <a href="/api/v1/backup/library" download>
+                            Download backup
+                          </a>
+                        </Button>
+                      </SettingRow>
+                      <SettingRow
+                        label="Restore chord sheets"
+                        caption="Open Songbook to review and restore a Songbook JSON backup."
+                      >
+                        <Button size="sm" variant="outline" asChild>
+                          <a href="#library/songbook">Open Songbook</a>
+                        </Button>
+                      </SettingRow>
+                    </SettingGroup>
+                    <StorageLock
+                      connected={connected}
+                      state={storage}
+                      onState={setStorage}
+                    />
+                    <SettingGroup title="Diagnostics">
+                      <FeatureBoundary name="the terminal">
+                        <Suspense
+                          fallback={<Loading label="Loading terminal…" />}
+                        >
+                          <WebTerminal />
+                        </Suspense>
+                      </FeatureBoundary>
+                      <DebugConsole />
+                    </SettingGroup>
+                    {developmentSimulator && (
+                      <details className="grid gap-3 rounded-lg border border-border bg-card p-4">
+                        <summary className="min-h-touch">
+                          Rig validation inspector
+                        </summary>
+                        <FormField>
+                          Rig JSON
+                          <textarea
+                            aria-label="Rig JSON"
+                            rows={8}
+                            value={draft || JSON.stringify(state.rig, null, 2)}
+                            onChange={(event) => setDraft(event.target.value)}
+                            spellCheck={false}
+                          />
+                        </FormField>
+                        <Button
+                          variant="outline"
+                          onClick={() => void validateDraft()}
+                          disabled={!connected}
+                        >
+                          Validate rig
+                        </Button>
+                        <p role="status">{validation}</p>
+                      </details>
+                    )}
+                  </>
+                )}
+                {settingsSection === 'about' && <About />}
+                {settingsSection === 'midi' && !developmentSimulator && (
+                  <MidiSettings connected={connected} />
+                )}
+                {settingsSection === 'midi' && developmentSimulator && (
+                  <>
+                    <Card>
+                      <Title as="h2" size="sm">
+                        MIDI mapping
+                      </Title>
+                      <p className="text-sm text-muted-foreground">
+                        Current mapping:{' '}
+                        {state.mappings.mappings
+                          .map(
+                            (mapping) => `CC ${mapping.cc} → ${mapping.target}`,
+                          )
+                          .join(', ') || 'none'}
+                        . This form replaces the PoC knob mapping.
+                      </p>
+                      <FormGrid>
+                        <FormField>
+                          Target
+                          <Select value={target} onValueChange={setTarget}>
+                            <SelectTrigger aria-label="Target">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {state.parameters.map((p) => (
+                                <SelectItem key={p.id} value={p.id}>
+                                  {p.label}
+                                </SelectItem>
+                              ))}
+                              {state.actions.map((action) => (
+                                <SelectItem key={action.id} value={action.id}>
+                                  {action.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </FormField>
+                        <FormField>
+                          MIDI channel
+                          <input
+                            type="number"
+                            min="1"
+                            max="16"
+                            value={channel}
+                            onChange={(e) => setChannel(Number(e.target.value))}
+                          />
+                        </FormField>
+                        <FormField>
+                          CC number
+                          <input
+                            type="number"
+                            min="0"
+                            max="127"
+                            value={cc}
+                            onChange={(e) => setCc(Number(e.target.value))}
+                          />
+                        </FormField>
+                        <FormField>
+                          Knob mode
+                          <Select
+                            value={mode}
+                            onValueChange={(value) =>
+                              setMode(value as typeof mode)
+                            }
+                          >
+                            <SelectTrigger aria-label="Knob mode">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="absolute">Absolute</SelectItem>
+                              <SelectItem value="relative_twos_complement">
+                                Relative · two’s complement
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </FormField>
+                      </FormGrid>
+                      <FormGrid>
+                        <FormField>
+                          Mapped minimum (0–1)
+                          <input
+                            type="number"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value={minimum}
+                            onChange={(e) => setMinimum(Number(e.target.value))}
+                          />
+                        </FormField>
+                        <FormField>
+                          Mapped maximum (0–1)
+                          <input
+                            type="number"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value={maximum}
+                            onChange={(e) => setMaximum(Number(e.target.value))}
+                          />
+                        </FormField>
+                        <FormField>
+                          Scaling curve
+                          <Select
+                            value={curve}
+                            onValueChange={(value) =>
+                              setCurve(value as typeof curve)
+                            }
+                          >
+                            <SelectTrigger aria-label="Scaling curve">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="linear">Linear</SelectItem>
+                              <SelectItem value="logarithmic">
+                                Logarithmic (minimum above zero)
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </FormField>
+                      </FormGrid>
+                      <div className="flex min-w-0 flex-wrap items-center gap-3">
+                        <Button
+                          variant="outline"
+                          disabled={!connected || !simulator}
+                          onClick={() => {
+                            learnArmed.current = !learnArmed.current;
+                            setLearning(learnArmed.current);
+                          }}
+                        >
+                          {learning
+                            ? 'Cancel MIDI learn'
+                            : 'Learn next MIDI message'}
+                        </Button>
+                        <span role="status">
+                          {learning
+                            ? 'Move a knob or send a simulator message…'
+                            : state.last_midi
+                              ? `Last input: CH ${state.last_midi.channel} / CC ${state.last_midi.cc} (${state.midi_mapped ? 'mapped' : 'unmapped'})`
+                              : 'No MIDI input yet'}
+                        </span>
+                      </div>
+                      <Caption>
+                        Bypass and preset targets use absolute CC, linear 0–1
+                        range, and no pickup. Values below 64 select off/serial;
+                        64–127 select on/parallel.
+                      </Caption>
+                      <div className="grid max-w-xl gap-2">
+                        <label className="flex min-h-11 items-center justify-between gap-3 text-sm">
+                          <span>Pickup / soft takeover</span>
+                          <Switch
+                            checked={pickup}
+                            onCheckedChange={setPickup}
+                            aria-label="Pickup / soft takeover"
+                          />
+                        </label>
+                        <label className="flex min-h-11 items-center justify-between gap-3 text-sm">
+                          <span>Send controller feedback</span>
+                          <Switch
+                            checked={feedback}
+                            onCheckedChange={setFeedback}
+                            aria-label="Send controller feedback"
+                          />
+                        </label>
+                      </div>
+                      <Button disabled={!connected} onClick={saveMapping}>
+                        Save mapping
+                      </Button>
+                      <Caption>
+                        Feedback updates supported displays, LEDs, or motors.
+                        Ordinary knobs use pickup; they cannot physically follow
+                        web edits.
+                      </Caption>
+                    </Card>
+                    <Card>
+                      <Title as="h2" size="sm">
+                        MIDI simulator
+                      </Title>
+                      <p>
+                        Inject a CC message into the running TONE3000 rig. The
+                        simulator does not require a connected controller.
+                      </p>
                       <FormField>
-                        CC number
+                        MIDI value
                         <input
+                          aria-label="MIDI value"
                           type="number"
                           min="0"
                           max="127"
-                          value={cc}
-                          onChange={(e) => setCc(Number(e.target.value))}
+                          value={midiValue}
+                          onChange={(e) => setMidiValue(Number(e.target.value))}
                         />
                       </FormField>
-                      <FormField>
-                        Knob mode
-                        <Select
-                          value={mode}
-                          onValueChange={(value) =>
-                            setMode(value as typeof mode)
-                          }
-                        >
-                          <SelectTrigger aria-label="Knob mode">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="absolute">Absolute</SelectItem>
-                            <SelectItem value="relative_twos_complement">
-                              Relative · two’s complement
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </FormField>
-                    </FormGrid>
-                    <FormGrid>
-                      <FormField>
-                        Mapped minimum (0–1)
-                        <input
-                          type="number"
-                          min="0"
-                          max="1"
-                          step="0.01"
-                          value={minimum}
-                          onChange={(e) => setMinimum(Number(e.target.value))}
-                        />
-                      </FormField>
-                      <FormField>
-                        Mapped maximum (0–1)
-                        <input
-                          type="number"
-                          min="0"
-                          max="1"
-                          step="0.01"
-                          value={maximum}
-                          onChange={(e) => setMaximum(Number(e.target.value))}
-                        />
-                      </FormField>
-                      <FormField>
-                        Scaling curve
-                        <Select
-                          value={curve}
-                          onValueChange={(value) =>
-                            setCurve(value as typeof curve)
-                          }
-                        >
-                          <SelectTrigger aria-label="Scaling curve">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="linear">Linear</SelectItem>
-                            <SelectItem value="logarithmic">
-                              Logarithmic (minimum above zero)
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </FormField>
-                    </FormGrid>
-                    <div className="flex min-w-0 flex-wrap items-center gap-3">
                       <Button
-                        variant="outline"
                         disabled={!connected || !simulator}
-                        onClick={() => {
-                          learnArmed.current = !learnArmed.current;
-                          setLearning(learnArmed.current);
-                        }}
+                        onClick={() =>
+                          void run({
+                            type: 'midi',
+                            input: {
+                              device: 'simulator',
+                              channel,
+                              cc,
+                              value: midiValue,
+                            },
+                          })
+                        }
                       >
-                        {learning
-                          ? 'Cancel MIDI learn'
-                          : 'Learn next MIDI message'}
+                        Send MIDI CC
                       </Button>
-                      <span role="status">
-                        {learning
-                          ? 'Move a knob or send a simulator message…'
-                          : state.last_midi
-                            ? `Last input: CH ${state.last_midi.channel} / CC ${state.last_midi.cc} (${state.midi_mapped ? 'mapped' : 'unmapped'})`
-                            : 'No MIDI input yet'}
-                      </span>
-                    </div>
-                    <Caption>
-                      Bypass and preset targets use absolute CC, linear 0–1
-                      range, and no pickup. Values below 64 select off/serial;
-                      64–127 select on/parallel.
-                    </Caption>
-                    <div className="grid max-w-xl gap-2">
-                      <label className="flex min-h-11 items-center justify-between gap-3 text-sm">
-                        <span>Pickup / soft takeover</span>
-                        <Switch
-                          checked={pickup}
-                          onCheckedChange={setPickup}
-                          aria-label="Pickup / soft takeover"
-                        />
-                      </label>
-                      <label className="flex min-h-11 items-center justify-between gap-3 text-sm">
-                        <span>Send controller feedback</span>
-                        <Switch
-                          checked={feedback}
-                          onCheckedChange={setFeedback}
-                          aria-label="Send controller feedback"
-                        />
-                      </label>
-                    </div>
-                    <Button disabled={!connected} onClick={saveMapping}>
-                      Save mapping
-                    </Button>
-                    <Caption>
-                      Feedback updates supported displays, LEDs, or motors.
-                      Ordinary knobs use pickup; they cannot physically follow
-                      web edits.
-                    </Caption>
-                  </Card>
-                  <Card>
-                    <Title as="h2" size="sm">
-                      MIDI simulator
-                    </Title>
-                    <p>
-                      Inject a CC message into the running TONE3000 rig. The
-                      simulator does not require a connected controller.
-                    </p>
-                    <FormField>
-                      MIDI value
-                      <input
-                        aria-label="MIDI value"
-                        type="number"
-                        min="0"
-                        max="127"
-                        value={midiValue}
-                        onChange={(e) => setMidiValue(Number(e.target.value))}
-                      />
-                    </FormField>
-                    <Button
-                      disabled={!connected || !simulator}
-                      onClick={() =>
-                        void run({
-                          type: 'midi',
-                          input: {
-                            device: 'simulator',
-                            channel,
-                            cc,
-                            value: midiValue,
-                          },
-                        })
-                      }
-                    >
-                      Send MIDI CC
-                    </Button>
-                    <div
-                      className="mt-6 flex flex-col gap-3 rounded-lg bg-muted p-4 text-sm"
-                      aria-label="MIDI feedback"
-                    >
-                      <Eyebrow>
-                        Confirmed output / isolated feedback route
-                      </Eyebrow>
-                      {state.feedback.length ? (
-                        state.feedback.map((item) => (
-                          <code key={item.mapping}>
-                            CH {item.channel} · CC {item.cc} · VALUE{' '}
-                            <span data-testid="feedback-value">
-                              {item.value}
-                            </span>
-                          </code>
-                        ))
-                      ) : (
-                        <span>No feedback yet</span>
-                      )}
-                    </div>
-                  </Card>
-                </>
-              )}
-            </SettingsPage>
-          )}
-        </div>
-        <MediaSheets />
-      </PerformanceTools>
-    </AppShell>
+                      <div
+                        className="mt-6 flex flex-col gap-3 rounded-lg bg-muted p-4 text-sm"
+                        aria-label="MIDI feedback"
+                      >
+                        <Eyebrow>
+                          Confirmed output / isolated feedback route
+                        </Eyebrow>
+                        {state.feedback.length ? (
+                          state.feedback.map((item) => (
+                            <code key={item.mapping}>
+                              CH {item.channel} · CC {item.cc} · VALUE{' '}
+                              <span data-testid="feedback-value">
+                                {item.value}
+                              </span>
+                            </code>
+                          ))
+                        ) : (
+                          <span>No feedback yet</span>
+                        )}
+                      </div>
+                    </Card>
+                  </>
+                )}
+              </SettingsPage>
+            )}
+          </div>
+          <MediaSheets />
+        </PerformanceTools>
+      </AppShell>
+    </ResourceContext.Provider>
   );
 }
 

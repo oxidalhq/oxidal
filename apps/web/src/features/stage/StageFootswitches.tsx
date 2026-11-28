@@ -30,6 +30,7 @@ export function StageFootswitches({
   boost,
   onStep,
   onToggle,
+  className,
 }: {
   layout: 'four' | 'ten';
   preset?: StageSwitchPreset;
@@ -40,6 +41,8 @@ export function StageFootswitches({
   boost?: boolean;
   onStep: (direction: 'previous' | 'next') => void;
   onToggle: (id: string) => void;
+  /** Sizing from the screen, as the Stage screen gives its switches room. */
+  className?: string;
 }) {
   const media = useSessionMedia();
   const [error, setError] = useState('');
@@ -113,6 +116,8 @@ export function StageFootswitches({
       >
         {(overrides, loading) => (
           <Footswitches
+            size="lg"
+            className={className}
             profile={mapped}
             overrides={overrides}
             state={{

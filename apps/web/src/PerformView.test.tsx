@@ -155,7 +155,7 @@ it('shows edge meters and live stats measured from this preset, and toggles stom
   expect(screen.queryByRole('button', { name: 'R Muff on' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Play' }));
   expect(screen.getByRole('button', { name: 'R Muff on' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Back to Rig' }));
+  fireEvent.click(screen.getByRole('button', { name: /back to Rig/i }));
   expect(edit).toHaveBeenCalled();
 });
 

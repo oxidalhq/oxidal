@@ -1,7 +1,16 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { CaretDown } from '@phosphor-icons/react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@oxidal/design-system/components/popover';
 import { Slider } from '@oxidal/design-system/components/slider';
+import { Switch } from '@oxidal/design-system/components/switch';
+import { Caption } from '@oxidal/design-system/components/text';
+import { cn } from '@oxidal/design-system/lib/cn';
 
 import { type UnitLevels, unitLevels } from './api';
 import {
@@ -22,14 +31,7 @@ const STEPS = 1000;
  * request is in flight only the newest value waits, so dragging never queues up.
  * @see docs/audio.md
  */
-export function MasterLevel({
-  disabled = false,
-  extra,
-}: {
-  disabled?: boolean;
-  /** A control that belongs beside Level, such as the playing preset's boost. */
-  extra?: ReactNode;
-}) {
+function useMasterLevel() {
   const [levels, setLevels] = useState<UnitLevels | null>(null);
   const [supported, setSupported] = useState(true);
   const [error, setError] = useState('');
@@ -100,6 +102,90 @@ export function MasterLevel({
     void send(next);
   }
 
+  return { supported, levels, error, latest, change, update };
+}
+type Level = ReturnType<typeof useMasterLevel>;
+
+export function MasterLevel({
+  disabled = false,
+  extra,
+  layout = 'row',
+}: {
+  disabled?: boolean;
+  /** A control that belongs beside Level, such as the playing preset's boost. */
+  extra?: ReactNode;
+  /**
+   * "row": Level with a Mono button, for the panel and the OUT popover.
+   * "page": Levels › Overview as C2 draws it, Master level beside a Mono
+   * switch with its note.
+   */
+  layout?: 'row' | 'page';
+}) {
+  const level = useMasterLevel();
+  return (
+    <LevelFields
+      level={level}
+      disabled={disabled}
+      extra={extra}
+      layout={layout}
+    />
+  );
+}
+
+/**
+ * The output level under the Rig's OUT meter: "OUT · −6.0 dB ⌄" opens the
+ * same Level, Mono and boost as the panel row, with the same taper.
+ * @see docs/interface.md
+ */
+export function OutLevelButton({
+  boost,
+  className,
+}: {
+  boost?: ReactNode;
+  /** Such as the full row height beside larger buttons (Perform). */
+  className?: string;
+}) {
+  const level = useMasterLevel();
+  if (!level.supported || !level.levels) return null;
+  const { output_level_db: db, mono } = level.levels;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="xs"
+          title="Output level, mono and boost"
+          className={cn('gap-1.5', className)}
+        >
+          <span className="text-xs small-caps text-muted-foreground">Out</span>
+          <span className="font-mono tabular-nums">{formatLevel(db)}</span>
+          {mono && <span className="text-xs text-muted-foreground">Mono</span>}
+          <CaretDown className="size-3.5" aria-hidden="true" />
+          <span className="sr-only">. Change the output level</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-96 max-w-[calc(100vw-2rem)]">
+        <section aria-label="Output level" className="grid gap-2">
+          <LevelFields level={level} extra={boost} />
+        </section>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function LevelFields({
+  level,
+  disabled = false,
+  extra,
+  layout = 'row',
+}: {
+  level: Level;
+  disabled?: boolean;
+  extra?: ReactNode;
+  layout?: 'row' | 'page';
+}) {
+  const { supported, levels, error, latest, change, update } = level;
+  const monoId = useId();
   if (!supported) return null;
   // Render once loaded so the row never flashes in and out on older daemons.
   if (!levels)
@@ -109,48 +195,83 @@ export function MasterLevel({
       </p>
     ) : null;
   const db = levels.output_level_db;
+  const toggleMono = () => {
+    const now = latest.current;
+    if (now) update({ ...now, mono: !now.mono });
+  };
+  const slider = (
+    <Slider
+      label={layout === 'page' ? 'Master level' : 'Level'}
+      readout={formatLevel(db)}
+      live
+      min={0}
+      max={STEPS}
+      step={1}
+      value={[Math.round(levelToPosition(db) * STEPS)]}
+      disabled={disabled}
+      aria-valuetext={formatLevel(db)}
+      title="Master output for every preset. Not saved in presets."
+      onValueChange={([position]) => change(positionToLevel(position! / STEPS))}
+      onKeyDown={(e) => {
+        // Arrow keys move in whole dB rather than fader steps.
+        const delta =
+          e.key === 'ArrowUp' || e.key === 'ArrowRight'
+            ? 1
+            : e.key === 'ArrowDown' || e.key === 'ArrowLeft'
+              ? -1
+              : 0;
+        if (!delta || disabled) return;
+        e.preventDefault();
+        const from = latest.current?.output_level_db ?? db;
+        change(
+          Math.min(LEVEL_MAX, Math.max(LEVEL_MIN, Math.round(from) + delta)),
+        );
+      }}
+    />
+  );
+  if (layout === 'page')
+    return (
+      <div className="grid min-w-0 gap-x-6 gap-y-4 md:grid-cols-2 md:items-center">
+        {slider}
+        <div className="flex min-w-0 items-center justify-between gap-3">
+          <label htmlFor={monoId} className="grid gap-0.5">
+            <span className="text-sm font-medium">Mono</span>
+            <Caption as="span" className="text-xs">
+              For a single PA or amp feed.
+            </Caption>
+          </label>
+          <Switch
+            id={monoId}
+            aria-label="Mono"
+            checked={levels.mono ?? false}
+            disabled={disabled}
+            title="Sum left and right: check how the preset sounds on a mono PA, or leave on for mono output"
+            onCheckedChange={toggleMono}
+          />
+        </div>
+        {extra && (
+          <div className="flex min-w-0 flex-wrap items-center gap-2 md:col-span-2">
+            {extra}
+          </div>
+        )}
+        {error && (
+          <p className="text-sm md:col-span-2" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
+    );
   return (
-    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 border-b border-border py-1 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
-      <Slider
-        label="Level"
-        readout={formatLevel(db)}
-        live
-        min={0}
-        max={STEPS}
-        step={1}
-        value={[Math.round(levelToPosition(db) * STEPS)]}
-        disabled={disabled}
-        aria-valuetext={formatLevel(db)}
-        title="Master output for every preset. Not saved in presets."
-        onValueChange={([position]) =>
-          change(positionToLevel(position! / STEPS))
-        }
-        onKeyDown={(e) => {
-          // Arrow keys move in whole dB rather than fader steps.
-          const delta =
-            e.key === 'ArrowUp' || e.key === 'ArrowRight'
-              ? 1
-              : e.key === 'ArrowDown' || e.key === 'ArrowLeft'
-                ? -1
-                : 0;
-          if (!delta || disabled) return;
-          e.preventDefault();
-          const from = latest.current?.output_level_db ?? db;
-          change(
-            Math.min(LEVEL_MAX, Math.max(LEVEL_MIN, Math.round(from) + delta)),
-          );
-        }}
-      />
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+      {slider}
       <Button
         type="button"
+        size="sm"
         variant={levels.mono ? 'default' : 'outline'}
         aria-pressed={levels.mono ?? false}
         disabled={disabled}
         title="Sum left and right: check how the preset sounds on a mono PA, or leave on for mono output"
-        onClick={() => {
-          const now = latest.current;
-          if (now) update({ ...now, mono: !now.mono });
-        }}
+        onClick={toggleMono}
       >
         Mono
       </Button>

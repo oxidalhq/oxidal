@@ -3,10 +3,16 @@ import {
   ArrowsClockwise,
   CaretLeft,
   CaretRight,
+  DotsThree,
 } from '@phosphor-icons/react';
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@oxidal/design-system/components/popover';
 import {
   Select,
   SelectContent,
@@ -15,6 +21,8 @@ import {
   SelectValue,
 } from '@oxidal/design-system/components/select';
 import { Caption } from '@oxidal/design-system/components/text';
+import { BarSlotContext } from '@oxidal/design-system/patterns/dock-context';
+import { RigHeading } from '@oxidal/design-system/patterns/rig-heading';
 import { StageHeading } from '@oxidal/design-system/patterns/stage-heading';
 import { FootswitchPad } from '@oxidal/design-system/widgets/footswitches';
 import { Meter } from '@oxidal/design-system/widgets/meter';
@@ -37,13 +45,14 @@ import {
 } from './features/stage/StageFootswitches';
 import { StageSetList } from './features/stage/StageSetList';
 import type { StageSwitchPreset } from './features/stage/StageSwitchLayout';
-import { GuitarSwitch } from './GuitarSettings';
+import { GuitarLane } from './GuitarSettings';
 import { friendlyError } from './lib/friendlyError';
 import { useSessionState } from './lib/sessionState';
-import { MasterLevel } from './MasterLevel';
+import { OutLevelButton } from './MasterLevel';
 import { useMonitorReadings } from './monitorFeed';
 import { setPerform, usePerform } from './performState';
 import type { RigLaneVM } from './rigChain';
+import { TunerButton } from './TunerButton';
 
 const FLOOR_DB = -60;
 const HOLD_MS = 1500;
@@ -192,6 +201,7 @@ function PresetSteps({
       />
       <div role="group" aria-label="Set list" className="inline-flex gap-1">
         <Button
+          size="sm"
           variant="outline"
           type="button"
           disabled={disabled || busy || stepping}
@@ -200,6 +210,7 @@ function PresetSteps({
           <CaretLeft aria-hidden="true" /> Previous
         </Button>
         <Button
+          size="sm"
           variant="outline"
           type="button"
           disabled={disabled || busy || stepping}
@@ -223,6 +234,7 @@ function PresetSteps({
         </div>
       )}
       <Button
+        size="sm"
         variant="outline"
         type="button"
         className="aria-pressed:bg-primary aria-pressed:text-primary-foreground"
@@ -249,6 +261,7 @@ export function PerformView({
   sceneControls,
   switchPreset,
   selector,
+  identity = null,
 }: {
   /** What is playing: the surface is the same for every engine. */
   now: {
@@ -272,7 +285,10 @@ export function PerformView({
   switchPreset?: StageSwitchPreset;
   /** The preset pads, rendered by the rig that owns the library. */
   selector: React.ReactNode;
+  /** The playing preset with ‹ ›, for the capsule (the Rig's own picker). */
+  identity?: React.ReactNode;
 }) {
+  const inCapsule = !!useContext(BarSlotContext)?.capsule;
   const [live, setLive] = useState<{
     snapshot: Monitoring | null;
     link: number | null;
@@ -471,16 +487,25 @@ export function PerformView({
       aria-label="Perform"
       data-mode={mode}
     >
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <Button
-          variant="outline"
-          type="button"
-          aria-label="Back to Rig"
-          onClick={onEdit}
-        >
-          <ArrowLeft aria-hidden="true" /> Rig
-        </Button>
-        <h2 className="m-0 text-base font-semibold">Perform</h2>
+      <h2 className="sr-only">Perform</h2>
+      {/* As C2: the capsule is the top. The preset with ‹ › sits in it, Edit
+          leads back to the Rig, and the board, the view and the set-list
+          steps open with the capsule (on a phone, in its tray). */}
+      <RigHeading
+        playing={now.playing}
+        identity={identity}
+        primary={
+          <Button
+            variant="ghost"
+            size="sm"
+            type="button"
+            aria-label="Edit, back to Rig"
+            onClick={onEdit}
+          >
+            <ArrowLeft aria-hidden="true" /> Edit
+          </Button>
+        }
+      >
         <Select
           value={layout}
           onValueChange={(value) => {
@@ -488,7 +513,11 @@ export function PerformView({
               setLayout(value);
           }}
         >
-          <SelectTrigger aria-label="On-screen controller layout" size="sm">
+          <SelectTrigger
+            aria-label="On-screen controller layout"
+            size="sm"
+            className="w-auto"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -497,11 +526,7 @@ export function PerformView({
             <SelectItem value="ten">Ten switches</SelectItem>
           </SelectContent>
         </Select>
-        <div
-          className="ml-auto inline-flex flex-wrap gap-1"
-          role="group"
-          aria-label="Perform view"
-        >
+        <div className="inline-flex" role="group" aria-label="Perform view">
           {(
             [
               ['play', 'Play'],
@@ -509,7 +534,8 @@ export function PerformView({
             ] as const
           ).map(([id, label]) => (
             <Button
-              variant={mode === id ? 'default' : 'outline'}
+              size="sm"
+              variant={mode === id ? 'secondary' : 'ghost'}
               key={id}
               type="button"
               aria-pressed={mode === id}
@@ -519,41 +545,44 @@ export function PerformView({
             </Button>
           ))}
         </div>
-      </div>
-      <div className="grid min-h-[calc(100dvh-9rem)] min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] gap-1 sm:gap-2">
-        <EdgeMeter
-          side="in"
-          channels={audio?.input}
-          held={inHeld}
-          clipped={[false, false]}
-          quiet={quiet}
-          showing={live.showing}
-        />
-        <div className="flex min-w-0 flex-col gap-3">
-          <StageHeading
-            name={
-              now.name ?? (switching ? 'Preparing preset…' : 'Unsaved preset')
-            }
-            state={
-              switching
-                ? 'Switching'
-                : now.scene
-                  ? `Scene · ${now.scene}`
-                  : now.playing
-                    ? 'Playing'
-                    : 'Stopped'
-            }
-            detail={
-              now.modified ? (
-                <span className="font-medium text-brand">
-                  edited, not saved
-                </span>
-              ) : (
-                'saved'
-              )
-            }
-          />
-          <div className="flex flex-wrap items-center justify-center gap-2">
+        {inCapsule ? (
+          // The capsule keeps one quiet ⋯ for the set list's songs and steps.
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Set list and songs"
+                title="Jump to a song, step through the set list"
+              >
+                <DotsThree weight="bold" aria-hidden="true" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              className="flex w-auto max-w-[calc(100vw-2rem)] flex-wrap items-center gap-2"
+            >
+              <RehearsalReport
+                stage
+                playing={
+                  link != null && now.playing
+                    ? (now.name ?? undefined)
+                    : undefined
+                }
+                disabled={disabled || !!switching || link == null}
+              />
+              <PresetSteps
+                disabled={disabled || !!switching}
+                muted={audio?.monitoring?.output_muted ?? false}
+                owner={recallKey}
+                stepping={stepping}
+                navigationRefresh={navigationRefresh}
+                onStep={(direction) => void step(direction)}
+              />
+            </PopoverContent>
+          </Popover>
+        ) : (
+          <>
             <RehearsalReport
               stage
               playing={
@@ -570,6 +599,46 @@ export function PerformView({
               stepping={stepping}
               navigationRefresh={navigationRefresh}
               onStep={(direction) => void step(direction)}
+            />
+          </>
+        )}
+      </RigHeading>
+      <div className="grid min-h-[calc(100dvh-6rem-var(--app-bottom-height,0px))] min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] gap-1 sm:gap-2">
+        <EdgeMeter
+          side="in"
+          channels={audio?.input}
+          held={inHeld}
+          clipped={[false, false]}
+          quiet={quiet}
+          showing={live.showing}
+        />
+        <div className="flex min-w-0 flex-col gap-3">
+          {/* The capsule carries the preset's name: under it the heading is
+              said to screen readers only, so the cards get the screen (C2). */}
+          <div className={inCapsule ? 'sr-only' : undefined}>
+            <StageHeading
+              compact
+              name={
+                now.name ?? (switching ? 'Preparing preset…' : 'Unsaved preset')
+              }
+              state={
+                switching
+                  ? 'Switching'
+                  : now.scene
+                    ? `Scene · ${now.scene}`
+                    : now.playing
+                      ? 'Playing'
+                      : 'Stopped'
+              }
+              detail={
+                now.modified ? (
+                  <span className="font-medium text-brand">
+                    edited, not saved
+                  </span>
+                ) : (
+                  'saved'
+                )
+              }
             />
           </div>
           {stepRefusal && <p role="alert">{stepRefusal}</p>}
@@ -593,7 +662,7 @@ export function PerformView({
           <LinkedSheet stage />
           {!switching && mode === 'play' && (
             <>
-              {scenes}
+              {layout === 'pads' && scenes}
               {layout !== 'pads' && (
                 <StageFootswitches
                   key={[
@@ -615,8 +684,10 @@ export function PerformView({
                   }
                   onStep={(direction) => void step(direction)}
                   onToggle={onToggle}
+                  className="min-h-[clamp(14rem,40vh,32rem)]"
                 />
               )}
+              {layout !== 'pads' && scenes}
               {layout === 'pads' &&
                 (boxes.length > 0 ? (
                   <div
@@ -645,24 +716,54 @@ export function PerformView({
                 ))}
             </>
           )}
-          <div className="flex flex-wrap items-end justify-center gap-x-6 gap-y-2 border-t border-border pt-2">
-            <PerformanceTempo />
-            <GuitarSwitch layout="compact" />
+          {/* One bottom row, as C2 Perform: tempo, Tuner, the guitar, the
+              cued track and the player, then the output level. */}
+          <section
+            aria-label="Tempo, player and level"
+            className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-3"
+          >
+            {/* "Tap · 96": the tempo, its source and the echo division open
+                from one button (C2). */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" aria-label="Tempo">
+                  Tap
+                  {snapshot?.tempo?.bpm != null && (
+                    <span className="font-mono tabular-nums">
+                      · {Math.round(snapshot.tempo.bpm)}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="start"
+                className="w-[min(30rem,calc(100vw-2rem))]"
+              >
+                <PerformanceTempo />
+              </PopoverContent>
+            </Popover>
+            <TunerButton />
+            {/* One height per row: these take the row's full height. */}
+            <GuitarLane className="h-auto min-h-touch" />
             {snapshot?.set_entry && (
               <CueEntryBacking
                 row={snapshot.set_entry}
                 disabled={disabled || !!switching || link == null}
               />
             )}
-          </div>
-          <PerformPlayerRow />
+            <div className="min-w-0 flex-1 basis-64">
+              <PerformPlayerRow />
+            </div>
+            <OutLevelButton className="h-auto min-h-touch" />
+          </section>
           {knobs}
-          <MasterLevel />
+          {/* As C2 keeps the stage clean: the live figures as one quiet
+              line, lit in oxide only when one needs attention. */}
           <details
-            className="min-w-0 rounded-lg border border-border bg-card px-3 data-[warn]:border-brand"
+            className="min-w-0 px-1 text-muted-foreground data-[warn]:text-brand"
             data-warn={stats.some((s) => s.warn) || undefined}
           >
-            <summary className="min-h-touch cursor-pointer py-3 text-sm font-medium">
+            <summary className="flex min-h-control-xs cursor-pointer items-center font-mono text-xs tabular-nums [@media(pointer:coarse)]:min-h-touch">
               {summary}
             </summary>
             <div

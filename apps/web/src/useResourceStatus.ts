@@ -57,6 +57,25 @@ export function useResourceStatus(
         0,
       )
     : null;
+  const peak_ = (v: number | undefined) =>
+    v !== undefined && Number.isFinite(v) ? v : null;
+  // Peak level of each channel, shown in the display bar; only while the meters are fresh.
+  const levels = audio
+    ? {
+        input: [
+          peak_(audio.input[0]?.peak_dbfs),
+          peak_(audio.input[1]?.peak_dbfs),
+        ] as [number | null, number | null],
+        output: [
+          peak_(audio.output[0]?.peak_dbfs),
+          peak_(audio.output[1]?.peak_dbfs),
+        ] as [number | null, number | null],
+      }
+    : null;
+  const tempo =
+    !disconnected && running && state?.tempo?.bpm != null
+      ? { bpm: state.tempo.bpm, source: String(state.tempo.source) }
+      : null;
   const host = disconnected ? null : state?.host;
   const used = host?.memory_used_bytes;
   const total = host?.memory_total_bytes;
@@ -106,6 +125,8 @@ export function useResourceStatus(
   return {
     connected: connected && state !== null && !disconnected,
     label: status,
+    levels,
+    tempo,
     preset: connected && !disconnected && running ? state?.preset : null,
     running: connected && !disconnected && running,
     state: (!connected || disconnected

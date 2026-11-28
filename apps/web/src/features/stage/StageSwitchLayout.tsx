@@ -457,40 +457,48 @@ export function StageSwitchLayout({
       {children(overrides, !!preset && !state)}
       {preset && path && (
         <>
-          <Button
-            variant="outline"
-            disabled={protectedMode || !state}
-            onClick={() => setEditing(true)}
-          >
-            Edit preset switches
-          </Button>
-          {(error ||
-            state?.layout.switches.some(
-              (a) => a.action.kind === 'freeze' && a.action.mode === 'gate',
-            )) && (
+          {/* Occasional actions: one small row under the switches, as the
+              Stage screen keeps them out of the way of the switches. */}
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Button
-              variant="outline"
-              onClick={() => {
-                const session = preset.session;
-                queue.current = queue.current
-                  .then(() => releasePresetSwitches(path, session))
-                  .then(
-                    () => {
-                      setReleaseNotice('Held switches released.');
-                      setError('');
-                    },
-                    (e) => setError(friendlyError(e, 'release held switches')),
-                  );
-              }}
+              size="sm"
+              variant="ghost"
+              disabled={protectedMode || !state}
+              onClick={() => setEditing(true)}
             >
-              Release held switches
+              Edit preset switches
             </Button>
-          )}
+            {(error ||
+              state?.layout.switches.some(
+                (a) => a.action.kind === 'freeze' && a.action.mode === 'gate',
+              )) && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const session = preset.session;
+                  queue.current = queue.current
+                    .then(() => releasePresetSwitches(path, session))
+                    .then(
+                      () => {
+                        setReleaseNotice('Held switches released.');
+                        setError('');
+                      },
+                      (e) =>
+                        setError(friendlyError(e, 'release held switches')),
+                    );
+                }}
+              >
+                Release held switches
+              </Button>
+            )}
+          </div>
           {releaseNotice && <p role="status">{releaseNotice}</p>}
           {error && (
             <p role="alert">
               {error}{' '}
               <Button
+                size="sm"
                 variant="outline"
                 onClick={async () => {
                   try {

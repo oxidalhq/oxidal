@@ -70,7 +70,7 @@ export function SceneChange({
     <>
       <Button
         type="button"
-        variant="link"
+        variant="ghost"
         size="sm"
         aria-label={`Scene change: ${blend ? `blend ${seconds(blend)}` : trails ? 'trails' : 'cut'}`}
         disabled={disabled}

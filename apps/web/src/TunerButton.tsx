@@ -15,14 +15,14 @@ export function TunerButton({
   return (
     <Button
       variant={compact ? 'ghost' : 'outline'}
-      size={compact ? 'icon' : 'md'}
+      size={compact ? 'sm' : 'md'}
       aria-label="Open tuner"
       title="Tuner"
       disabled={disabled}
       onClick={requestTuner}
     >
       {!compact && <MusicNotes aria-hidden="true" />}
-      <span className={compact ? undefined : 'phone-hidden'}>Tuner</span>
+      <span className={compact ? undefined : 'max-sm:sr-only'}>Tuner</span>
     </Button>
   );
 }

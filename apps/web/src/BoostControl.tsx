@@ -59,6 +59,7 @@ export function BoostControl({
   return (
     <>
       <Button
+        size="sm"
         variant="outline"
         className="boost-button"
         aria-label={`Boost ${db(total)}`}

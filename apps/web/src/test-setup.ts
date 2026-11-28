@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom/vitest';
+import { configure } from '@testing-library/react';
 import { vi } from 'vitest';
 // Page memory (search, scroll, return target) is per tab; start each test clean.
 import { beforeEach } from 'vitest';
@@ -18,10 +19,13 @@ globalThis.ResizeObserver ??= class {
 
 // The master level reads unit state over its own request; views that embed it
 // are tested without it. MasterLevel.test.tsx covers the real component.
-vi.mock('./MasterLevel', () => ({ MasterLevel: () => null }));
+vi.mock('./MasterLevel', () => ({
+  MasterLevel: () => null,
+  OutLevelButton: () => null,
+}));
 vi.mock('./GuitarSettings', () => ({
   GuitarSettings: () => null,
-  GuitarSwitch: () => null,
+  GuitarLane: () => null,
 }));
 beforeEach(() => {
   try {
@@ -29,5 +33,15 @@ beforeEach(() => {
   } catch {
     /* no storage */
   }
+  // The Rig draws its chain as a map by default; most tests were written for the
+  // tree, so each starts with the tree chosen. Map tests set the choice themselves.
+  try {
+    localStorage.setItem('oxidal.rig.chain-view.2', JSON.stringify('tree'));
+  } catch {
+    /* no storage */
+  }
 });
 window.scrollTo = () => {};
+
+// Finds wait a little longer on a busy host; a missing element still fails.
+configure({ asyncUtilTimeout: 3000 });

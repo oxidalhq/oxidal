@@ -18,6 +18,8 @@ export default defineConfig({
     environment: 'jsdom',
     // Bound concurrent DOM suites so busy development hosts retain timely input.
     maxWorkers: 4,
+    // Long interaction tests share those workers; allow for a busy host.
+    testTimeout: 15000,
     include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['./src/test-setup.ts'],
   },

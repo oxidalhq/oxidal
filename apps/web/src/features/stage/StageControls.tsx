@@ -3,21 +3,18 @@ import {
   LockSimpleOpen,
   SpeakerSlash,
 } from '@phosphor-icons/react';
-import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { ActionRow } from '@oxidal/design-system/components/form-layout';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
-import { protectState, setProtect } from '../../api';
-import { friendlyError } from '../../lib/friendlyError';
-import { useMonitorReadings } from '../../monitorFeed';
-import { setOutputMute } from './outputMute';
+import { useOutputMute, useProtect } from './stageState';
 
 /**
  * Mute and Protect, always one tap away on Rig and Perform (7.22). States are
  * read back from the device: Muted and Protect on are never shown on hope.
- * Turning Protect off asks first; turning it on does not.
+ * Turning Protect off asks first; turning it on does not. With the floating
+ * capsule, Mute sits in the capsule and Protect in its ☰ menu instead.
  * @see docs/interface.md
  */
 export function StageControls({
@@ -31,44 +28,13 @@ export function StageControls({
   grouped?: boolean;
 }) {
   const label = (text: string) =>
-    compact && !grouped ? <span className="phone-hidden">{text}</span> : text;
-  const [protect, setProtectOn] = useState<boolean | null>(null);
-  const [muted, setMuted] = useState<boolean | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [confirmOff, setConfirmOff] = useState(false);
-  const [error, setError] = useState('');
-  useMonitorReadings(5000, (reading) => {
-    const value = reading.snapshot?.audio?.monitoring?.output_muted;
-    setMuted(
-      !reading.disconnected && typeof value === 'boolean' ? value : null,
-    );
-  });
-  useEffect(() => {
-    let alive = true;
-    const read = () => {
-      void protectState()
-        .then((s) => alive && setProtectOn(s.on))
-        .catch(() => alive && setProtectOn(null));
-    };
-    read();
-    const timer = window.setInterval(read, 5000);
-    return () => {
-      alive = false;
-      window.clearInterval(timer);
-    };
-  }, []);
-  async function run(task: () => Promise<void>, failure: string) {
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      await task();
-    } catch (cause) {
-      setError(friendlyError(cause, failure));
-    } finally {
-      setBusy(false);
-    }
-  }
+    compact && !grouped ? <span className="max-sm:sr-only">{text}</span> : text;
+  const mute = useOutputMute(connected);
+  const lock = useProtect(connected);
+  const { muted } = mute;
+  const { protect } = lock;
+  const busy = mute.busy || lock.busy;
+  const error = mute.error || lock.error;
   return (
     <div
       className="mb-2 flex flex-wrap items-center justify-end gap-2 data-[compact]:m-0 data-[compact]:flex-none data-[compact]:flex-nowrap data-[grouped]:gap-0 data-[grouped]:rounded-lg data-[grouped]:bg-secondary"
@@ -79,44 +45,30 @@ export function StageControls({
     >
       <Button
         variant={muted ? 'destructive' : grouped ? 'ghost' : 'outline'}
-        size={compact ? 'md' : grouped ? 'sm' : 'md'}
+        size={compact || grouped ? 'sm' : 'md'}
         className={grouped ? 'min-w-touch px-2' : undefined}
         aria-label={muted ? 'Muted' : 'Mute'}
         title={muted ? 'Unmute output' : 'Mute output'}
         aria-pressed={!!muted}
-        disabled={!connected || busy || muted === null}
-        onClick={() =>
-          void run(
-            async () => {
-              await setOutputMute(!muted);
-              setMuted(!muted);
-            },
-            muted ? 'unmute' : 'mute',
-          )
-        }
+        disabled={mute.disabled || busy}
+        onClick={mute.toggle}
       >
         {!grouped && <SpeakerSlash aria-hidden="true" />}
         {label(muted ? 'Muted' : 'Mute')}
       </Button>
       <Button
         variant={protect ? 'default' : grouped ? 'ghost' : 'outline'}
-        size={compact ? 'md' : grouped ? 'sm' : 'md'}
+        size={compact || grouped ? 'sm' : 'md'}
         className={grouped ? 'min-w-touch px-2' : undefined}
         aria-label={protect ? 'Protected' : 'Protect'}
         aria-pressed={!!protect}
-        disabled={!connected || busy || protect === null}
+        disabled={lock.disabled || busy}
         title={
           protect
             ? 'Protect is on: edits and audio changes are blocked'
             : 'Turn on Protect to block edits while you play'
         }
-        onClick={() =>
-          protect
-            ? setConfirmOff(true)
-            : void run(async () => {
-                setProtectOn((await setProtect(true)).on);
-              }, 'turn on Protect')
-        }
+        onClick={lock.request}
       >
         {!grouped &&
           (protect ? (
@@ -131,32 +83,33 @@ export function StageControls({
           {error}
         </p>
       )}
-      {confirmOff && (
-        <AdjustmentDialog
-          title="Turn Protect off?"
-          onCancel={() => setConfirmOff(false)}
-        >
-          <p>
-            Edits, audio setup and presets that are not ready will work again,
-            from every browser and MIDI.
-          </p>
-          <ActionRow>
-            <Button variant="outline" onClick={() => setConfirmOff(false)}>
-              Keep Protect on
-            </Button>
-            <Button
-              onClick={() => {
-                setConfirmOff(false);
-                void run(async () => {
-                  setProtectOn((await setProtect(false)).on);
-                }, 'turn off Protect');
-              }}
-            >
-              Turn off
-            </Button>
-          </ActionRow>
-        </AdjustmentDialog>
+      {lock.confirmOff && (
+        <ProtectOffDialog onKeep={lock.keepOn} onTurnOff={lock.turnOff} />
       )}
     </div>
+  );
+}
+
+/** Turning Protect off always asks first. */
+export function ProtectOffDialog({
+  onKeep,
+  onTurnOff,
+}: {
+  onKeep: () => void;
+  onTurnOff: () => void;
+}) {
+  return (
+    <AdjustmentDialog title="Turn Protect off?" onCancel={onKeep}>
+      <p>
+        Edits, audio setup and presets that are not ready will work again, from
+        every browser and MIDI.
+      </p>
+      <ActionRow>
+        <Button variant="outline" onClick={onKeep}>
+          Keep Protect on
+        </Button>
+        <Button onClick={onTurnOff}>Turn off</Button>
+      </ActionRow>
+    </AdjustmentDialog>
   );
 }
