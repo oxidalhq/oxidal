@@ -1,4 +1,12 @@
-import { ArrowsClockwise, CaretLeft, CaretRight } from '@phosphor-icons/react';
+import {
+  ArrowRight,
+  ArrowsClockwise,
+  ArrowsSplit,
+  CaretLeft,
+  CaretRight,
+  Info,
+  Stack,
+} from '@phosphor-icons/react';
 import { useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -13,12 +21,14 @@ import {
 import { Caption, Title } from '@oxidal/design-system/components/text';
 import { useVerticalRig } from '@oxidal/design-system/lib/use-media';
 import { BarSlotContext } from '@oxidal/design-system/patterns/dock-context';
+import { ArtworkMosaic } from '@oxidal/design-system/widgets/artwork-mosaic';
 import {
   PresetNameButton,
   PresetSteps,
 } from '@oxidal/design-system/widgets/preset-steps';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
+import { artworkPath, presetArtwork } from './api';
 import { CueLinkedMix } from './components/media/SongLinkControls';
 import type { FactoryRecipe } from './factoryRecipes';
 import { LibrarySearch } from './features/library/LibrarySearch';
@@ -492,6 +502,8 @@ export function RigPresetSelector({
       {open && !preview && (
         <AdjustmentDialog
           title="Choose a preset"
+          // Room for each preset's picture, name and contents on a laptop.
+          className="sm:max-w-2xl"
           onCancel={() => setOpen(false)}
         >
           <LibrarySearch
@@ -529,97 +541,104 @@ export function RigPresetSelector({
                   }
                 : {})}
             >
-              <ul
-                className="grid min-w-0 list-none border-t border-border p-0"
-                aria-label={
-                  found
-                    ? 'Matching presets'
-                    : (SOURCES.find(([o]) => o === shownSource)?.[1] ?? '')
-                }
-              >
-                {shown.map((p) => {
-                  const currentRow = key(p) === selected;
-                  const playingRow = sounding && currentRow;
-                  const n = number(p);
-                  return (
+              {/* One height for every tab, so switching tabs never resizes the
+                  chooser; the list scrolls inside it. */}
+              <div className="h-[min(28rem,55dvh)] overflow-y-auto overscroll-contain">
+                <ul
+                  className="grid min-w-0 list-none border-t border-border p-0"
+                  aria-label={
+                    found
+                      ? 'Matching presets'
+                      : (SOURCES.find(([o]) => o === shownSource)?.[1] ?? '')
+                  }
+                >
+                  {shown.map((p) => {
+                    const currentRow = key(p) === selected;
+                    const playingRow = sounding && currentRow;
+                    const n = number(p);
+                    return (
+                      <li
+                        key={key(p)}
+                        className="flex min-w-0 items-center gap-2 border-b border-border"
+                      >
+                        <span
+                          className="min-w-[2ch] shrink-0 text-center font-mono text-sm tabular-nums"
+                          aria-hidden="true"
+                        >
+                          {n || ''}
+                        </span>
+                        <PresetThumb choice={p} />
+                        <Button
+                          variant={playingRow ? 'default' : 'ghost'}
+                          className="grid h-auto min-w-0 flex-1 grid-cols-[minmax(0,1fr)] justify-stretch justify-items-start gap-1 p-2 text-left whitespace-normal [&>span:first-child]:w-full [&>span:first-child]:break-words"
+                          data-preset={key(p)}
+                          aria-pressed={playingRow}
+                          disabled={disabled || loading}
+                          ref={(element) => {
+                            if (currentRow && element && !revealed.current) {
+                              revealed.current = true;
+                              element.scrollIntoView({ block: 'center' });
+                            }
+                          }}
+                          onClick={() => {
+                            setOpen(false);
+                            if (!playingRow) choose(p);
+                          }}
+                        >
+                          <span>{p.name}</span>
+                          <span
+                            className={
+                              playingRow
+                                ? 'text-xs font-medium'
+                                : 'text-xs text-muted-foreground'
+                            }
+                          >
+                            {playingRow ? 'Playing · ' : ''}
+                            {choiceSummary(p)}
+                            {found && ` · ${choiceSource(p)}`}
+                          </span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="shrink-0"
+                          aria-label={`Details: ${p.name}`}
+                          title="Details"
+                          onClick={() => setPreview(p)}
+                        >
+                          <Info aria-hidden="true" />
+                        </Button>
+                      </li>
+                    );
+                  })}
+                  {unsavedShown.map((recipe) => (
                     <li
-                      key={key(p)}
+                      key={`unsaved:${recipe.id}`}
                       className="flex min-w-0 items-center gap-2 border-b border-border"
                     >
                       <span
                         className="min-w-[2ch] shrink-0 text-center font-mono text-sm tabular-nums"
                         aria-hidden="true"
-                      >
-                        {n || ''}
-                      </span>
-                      <Button
-                        variant={playingRow ? 'default' : 'ghost'}
-                        className="grid h-auto min-w-0 flex-1 grid-cols-[minmax(0,1fr)] justify-stretch justify-items-start gap-1 p-2 text-left whitespace-normal [&>span:first-child]:w-full [&>span:first-child]:break-words"
-                        data-preset={key(p)}
-                        aria-pressed={playingRow}
-                        disabled={disabled || loading}
-                        ref={(element) => {
-                          if (currentRow && element && !revealed.current) {
-                            revealed.current = true;
-                            element.scrollIntoView({ block: 'center' });
-                          }
-                        }}
-                        onClick={() => {
-                          setOpen(false);
-                          if (!playingRow) choose(p);
-                        }}
-                      >
-                        <span>{p.name}</span>
-                        <span
-                          className={
-                            playingRow
-                              ? 'text-xs font-medium'
-                              : 'text-xs text-muted-foreground'
-                          }
-                        >
-                          {playingRow ? 'Playing · ' : ''}
-                          {choiceSummary(p)}
-                          {found && ` · ${choiceSource(p)}`}
-                        </span>
-                      </Button>
+                      />
                       <Button
                         variant="ghost"
-                        className="shrink-0 px-2"
-                        aria-label={`Details: ${p.name}`}
-                        onClick={() => setPreview(p)}
+                        className="grid h-auto min-w-0 flex-1 grid-cols-[minmax(0,1fr)] justify-stretch justify-items-start gap-1 p-2 text-left whitespace-normal [&>span:first-child]:w-full [&>span:first-child]:break-words"
+                        data-preset={`unsaved:${recipe.id}`}
+                        disabled={disabled || loading || !!saving}
+                        onClick={() => void saveAndChoose(recipe)}
                       >
-                        Details
+                        <span>{builtName(recipe)}</span>
+                        <span className="text-xs text-wrap text-muted-foreground">
+                          {saving === recipe.id
+                            ? 'Saving…'
+                            : `${recipe.scenes.length} scenes · saved when chosen`}
+                          {found && ' · Oxidal sounds'}
+                        </span>
                       </Button>
                     </li>
-                  );
-                })}
-                {unsavedShown.map((recipe) => (
-                  <li
-                    key={`unsaved:${recipe.id}`}
-                    className="flex min-w-0 items-center gap-2 border-b border-border"
-                  >
-                    <span
-                      className="min-w-[2ch] shrink-0 text-center font-mono text-sm tabular-nums"
-                      aria-hidden="true"
-                    />
-                    <Button
-                      variant="ghost"
-                      className="grid h-auto min-w-0 flex-1 grid-cols-[minmax(0,1fr)] justify-stretch justify-items-start gap-1 p-2 text-left whitespace-normal [&>span:first-child]:w-full [&>span:first-child]:break-words"
-                      data-preset={`unsaved:${recipe.id}`}
-                      disabled={disabled || loading || !!saving}
-                      onClick={() => void saveAndChoose(recipe)}
-                    >
-                      <span>{builtName(recipe)}</span>
-                      <span className="text-xs text-wrap text-muted-foreground">
-                        {saving === recipe.id
-                          ? 'Saving…'
-                          : `${recipe.scenes.length} scenes · saved when chosen`}
-                        {found && ' · Oxidal sounds'}
-                      </span>
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+                  ))}
+                </ul>
+              </div>
             </TabsContent>
           </Tabs>
           {saveError && <p role="alert">{saveError}</p>}
@@ -745,5 +764,56 @@ export function RigPresetSelector({
       )}
       {dialogs}
     </div>
+  );
+}
+
+/**
+ * A chooser row's picture: a TONE3000 preset's model pictures as a small
+ * mosaic, or for a preset with scenes or paths a glyph of how it is built.
+ */
+function PresetThumb({ choice }: { choice: Choice }) {
+  const [art, setArt] = useState<{ src: string; title: string }[]>([]);
+  const toneId = choice.kind === 'tone3000' ? choice.id : null;
+  const owned = choice.kind === 'tone3000' && choice.owned;
+  useEffect(() => {
+    if (!toneId) return;
+    const abort = new AbortController();
+    presetArtwork(toneId, owned, abort.signal).then(
+      (items) =>
+        setArt(
+          items
+            .filter((item) => item.cached && item.key)
+            .map((item) => ({
+              src: artworkPath(toneId, owned, item.key!),
+              title: `${item.title} · ${item.gear}`,
+            })),
+        ),
+      () => {},
+    );
+    return () => abort.abort();
+  }, [toneId, owned]);
+  const Glyph =
+    choice.kind === 'scenes'
+      ? choice.topology === 'scenes'
+        ? Stack
+        : choice.topology === 'parallel'
+          ? ArrowsSplit
+          : ArrowRight
+      : null;
+  return (
+    <span
+      aria-hidden={!art.length || undefined}
+      className="relative grid size-11 shrink-0 place-items-center overflow-hidden rounded-md border border-border bg-card text-muted-foreground [&_svg]:size-5"
+    >
+      {art.length ? (
+        <ArtworkMosaic sources={art} />
+      ) : Glyph ? (
+        <Glyph />
+      ) : (
+        <span className="font-display text-lg font-semibold">
+          {choice.name.slice(0, 1)}
+        </span>
+      )}
+    </span>
   );
 }
