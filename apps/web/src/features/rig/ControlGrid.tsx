@@ -11,7 +11,14 @@ import type { RigViewProps } from './useMixedRigSession';
  * Controls of the selected block, with native authoring and live EQ.
  * @see docs/interface.md
  */
-export function ControlGrid({ rig, vm }: RigViewProps) {
+export function ControlGrid({
+  rig,
+  vm,
+  values = true,
+}: RigViewProps & {
+  /** The value buttons; false where the block panel's sliders show them. */
+  values?: boolean;
+}) {
   const {
     accept,
     busy,
@@ -41,7 +48,7 @@ export function ControlGrid({ rig, vm }: RigViewProps) {
   } = vm;
   return (
     <>
-      {running && (
+      {running && values && (
         <div
           className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
           aria-label="Selected effect controls"

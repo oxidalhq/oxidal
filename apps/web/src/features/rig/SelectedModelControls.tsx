@@ -6,6 +6,10 @@ import {
 } from '@phosphor-icons/react';
 
 import { Button } from '@oxidal/design-system/components/button';
+import {
+  SettingGroup,
+  SettingRow,
+} from '@oxidal/design-system/patterns/settings-page';
 
 import { AddBlockChooser } from '../../AddBlockChooser';
 import { ArtworkDeck } from '../../AssetArtwork';
@@ -19,7 +23,18 @@ import type { RigViewProps } from './useMixedRigSession';
  * selection, Change model, Add, artwork, tone details and stage capture.
  * @see docs/interface.md
  */
-export function SelectedModelControls({ rig, vm }: RigViewProps) {
+export function SelectedModelControls({
+  rig,
+  vm,
+  inPanel = false,
+}: RigViewProps & {
+  /**
+   * In the block panel: no Change model, Add, artwork or tone card, which
+   * the panel (Change…, its picture and credit) and the Rig's bar (Add)
+   * already show; the chain's control sets as one titled row.
+   */
+  inPanel?: boolean;
+}) {
   const waiting = rigBusy(vm, rig);
   const { adding, setAdding, setInsertion, setNativeSelection, setPicker } =
     rig;
@@ -39,78 +54,96 @@ export function SelectedModelControls({ rig, vm }: RigViewProps) {
     state,
     wholeNative,
   } = vm;
+  // The chain's control sets (Tone, Gate, Pitch, Stereo) and its blocks.
+  const targets = selected && (
+    <>
+      {(
+        [
+          ['global', 'Tone', SlidersHorizontal],
+          ['gate', 'Gate', Waveform],
+          ['pitch', 'Pitch', MusicNotes],
+          ['stereo', 'Stereo', ArrowsSplit],
+        ] as const
+      )
+        .filter(([target]) =>
+          controls.some(
+            (c) =>
+              c.target.kind === 'native' &&
+              !c.target.parameter.startsWith('block:') &&
+              controlGroup(c.target.parameter) ===
+                (target === 'global' ? 'tone' : target),
+          ),
+        )
+        .map(([target, title, Icon]) => (
+          <Button
+            key={target}
+            variant="ghost"
+            aria-pressed={nativeTarget === target}
+            disabled={waiting}
+            onClick={() => setNativeSelection({ node: selected.id, target })}
+          >
+            <Icon aria-hidden="true" />
+            {title}
+          </Button>
+        ))}
+      {/* Scene lanes select models by their tiles; other rigs list them here. */}
+      {!inLane &&
+        eqBlocks.map((block, index) => {
+          const control = controls.find(
+            (c) =>
+              c.target.kind === 'native' &&
+              c.target.parameter === `block:${block.block_id}:enabled`,
+          );
+          const title =
+            control?.label.replace(/(?: · (?:left|right))? · enabled$/, '') ??
+            'Model';
+          return (
+            <Button
+              key={block.block_id}
+              variant="outline"
+              aria-label={`Select model ${index + 1}`}
+              aria-pressed={nativeTarget === block.block_id}
+              disabled={waiting}
+              className="h-auto min-h-11 max-w-full min-w-0 whitespace-normal"
+              onClick={() =>
+                setNativeSelection({
+                  node: selected.id,
+                  target: block.block_id,
+                })
+              }
+            >
+              <span className="min-w-0 break-words">
+                {index + 1} · {title}
+              </span>
+            </Button>
+          );
+        })}
+    </>
+  );
   return (
     <>
-      {running && selected && wholeNative && (
+      {running && selected && wholeNative && inPanel && (
+        <SettingGroup title="TONE3000 chain">
+          <SettingRow
+            label="Controls shown"
+            caption="The chain's tone, gate, pitch and stereo settings, or one of its blocks."
+            stacked
+          >
+            <div
+              className="flex flex-wrap items-center gap-2"
+              aria-label="Native model controls"
+            >
+              {targets}
+            </div>
+          </SettingRow>
+        </SettingGroup>
+      )}
+      {running && selected && wholeNative && !inPanel && (
         <div
           className="flex flex-wrap items-center gap-2"
           aria-label="Native model controls"
         >
-          {(
-            [
-              ['global', 'Tone', SlidersHorizontal],
-              ['gate', 'Gate', Waveform],
-              ['pitch', 'Pitch', MusicNotes],
-              ['stereo', 'Stereo', ArrowsSplit],
-            ] as const
-          )
-            .filter(([target]) =>
-              controls.some(
-                (c) =>
-                  c.target.kind === 'native' &&
-                  !c.target.parameter.startsWith('block:') &&
-                  controlGroup(c.target.parameter) ===
-                    (target === 'global' ? 'tone' : target),
-              ),
-            )
-            .map(([target, title, Icon]) => (
-              <Button
-                key={target}
-                variant="ghost"
-                aria-pressed={nativeTarget === target}
-                disabled={waiting}
-                onClick={() =>
-                  setNativeSelection({ node: selected.id, target })
-                }
-              >
-                <Icon aria-hidden="true" />
-                {title}
-              </Button>
-            ))}
-          {/* Scene lanes select models by their tiles; other rigs list them here. */}
-          {!inLane &&
-            eqBlocks.map((block, index) => {
-              const control = controls.find(
-                (c) =>
-                  c.target.kind === 'native' &&
-                  c.target.parameter === `block:${block.block_id}:enabled`,
-              );
-              const title =
-                control?.label.replace(
-                  /(?: · (?:left|right))? · enabled$/,
-                  '',
-                ) ?? 'Model';
-              return (
-                <Button
-                  key={block.block_id}
-                  variant="outline"
-                  aria-label={`Select model ${index + 1}`}
-                  aria-pressed={nativeTarget === block.block_id}
-                  disabled={waiting}
-                  className="h-auto min-h-11 max-w-full min-w-0 whitespace-normal"
-                  onClick={() =>
-                    setNativeSelection({
-                      node: selected.id,
-                      target: block.block_id,
-                    })
-                  }
-                >
-                  <span className="min-w-0 break-words">
-                    {index + 1} · {title}
-                  </span>
-                </Button>
-              );
-            })}
+          {targets}
           <div className="ml-auto flex flex-wrap gap-2">
             {eqBlock && (
               <Button
@@ -151,30 +184,35 @@ export function SelectedModelControls({ rig, vm }: RigViewProps) {
           )}
         </div>
       )}
-      {running && selectedModel && (
+      {running && selectedModel && !inPanel && (
         <ArtworkDeck model id={selectedModel.asset} />
       )}
-      {running && selectedToneId != null && (
+      {running && selectedToneId != null && !inPanel && (
         <ToneDetails toneId={selectedToneId} />
       )}
-      {running && selected && nativeModels && !wholeNative && eqBlock && (
-        <Button
-          variant="outline"
-          disabled={waiting}
-          onClick={() =>
-            setPicker({
-              opening: state,
-              node: selected.id,
-              target: eqBlock.block_id,
-              name: stageRole === 'cab' ? 'Cab IR' : 'Amp capture',
-              insert: false,
-              allowedFormat: stageRole === 'cab' ? 'ir' : 'nam',
-            })
-          }
-        >
-          {stageRole === 'cab' ? 'Change cab IR' : 'Change amp capture'}
-        </Button>
-      )}
+      {running &&
+        selected &&
+        nativeModels &&
+        !wholeNative &&
+        eqBlock &&
+        !inPanel && (
+          <Button
+            variant="outline"
+            disabled={waiting}
+            onClick={() =>
+              setPicker({
+                opening: state,
+                node: selected.id,
+                target: eqBlock.block_id,
+                name: stageRole === 'cab' ? 'Cab IR' : 'Amp capture',
+                insert: false,
+                allowedFormat: stageRole === 'cab' ? 'ir' : 'nam',
+              })
+            }
+          >
+            {stageRole === 'cab' ? 'Change cab IR' : 'Change amp capture'}
+          </Button>
+        )}
     </>
   );
 }

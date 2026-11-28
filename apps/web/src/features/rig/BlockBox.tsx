@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import {
@@ -25,12 +25,13 @@ import {
 } from '@oxidal/design-system/widgets/selected-block-panel';
 import { VisualControl } from '@oxidal/design-system/widgets/visual-control';
 
+import type { RigControl } from '../../api';
 import { controlLabel } from '../../lv2Control';
 import type { IdStep } from '../../rigChain';
 import { useToneSource } from '../../useToneSource';
 import { ControlGrid } from './ControlGrid';
 import { LiveLv2Panel } from './LiveLv2Panel';
-import { key, rigBusy } from './mixedRigViewModel';
+import { key, rigBusy, rigLocked } from './mixedRigViewModel';
 import { NativeLoad } from './NativeLoad';
 import { SelectedBlockPanel as RoutingPanel } from './SelectedBlockPanel';
 import { SelectedModelControls } from './SelectedModelControls';
@@ -86,8 +87,37 @@ export function BlockBox({ rig, vm }: RigViewProps) {
   const [minimised, setMinimised] = useState(false);
   const tone = useToneSource(selectedToneId ?? null);
   const lv2 = useLv2Controls({ rig, vm });
+  // While a value is on its way to the device the controls stay usable: the
+  // slider shows where it was dragged, and the newest value waits and goes
+  // next. Disabling them for each step made the whole box flicker.
+  const [dragged, setDragged] = useState<Record<string, number>>({});
+  const waiting = useRef<{
+    target: RigControl['target'];
+    value: number;
+  } | null>(null);
+  const inFlight = vm.disabled && !vm.controlsHeld;
+  useEffect(() => {
+    if (inFlight) return;
+    const next = waiting.current;
+    waiting.current = null;
+    const control = vm.state.control;
+    if (next && control)
+      void command({
+        kind: 'control',
+        command: {
+          session: control.session,
+          expected_revision: control.revision,
+          target: next.target,
+          value: next.value,
+        },
+      });
+    // The device has the last value: show what it reports.
+    else setDragged((d) => (Object.keys(d).length ? {} : d));
+  }, [inFlight, command, vm.state.control]);
   if (!running || !selected || !selectedView) return null;
   const busy = rigBusy(vm, rig);
+  /** Held for anything but a value in flight. */
+  const controlsBusy = vm.controlsHeld || rigLocked(rig) || !!rig.switching;
   const bypass = selectedView.branch ? undefined : selectedView.bypass;
   const on = selectedView.branch
     ? selectedView.branch.enabled
@@ -122,26 +152,32 @@ export function BlockBox({ rig, vm }: RigViewProps) {
       : key(c);
   const ordinary = visibleControls.filter((c) => !c.toggle);
   const plain = ordinary.slice(0, 4);
+  /** The value a control shows: where it was dragged, until the device has it. */
+  const shown = (c: { target: unknown; value: number }) =>
+    dragged[JSON.stringify(c.target)] ?? c.value;
   const asTile = (c: (typeof vm.controls)[number]): BlockControl => ({
     id: idOf(c),
     label: controlLabel(c.label),
-    value: c.value,
+    value: shown(c),
     min: c.minimum,
     max: c.maximum,
     step: c.integer ? 1 : (c.maximum - c.minimum) / 1000,
     main: true,
   });
   const tiles: BlockControl[] = effect
-    ? lv2.main.map((c) => ({
-        id: c.symbol,
-        label: pluginLabel(c),
-        value: c.value,
-        min: c.min,
-        max: c.max,
-        step: c.integer ? 1 : (c.max - c.min) / 1000,
-        unit: c.unit,
-        main: true,
-      }))
+    ? lv2.main.map((c) => {
+        const live = lv2.live.get(c.symbol);
+        return {
+          id: c.symbol,
+          label: pluginLabel(c),
+          value: live ? shown(live) : c.value,
+          min: c.min,
+          max: c.max,
+          step: c.integer ? 1 : (c.max - c.min) / 1000,
+          unit: c.unit,
+          main: true,
+        };
+      })
     : plain.map(asTile);
   // The drawing sees every ordinary control, not only the four tiles.
   const drawn = effect
@@ -149,12 +185,19 @@ export function BlockBox({ rig, vm }: RigViewProps) {
     : vm.controls
         .filter((c) => !c.toggle && c.target.kind === 'native')
         .map(asTile);
-  const setValue = (id: string, value: number) => {
-    const target = effect
+  const targetOf = (id: string) =>
+    effect
       ? lv2.live.get(id)
-      : (visibleControls.find((c) => idOf(c) === id) ??
-        vm.controls.find((c) => idOf(c) === id));
-    if (!target || !state.control || busy) return;
+      : (visibleControls.find((c) => idOf(c) === id || key(c) === id) ??
+        vm.controls.find((c) => idOf(c) === id || key(c) === id));
+  const setValue = (id: string, value: number) => {
+    const target = targetOf(id);
+    if (!target || !state.control || controlsBusy) return;
+    setDragged((d) => ({ ...d, [key(target)]: value }));
+    if (inFlight) {
+      waiting.current = { target: target.target, value };
+      return;
+    }
     void command({
       kind: 'control',
       command: {
@@ -197,7 +240,7 @@ export function BlockBox({ rig, vm }: RigViewProps) {
   const fullControls: BlockControl[] = visibleControls.map((c) => ({
     id: key(c),
     label: controlLabel(c.label),
-    value: c.value,
+    value: shown(c),
     min: c.minimum,
     max: c.maximum,
     step: c.integer ? 1 : (c.maximum - c.minimum) / 1000,
@@ -236,17 +279,19 @@ export function BlockBox({ rig, vm }: RigViewProps) {
           controls: fullControls,
         }}
         onControl={setValue}
-        disabled={busy}
+        disabled={controlsBusy}
+        // In place, the panel already draws the block beside its values.
+        visual={allControls.inPlace ? null : undefined}
       />
-      <details className="min-w-0 pt-1">
-        <summary>More for this block</summary>
-        <div className="grid gap-3 pt-3">
-          <NativeLoad load={vm.nativeLoad} />
-          <SelectedModelControls rig={rig} vm={vm} />
-          {selected.kind === 'lv2' && <LiveLv2Panel rig={rig} vm={vm} />}
-          {selected.kind !== 'lv2' && <ControlGrid rig={rig} vm={vm} />}
-        </div>
-      </details>
+      <NativeLoad load={vm.nativeLoad} />
+      {selected.kind === 'lv2' ? (
+        <LiveLv2Panel rig={rig} vm={vm} />
+      ) : (
+        <>
+          <SelectedModelControls rig={rig} vm={vm} inPanel />
+          <ControlGrid rig={rig} vm={vm} values={false} />
+        </>
+      )}
     </>
   );
   return (
@@ -308,7 +353,7 @@ export function BlockBox({ rig, vm }: RigViewProps) {
               role={lv2.layout?.role}
               controls={drawn}
               onControl={setValue}
-              disabled={busy}
+              disabled={controlsBusy}
               className={cn(
                 blockPanelVisualClass,
                 !on && 'text-muted-foreground',
@@ -329,7 +374,7 @@ export function BlockBox({ rig, vm }: RigViewProps) {
               fine: (c.step ?? 0.5) / 5,
               unit: c.unit,
               digits: c.step && c.step >= 1 ? 0 : 1,
-              disabled: busy,
+              disabled: controlsBusy,
               onChange: (value) => setValue(c.id, value),
             }}
           />

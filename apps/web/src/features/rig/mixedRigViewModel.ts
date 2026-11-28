@@ -267,6 +267,16 @@ export function mixedRigViewModel({
       row.status.tools?.alignment.state === 'listening',
   );
   const disabled = unavailable || !!measuring || !matching;
+  // What holds the block's controls: everything above except a command in
+  // flight, which only delays the next value (no flicker while dragging).
+  const controlsHeld =
+    !connected ||
+    eqBusy ||
+    !running ||
+    !!readError ||
+    modelPending ||
+    !!measuring ||
+    !matching;
   const nativeModels = state.control?.slots?.find(
     (s) => s.node === selected?.id,
   );
@@ -830,6 +840,7 @@ export function mixedRigViewModel({
     unavailable,
     measuring,
     disabled,
+    controlsHeld,
     nativeModels,
     slots,
     wholeNative,
