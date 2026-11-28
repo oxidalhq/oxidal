@@ -223,7 +223,12 @@ export function SelectedBlockPanel({
           {actions}
         </div>
       </div>
-      <div className="min-w-0" data-slot="block-panel-visual">
+      {/* On a laptop the drawing fills its column's height: no empty band
+          under it beside a taller block column. */}
+      <div
+        className="min-w-0 lg:relative lg:min-h-32 lg:self-stretch lg:[&>*]:absolute lg:[&>*]:inset-0 lg:[&>*]:h-auto"
+        data-slot="block-panel-visual"
+      >
         {visual}
       </div>
       <div

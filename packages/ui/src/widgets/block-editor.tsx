@@ -97,6 +97,8 @@ export function BlockQuickEditor({
    * readouts, so a thumb sets them without the keyboard taking the screen;
    * `popover` (laptops) draws drag-or-type fields in two columns.
    */
+  /** The drawing above the sliders; null for none, such as in a block
+   * panel that already draws the block beside its main values. */
   visual?: React.ReactNode;
   renderSlider?: (control: BlockControl) => React.ReactNode;
   renderValue?: (control: BlockControl) => React.ReactNode;
@@ -258,10 +260,14 @@ function ControlGroup({
   title: string;
   children: React.ReactNode;
 }) {
-  if (!title) return <section className="grid gap-3">{children}</section>;
+  // Sliders sit in columns when the editor is wide (a laptop's block panel),
+  // so none runs across the whole screen.
+  const columns =
+    'grid gap-x-8 gap-y-3 @3xl/editor:grid-cols-2 @6xl/editor:grid-cols-3';
+  if (!title) return <section className={columns}>{children}</section>;
   return (
     <CollapsibleSection title={title} defaultOpen>
-      {children}
+      <div className={columns}>{children}</div>
     </CollapsibleSection>
   );
 }
@@ -279,6 +285,8 @@ export function BlockFullEditor({
   block: BlockModel;
   onControl: (control: string, value: number) => void;
   onReset?: () => void;
+  /** The drawing above the sliders; null for none, such as in a block
+   * panel that already draws the block beside its main values. */
   visual?: React.ReactNode;
   renderSlider?: (control: BlockControl) => React.ReactNode;
   disabled?: boolean;
@@ -290,9 +298,9 @@ export function BlockFullEditor({
     groups.set(key, [...(groups.get(key) ?? []), control]);
   }
   return (
-    <div data-slot="block-full-editor" className="grid gap-5">
+    <div data-slot="block-full-editor" className="@container/editor grid gap-5">
       {block.kind === 'cab' && <IrFacts source={block.origin} hint />}
-      {visual ?? (
+      {visual !== undefined ? visual : (
         <VisualControl
           kind={block.kind}
           role={block.role}

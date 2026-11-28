@@ -804,6 +804,8 @@ export function RigSurface({
                 <>
                   <BlockFullEditor
                     block={block}
+                    // The panel draws the block beside its main values.
+                    visual={null}
                     onControl={(c, v) => control(block.id, c, v)}
                   />
                   {blockTools?.(block)}
