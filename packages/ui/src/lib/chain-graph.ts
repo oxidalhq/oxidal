@@ -201,8 +201,54 @@ export type ColumnLayout = { col: Record<string, number>; xs: number[] };
 export const nodeX = (n: GraphNode, lay: ColumnLayout) =>
   lay.xs[lay.col[n.id] ?? n.col] ?? 40;
 export const nodeY = (n: GraphNode) => n.row * ROW + 100;
-export function edgeMid(p: GraphNode, q: GraphNode, lay: ColumnLayout) {
+/** How far a line runs to bend from one row to another. */
+const BEND = 64;
+
+/**
+ * A connection's line and its middle (where its + sits and a dragged block
+ * lands). A line into a join (Σ, OUT) keeps to its own row and bends just
+ * before the join; a line out of a split (◆, IN) bends just after it; so a
+ * long line never bends across another path and seems to feed it. Between
+ * two blocks, or two joins, it bends half way.
+ */
+export function edgeShape(p: GraphNode, q: GraphNode, lay: ColumnLayout) {
   const x1 = nodeX(p, lay) + (p.kind !== 'block' ? 24 : CARD_HALF);
   const x2 = nodeX(q, lay) - (q.kind !== 'block' ? 26 : CARD_HALF + 2);
-  return { x: (x1 + x2) / 2, y: (nodeY(p) + nodeY(q)) / 2, x1, x2 };
+  const y1 = nodeY(p);
+  const y2 = nodeY(q);
+  const b = Math.min(BEND, Math.max(0, x2 - x1));
+  const into = q.kind === 'cap' && p.kind !== 'cap';
+  const outOf = p.kind === 'cap' && q.kind !== 'cap';
+  if (y1 !== y2 && into && x2 - x1 > 2 * b) {
+    const bx = x2 - b;
+    return {
+      d: `M ${x1} ${y1} L ${bx} ${y1} C ${bx + b / 2} ${y1}, ${bx + b / 2} ${y2}, ${x2} ${y2}`,
+      x: (x1 + bx) / 2,
+      y: y1,
+      x1,
+      x2,
+    };
+  }
+  if (y1 !== y2 && outOf && x2 - x1 > 2 * b) {
+    const bx = x1 + b;
+    return {
+      d: `M ${x1} ${y1} C ${x1 + b / 2} ${y1}, ${x1 + b / 2} ${y2}, ${bx} ${y2} L ${x2} ${y2}`,
+      x: (bx + x2) / 2,
+      y: y2,
+      x1,
+      x2,
+    };
+  }
+  const mx = (x1 + x2) / 2;
+  return {
+    d: `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`,
+    x: mx,
+    y: (y1 + y2) / 2,
+    x1,
+    x2,
+  };
+}
+export function edgeMid(p: GraphNode, q: GraphNode, lay: ColumnLayout) {
+  const { x, y, x1, x2 } = edgeShape(p, q, lay);
+  return { x, y, x1, x2 };
 }
