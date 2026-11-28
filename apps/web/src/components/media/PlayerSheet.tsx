@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { Button } from '@oxidal/design-system/components/button';
 import { FormField } from '@oxidal/design-system/components/form-layout';
 import { Slider } from '@oxidal/design-system/components/slider';
-import { Caption } from '@oxidal/design-system/components/text';
+import { Caption, Eyebrow } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { type MediaAsset, originalPath, updateAsset } from '../../api';
@@ -29,7 +29,7 @@ import { StateChip } from './StateChip';
 import { StemMixEditor } from './StemMixEditor';
 import { LiveStemsPanel } from './StemMixer';
 import { DeleteDialog, RenameDialog } from './TrackDialogs';
-import { FullTransport } from './TransportBar';
+import { CompactTransport, FullTransport } from './TransportBar';
 
 const LEVEL_MIN = -60;
 const LEVEL_MAX = 6;
@@ -148,7 +148,8 @@ function PlayerLevel() {
   );
 }
 
-function FullPlayer({ onClose }: { onClose: () => void }) {
+/** The player's controls, in the full player and in the Rig's side panel. */
+function FullPlayerBody() {
   const media = useSessionMedia();
   const { player, shown, muted, slow, tracks, send, pending } = media;
   const { at, length } = usePlayerPosition();
@@ -156,7 +157,7 @@ function FullPlayer({ onClose }: { onClose: () => void }) {
   const asset = tracks.find((t) => t.id === track?.id);
   const upNext = nextUp(player, tracks);
   return (
-    <AdjustmentDialog title="Backing player" onCancel={onClose} sideSheet>
+    <>
       <PerformanceTempo />
       {!track || shown === 'empty' ? (
         <div className="grid min-w-0 content-start gap-3">
@@ -275,6 +276,14 @@ function FullPlayer({ onClose }: { onClose: () => void }) {
           </Caption>
         </div>
       )}
+    </>
+  );
+}
+
+function FullPlayer({ onClose }: { onClose: () => void }) {
+  return (
+    <AdjustmentDialog title="Backing player" onCancel={onClose} sideSheet>
+      <FullPlayerBody />
     </AdjustmentDialog>
   );
 }
@@ -542,4 +551,74 @@ export function MediaSheets() {
       onClose={close}
     />
   ) : null;
+}
+
+/**
+ * The Rig's Backing panel, as Layout A draws it: the track, its play button
+ * and position, and the stem faders when it plays as stems. Tempo, repeat,
+ * practice tools and the track list are one tap away in the full player.
+ * @see docs/interface.md
+ */
+export function BackingPanelBody({
+  stems = true,
+}: {
+  /** The stem faders; the dock's Stems tool shows them on its own. */
+  stems?: boolean;
+} = {}) {
+  const media = useSessionMedia();
+  const { player, shown, tracks, notice } = media;
+  const { length } = usePlayerPosition();
+  const track = player?.track;
+  const asset = tracks.find((t) => t.id === track?.id);
+  return (
+    <div className="grid min-w-0 content-start gap-4">
+      <section className="grid min-w-0 gap-2" aria-label="Backing track">
+        <Eyebrow>Backing track</Eyebrow>
+        {!track || shown === 'empty' ? (
+          <>
+            <p className="m-0 text-sm text-muted-foreground">No track cued.</p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="justify-self-start"
+              onClick={() => media.setSheet({ kind: 'list' })}
+            >
+              Choose track
+            </Button>
+          </>
+        ) : (
+          <>
+            <p className="m-0 text-sm font-medium break-words">
+              {track.title}
+              <Caption as="span" className="font-normal">
+                {' · '}
+                {[asset ? formatLabel(asset) : null, formatTime(length)]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </Caption>
+            </p>
+            <PositionBar
+              key={`rail-position-${track.id}`}
+              disabled={shown === 'unavailable'}
+            />
+            <CompactTransport />
+            {notice && (
+              <Caption role="status" className="text-xs">
+                {notice}
+              </Caption>
+            )}
+          </>
+        )}
+      </section>
+      {stems && <LiveStemsPanel />}
+      <Button
+        size="sm"
+        variant="outline"
+        className="justify-self-start"
+        onClick={() => media.setSheet({ kind: 'player' })}
+      >
+        Open full player
+      </Button>
+    </div>
+  );
 }

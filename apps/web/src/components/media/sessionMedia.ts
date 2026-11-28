@@ -15,7 +15,7 @@ import {
   protectState,
 } from '../../api';
 import type { UploadItem, UploadQueue } from '../../lib/mediaUpload';
-import { formatTime, lengthOf, positionAt } from '../../lib/playerClock';
+import { lengthOf, positionAt } from '../../lib/playerClock';
 
 export type PlayerCommand = PlayerRequest['command'];
 
@@ -159,24 +159,6 @@ export function nextUp(
   const index = player.order.indexOf(player.track?.id ?? '');
   const id = player.order[index + 1];
   return tracks.find((track) => track.id === id);
-}
-
-/** The time line a compact surface shows for each state. */
-export function useTimeText(state: ShownState): string {
-  const { player } = useSessionMedia();
-  const { at, length } = usePlayerPosition();
-  switch (state) {
-    case 'ready':
-      return `0:00 / ${formatTime(length)}`;
-    case 'ended':
-      return `${formatTime(length)} / ${formatTime(length)}`;
-    case 'interrupted':
-      return `Audio restarted at ${formatTime(at)}`;
-    case 'unavailable':
-      return player?.reason ?? 'Not playable yet';
-    default:
-      return `${formatTime(at)} / ${formatTime(length)}`;
-  }
 }
 
 /** Protect as the device reports it, re-read every 5 s while shown. */

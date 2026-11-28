@@ -223,7 +223,7 @@ it('turns pass filters on and off and picks their slope', async () => {
   vi.mocked(venueCommand).mockImplementation(async (request) =>
     editing((request.command as { eq: VenueSettings }).eq),
   );
-  fireEvent.click(within(panel).getByRole('button', { name: 'Low-pass on' }));
+  fireEvent.click(within(panel).getByRole('switch', { name: 'Low-pass on' }));
   await waitFor(() => expect(venueCommand).toHaveBeenCalledTimes(1));
   const eq = (
     vi.mocked(venueCommand).mock.calls[0]![0].command as { eq: VenueSettings }

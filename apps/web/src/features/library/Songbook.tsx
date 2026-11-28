@@ -3,6 +3,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Button } from '@oxidal/design-system/components/button';
 import { Combobox } from '@oxidal/design-system/components/combobox';
 import { formatOf, parseSong } from '@oxidal/design-system/lib/song';
+import { SettingDisclosure } from '@oxidal/design-system/patterns/settings-page';
 import {
   Songbook as SongbookView,
   SongbookEditor,
@@ -172,22 +173,31 @@ export function Songbook({ connected }: { connected: boolean }) {
       {book.loading && <p role="status">Reading Songbook…</p>}
       {book.error && <p role="alert">{book.error}</p>}
       {book.warning && <p role="status">{book.warning}</p>}
+      {/* Picks up another viewer's save; kept in view for that reason. */}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="justify-self-start"
+        disabled={!connected || book.busy || book.loading}
+        onClick={() => void book.refresh().catch(() => {})}
+      >
+        Refresh
+      </Button>
+    </div>
+  );
+  // Backup, restore and a fresh read are rare: one fold-out row under the
+  // Songbook rather than a toolbar above it.
+  const backupRow = (
+    <SettingDisclosure
+      label="Backup and restore"
+      caption="Download every chord sheet as one file, or restore one into an empty Songbook."
+    >
       <div className="flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!connected || book.busy || book.loading}
-          onClick={() => void book.refresh().catch(() => {})}
-        >
-          Refresh
+        <Button variant="outline" size="sm" asChild>
+          <a href={chordSheetBackup} download>
+            Download Songbook backup
+          </a>
         </Button>
-        <a
-          className="inline-flex min-h-touch items-center text-sm underline"
-          href={chordSheetBackup}
-          download
-        >
-          Download Songbook backup
-        </a>
         <Button
           variant="outline"
           size="sm"
@@ -208,7 +218,7 @@ export function Songbook({ connected }: { connected: boolean }) {
           songs.
         </p>
       )}
-    </div>
+    </SettingDisclosure>
   );
   return (
     <>
@@ -252,6 +262,7 @@ export function Songbook({ connected }: { connected: boolean }) {
         )}
         notice={notices}
       />
+      {backupRow}
       <input
         ref={file}
         type="file"

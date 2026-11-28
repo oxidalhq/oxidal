@@ -1,5 +1,6 @@
 import { CheckCircle, Lock, Warning } from '@phosphor-icons/react';
 import {
+  type ComponentProps,
   createContext,
   type ReactNode,
   useCallback,
@@ -24,6 +25,7 @@ import {
   SelectValue,
 } from '@oxidal/design-system/components/select';
 import { Caption, Title } from '@oxidal/design-system/components/text';
+import { cn } from '@oxidal/design-system/lib/cn';
 
 import {
   keepVenuePreview,
@@ -387,20 +389,46 @@ export function VenueProvider({
   );
 }
 
-export function VenueEq({ connected }: { connected: boolean }) {
+export function VenueEq({
+  connected,
+  bare = false,
+}: {
+  connected: boolean;
+  /**
+   * Inside another card (Levels › Overview's Output, as C2 draws it): a
+   * section under one rule instead of a card of its own.
+   */
+  bare?: boolean;
+}) {
   const context = useContext(VenueContext);
   const subscribe = context?.subscribe;
   useEffect(() => subscribe?.(), [subscribe]);
   if (!context)
     return (
       <VenueProvider connected={connected}>
-        <VenueEq connected={connected} />
+        <VenueEq connected={connected} bare={bare} />
       </VenueProvider>
     );
-  return <VenueView owner={context.owner} />;
+  return <VenueView owner={context.owner} bare={bare} />;
 }
 
-function VenueView({ owner }: { owner: Owner }) {
+/** The Venue EQ's frame: a card, or a section under one rule inside another card. */
+function Frame({
+  bare,
+  className,
+  ...props
+}: ComponentProps<'section'> & { bare: boolean }) {
+  return bare ? (
+    <section
+      className={cn('border-t border-border pt-4', className)}
+      {...props}
+    />
+  ) : (
+    <Card className={className} {...props} />
+  );
+}
+
+function VenueView({ owner, bare = false }: { owner: Owner; bare?: boolean }) {
   const titleId = useId();
   const {
     slow,
@@ -431,7 +459,8 @@ function VenueView({ owner }: { owner: Owner }) {
   } = owner;
   if (loadError && !venue)
     return (
-      <Card
+      <Frame
+        bare={bare}
         className="grid min-w-0 items-start gap-3 gap-4 [&>button]:max-w-full [&>button]:justify-self-start"
         aria-labelledby={titleId}
       >
@@ -439,11 +468,12 @@ function VenueView({ owner }: { owner: Owner }) {
           Venue EQ
         </Title>
         <p role="alert">{loadError}</p>
-      </Card>
+      </Frame>
     );
   if (!venue || !active || !work)
     return (
-      <Card
+      <Frame
+        bare={bare}
         className="grid min-w-0 items-start gap-3 gap-4 [&>button]:max-w-full [&>button]:justify-self-start"
         aria-labelledby={titleId}
       >
@@ -451,7 +481,7 @@ function VenueView({ owner }: { owner: Owner }) {
           Venue EQ
         </Title>
         <p role="status">Reading the venue EQ…</p>
-      </Card>
+      </Frame>
     );
 
   const users = venue.profiles.filter((profile) => !profile.builtin);
@@ -459,7 +489,8 @@ function VenueView({ owner }: { owner: Owner }) {
   const check = headroom(work);
   const notice = venue.notice && venue.notice !== dismissed ? venue.notice : '';
   return (
-    <Card
+    <Frame
+      bare={bare}
       className="grid min-w-0 items-start gap-3 gap-4 [&>button]:max-w-full [&>button]:justify-self-start"
       aria-labelledby={titleId}
       data-locked={locked || undefined}
@@ -577,6 +608,7 @@ function VenueView({ owner }: { owner: Owner }) {
           {!disabled && (
             <RowMenu
               variant="outline"
+              size="icon"
               name={active.name}
               label="Profile actions"
               items={
@@ -631,6 +663,7 @@ function VenueView({ owner }: { owner: Owner }) {
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="flex flex-wrap items-center gap-1.5">
           <Button
+            size="sm"
             variant={venue.bypass ? 'default' : 'outline'}
             aria-pressed={venue.bypass}
             disabled={disabled}
@@ -641,6 +674,7 @@ function VenueView({ owner }: { owner: Owner }) {
             Bypass: {venue.bypass ? 'On' : 'Off'}
           </Button>
           <Button
+            size="sm"
             variant={compare ? 'default' : 'outline'}
             aria-pressed={compare}
             disabled={disabled || !preview}
@@ -682,6 +716,6 @@ function VenueView({ owner }: { owner: Owner }) {
           Sending…
         </p>
       )}
-    </Card>
+    </Frame>
   );
 }

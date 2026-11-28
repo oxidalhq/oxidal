@@ -10,7 +10,13 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { presetDetails } from './api';
 import { PresetDetailsDialog } from './PresetDetails';
 import { detailsMatch } from './presetMetadata';
-vi.mock('./api', () => ({ presetDetails: vi.fn() }));
+vi.mock('./api', () => ({
+  presetDetails: vi.fn(),
+  // A TONE3000 file's pictures: none here, so the details keep their notes.
+  presetArtwork: vi.fn(async () => []),
+  artworkPath: () => '',
+  saveArtwork: vi.fn(),
+}));
 HTMLDialogElement.prototype.showModal ??= function () {
   this.open = true;
 };

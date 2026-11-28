@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { NumberField } from '@oxidal/design-system/components/number-field';
+import { Switch } from '@oxidal/design-system/components/switch';
 
 import type { VenueBand, VenueSettings } from '../../api';
 import {
@@ -35,7 +36,7 @@ function StepField({
   onStep: (direction: -1 | 1) => void;
 }) {
   return (
-    <div className="grid min-w-0 gap-1 [&>span]:text-sm [&>span]:font-semibold">
+    <div className="grid min-w-0 gap-1 [&>span]:text-xs [&>span]:small-caps [&>span]:text-muted-foreground">
       <span>{label}</span>
       <div
         className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center rounded-md border border-border bg-card [&>output]:min-w-0 [&>output]:overflow-hidden [&>output]:text-center [&>output]:font-mono [&>output]:tabular-nums"
@@ -44,7 +45,7 @@ function StepField({
       >
         <Button
           variant="ghost"
-          size="icon"
+          size="icon-sm"
           aria-label={`Lower ${label}`}
           disabled={disabled}
           onClick={() => onStep(-1)}
@@ -58,7 +59,7 @@ function StepField({
         )}
         <Button
           variant="ghost"
-          size="icon"
+          size="icon-sm"
           aria-label={`Raise ${label}`}
           disabled={disabled}
           onClick={() => onStep(1)}
@@ -99,7 +100,7 @@ export function BandEditor({
   return (
     <>
       <div
-        className="grid min-w-0 grid-cols-7 gap-1 [&_small]:text-[0.625rem] [&_small]:whitespace-nowrap [&>button]:flex-col [&>button]:gap-0 [&>button]:px-0 [&>button]:py-1 [&>button[aria-pressed=true]]:bg-primary [&>button[aria-pressed=true]]:text-primary-foreground [&>button[data-off]]:border-dashed"
+        className="grid min-w-0 grid-cols-7 gap-1 [&_small]:text-[0.625rem] [&_small]:whitespace-nowrap [&>button]:flex-col [&>button]:gap-0 [&>button]:px-0 [&>button]:py-1 [&>button[aria-pressed=true]]:bg-foreground [&>button[aria-pressed=true]]:text-background [&>button[data-off]]:border-dashed"
         role="group"
         aria-label="Bands"
       >
@@ -133,18 +134,15 @@ export function BandEditor({
         aria-label={`${info.name} settings`}
         role="group"
       >
-        <div className="grid min-w-0 gap-1 [&>span]:text-sm [&>span]:font-semibold">
-          <span>{info.name}</span>
-          <Button
-            variant={band.enabled ? 'default' : 'outline'}
-            aria-pressed={band.enabled}
+        <label className="flex min-h-control min-w-0 items-center gap-3 self-end pb-1 text-sm font-medium">
+          {info.name}
+          <Switch
             aria-label={`${info.name} on`}
+            checked={band.enabled}
             disabled={locked}
-            onClick={() => onChange(selected, { enabled: !band.enabled })}
-          >
-            {band.enabled ? 'On' : 'Off'}
-          </Button>
-        </div>
+            onCheckedChange={(enabled) => onChange(selected, { enabled })}
+          />
+        </label>
         <StepField
           label="Frequency"
           value={formatHz(band.freqHz)}
@@ -157,16 +155,17 @@ export function BandEditor({
           }
         />
         {pass ? (
-          <div className="grid min-w-0 gap-1 [&>span]:text-sm [&>span]:font-semibold">
+          <div className="grid min-w-0 gap-1 [&>span]:text-xs [&>span]:small-caps [&>span]:text-muted-foreground">
             <span>Slope</span>
             <div
-              className="flex flex-wrap [&>button]:flex-1 [&>button[aria-pressed=true]]:bg-primary [&>button[aria-pressed=true]]:text-primary-foreground"
+              className="flex flex-wrap [&>button]:flex-1"
               role="group"
               aria-label="Slope"
             >
               {[false, true].map((steep) => (
                 <Button
                   key={String(steep)}
+                  size="sm"
                   variant={!!band.steep === steep ? 'default' : 'outline'}
                   aria-pressed={!!band.steep === steep}
                   aria-label={steep ? '24 dB per octave' : '12 dB per octave'}
@@ -186,6 +185,7 @@ export function BandEditor({
                 formatDb(band.gainDb ?? 0)
               ) : (
                 <NumberField
+                  size="sm"
                   label={info.name + ' gain'}
                   value={band.gainDb ?? 0}
                   min={-GAIN_LIMIT}
@@ -227,7 +227,7 @@ export function BandEditor({
           />
         )}
       </div>
-      <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,10.5rem),1fr))] items-end gap-3">
+      <div className="grid max-w-56 min-w-0 items-end gap-3">
         <StepField
           label="Output trim"
           value={formatDb(eq.trimDb)}

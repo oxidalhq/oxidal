@@ -1,11 +1,7 @@
-import { Plus } from '@phosphor-icons/react';
+import { Plus, UploadSimple } from '@phosphor-icons/react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
-import {
-  FormField,
-  FormGrid,
-} from '@oxidal/design-system/components/form-layout';
 import {
   Segment,
   SegmentedControl,
@@ -19,15 +15,19 @@ import {
 } from '@oxidal/design-system/components/select';
 import { StateNotice } from '@oxidal/design-system/components/states';
 import { Caption } from '@oxidal/design-system/components/text';
+import { useRemembered } from '@oxidal/design-system/lib/use-remembered';
 import { LIBRARY_SECTIONS } from '@oxidal/design-system/patterns/library-sections';
+import { SettingNotice } from '@oxidal/design-system/patterns/settings-page';
 import { Workspace } from '@oxidal/design-system/patterns/workspace';
 
 import {
+  type AssetArtwork,
   type AudioState,
   importPreset,
   libraryCatalog,
   playbackState,
   type Preset,
+  presetArtwork,
   type PresetDetails,
   presetDetails,
   presetLibrary,
@@ -37,6 +37,7 @@ import { ArtworkDeck } from './AssetArtwork';
 import { BackingTracks } from './components/media/BackingTracks';
 import { DiReamps } from './components/media/DiReamps';
 import { StemSongs } from './components/media/StemSongs';
+import type { RowAction } from './components/RowMenu';
 import { CreatedPreset } from './features/library/CreatedPreset';
 import { LibrarySearch } from './features/library/LibrarySearch';
 import { MineDialogs, type MineTarget } from './features/library/MineDialogs';
@@ -47,8 +48,10 @@ import { PresetRow } from './features/library/PresetRow';
 import { duplicatePreset } from './features/library/setList';
 import { Songbook } from './features/library/Songbook';
 import { StarterOffer } from './features/library/StarterOffer';
+import { Tone3000Browser } from './features/library/Tone3000Browser';
 import { GraphAuthor } from './GraphAuthor';
 import { friendlyError } from './lib/friendlyError';
+import { setReturnTarget } from './lib/sessionState';
 import { useSessionState } from './lib/sessionState';
 import { LibraryManagement } from './LibraryManagement';
 import { requestMidiAssignments } from './midiNavigation';
@@ -57,7 +60,12 @@ import { NativeEditor } from './NativeEditor';
 import { playTone3000 } from './presetChoices';
 import { PresetDetailsDialog } from './PresetDetails';
 import { detailsKey, detailsMatch } from './presetMetadata';
-import { SavedRigs, type SetListControls } from './SavedRigs';
+import { blockKind } from './rigChain';
+import {
+  type PanelSelection,
+  SavedRigs,
+  type SetListControls,
+} from './SavedRigs';
 import {
   replaceWorkspaceLocation,
   useSectionLocation,
@@ -165,7 +173,34 @@ export function Library({
   ].sort((a, b) => a.localeCompare(b));
   const category = categories.includes(savedCategory) ? savedCategory : '';
   const [presets, setPresets] = useState<Preset[]>([]);
-  const [file, setFile] = useState<File | null>(null);
+  const presetFile = useRef<HTMLInputElement>(null);
+  // TONE3000 opens on the browser; imported preset files have their own tab.
+  const [toneTab, setToneTab] = useRemembered<'browse' | 'imported'>(
+    'oxidal.library.tone3000.tab',
+    'browse',
+  );
+  const [originalArt, setOriginalArt] = useState<
+    Record<string, AssetArtwork[]>
+  >({});
+  // What each imported original holds, read once when its tab is open.
+  useEffect(() => {
+    if (section !== 'tone3000' || toneTab !== 'imported') return;
+    const missing = presets.filter((p) => !(p.sha256 in originalArt));
+    if (!missing.length) return;
+    const controller = new AbortController();
+    void Promise.all(
+      missing.map((p) =>
+        presetArtwork(p.sha256, false, controller.signal).then(
+          (items) => [p.sha256, items] as const,
+          () => [p.sha256, [] as AssetArtwork[]] as const,
+        ),
+      ),
+    ).then((pairs) => {
+      if (!controller.signal.aborted)
+        setOriginalArt((old) => ({ ...old, ...Object.fromEntries(pairs) }));
+    });
+    return () => controller.abort();
+  }, [section, toneTab, presets, originalArt]);
   const [busy, setBusy] = useState(true);
   const [importMessage, setImportMessage] = useState('');
   const [importError, setImportError] = useState('');
@@ -249,6 +284,89 @@ export function Library({
       setError(friendlyError(cause, 'duplicate this preset'));
     }
   }
+  /** The ⋯ menu of a TONE3000 row; the details panel offers the same. */
+  function toneActions(
+    id: string,
+    name: string,
+    isOwned: boolean,
+    download: string,
+    setList?: SetListControls,
+  ): RowAction[] {
+    const inSetList = setList?.isMember(id) ?? null;
+    return [
+      {
+        label: 'MIDI',
+        onSelect: () => void play(id, isOwned, true),
+        disabled: !connected || loadingId !== null,
+      },
+      { label: 'Download', href: download, download: true },
+      ...(isOwned
+        ? [
+            {
+              label: 'Duplicate',
+              onSelect: () => void duplicateOwned(id),
+              disabled: !connected || loadingId !== null,
+            },
+          ]
+        : []),
+      ...(setList && inSetList !== null
+        ? [
+            inSetList
+              ? {
+                  label: 'Remove from set list',
+                  onSelect: () => setList.toggle(id, name, false),
+                  disabled: !connected || setList.disabled,
+                }
+              : {
+                  label: 'Add to set list',
+                  onSelect: () => setList.toggle(id, name, true),
+                  disabled: !connected || setList.disabled,
+                },
+          ]
+        : []),
+      ...(!isOwned
+        ? [
+            {
+              label: 'Delete…',
+              onSelect: () =>
+                setMineDialog({
+                  action: 'delete',
+                  kind: 'original',
+                  id,
+                  name,
+                }),
+              disabled: !connected || loadingId !== null,
+            },
+          ]
+        : []),
+      ...(isOwned
+        ? [
+            {
+              label: 'Rename',
+              onSelect: () =>
+                setMineDialog({
+                  action: 'rename',
+                  kind: 'owned',
+                  id,
+                  name,
+                }),
+              disabled: !connected || loadingId !== null,
+            },
+            {
+              label: 'Delete…',
+              onSelect: () =>
+                setMineDialog({
+                  action: 'delete',
+                  kind: 'owned',
+                  id,
+                  name,
+                }),
+              disabled: !connected || loadingId !== null,
+            },
+          ]
+        : []),
+    ];
+  }
   function toneRow(
     id: string,
     name: string,
@@ -257,99 +375,40 @@ export function Library({
     download: string,
     setList?: SetListControls,
     favourite?: ReactNode,
+    panel?: PanelSelection | null,
   ) {
-    const inSetList = setList?.isMember(id) ?? null;
     const active =
       playing?.phase === 'running' &&
       playing.configured?.preset_id === id &&
       playing.configured.owned === isOwned;
+    const inSetList = setList?.badge(id);
+    // An imported original's own blocks: their gear and model names.
+    const art = !isOwned ? originalArt[id] : undefined;
     return (
       <PresetRow
+        chain={art?.map((block) => {
+          const kind = blockKind(block.gear, block.title);
+          return { kind: kind === 'other' ? 'lv2' : kind, label: block.title };
+        })}
         key={`${isOwned ? 'owned' : 'original'}-${id}`}
         testId={isOwned ? undefined : `preset-${id}`}
         name={name}
         favourite={favourite}
-        meta={[meta, setList?.label(id)].filter(Boolean).join(' · ')}
+        meta={meta}
+        badges={inSetList ? [inSetList] : []}
         playing={active}
         loading={loadingId === id}
         disabled={!connected || loadingId !== null}
         onPlay={() => void play(id, isOwned)}
-        onDetails={() =>
-          setPreview({ kind: isOwned ? 'owned' : 'original', id, name })
+        selected={panel?.selected}
+        hideMenu={!!panel}
+        onDetails={
+          panel
+            ? panel.onSelect
+            : () =>
+                setPreview({ kind: isOwned ? 'owned' : 'original', id, name })
         }
-        actions={[
-          {
-            label: 'MIDI',
-            onSelect: () => void play(id, isOwned, true),
-            disabled: !connected || loadingId !== null,
-          },
-          { label: 'Download', href: download, download: true },
-          ...(isOwned
-            ? [
-                {
-                  label: 'Duplicate',
-                  onSelect: () => void duplicateOwned(id),
-                  disabled: !connected || loadingId !== null,
-                },
-              ]
-            : []),
-          ...(setList && inSetList !== null
-            ? [
-                inSetList
-                  ? {
-                      label: 'Remove from set list',
-                      onSelect: () => setList.toggle(id, name, false),
-                      disabled: !connected || setList.disabled,
-                    }
-                  : {
-                      label: 'Add to set list',
-                      onSelect: () => setList.toggle(id, name, true),
-                      disabled: !connected || setList.disabled,
-                    },
-              ]
-            : []),
-          ...(!isOwned
-            ? [
-                {
-                  label: 'Delete…',
-                  onSelect: () =>
-                    setMineDialog({
-                      action: 'delete',
-                      kind: 'original',
-                      id,
-                      name,
-                    }),
-                  disabled: !connected || loadingId !== null,
-                },
-              ]
-            : []),
-          ...(isOwned
-            ? [
-                {
-                  label: 'Rename',
-                  onSelect: () =>
-                    setMineDialog({
-                      action: 'rename',
-                      kind: 'owned',
-                      id,
-                      name,
-                    }),
-                  disabled: !connected || loadingId !== null,
-                },
-                {
-                  label: 'Delete…',
-                  onSelect: () =>
-                    setMineDialog({
-                      action: 'delete',
-                      kind: 'owned',
-                      id,
-                      name,
-                    }),
-                  disabled: !connected || loadingId !== null,
-                },
-              ]
-            : []),
-        ]}
+        actions={toneActions(id, name, isOwned, download, setList)}
         extra={showArtwork && <ArtworkDeck id={id} owned={isOwned} />}
       />
     );
@@ -373,8 +432,7 @@ export function Library({
       lifecycle.current++;
     };
   }, [refresh]);
-  async function upload() {
-    if (!file) return;
+  async function upload(file: File) {
     const request = ++generation.current;
     const controller = new AbortController();
     importing.current = controller;
@@ -431,7 +489,7 @@ export function Library({
       value={category || '__all__'}
       onValueChange={(value) => setCategory(value === '__all__' ? '' : value)}
     >
-      <SelectTrigger aria-label="Category" className="w-auto">
+      <SelectTrigger aria-label="Category" size="sm" className="w-auto">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -446,6 +504,7 @@ export function Library({
   );
   const viewToggle = (
     <SegmentedControl
+      size="sm"
       value={showArtwork ? 'artwork' : 'list'}
       aria-label="Library view"
       onValueChange={(value) => {
@@ -494,7 +553,6 @@ export function Library({
         className="px-0"
         sections={LIBRARY_SECTIONS}
         current={section}
-        showTitle={['mine', 'tone3000', 'oxidal', 'tones'].includes(section)}
         onSelect={(id) => {
           if (sections.includes(id as Section)) setSection(id as Section);
         }}
@@ -513,6 +571,15 @@ export function Library({
         {preview && (
           <PresetDetailsDialog
             entry={preview}
+            file={(() => {
+              const p =
+                preview.kind === 'original'
+                  ? presets.find((item) => item.sha256 === preview.id)
+                  : undefined;
+              return p
+                ? { blocks: p.block_count, modelBytes: p.embedded_bytes }
+                : undefined;
+            })()}
             onEditVersion={(selection) => {
               setPreview(null);
               setEditing({ revision: selection.expected_content, selection });
@@ -606,25 +673,30 @@ export function Library({
                   <Plus aria-hidden="true" /> New preset
                 </Button>
               }
-              toolbar={
-                <div className="flex flex-wrap items-center gap-2">
-                  {categorySelect}
-                  {viewToggle}
-                </div>
-              }
-              owned={owned.map((p) => ({
-                ...p,
-                render: (setList, favourite) =>
-                  toneRow(
-                    p.id,
-                    p.name,
-                    true,
-                    'TONE3000 chain',
-                    `/api/v1/presets/owned/${p.id}/download`,
-                    setList,
-                    favourite,
-                  ),
-              }))}
+              toolbar={viewToggle}
+              toolbarEnd={categorySelect}
+              owned={owned.map((p) => {
+                const download = `/api/v1/presets/owned/${p.id}/download`;
+                return {
+                  ...p,
+                  caption: 'TONE3000 chain',
+                  actions: (setList) =>
+                    toneActions(p.id, p.name, true, download, setList),
+                  onDetails: () =>
+                    setPreview({ kind: 'owned', id: p.id, name: p.name }),
+                  render: (setList, favourite, panel) =>
+                    toneRow(
+                      p.id,
+                      p.name,
+                      true,
+                      'TONE3000 chain',
+                      download,
+                      setList,
+                      favourite,
+                      panel,
+                    ),
+                };
+              })}
               empty={
                 <StateNotice kind="empty" title="No presets yet">
                   Create one with New preset, or start from Oxidal sounds.
@@ -666,79 +738,119 @@ export function Library({
           </div>
         )}
         {section === 'tone3000' && (
-          <div>
-            {search(
-              toneQuery,
-              setToneQuery,
-              'Find a TONE3000 preset…',
-              <>
-                {categorySelect}
-                {viewToggle}
-              </>,
-            )}
-            {busy && !presets.length ? (
-              <StateNotice kind="loading" title="Reading TONE3000 presets…" />
-            ) : !originalsShown.length ? (
-              <Caption role="status">
-                {toneQuery.trim() || category
-                  ? 'No TONE3000 presets match these filters.'
-                  : 'No TONE3000 presets yet. Import a preset file below.'}
-              </Caption>
-            ) : (
-              <ul className="m-0 grid list-none gap-2 p-0">
-                {originalsShown.map((preset) =>
-                  toneRow(
-                    preset.sha256,
-                    preset.name,
-                    false,
-                    `Original · ${preset.block_count} blocks${preset.framing === 'legacy' ? ' · legacy format' : ''}`,
-                    `/api/v1/presets/${preset.sha256}/original`,
-                  ),
-                )}
-              </ul>
-            )}
-            <section
-              className="mt-4 grid gap-3 border-t border-border py-4"
-              aria-label="Import a preset"
+          <div className="grid min-w-0 gap-4">
+            <SegmentedControl
+              size="sm"
+              aria-label="TONE3000"
+              value={toneTab}
+              onValueChange={(value) =>
+                setToneTab(value as 'browse' | 'imported')
+              }
+              className="justify-self-start"
             >
-              <h2 className="text-base">Import a TONE3000 preset file</h2>
-              <Caption>
-                Importing does not change what is playing. The original file is
-                kept unchanged; importing the same file twice keeps one copy. Up
-                to 32 MiB.
-              </Caption>
-              <FormGrid>
-                <FormField>
-                  TONE3000 preset file
-                  <input
-                    type="file"
-                    accept=".t3kpreset"
-                    disabled={!connected}
-                    onChange={(event) =>
-                      setFile(event.target.files?.[0] ?? null)
+              <Segment value="browse">Browse TONE3000</Segment>
+              <Segment value="imported">
+                Imported presets ({presets.length})
+              </Segment>
+            </SegmentedControl>
+            {toneTab === 'browse' ? (
+              <Tone3000Browser
+                connected={connected}
+                onOpenRig={onOpenRig}
+                onPlay={(id, owned) => play(id, owned)}
+                onSignIn={() => {
+                  setReturnTarget({
+                    hash: window.location.hash || '#library/tone3000',
+                    label: 'TONE3000',
+                  });
+                  window.location.hash = 'settings/accounts';
+                }}
+              />
+            ) : (
+              <section
+                aria-label="Imported preset files"
+                className="grid min-w-0 gap-2"
+              >
+                <input
+                  ref={presetFile}
+                  type="file"
+                  accept=".t3kpreset"
+                  aria-label="TONE3000 preset file"
+                  className="sr-only"
+                  tabIndex={-1}
+                  disabled={!connected}
+                  onChange={(event) => {
+                    const chosen = event.target.files?.[0] ?? null;
+                    event.target.value = '';
+                    // Choosing a file imports it: no second step.
+                    if (chosen) void upload(chosen);
+                  }}
+                />
+                {search(
+                  toneQuery,
+                  setToneQuery,
+                  'Find a TONE3000 preset…',
+                  <>
+                    {categorySelect}
+                    {viewToggle}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!connected || importMessage === 'Importing…'}
+                      title="Import a .t3kpreset file. The original file is kept unchanged; importing the same file twice keeps one copy. Up to 32 MiB."
+                      onClick={() => presetFile.current?.click()}
+                    >
+                      <UploadSimple aria-hidden="true" /> Import…
+                    </Button>
+                  </>,
+                )}
+                {importMessage && (
+                  <SettingNotice
+                    live
+                    action={
+                      importMessage === 'Importing…' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => importing.current?.abort()}
+                        >
+                          Cancel import
+                        </Button>
+                      )
                     }
+                  >
+                    {importMessage}
+                  </SettingNotice>
+                )}
+                {importError && (
+                  <SettingNotice tone="error">{importError}</SettingNotice>
+                )}
+                {busy && !presets.length ? (
+                  <StateNotice
+                    kind="loading"
+                    title="Reading TONE3000 presets…"
                   />
-                </FormField>
-                <Button
-                  disabled={
-                    !file || !connected || importMessage === 'Importing…'
-                  }
-                  onClick={() => void upload()}
-                >
-                  Import
-                </Button>
-              </FormGrid>
-              {importMessage && <p role="status">{importMessage}</p>}
-              {importMessage === 'Importing…' && (
-                <Button
-                  variant="outline"
-                  onClick={() => importing.current?.abort()}
-                >
-                  Cancel import
-                </Button>
-              )}
-              {importError && <p role="alert">{importError}</p>}
-            </section>
+                ) : !originalsShown.length ? (
+                  <Caption role="status">
+                    {toneQuery.trim() || category
+                      ? 'No TONE3000 presets match these filters.'
+                      : 'No TONE3000 presets yet. Import a preset file with Import….'}
+                  </Caption>
+                ) : (
+                  <ul className="m-0 grid list-none gap-2 p-0">
+                    {originalsShown.map((preset) =>
+                      toneRow(
+                        preset.sha256,
+                        preset.name,
+                        false,
+                        `Original · ${preset.block_count} blocks${preset.framing === 'legacy' ? ' · legacy format' : ''}`,
+                        `/api/v1/presets/${preset.sha256}/original`,
+                      ),
+                    )}
+                  </ul>
+                )}
+              </section>
+            )}
           </div>
         )}
         {section === 'setlist' && (

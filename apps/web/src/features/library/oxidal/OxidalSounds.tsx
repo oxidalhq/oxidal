@@ -45,6 +45,9 @@ import { useOxidalSounds } from './useOxidalSounds';
  * browser. Each card has exactly one primary action; Details opens one sheet.
  * @see docs/factory-collection.md
  */
+/** Sounds per page before Load more. */
+const PAGE = 24;
+
 export function OxidalSounds({
   connected,
   onChanged,
@@ -88,7 +91,12 @@ export function OxidalSounds({
   const shown = filterItems(unit.items, filters).filter(
     (item) => !filters.readyOnly || isPlayable(states.get(item.key)!),
   );
-  const groups = groupItems(shown, filters.groupBy);
+  // A page at a time, as Mine does: 185 sounds were one 18,000 px page.
+  // The count belongs to these filters: changing them starts a page again.
+  const filterKey = JSON.stringify(filters);
+  const [page, setPage] = useState({ key: filterKey, limit: PAGE });
+  const limit = page.key === filterKey ? page.limit : PAGE;
+  const groups = groupItems(shown.slice(0, limit), filters.groupBy);
   const byKey = (key: string | null) =>
     unit.items.find((item) => item.key === key) ?? null;
 
@@ -257,6 +265,19 @@ export function OxidalSounds({
               <div className="grid gap-2">{group.items.map(card)}</div>
             </section>
           ))}
+          {shown.length > limit && (
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setPage({ key: filterKey, limit: limit + PAGE })}
+              >
+                Load more
+              </Button>
+              <Caption as="span">
+                {limit} of {shown.length} shown
+              </Caption>
+            </div>
+          )}
         </div>
         {detail}
       </div>

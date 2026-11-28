@@ -50,6 +50,7 @@ export function RehearsalReport({
   return (
     <section aria-label="Rehearsal check" className="space-y-2">
       <Button
+        size={stage ? 'sm' : 'md'}
         variant="outline"
         disabled={busy || !!pending || disabled}
         onClick={() => void check()}

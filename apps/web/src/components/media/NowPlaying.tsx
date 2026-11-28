@@ -1,8 +1,6 @@
 import { Scissors } from '@phosphor-icons/react';
 
-import { stateWord, useSessionMedia, useTimeText } from './sessionMedia';
-import { StateChip } from './StateChip';
-import { CompactTransport } from './TransportBar';
+import { useSessionMedia } from './sessionMedia';
 
 const SPLIT_WORDS = {
   running: 'Splitting',
@@ -48,61 +46,5 @@ export function SplitStatus() {
         />
       )}
     </button>
-  );
-}
-
-/**
- * Persistent backing transport in the bottom dock. The stage has its own transport.
- * @see docs/media.md
- */
-export function NowPlaying() {
-  const media = useSessionMedia();
-  const { player, shown, muted, slow, notice } = media;
-  const time = useTimeText(shown);
-  if (!media.ready || !player?.track || shown === 'empty') return null;
-  const title = player.track.title;
-  // Playing is evident from the moving time; e-paper always says it in words.
-  const chip = shown !== 'playing' || slow;
-  return (
-    <div
-      data-slot="now-playing"
-      className="flex min-h-14 min-w-0 items-center gap-2 border-t border-border bg-card py-1.5 pr-[max(0.75rem,env(safe-area-inset-right))] pl-[max(0.75rem,env(safe-area-inset-left))] [[data-slot=app-shell]:has([data-slot=stage])_&]:hidden!"
-      data-placement="bottom"
-      role="region"
-      aria-label="Now playing"
-    >
-      <div
-        className="flex min-w-0 flex-1 items-center gap-2"
-        data-state={shown}
-      >
-        <button
-          type="button"
-          className="flex min-h-touch min-w-0 flex-1 cursor-pointer flex-col items-start justify-center rounded-md px-1 text-left focus-visible:outline-2"
-          onClick={() => media.setSheet({ kind: 'player' })}
-        >
-          <span className="sr-only">Open backing player:</span>{' '}
-          <span className="max-w-full truncate text-sm font-semibold">
-            {title}
-          </span>{' '}
-          <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-px text-xs">
-            {chip ? (
-              <StateChip state={shown} />
-            ) : (
-              <span className="sr-only">{stateWord[shown]}</span>
-            )}{' '}
-            <span className="font-mono text-sm whitespace-nowrap tabular-nums">
-              {time}
-            </span>{' '}
-            {muted && <strong>Output muted</strong>}{' '}
-            {notice && (
-              <span className="min-w-0 text-xs break-words text-muted-foreground">
-                {notice}
-              </span>
-            )}
-          </span>
-        </button>
-        <CompactTransport className="shrink-0" />
-      </div>
-    </div>
   );
 }

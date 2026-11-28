@@ -7,12 +7,15 @@
 import { Faders, FilePlus, Pause, Play, Scissors } from '@phosphor-icons/react';
 import { useCallback, useEffect, useState } from 'react';
 
-import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
 import { useConfirm } from '@oxidal/design-system/components/confirm';
-import { ActionRow } from '@oxidal/design-system/components/form-layout';
 import { Progress } from '@oxidal/design-system/components/states';
-import { Caption, Title } from '@oxidal/design-system/components/text';
+import { Caption } from '@oxidal/design-system/components/text';
+import { useRemembered } from '@oxidal/design-system/lib/use-remembered';
+import {
+  type LibraryItem,
+  LibraryList,
+} from '@oxidal/design-system/patterns/library-list';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { type MediaAsset, type SongList, songList } from '../../api';
@@ -41,6 +44,13 @@ export function StemSongs({ connected }: { connected: boolean }) {
   const open = (source: MediaAsset, mix?: string) =>
     media.setSheet({ kind: 'stems', source: source.id, mix });
   const [importing, setImporting] = useState(false);
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<string | null>(null);
+  // Favourites are kept on this browser, as the list's star promises.
+  const [favourites, setFavourites] = useRemembered<string[]>(
+    'oxidal.stems.favourites',
+    [],
+  );
   const [picking, setPicking] = useState(false);
 
   const load = useCallback(() => {
@@ -87,33 +97,41 @@ export function StemSongs({ connected }: { connected: boolean }) {
       await send({ kind: 'play' }, asset);
   }
 
+  const items: LibraryItem[] = songs.map(({ song, asset }) => {
+    const first = song.mixes[0];
+    const cued = !!first && player?.track?.id === first.asset;
+    const playing = cued && player?.state === 'playing';
+    return {
+      id: asset.id,
+      title: asset.title,
+      caption: [
+        formatTime(durationOf(asset)),
+        ...song.splits.map((split) => splitLabel(split, song.splits)),
+        song.mixes.length
+          ? `${song.mixes.length} ${song.mixes.length === 1 ? 'mix' : 'mixes'}`
+          : 'no saved mixes',
+      ].join(' · '),
+      playable: connected && !!first,
+      badge:
+        running?.source === asset.id
+          ? { text: `Splitting ${running.percent}%` }
+          : cued
+            ? { text: playing ? 'Playing' : 'Cued', tone: 'live' }
+            : undefined,
+      favourite: favourites.includes(asset.id),
+      facts: [
+        ['Length', formatTime(durationOf(asset))],
+        [
+          'Stems',
+          song.splits.map((split) => splitLabel(split, song.splits)).join(', '),
+        ],
+        ['Mixes', String(song.mixes.length)],
+      ],
+    };
+  });
+  const songOf = (id: string) => songs.find(({ asset }) => asset.id === id);
   return (
     <section className="grid min-w-0 gap-3" aria-label="Stems">
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 [&>h2]:m-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold">
-        <div>
-          <Title as="h2" size="sm">
-            Stems
-          </Title>
-          <Caption>
-            Split a song into its parts, mute or level each one as it plays, and
-            save mixes for the Set list and your rigs.
-          </Caption>
-        </div>
-        <ActionRow>
-          <Button disabled={locked} onClick={() => setPicking(true)}>
-            <Scissors aria-hidden="true" />
-            Split a track…
-          </Button>
-          <Button
-            variant="outline"
-            disabled={locked}
-            onClick={() => setImporting(true)}
-          >
-            <FilePlus aria-hidden="true" />
-            Import stems…
-          </Button>
-        </ActionRow>
-      </div>
       {protect && <Caption>{PROTECT_REASON}</Caption>}
       {(error || media.refusal) && (
         <p
@@ -125,21 +143,22 @@ export function StemSongs({ connected }: { connected: boolean }) {
       )}
       {running && !songs.some(({ asset }) => asset.id === running.source) && (
         <div
-          className="grid min-w-0 gap-2 rounded-lg border border-border bg-card p-3"
+          className="grid min-w-0 gap-2 border-b border-border pb-3"
           role="status"
         >
-          <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 [&>h2]:m-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
             <div className="grid min-w-0 gap-0.5">
-              <strong>
+              <strong className="text-sm">
                 {tracks.find((track) => track.id === running.source)?.title ??
                   'Song'}
               </strong>
-              <Caption as="span">
+              <Caption as="span" className="text-xs">
                 Splitting into {running.mode === 'six' ? 6 : 4} stems ·{' '}
                 {running.percent}%
               </Caption>
             </div>
             <Button
+              size="sm"
               variant="outline"
               onClick={() =>
                 media.setSheet({ kind: 'stems', source: running.source })
@@ -152,107 +171,130 @@ export function StemSongs({ connected }: { connected: boolean }) {
           <Progress label="Stem split progress" value={running.percent} />
         </div>
       )}
-      {list && !songs.length && !running && (
-        <Caption>
-          No songs with stems yet. Split one of your backing tracks, or import
-          stems exported from another app.
-        </Caption>
-      )}
-      <ul
-        className="m-0 grid min-w-0 list-none gap-3 p-0"
-        aria-label="Songs with stems"
-      >
-        {songs.map(({ song, asset }) => (
-          <li
-            key={asset.id}
-            className="grid min-w-0 gap-2 rounded-lg border border-border bg-card p-3"
-          >
-            <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 [&>h2]:m-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold">
-              <div className="grid min-w-0 gap-0.5">
-                <strong>
-                  {asset.title}{' '}
-                  {running?.source === asset.id && (
-                    <Badge data-kind="stems">
-                      Splitting {running.percent}%
-                    </Badge>
-                  )}
-                </strong>
-                <Caption as="span">
-                  {[
-                    formatTime(durationOf(asset)),
-                    ...song.splits.map((split) =>
-                      splitLabel(split, song.splits),
-                    ),
-                  ].join(' · ')}
-                </Caption>
-              </div>
-              <Button
-                variant="outline"
-                disabled={!connected}
-                onClick={() => open(asset)}
-              >
-                <Faders aria-hidden="true" />
-                Open
-              </Button>
-            </div>
-            {song.mixes.length ? (
-              <ul
-                className="m-0 grid list-none gap-1 p-0 [&>li]:flex [&>li]:min-w-0 [&>li]:flex-wrap [&>li]:items-center [&>li]:gap-2"
-                aria-label={`${asset.title} mixes`}
-              >
-                {song.mixes.map((mix) => {
-                  const split = song.splits.find((s) => s.id === mix.split);
-                  const cued = player?.track?.id === mix.asset;
-                  const playing = cued && player?.state === 'playing';
-                  const prefix = `${asset.title} – `;
-                  const name = mix.title.startsWith(prefix)
-                    ? mix.title.slice(prefix.length)
-                    : mix.title;
-                  return (
-                    <li key={mix.id}>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        aria-label={`${playing ? 'Pause' : 'Play'} ${mix.title}`}
-                        disabled={!connected}
-                        onClick={() => void playMix(mix.asset, mix.title)}
-                      >
-                        {playing ? (
-                          <Pause aria-hidden="true" weight="fill" />
-                        ) : (
-                          <Play aria-hidden="true" weight="fill" />
-                        )}
-                      </Button>
-                      <span className="grid min-w-0 flex-1 gap-0.5 [&>[data-slot=caption]]:truncate">
-                        <strong>{name}</strong>
-                        <Caption as="span">
-                          {split
-                            ? describeRecipe(mix.recipe, splitRoles(split))
-                            : ''}
-                        </Caption>
-                      </span>
-                      {cued && (
-                        <StateChip state={playing ? 'playing' : 'cued'} />
+      <LibraryList
+        items={items}
+        query={query}
+        onQuery={setQuery}
+        searchLabels={{
+          input: 'Search songs with stems',
+          clear: 'Clear stem search',
+          placeholder: 'Find a song…',
+        }}
+        selected={selected}
+        onOpen={setSelected}
+        onFavourite={(id, on) =>
+          setFavourites(
+            on
+              ? [...new Set([...favourites, id])]
+              : favourites.filter((f) => f !== id),
+          )
+        }
+        onPlay={(id) => {
+          const first = songOf(id)?.song.mixes[0];
+          if (first) void playMix(first.asset, first.title);
+        }}
+        tile={<Faders />}
+        noun={['song', 'songs']}
+        primary={
+          <>
+            <Button
+              size="sm"
+              disabled={locked}
+              onClick={() => setPicking(true)}
+            >
+              <Scissors aria-hidden="true" />
+              Split a track…
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={locked}
+              onClick={() => setImporting(true)}
+            >
+              <FilePlus aria-hidden="true" />
+              Import stems…
+            </Button>
+          </>
+        }
+        empty={{
+          title: list ? 'No songs with stems yet' : 'Reading stems…',
+          text: list
+            ? 'Split one of your backing tracks, or import stems exported from another app.'
+            : undefined,
+        }}
+        mainAction={() => ({
+          label: 'Open mixer',
+          icon: <Faders />,
+          disabled: !connected,
+          run: (id) => {
+            const found = songOf(id);
+            if (found) open(found.asset);
+          },
+        })}
+        detail={(item) => {
+          const found = songOf(item.id);
+          if (!found) return null;
+          const { song, asset } = found;
+          return song.mixes.length ? (
+            <ul
+              className="m-0 grid list-none gap-1 p-0 [&>li]:flex [&>li]:min-w-0 [&>li]:flex-wrap [&>li]:items-center [&>li]:gap-2"
+              aria-label={`${asset.title} mixes`}
+            >
+              {song.mixes.map((mix) => {
+                const split = song.splits.find((s) => s.id === mix.split);
+                const cued = player?.track?.id === mix.asset;
+                const playing = cued && player?.state === 'playing';
+                const prefix = `${asset.title} – `;
+                const name = mix.title.startsWith(prefix)
+                  ? mix.title.slice(prefix.length)
+                  : mix.title;
+                return (
+                  <li key={mix.id}>
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      aria-label={`${playing ? 'Pause' : 'Play'} ${mix.title}`}
+                      disabled={!connected}
+                      onClick={() => void playMix(mix.asset, mix.title)}
+                    >
+                      {playing ? (
+                        <Pause aria-hidden="true" weight="fill" />
+                      ) : (
+                        <Play aria-hidden="true" weight="fill" />
                       )}
-                      <Button
-                        variant="ghost"
-                        disabled={!connected}
-                        onClick={() => open(asset, mix.id)}
-                      >
-                        Edit
-                      </Button>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <Caption>
-                No saved mixes yet. Open it to play the stems and make one.
-              </Caption>
-            )}
-          </li>
-        ))}
-      </ul>
+                    </Button>
+                    <span className="grid min-w-0 flex-1 gap-0.5 [&>[data-slot=caption]]:truncate">
+                      <strong className="text-sm">{name}</strong>
+                      <Caption as="span" className="text-xs">
+                        {split
+                          ? describeRecipe(mix.recipe, splitRoles(split))
+                          : ''}
+                      </Caption>
+                    </span>
+                    {cued && <StateChip state={playing ? 'playing' : 'cued'} />}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={!connected}
+                      onClick={() => open(asset, mix.id)}
+                    >
+                      Edit
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <Caption className="text-xs">
+              No saved mixes yet. Open the mixer to play the stems and make one.
+            </Caption>
+          );
+        }}
+      />
+      <Caption className="text-xs">
+        Split a song into its parts, mute or level each one as it plays, and
+        save mixes for the Set list and your rigs.
+      </Caption>
 
       {picking && (
         <AdjustmentDialog

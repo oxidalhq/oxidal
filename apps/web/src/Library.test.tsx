@@ -12,6 +12,12 @@ import { importPreset, presetDetails, presetLibrary } from './api';
 import { Library } from './Library';
 
 vi.mock('./api', () => ({
+  // The TONE3000 browser above the imported files.
+  localModels: vi.fn(async () => ({ data: [] })),
+  tone3000Tones: vi.fn(async () => ({ data: [], page: 1, total_pages: 1 })),
+  tone3000Models: vi.fn(async () => ({ data: [] })),
+  stageTone3000: vi.fn(),
+  toneImage: (id: number) => `/api/v1/tone3000/tones/${id}/image`,
   importPreset: vi.fn(),
   presetLibrary: vi.fn(async () => []),
   playbackState: vi.fn(() => new Promise(() => {})),
@@ -50,11 +56,15 @@ it('stops a preset import in flight and says what may still happen', async () =>
       }),
   );
   render(<Library connected onOpenRig={() => {}} />);
+  // Imported preset files have their own tab under TONE3000.
+  fireEvent.click(
+    await screen.findByRole('radio', { name: /^Imported presets/ }),
+  );
   const input = await screen.findByLabelText('TONE3000 preset file');
   fireEvent.change(input, {
     target: { files: [new File(['x'], 'a.t3kpreset')] },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+  // Choosing the file imports it: there is no second Import step.
   fireEvent.click(await screen.findByRole('button', { name: 'Cancel import' }));
   expect(signal?.aborted).toBe(true);
   expect(await screen.findByText(/Import stopped/)).toBeVisible();
@@ -106,6 +116,9 @@ it('keeps the selected category on return and explains a filtered TONE3000 resul
     .mockResolvedValueOnce(available);
   const user = userEvent.setup();
   const first = render(<Library connected onOpenRig={() => {}} />);
+  fireEvent.click(
+    await screen.findByRole('radio', { name: /^Imported presets/ }),
+  );
   const category = await screen.findByRole('combobox', { name: 'Category' });
   await user.click(category);
   await user.click(screen.getByRole('option', { name: 'Clean' }));

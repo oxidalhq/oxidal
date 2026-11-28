@@ -21,13 +21,13 @@ import {
   protectState,
   setPlayerOrder,
 } from '../../api';
+import { PhoneMiniPlayer } from '../../features/dock/AppDock';
 import { DeviceError } from '../../lib/friendlyError';
 import { publishPlayer } from '../../lib/playerFeed';
 import { useMonitorFeed } from '../../monitorFeed';
 import { BackingTracks } from './BackingTracks';
-import { NowPlaying } from './NowPlaying';
 import { PerformPlayerRow } from './PerformPlayerRow';
-import { MediaSheets } from './PlayerSheet';
+import { BackingPanelBody, MediaSheets } from './PlayerSheet';
 import { type SessionMedia, SessionMediaContext } from './sessionMedia';
 import { SessionMediaProvider } from './SessionMediaProvider';
 
@@ -140,35 +140,53 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-it('hides the mini-player until a track is cued', () => {
-  const view = withMedia(media({ player: snapshot('empty') }), <NowPlaying />);
-  expect(screen.queryByRole('region', { name: 'Now playing' })).toBeNull();
+/** A phone: the mini player shows above the bottom tabs. */
+function asPhone() {
+  window.matchMedia = ((query: string) => ({
+    matches: query.includes('max-width'),
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
+}
+
+it('hides the phone mini player until a track is cued', () => {
+  asPhone();
+  const view = withMedia(
+    media({ player: snapshot('empty') }),
+    <PhoneMiniPlayer />,
+  );
+  expect(screen.queryByRole('group', { name: 'Now playing' })).toBeNull();
   view.rerender(
     <SessionMediaContext.Provider value={{ ...media(), ready: false }}>
-      <NowPlaying />
+      <PhoneMiniPlayer />
     </SessionMediaContext.Provider>,
   );
-  expect(screen.queryByRole('region', { name: 'Now playing' })).toBeNull();
+  expect(screen.queryByRole('group', { name: 'Now playing' })).toBeNull();
 });
 
 it.each([
   ['ready', ['Play'], '0:00 / 3:42', 'Ready'],
   ['playing', ['Pause', 'Stop track'], '1:12 / 3:42', null],
   ['paused', ['Play', 'Stop track'], '1:12 / 3:42', 'Paused'],
-  ['ended', ['Play again', 'Next'], '3:42 / 3:42', 'Ended'],
-  [
-    'interrupted',
-    ['Resume', 'Stop track'],
-    'Audio restarted at 1:12',
-    'Stopped',
-  ],
+  ['ended', ['Play again', 'Next'], '3:42 / 3:42', 'Track ended'],
+  ['interrupted', ['Resume', 'Stop track'], null, 'Stopped'],
 ] as const)(
-  'shows %s in words with its transport',
-  (state, buttons, time, chip) => {
+  'shows %s in words on the phone and its transport in the Player',
+  (state, buttons, time, words) => {
+    asPhone();
     const value = media({ player: snapshot(state) });
-    withMedia(value, <NowPlaying />);
-    const bar = screen.getByRole('region', { name: 'Now playing' });
-    const group = within(bar).getByRole('group', {
+    const view = withMedia(value, <PhoneMiniPlayer />);
+    const bar = screen.getByRole('group', { name: 'Now playing' });
+    if (time) expect(bar).toHaveTextContent(time);
+    if (words) expect(bar).toHaveTextContent(words);
+    view.unmount();
+    withMedia(value, <BackingPanelBody />);
+    const group = screen.getByRole('group', {
       name: 'Backing track transport',
     });
     expect(
@@ -176,8 +194,6 @@ it.each([
         .getAllByRole('button')
         .map((b) => b.textContent),
     ).toEqual(buttons);
-    expect(bar).toHaveTextContent(time);
-    if (chip) expect(bar).toHaveTextContent(chip);
     fireEvent.click(within(group).getAllByRole('button')[0]!);
     expect(value.send).toHaveBeenCalledWith({
       kind: state === 'playing' ? 'pause' : 'play',
@@ -185,16 +201,17 @@ it.each([
   },
 );
 
-it('explains a silent track and an unplayable one, and opens the full player', () => {
+it('explains a silent track and an unplayable one on the phone, and opens the Player', () => {
+  asPhone();
+  const opened = vi.fn();
+  window.addEventListener('oxidal-open-tool', opened);
   const value = media({ player: snapshot('playing'), muted: true });
-  const view = withMedia(value, <NowPlaying />);
-  expect(screen.getByText('Output muted')).toBeVisible();
-  fireEvent.click(
-    screen.getByRole('button', {
-      name: /Open backing player: Rehearsal 01 Playing .*Output muted/,
-    }),
-  );
-  expect(value.setSheet).toHaveBeenCalledWith({ kind: 'player' });
+  const view = withMedia(value, <PhoneMiniPlayer />);
+  const bar = screen.getByRole('group', { name: 'Now playing' });
+  expect(bar).toHaveTextContent('Output muted');
+  fireEvent.click(within(bar).getByText('Rehearsal 01'));
+  expect(opened).toHaveBeenCalledTimes(1);
+  window.removeEventListener('oxidal-open-tool', opened);
   view.rerender(
     <SessionMediaContext.Provider
       value={media({
@@ -203,14 +220,12 @@ it('explains a silent track and an unplayable one, and opens the full player', (
         }),
       })}
     >
-      <NowPlaying />
+      <PhoneMiniPlayer />
     </SessionMediaContext.Provider>,
   );
-  expect(
-    screen.getByText('Prepared for 44.1 kHz; the audio runs at 48 kHz'),
-  ).toBeVisible();
-  expect(screen.getByText('Not playable')).toBeVisible();
-  expect(screen.queryByRole('group')).toBeNull();
+  expect(screen.getByRole('group', { name: 'Now playing' })).toHaveTextContent(
+    'Prepared for 44.1 kHz; the audio runs at 48 kHz',
+  );
 });
 
 it('full player: seek keys, repeat, level and the refusal', () => {
@@ -367,12 +382,12 @@ it('Library lists tracks in Backing order; Play cues then plays; Protect locks e
   });
   vi.mocked(setPlayerOrder).mockResolvedValue(snapshot('ready'));
   const view = withMedia(value, <BackingTracks connected />);
-  const list = screen.getByRole('list', { name: 'Backing list' });
+  // The shared Library list keeps the Backing order.
   expect(
-    within(list)
-      .getAllByRole('listitem')
-      .map((item) => item.getAttribute('aria-label')),
-  ).toEqual(['Rehearsal 02', 'Rehearsal 01']);
+    screen
+      .getAllByRole('button', { name: /^Play Rehearsal/ })
+      .map((button) => button.getAttribute('aria-label')),
+  ).toEqual(['Play Rehearsal 02', 'Play Rehearsal 01']);
   fireEvent.click(screen.getByRole('button', { name: 'Play Rehearsal 02' }));
   await waitFor(() =>
     expect(value.send).toHaveBeenNthCalledWith(1, { kind: 'cue', asset: 't2' }),
@@ -380,10 +395,9 @@ it('Library lists tracks in Backing order; Play cues then plays; Protect locks e
   await waitFor(() =>
     expect(value.send).toHaveBeenNthCalledWith(2, { kind: 'play' }, 't2'),
   );
-  await userEvent.click(
-    screen.getByRole('button', { name: 'More for Rehearsal 01' }),
-  );
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Move up' }));
+  // Everything else is in plain sight in the opened track's details.
+  await userEvent.click(screen.getByRole('button', { name: /^Rehearsal 01/ }));
+  await userEvent.click(screen.getByRole('button', { name: 'Move up' }));
   await waitFor(() =>
     expect(setPlayerOrder).toHaveBeenCalledWith(['t1', 't2']),
   );

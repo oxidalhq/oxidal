@@ -1,11 +1,22 @@
-import { Play } from '@phosphor-icons/react';
+import {
+  ArrowsClockwise,
+  DownloadSimple,
+  Microphone,
+  PencilSimple,
+  Trash,
+} from '@phosphor-icons/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { DialogFooter } from '@oxidal/design-system/components/dialog';
 import { FormField } from '@oxidal/design-system/components/form-layout';
 import { Caption } from '@oxidal/design-system/components/text';
+import { useRemembered } from '@oxidal/design-system/lib/use-remembered';
 import { RecordDiToggle } from '@oxidal/design-system/patterns/device-flows';
+import {
+  type LibraryItem,
+  LibraryList,
+} from '@oxidal/design-system/patterns/library-list';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import {
@@ -21,8 +32,6 @@ import {
 } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
 import { formatTime } from '../../lib/playerClock';
-import type { MenuItem } from '../RowMenu';
-import { MediaRow } from './MediaRow';
 import {
   channelsLabel,
   durationOf,
@@ -84,6 +93,13 @@ export function DiReamps({ connected }: { connected: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [reamp, setReamp] = useState<MediaAsset | null>(null);
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<string | null>(null);
+  // Favourites are kept on this browser, as the list's star promises.
+  const [favourites, setFavourites] = useRemembered<string[]>(
+    'oxidal.di.favourites',
+    [],
+  );
   const [dialog, setDialog] = useState<{
     kind: 'rename' | 'delete';
     asset: MediaAsset;
@@ -124,57 +140,55 @@ export function DiReamps({ connected }: { connected: boolean }) {
     await send({ kind: 'play' });
   }
 
+  const byId = new Map(assets.map((asset) => [asset.id, asset]));
+  const items: LibraryItem[] = assets.map((asset) => {
+    const cued = player?.track?.id === asset.id;
+    const playing = cued && player?.state === 'playing';
+    const incomplete = asset.provenance?.complete === false;
+    return {
+      id: asset.id,
+      title: asset.title,
+      caption: [
+        asset.kind === 'di' ? 'DI' : 'Reamp',
+        formatTime(durationOf(asset)),
+        channelsLabel(asset.renders[0]?.channels ?? 1),
+        incomplete ? 'Incomplete' : '',
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      playable: connected && !running,
+      badge: cued
+        ? { text: playing ? 'Playing' : 'Cued', tone: 'live' }
+        : undefined,
+      badges: incomplete ? [{ text: 'Incomplete', tone: 'warning' }] : [],
+      favourite: favourites.includes(asset.id),
+      facts: [
+        ['Kind', asset.kind === 'di' ? 'Dry guitar (DI)' : 'Reamp'],
+        ['Length', formatTime(durationOf(asset))],
+        ['Channels', channelsLabel(asset.renders[0]?.channels ?? 1)],
+      ],
+    };
+  });
   return (
     <section className="grid min-w-0 gap-3" aria-label="DI and reamps">
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 [&>h2]:m-0 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-semibold">
-        <div>
-          <Caption>
-            Record the raw guitar, then reamp it through any sound later.
-          </Caption>
-        </div>
-      </div>
       {protect && <Caption>{PROTECT_REASON}</Caption>}
-      <div
-        className="grid min-w-0 gap-3 rounded-lg border border-border bg-card p-3"
-        aria-label="Record DI"
-      >
-        {(!running || job?.kind === 'di') && (
-          <RecordDiToggle
-            recording={running}
-            disabled={
-              !ready ||
-              busy ||
-              !connected ||
-              (protect && !running) ||
-              job?.phase === 'finishing'
-            }
-            onRecording={(on) =>
-              void act(
-                on ? recordDi : () => stopCapture(true),
-                on ? 'start recording' : 'stop the recording',
-              )
-            }
-          />
-        )}
-        {job && running ? (
-          <JobRunning
-            job={job}
-            onStop={(keep) =>
-              void act(() => stopCapture(keep), 'stop the recording')
-            }
-          />
-        ) : (
-          <>
-            <Caption>
-              Records the raw guitar before trim, gate and effects. You’ll hear
-              your current rig while recording.
-              {minutes !== null &&
-                ` Space for about ${Math.floor(minutes / 60)} h ${Math.floor(minutes % 60)} min.`}
-            </Caption>
-          </>
-        )}
-        {job && !running && <JobResult job={job} />}
-      </div>
+      {(running || job) && (
+        <div
+          className="grid min-w-0 gap-3 border-b border-border pb-3"
+          aria-label="Recording"
+        >
+          {job && running ? (
+            <JobRunning
+              job={job}
+              onStop={(keep) =>
+                void act(() => stopCapture(keep), 'stop the recording')
+              }
+            />
+          ) : (
+            job && <JobResult job={job} />
+          )}
+        </div>
+      )}
       {error && (
         <p
           role="alert"
@@ -183,81 +197,106 @@ export function DiReamps({ connected }: { connected: boolean }) {
           {error}
         </p>
       )}
-      {library && !assets.length ? (
-        <Caption>No DI recordings or reamps yet.</Caption>
-      ) : (
-        <ol
-          className="m-0 grid min-w-0 list-none divide-y divide-border border-y border-border p-0"
-          aria-label="DI and reamps"
-        >
-          {assets.map((asset, index) => {
-            const cued = player?.track?.id === asset.id;
-            const playing = cued && player?.state === 'playing';
-            const menu: MenuItem[] = [
-              {
-                label: 'Reamp…',
-                disabled: locked,
-                onSelect: () => setReamp(asset),
-              },
-              {
-                label: 'Rename',
-                disabled: locked,
-                onSelect: () => setDialog({ kind: 'rename', asset }),
-              },
-              'separator',
-              {
-                label: 'Download WAV',
-                href: wavPath(asset.id),
-                download: true,
-              },
-              {
-                label: 'Delete…',
-                disabled: locked,
-                onSelect: () => setDialog({ kind: 'delete', asset }),
-              },
-            ];
-            const incomplete = asset.provenance?.complete === false;
-            return (
-              <MediaRow
-                key={asset.id}
-                num={index + 1}
-                name={asset.title}
-                cued={cued}
-                sub={[
-                  asset.kind === 'di' ? 'DI' : 'Reamp',
-                  formatTime(durationOf(asset)),
-                  channelsLabel(asset.renders[0]?.channels ?? 1),
-                  incomplete ? 'Incomplete' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-                actions={
-                  playing ? (
-                    <Button
-                      variant="outline"
-                      aria-label={`Pause ${asset.title}`}
-                      onClick={() => void send({ kind: 'pause' })}
-                    >
-                      Pause
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      aria-label={`Play ${asset.title}`}
-                      disabled={!connected || running}
-                      onClick={() => void play(asset)}
-                    >
-                      <Play aria-hidden="true" weight="fill" />
-                      Play
-                    </Button>
-                  )
-                }
-                menu={menu}
-              />
-            );
-          })}
-        </ol>
-      )}
+      <LibraryList
+        items={items}
+        query={query}
+        onQuery={setQuery}
+        searchLabels={{
+          input: 'Search DI recordings and reamps',
+          clear: 'Clear DI search',
+          placeholder: 'Find a recording…',
+        }}
+        selected={selected}
+        onOpen={setSelected}
+        onFavourite={(id, on) =>
+          setFavourites(
+            on
+              ? [...new Set([...favourites, id])]
+              : favourites.filter((f) => f !== id),
+          )
+        }
+        onPlay={(id) => {
+          const asset = byId.get(id);
+          if (!asset) return;
+          if (player?.track?.id === id && player.state === 'playing')
+            void send({ kind: 'pause' });
+          else void play(asset);
+        }}
+        tile={<Microphone />}
+        noun={['recording', 'recordings']}
+        primary={
+          (!running || job?.kind === 'di') && (
+            <RecordDiToggle
+              recording={running}
+              disabled={
+                !ready ||
+                busy ||
+                !connected ||
+                (protect && !running) ||
+                job?.phase === 'finishing'
+              }
+              onRecording={(on) =>
+                void act(
+                  on ? recordDi : () => stopCapture(true),
+                  on ? 'start recording' : 'stop the recording',
+                )
+              }
+            />
+          )
+        }
+        empty={{
+          title: library
+            ? 'No DI recordings or reamps yet'
+            : 'Reading recordings…',
+          text: library
+            ? 'Record DI keeps the raw guitar, before trim, gate and effects, while you hear your current rig.'
+            : undefined,
+        }}
+        mainAction={() => ({
+          label: 'Reamp…',
+          icon: <ArrowsClockwise />,
+          disabled: locked,
+          run: (id) => {
+            const asset = byId.get(id);
+            if (asset) setReamp(asset);
+          },
+        })}
+        actions={[
+          {
+            label: 'Rename',
+            icon: <PencilSimple />,
+            disabled: locked,
+            run: (id) => {
+              const asset = byId.get(id);
+              if (asset) setDialog({ kind: 'rename', asset });
+            },
+          },
+          {
+            label: 'Delete…',
+            icon: <Trash />,
+            destructive: true,
+            disabled: locked,
+            run: (id) => {
+              const asset = byId.get(id);
+              if (asset) setDialog({ kind: 'delete', asset });
+            },
+          },
+        ]}
+        detail={(item) => (
+          <Button size="sm" variant="outline" asChild>
+            <a href={wavPath(item.id)} download>
+              <DownloadSimple aria-hidden="true" />
+              Download WAV
+            </a>
+          </Button>
+        )}
+      />
+      <Caption className="text-xs">
+        Records the raw guitar before trim, gate and effects; reamp plays it
+        back through the rig that is playing now.
+        {minutes !== null &&
+          ` Space for about ${Math.floor(minutes / 60)} h ${Math.floor(minutes % 60)} min.`}
+      </Caption>
       {reamp && (
         <ReampDialog
           asset={reamp}

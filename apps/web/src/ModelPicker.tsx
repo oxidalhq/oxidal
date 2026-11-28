@@ -1,116 +1,64 @@
-import {
-  ArrowLeft,
-  CaretRight,
-  Check,
-  CloudArrowDown,
-  MagnifyingGlass,
-  Play,
-} from '@phosphor-icons/react';
+/**
+ * Change… and Get: choosing a NAM model or IR for a block, as Storybook's
+ * Swap sheet draws it, on the shared `ModelBrowser`: search, the TONE3000
+ * collections and gear filters, pictures, and the models on this unit, all
+ * in one list. Trying one auditions it through the block (the caller's
+ * `onAudition`, or `onTone` to build a new block from a TONE3000 capture).
+ * A file from this device can still be uploaded and auditioned.
+ * @see docs/native-tone3000.md
+ */
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { DialogFooter } from '@oxidal/design-system/components/dialog';
-import {
-  ActionRow,
-  FormField,
-} from '@oxidal/design-system/components/form-layout';
-import {
-  Segment,
-  SegmentedControl,
-} from '@oxidal/design-system/components/segmented';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@oxidal/design-system/components/select';
-import { Loading } from '@oxidal/design-system/components/states';
 import { Caption } from '@oxidal/design-system/components/text';
-import { CatalogueNotice } from '@oxidal/design-system/patterns/model-browser';
+import {
+  ModelBrowser,
+  type ModelChoice,
+} from '@oxidal/design-system/patterns/model-browser';
 import { DockableSheet } from '@oxidal/design-system/patterns/tool-dock';
 
 import {
-  type LocalModelPage,
+  type LocalModel,
   localModels,
-  type ModelPage,
   stageLocalCollection,
   stageTone3000,
-  tone3000Models,
-  tone3000Tones,
-  toneImage,
-  type TonePage,
-  type ToneQuery,
   uploadLocalModel,
 } from './api';
-import { GearIcon, GearLabel } from './GearIcon';
-import { friendlyError } from './lib/friendlyError';
 import {
-  remoteProblem,
-  setReturnTarget,
-  useSessionState,
-} from './lib/sessionState';
+  choiceOf,
+  useToneCatalogue,
+} from './features/library/useToneCatalogue';
+import { friendlyError } from './lib/friendlyError';
+import { gearLabel } from './lib/gearLabel';
+import { setReturnTarget } from './lib/sessionState';
 
-/** Gear types TONE3000 can narrow a list to, per model type. */
-const GEARS = {
-  nam: [
-    ['amp', 'Amp'],
-    ['amp-cab', 'Full rig'],
-    ['pedal', 'Pedal'],
-    ['outboard', 'Outboard'],
-    ['experimental', 'Experimental'],
-  ],
-  ir: [
-    ['cab', 'Cab'],
-    ['space', 'Space'],
-  ],
-} as const;
-type Gear = NonNullable<ToneQuery['gear']>;
-
-/** A tone's picture through the unit, or its gear glyph when there is none. */
-function ToneThumb({ id, gear }: { id: number; gear: string }) {
-  const [failed, setFailed] = useState(false);
-  return failed ? (
-    <span className="grid size-14 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground group-data-[view=pictures]:aspect-square group-data-[view=pictures]:h-auto group-data-[view=pictures]:w-full [&_svg]:size-7">
-      <GearIcon gear={gear} />
-    </span>
-  ) : (
-    <img
-      className="size-14 shrink-0 rounded-md bg-muted object-cover group-data-[view=pictures]:aspect-square group-data-[view=pictures]:h-auto group-data-[view=pictures]:w-full"
-      src={toneImage(id)}
-      alt=""
-      loading="lazy"
-      onError={() => setFailed(true)}
-    />
-  );
-}
-function readView(): 'pictures' | 'list' {
-  try {
-    return localStorage.getItem('oxidal.picker.view') === 'list'
-      ? 'list'
-      : 'pictures';
-  } catch {
-    return 'pictures';
-  }
-}
-
-/** Keep the already visible rows when a catalogue page is appended. */
-function appendPage<Row extends { id: number }>(
-  previous: { data: Row[]; page?: number; total_pages?: number } | null,
-  page: { data: Row[]; page?: number; total_pages?: number },
-) {
-  if (!previous) return page;
+/** A model on this unit as the shared browser shows it. */
+function deviceChoice(model: LocalModel): ModelChoice {
+  const tone = model.provider_tone;
+  const ir = model.format === 'ir';
+  const kind: ModelChoice['kind'] =
+    ir || model.gear === 'cab' || model.gear === 'space'
+      ? 'cab'
+      : model.gear === 'pedal'
+        ? 'pedal'
+        : 'amp';
   return {
-    ...page,
-    data: [
-      ...new Map(
-        [...previous.data, ...page.data].map((row) => [row.id, row]),
-      ).values(),
-    ],
+    id: model.id,
+    label: model.title,
+    caption: [
+      model.gear ? gearLabel(model.gear) : 'File',
+      ir ? 'IR' : 'NAM',
+      model.name && model.name !== model.title ? model.name : null,
+    ]
+      .filter(Boolean)
+      .join(' · '),
+    kind,
+    from: 'mine',
+    origin: tone ? choiceOf(tone, true).origin : undefined,
   };
 }
 
-/** Selection starts at the opening revision; repeat comparison advances only its own receipt. */
 export function ModelPicker({
   name,
   intent = 'replace',
@@ -126,7 +74,7 @@ export function ModelPicker({
 }: {
   name: string;
   returnFocus?: () => HTMLElement | null;
-  /** Shown in a page (Library) instead of a dialog; keeps its browsing for this tab. */
+  /** Shown in a page (Library) instead of a sheet. */
   inline?: boolean;
   /** Opens Accounts when browsing needs a TONE3000 sign-in. */
   onSignIn?: () => void;
@@ -144,59 +92,21 @@ export function ModelPicker({
   /** Build a new host block from a selected TONE3000 capture. */
   onTone?: (tone: number, model: number, name: string) => Promise<string>;
 }) {
-  const [source, setSource] = useState<'all' | 'tone3000' | 'local'>(
-    intent === 'download' || onTone ? 'tone3000' : 'all',
-  );
-  const [view, setView] = useState(readView);
-  function chooseView(next: 'pictures' | 'list') {
-    setView(next);
-    try {
-      localStorage.setItem('oxidal.picker.view', next);
-    } catch {
-      /* optional preference */
-    }
-  }
+  const format = allowedFormat ?? initialFormat;
   const [files, setFiles] = useState<File[]>([]);
-  const [local, setLocal] = useState<LocalModelPage | null>(null);
+  const [local, setLocal] = useState<LocalModel[]>([]);
+  const [localNext, setLocalNext] = useState<string | null>(null);
   const [localAfter, setLocalAfter] = useState<string | null>(null);
-  const [localLoading, setLocalLoading] = useState(true);
   const [localError, setLocalError] = useState('');
-
-  const memory = (key: string) => (inline ? `discover-tone3000-${key}` : null);
-  const [query, saveQuery] = useSessionState<ToneQuery>(memory('query'), {
-    collection: 'latest',
-    page: 1,
-  });
-  const [tonePage, setTonePage] = useState(1);
-  const setQuery = (next: ToneQuery) => {
-    setTonePage(1);
-    saveQuery({ ...next, page: 1 });
-  };
-  const [format, setFormat] = useSessionState(
-    memory('format'),
-    allowedFormat ?? initialFormat,
-  );
-  const [search, setSearch] = useSessionState(
-    memory('search'),
-    query.query ?? '',
-  );
-  const [tones, setTones] = useState<TonePage | null>(null);
-  const [tone, setTone] = useSessionState<TonePage['data'][number] | null>(
-    memory('tone'),
-    null,
-  );
-  const [models, setModels] = useState<ModelPage | null>(null);
-  const [modelPage, setModelPage] = useState(1);
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<'download' | 'assign' | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [downloads, setDownloads] = useState<Record<string, number>>({});
   const [error, setError] = useState('');
-  const [catalogueError, setCatalogueError] = useState('');
-  const [retry, setRetry] = useState(0);
   const [choice, setChoice] = useState<{
     asset: string;
     label: string;
-    toneId?: number;
-    modelId?: number;
+    /** The browser row it came from. */
+    id: string;
   } | null>(null);
   const locked = !!busy || !!comparison?.pending || !!comparison?.blocked;
   const download = useRef<AbortController | null>(null);
@@ -208,90 +118,80 @@ export function ModelPicker({
       download.current?.abort();
     };
   }, []);
-  const showRemote = source !== 'local';
-  const showLocal =
-    !onTone && (source === 'local' || (source === 'all' && !tone));
-  useEffect(() => {
-    if (!showLocal) return;
-    const controller = new AbortController();
-    async function loadLocal() {
-      setLocalLoading(true);
-      setLocalError('');
-      try {
-        const page = await localModels(localAfter, controller.signal, true);
-        if (!controller.signal.aborted) setLocal(page);
-      } catch (cause) {
-        if (!controller.signal.aborted)
-          setLocalError(friendlyError(cause, 'read local model files'));
-      } finally {
-        if (!controller.signal.aborted) setLocalLoading(false);
-      }
-    }
-    void loadLocal();
-    return () => controller.abort();
-  }, [localAfter, showLocal]);
-  useEffect(() => {
-    if (!showRemote) return;
-    const controller = new AbortController();
-    async function loadRemote() {
-      setLoading(true);
-      setCatalogueError('');
-      try {
-        if (tone) {
-          const page = await tone3000Models(
-            tone.id,
-            modelPage,
-            controller.signal,
-            format,
-          );
-          if (!controller.signal.aborted)
-            setModels((previous) =>
-              modelPage === 1 ? page : appendPage(previous, page),
-            );
-        } else {
-          const page = await tone3000Tones(
-            { ...query, page: tonePage },
-            controller.signal,
-          );
-          if (!controller.signal.aborted)
-            setTones((previous) =>
-              tonePage === 1 ? page : appendPage(previous, page),
-            );
-        }
-      } catch (cause) {
-        if (!controller.signal.aborted)
-          setCatalogueError(friendlyError(cause, 'read the sounds'));
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    }
-    void loadRemote();
-    return () => controller.abort();
-  }, [query, tone, modelPage, tonePage, format, showRemote, retry]);
   function close() {
     if (busy === 'assign') return;
     download.current?.abort();
     onClose();
   }
-  async function audition(id: number) {
-    if (!tone || locked) return;
+  const signIn =
+    onSignIn ??
+    (() => {
+      setReturnTarget({
+        hash: window.location.hash || '#rig',
+        label: intent === 'download' ? 'Sounds' : 'Rig',
+      });
+      close();
+      window.location.hash = 'settings/accounts';
+    });
+  const { catalogue, markKept, modelsOf } = useToneCatalogue({
+    connected: true,
+    onSignIn: signIn,
+  });
+  // Models on this unit join the list, except when only TONE3000 is asked for.
+  const deviceToo = !onTone && intent !== 'download';
+  useEffect(() => {
+    if (!deviceToo) return;
+    const controller = new AbortController();
+    localModels(localAfter, controller.signal, true).then(
+      (page) => {
+        if (controller.signal.aborted) return;
+        setLocal((previous) => {
+          const seen = new Set(previous.map((m) => m.id));
+          return localAfter
+            ? [...previous, ...page.data.filter((m) => !seen.has(m.id))]
+            : page.data;
+        });
+        setLocalNext(page.next ?? null);
+      },
+      (cause: unknown) => {
+        if (!controller.signal.aborted)
+          setLocalError(friendlyError(cause, 'read local model files'));
+      },
+    );
+    return () => controller.abort();
+  }, [localAfter, deviceToo]);
+
+  /** A TONE3000 tone: its chosen model (or its first) through the block. */
+  async function auditionTone(toneId: number, label: string, variant?: string) {
+    if (locked) return;
     const controller = new AbortController();
     download.current = controller;
     setBusy(onTone ? 'assign' : 'download');
+    setUploading(false);
     setError('');
+    setDownloads((all) => ({ ...all, [String(toneId)]: 50 }));
     try {
+      const models = await modelsOf(toneId, controller.signal, allowedFormat);
+      const modelId = variant ? Number(variant) : models.data[0]?.id;
+      if (!modelId)
+        throw new Error(
+          allowedFormat === 'ir'
+            ? 'This tone has no IR for this block.'
+            : 'This tone has no model Oxidal can play here.',
+        );
       const asset = onTone
-        ? { id: await onTone(tone.id, id, tone.title) }
-        : await stageTone3000(tone.id, id, controller.signal);
+        ? { id: await onTone(toneId, modelId, label) }
+        : await stageTone3000(toneId, modelId, controller.signal);
       if (controller.signal.aborted || !alive.current) return;
+      markKept(toneId);
       setBusy('assign');
       if (!onTone) await onAudition(asset.id);
       if (alive.current) {
         setChoice({
           asset: asset.id,
-          toneId: tone.id,
-          modelId: id,
-          label: models?.data.find((model) => model.id === id)?.name ?? 'Model',
+          label:
+            models.data.find((model) => model.id === modelId)?.name ?? label,
+          id: String(toneId),
         });
         if (!comparison) onClose();
       }
@@ -299,14 +199,23 @@ export function ModelPicker({
       if (!controller.signal.aborted && alive.current)
         setError(friendlyError(cause, 'read the sounds'));
     } finally {
-      if (alive.current) setBusy(null);
+      if (alive.current) {
+        setBusy(null);
+        setDownloads((all) => {
+          const next = { ...all };
+          delete next[String(toneId)];
+          return next;
+        });
+      }
     }
   }
+  /** A model on this unit, or the files chosen from this device. */
   async function auditionLocal(asset?: string) {
     if (locked || (!asset && files.length === 0)) return;
     const controller = new AbortController();
     download.current = controller;
     setBusy(asset ? 'assign' : 'download');
+    setUploading(!asset);
     setError('');
     try {
       if (!asset) {
@@ -342,8 +251,9 @@ export function ModelPicker({
       if (alive.current) {
         setChoice({
           asset,
+          id: asset,
           label:
-            (local?.data.find((model) => model.id === asset)?.title ??
+            (local.find((model) => model.id === asset)?.title ??
               files.map((file) => file.name).join(', ')) ||
             'Local model',
         });
@@ -356,505 +266,151 @@ export function ModelPicker({
       if (alive.current) setBusy(null);
     }
   }
-  const paginated =
-    query.collection !== 'latest' && query.collection !== 'trending';
-  const page = tone ? modelPage : tonePage;
-  const total = (tone ? models : tones)?.total_pages ?? 1;
-  const appending = page > 1;
-  function showMore() {
-    setLoading(true);
-    if (tone) setModelPage((value) => value + 1);
-    else setTonePage((value) => value + 1);
-  }
-  const problem = remoteProblem(catalogueError);
+
+  // Replacing keeps the block's kind: a model for a model, an IR for an IR.
+  const only = allowedFormat ?? (intent === 'replace' ? initialFormat : null);
+  const deviceChoices = local
+    .filter((m) => !only || m.format === only)
+    .map(deviceChoice);
   const title =
     intent === 'download'
       ? `Get ${format === 'nam' ? 'NAM models' : 'IRs'}`
       : 'Choose model';
   const body = (
-    <>
-      <div className="grid min-w-0 items-start gap-3 [&>button]:max-w-full [&>button]:justify-self-start">
-        {intent !== 'download' && (
-          <p className="truncate text-sm text-muted-foreground">
-            {intent === 'add' ? 'Add to' : 'Replace'} {name}
-          </p>
-        )}
-        {intent !== 'download' && !onTone && (
-          <SegmentedControl
-            aria-label="Model source"
-            value={source}
-            disabled={locked}
-            onValueChange={(value) => {
-              if (value === 'all' || value === 'tone3000' || value === 'local')
-                setSource(value);
-            }}
-          >
-            <Segment value="all">All</Segment>
-            <Segment value="local">On this device</Segment>
-            <Segment value="tone3000">TONE3000</Segment>
-          </SegmentedControl>
-        )}
-        {showLocal && (
-          <section aria-label="On this device" className="space-y-3">
-            <details className="[&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:font-semibold">
-              <summary>Add a file from this device</summary>
-              <div className="space-y-3">
-                <label htmlFor="local-model-file">NAM / IR file</label>
-                <input
-                  id="local-model-file"
-                  className="w-full min-w-0"
-                  type="file"
-                  multiple
-                  accept={
-                    allowedFormat === 'nam'
-                      ? '.nam'
-                      : allowedFormat === 'ir'
-                        ? '.wav'
-                        : '.nam,.wav'
-                  }
-                  disabled={locked}
-                  onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-                />
-                <Button
-                  variant="outline"
-                  disabled={files.length === 0 || locked}
-                  onClick={() => void auditionLocal()}
-                >
-                  {files.length > 1
-                    ? `Audition ${files.length} files`
-                    : 'Audition file'}
-                </Button>
-              </div>
-            </details>
-            <Caption>
-              Everything already on this unit: models you downloaded from
-              TONE3000 and files you added. No internet needed.
-            </Caption>
-            <div
-              aria-label="Local model files"
-              className="space-y-2"
-              aria-busy={localLoading}
-            >
-              {localLoading ? (
-                <Loading label="Reading this unit…" />
-              ) : (
-                <>
-                  {!local?.data.some(
-                    (m) => !allowedFormat || m.format === allowedFormat,
-                  ) && <p>Nothing on this unit yet.</p>}
-                  {local?.data
-                    .filter((m) => !allowedFormat || m.format === allowedFormat)
-                    .map((m) => (
-                      <Button
-                        key={m.id}
-                        variant="outline"
-                        className="group h-auto min-h-20 w-full justify-start gap-3 p-3 text-left whitespace-normal data-[view=pictures]:flex-col data-[view=pictures]:items-stretch data-[view=pictures]:gap-2 data-[view=pictures]:p-2 data-[view=pictures]:[&>svg]:hidden"
-                        disabled={locked}
-                        onClick={() => void auditionLocal(m.id)}
-                      >
-                        {m.tone_id ? (
-                          <ToneThumb id={m.tone_id} gear={m.gear ?? ''} />
-                        ) : (
-                          <span className="grid size-14 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground group-data-[view=pictures]:aspect-square group-data-[view=pictures]:h-auto group-data-[view=pictures]:w-full [&_svg]:size-7">
-                            <GearIcon
-                              gear={m.gear || (m.format === 'ir' ? 'ir' : '')}
-                            />
-                          </span>
-                        )}
-                        <span className="grid min-w-0 flex-1 gap-1 [overflow-wrap:anywhere] [&>span]:text-xs [&>span]:font-normal [&>span]:text-muted-foreground">
-                          <strong>{m.title}</strong>
-                          <span className="font-mono">
-                            {m.gear ? <GearLabel gear={m.gear} /> : 'File'} ·{' '}
-                            {m.format === 'nam' ? 'NAM' : 'IR'}
-                            {m.name && m.name !== m.title ? ` · ${m.name}` : ''}
-                          </span>
-                        </span>
-                        <span className="flex shrink-0 items-center gap-1 [&_svg]:size-4">
-                          <Play aria-hidden="true" /> Audition
-                        </span>
-                      </Button>
-                    ))}
-                </>
-              )}
-            </div>
-            {(localAfter || local?.next) && (
-              <ActionRow>
-                <Button
-                  variant="outline"
-                  disabled={!localAfter || localLoading || locked}
-                  onClick={() => setLocalAfter(null)}
-                >
-                  First page
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={!local?.next || localLoading || locked}
-                  onClick={() => setLocalAfter(local!.next ?? null)}
-                >
-                  More files
-                </Button>
-              </ActionRow>
-            )}
-            {localError && <p role="alert">{localError}</p>}
-          </section>
-        )}
-        {showRemote && (
-          <>
-            {!tone ? (
-              <>
-                {!(intent === 'download' && allowedFormat) && (
-                  <ActionRow aria-label="Model type">
-                    {(allowedFormat
-                      ? [allowedFormat]
-                      : (['nam', 'ir'] as const)
-                    ).map((kind) => (
-                      <Button
-                        key={kind}
-                        variant="ghost"
-                        aria-pressed={format === kind}
-                        disabled={locked}
-                        onClick={() => {
-                          setFormat(kind);
-                          setQuery({ ...query, gear: null, page: 1 });
-                        }}
-                      >
-                        {kind === 'nam' ? 'NAM' : 'Cab / IR'}
-                      </Button>
-                    ))}
-                  </ActionRow>
-                )}
-                <FormField>
-                  TONE3000 library
-                  <Select
-                    value={query.collection}
-                    disabled={locked}
-                    onValueChange={(value) => {
-                      setQuery({
-                        collection: value as ToneQuery['collection'],
-                        page: 1,
-                      });
-                      setSearch('');
-                    }}
-                  >
-                    <SelectTrigger aria-label="TONE3000 library">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="latest">Latest</SelectItem>
-                      <SelectItem value="favorites">Favorites</SelectItem>
-                      <SelectItem value="downloaded">Downloaded</SelectItem>
-                      <SelectItem value="created">My tones</SelectItem>
-                      <SelectItem value="trending">Trending</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </FormField>
-                <div className="flex flex-wrap justify-between gap-x-4 gap-y-1">
-                  <SegmentedControl
-                    value={query.gear ?? 'all'}
-                    disabled={locked}
-                    aria-label="Gear type"
-                    onValueChange={(value) => {
-                      if (value)
-                        setQuery({
-                          ...query,
-                          gear: value === 'all' ? null : (value as Gear),
-                          page: 1,
-                        });
-                    }}
-                  >
-                    {(
-                      [[null, 'All'], ...GEARS[format]] as [
-                        Gear | null,
-                        string,
-                      ][]
-                    ).map(([gear, label]) => (
-                      <Segment key={label} value={gear ?? 'all'}>
-                        {label}
-                      </Segment>
-                    ))}
-                  </SegmentedControl>
-                  <SegmentedControl
-                    value={view}
-                    aria-label="Show tones as"
-                    onValueChange={(value) => {
-                      if (value === 'pictures' || value === 'list')
-                        chooseView(value);
-                    }}
-                  >
-                    {(['pictures', 'list'] as const).map((v) => (
-                      <Segment key={v} value={v}>
-                        {v === 'pictures' ? 'Pictures' : 'List'}
-                      </Segment>
-                    ))}
-                  </SegmentedControl>
-                </div>
-                {paginated && (
-                  <form
-                    className="flex items-end gap-2"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      setQuery({ ...query, query: search.trim(), page: 1 });
-                    }}
-                  >
-                    <FormField className="min-w-0 flex-1">
-                      Search
-                      <input
-                        value={search}
-                        maxLength={200}
-                        onChange={(e) => setSearch(e.target.value)}
-                      />
-                    </FormField>
-                    <Button type="submit" variant="outline" disabled={locked}>
-                      <MagnifyingGlass aria-hidden="true" /> Search
-                    </Button>
-                  </form>
-                )}
-              </>
-            ) : (
-              <div className="flex min-w-0 items-center gap-3">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Back to tones"
-                  disabled={locked}
-                  onClick={() => {
-                    setTone(null);
-                    setModels(null);
-                  }}
-                >
-                  <ArrowLeft aria-hidden="true" />
-                </Button>
-                <ToneThumb id={tone.id} gear={tone.gear} />
-                <div className="grid min-w-0 flex-1 gap-1 [overflow-wrap:anywhere] [&>span]:text-xs [&>span]:font-normal [&>span]:text-muted-foreground">
-                  <strong>{tone.title}</strong>
-                  <span className="font-mono">
-                    <GearLabel gear={tone.gear} /> ·{' '}
-                    {tone.user.profile_url ? (
-                      <a
-                        href={tone.user.profile_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex min-h-touch items-center underline"
-                      >
-                        {tone.user.display_name || tone.user.username}
-                      </a>
-                    ) : (
-                      tone.user.display_name || tone.user.username
-                    )}{' '}
-                    · licence {tone.license.toUpperCase()}
-                  </span>
-                </div>
-              </div>
-            )}
-            <div
-              className={
-                !tone && view === 'pictures'
-                  ? 'grid grid-cols-[repeat(auto-fill,minmax(min(9rem,100%),1fr))] gap-2'
-                  : 'space-y-2'
-              }
-              aria-label={tone ? 'Available models' : 'TONE3000 tones'}
-              data-view={tone ? undefined : view}
-              aria-busy={loading || locked}
-            >
-              {loading && !appending ? (
-                <p
-                  className="col-span-full px-4 py-8 text-center text-muted-foreground"
-                  role="status"
-                >
-                  Searching TONE3000…
-                </p>
-              ) : catalogueError && !appending ? null : tone ? (
-                <>
-                  {!models?.data.length && (
-                    <p
-                      className="col-span-full px-4 py-8 text-center text-muted-foreground"
-                      role="status"
-                    >
-                      {format === 'nam' ? 'No A2 models' : 'No IR files'}{' '}
-                      available for this tone.
-                    </p>
-                  )}
-                  {models?.data.map((m) => {
-                    const playing =
-                      !comparison?.blocked &&
-                      choice?.toneId === tone.id &&
-                      choice.modelId === m.id &&
-                      comparison?.appliedAsset === choice.asset;
-                    return (
-                      <Button
-                        key={m.id}
-                        aria-pressed={playing}
-                        variant="outline"
-                        className="h-auto min-h-11 w-full justify-between gap-3 py-3 text-left whitespace-normal"
-                        disabled={locked}
-                        onClick={() => void audition(m.id)}
-                      >
-                        <span className="min-w-0 break-words">
-                          {m.name}
-                          {m.size ? ` · ${m.size}` : ''}
-                        </span>
-                        <span className="flex shrink-0 items-center gap-1 [&_svg]:size-4">
-                          {playing ? (
-                            <Check aria-hidden="true" />
-                          ) : intent === 'download' ? (
-                            <CloudArrowDown aria-hidden="true" />
-                          ) : (
-                            <Play aria-hidden="true" />
-                          )}{' '}
-                          {playing
-                            ? 'Playing'
-                            : intent === 'download'
-                              ? 'Download'
-                              : 'Audition'}
-                        </span>
-                      </Button>
-                    );
-                  })}
-                </>
-              ) : (
-                <>
-                  {!tones?.data.some((t) => t.format === format) && (
-                    <p
-                      className="col-span-full px-4 py-8 text-center text-muted-foreground"
-                      role="status"
-                    >
-                      No {format === 'nam' ? 'NAM tones' : 'IRs'} in{' '}
-                      {query.collection === 'latest'
-                        ? 'the latest feed'
-                        : 'this collection'}
-                      {query.gear ? ' with this filter' : ''}.
-                      {query.collection === 'latest'
-                        ? ' Latest only includes the ten newest tones. Try another collection.'
-                        : ' Try another collection or gear type.'}
-                    </p>
-                  )}
-                  {tones?.data
-                    .filter((t) => t.format === format)
-                    .map((t) => (
-                      <Button
-                        key={t.id}
-                        variant="outline"
-                        className="group h-auto min-h-20 w-full justify-start gap-3 p-3 text-left whitespace-normal data-[view=pictures]:flex-col data-[view=pictures]:items-stretch data-[view=pictures]:gap-2 data-[view=pictures]:p-2 data-[view=pictures]:[&>svg]:hidden"
-                        data-view={view}
-                        onClick={() => {
-                          setTone(t);
-                          setModels(null);
-                          setModelPage(1);
-                        }}
-                      >
-                        {view === 'pictures' ? (
-                          <ToneThumb id={t.id} gear={t.gear} />
-                        ) : (
-                          <span className="grid size-14 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground group-data-[view=pictures]:aspect-square group-data-[view=pictures]:h-auto group-data-[view=pictures]:w-full [&_svg]:size-7">
-                            <GearIcon gear={t.gear} />
-                          </span>
-                        )}
-                        <span className="grid min-w-0 flex-1 gap-1 [overflow-wrap:anywhere] [&>span]:text-xs [&>span]:font-normal [&>span]:text-muted-foreground">
-                          <strong>{t.title}</strong>
-                          <span>{t.user.display_name || t.user.username}</span>
-                          <span className="font-mono">
-                            <GearLabel gear={t.gear} /> · {t.models_count}{' '}
-                            {t.models_count === 1 ? 'model' : 'models'}
-                          </span>
-                        </span>
-                        <CaretRight aria-hidden="true" />
-                      </Button>
-                    ))}
-                </>
-              )}
-            </div>
-            {loading && appending && <Loading label="Loading more…" />}
-            {!catalogueError && page < total && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-fit"
-                disabled={loading || locked}
-                onClick={showMore}
-              >
-                Show more
-              </Button>
-            )}
-          </>
-        )}
-        <Caption>
-          {intent === 'download'
-            ? 'Downloads stay in your library for future presets. Downloading does not change the playing sound.'
-            : 'Audition changes live sound; closing keeps it. Save a copy in Rig for offline use.'}
+    <div className="grid min-w-0 content-start gap-3">
+      {intent !== 'download' && (
+        <Caption className="truncate">
+          {intent === 'add' ? 'Add to' : 'Replace'} {name}
         </Caption>
-        {comparison?.pending && (
-          <p role="status">
-            Preparing comparison… Close leaves this request running.
-          </p>
-        )}
-        {choice &&
+      )}
+      <ModelBrowser
+        models={deviceToo ? deviceChoices : []}
+        only={deviceToo ? undefined : 'tone3000'}
+        kind={only === 'ir' ? 'cab' : undefined}
+        downloads={downloads}
+        disabled={locked}
+        // Marked sounding only once the comparison confirms it is applied.
+        playing={
+          choice &&
           !comparison?.blocked &&
-          comparison?.appliedAsset === choice.asset && (
-            <p role="status">Auditioning {choice.label}</p>
-          )}
-        {(comparison?.blocked || error || comparison?.error) && (
-          <p role="alert">
-            {comparison?.blocked
-              ? 'The playing preset changed. Close and reopen the model browser.'
-              : error || comparison?.error}
-          </p>
-        )}
-        {showRemote && catalogueError && (
-          <CatalogueNotice
-            status={
-              problem === 'account'
-                ? { state: 'signed-out' }
-                : problem === 'offline'
-                  ? { state: 'offline' }
-                  : { state: 'failed', message: catalogueError }
-            }
-            onRetry={() => setRetry((n) => n + 1)}
-            onSignIn={
-              onSignIn ??
-              (() => {
-                setReturnTarget({
-                  hash: window.location.hash || '#rig',
-                  label: intent === 'download' ? 'Sounds' : 'Rig',
-                });
-                close();
-                window.location.hash = 'settings/accounts';
-              })
-            }
-          />
-        )}
-        {inline && choice && !busy && (
-          <p role="status">{choice.label} is saved in Sounds.</p>
-        )}
-        {busy && (
-          <p role="status">
-            {busy === 'download'
-              ? source === 'local'
-                ? 'Uploading for audition…'
-                : intent === 'download'
-                  ? 'Downloading to library…'
-                  : 'Downloading for audition…'
-              : intent === 'download'
-                ? 'Adding to library…'
-                : 'Preparing live audition…'}
-          </p>
-        )}
-        <DialogFooter>
-          {(!inline || busy === 'download') && (
+          comparison?.appliedAsset === choice.asset
+            ? choice.id
+            : null
+        }
+        catalogue={catalogue}
+        onTry={(picked, variant) =>
+          picked.from === 'mine'
+            ? void auditionLocal(picked.id)
+            : void auditionTone(Number(picked.id), picked.label, variant)
+        }
+        onGet={
+          intent === 'download'
+            ? (picked) => void auditionTone(Number(picked.id), picked.label)
+            : undefined
+        }
+      />
+      {deviceToo && localNext && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-fit"
+          disabled={locked}
+          onClick={() => setLocalAfter(localNext)}
+        >
+          More files on this unit
+        </Button>
+      )}
+      {localError && <p role="alert">{localError}</p>}
+      {deviceToo && (
+        <details className="border-t border-border pt-2 [&>summary]:flex [&>summary]:min-h-touch [&>summary]:cursor-pointer [&>summary]:items-center [&>summary]:text-sm [&>summary]:font-semibold">
+          <summary>Add a file from this device</summary>
+          <div className="grid gap-3 pt-2">
+            <label htmlFor="local-model-file" className="text-sm">
+              NAM / IR file
+            </label>
+            <input
+              id="local-model-file"
+              className="w-full min-w-0"
+              type="file"
+              multiple
+              accept={
+                allowedFormat === 'nam'
+                  ? '.nam'
+                  : allowedFormat === 'ir'
+                    ? '.wav'
+                    : '.nam,.wav'
+              }
+              disabled={locked}
+              onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+            />
             <Button
               variant="outline"
-              disabled={busy === 'assign'}
-              onClick={inline ? () => download.current?.abort() : close}
+              size="sm"
+              className="w-fit"
+              disabled={files.length === 0 || locked}
+              onClick={() => void auditionLocal()}
             >
-              {busy === 'download'
-                ? source === 'local'
-                  ? 'Cancel upload'
-                  : 'Cancel download'
-                : 'Close'}
+              {files.length > 1
+                ? `Audition ${files.length} files`
+                : 'Audition file'}
             </Button>
-          )}
+          </div>
+        </details>
+      )}
+      <Caption>
+        {intent === 'download'
+          ? 'Downloads stay in your library for future presets. Downloading does not change the playing sound.'
+          : 'Audition changes live sound; closing keeps it. Save a copy in Rig for offline use.'}
+      </Caption>
+      {comparison?.pending && (
+        <p role="status">
+          Preparing comparison… Close leaves this request running.
+        </p>
+      )}
+      {choice &&
+        !comparison?.blocked &&
+        comparison?.appliedAsset === choice.asset && (
+          <p role="status">Auditioning {choice.label}</p>
+        )}
+      {(comparison?.blocked || error || comparison?.error) && (
+        <p role="alert">
+          {comparison?.blocked
+            ? 'The playing preset changed. Close and reopen the model browser.'
+            : error || comparison?.error}
+        </p>
+      )}
+      {inline && choice && !busy && (
+        <p role="status">{choice.label} is saved in Sounds.</p>
+      )}
+      {busy && (
+        <p role="status">
+          {busy === 'download'
+            ? uploading
+              ? 'Uploading for audition…'
+              : intent === 'download'
+                ? 'Downloading to library…'
+                : 'Downloading for audition…'
+            : intent === 'download'
+              ? 'Adding to library…'
+              : 'Preparing live audition…'}
+        </p>
+      )}
+      {(!inline || busy === 'download') && (
+        <DialogFooter>
+          <Button
+            variant="outline"
+            disabled={busy === 'assign'}
+            onClick={inline ? () => download.current?.abort() : close}
+          >
+            {busy === 'download'
+              ? uploading
+                ? 'Cancel upload'
+                : 'Cancel download'
+              : 'Close'}
+          </Button>
         </DialogFooter>
-      </div>
-    </>
+      )}
+    </div>
   );
   return inline ? (
     <section className="mx-auto w-full max-w-2xl" aria-label="TONE3000 sounds">

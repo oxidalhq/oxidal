@@ -517,13 +517,18 @@ it('lists songs with stems, plays a mix and offers only unsplit tracks to split'
   render(wrap(<StemSongs connected />));
   expect(await screen.findByText('Practice song')).toBeVisible();
   expect(screen.getByText(/0:01 · 4 stems · 6 stems/)).toBeVisible();
-  expect(screen.getByText('Guitar muted')).toBeVisible();
+  // The song's mixes are in its details in the shared Library list.
+  fireEvent.click(screen.getByRole('button', { name: /^Practice song/ }));
+  expect(await screen.findByText('Guitar muted')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Play No guitar' }));
   await waitFor(() =>
     expect(send).toHaveBeenCalledWith({ kind: 'play' }, 'render'),
   );
   expect(send).toHaveBeenCalledWith({ kind: 'cue', asset: 'render' });
-  fireEvent.click(screen.getByRole('button', { name: /Split a track/ }));
+  // A narrow screen shows the details over the list: close them first.
+  const close = screen.queryByRole('button', { name: /^Close/ });
+  if (close) fireEvent.click(close);
+  fireEvent.click(await screen.findByRole('button', { name: /Split a track/ }));
   const picker = await screen.findByRole('dialog', { name: 'Split a track' });
   expect(
     within(picker).getAllByRole('button', { name: /Encore/ }),

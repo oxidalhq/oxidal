@@ -21,7 +21,7 @@ export function PerformPlayerRow() {
   if (!player?.track || shown === 'empty')
     return (
       <div
-        className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
+        className="flex min-w-0 flex-wrap items-center gap-2 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
         role="region"
         aria-label="Backing track"
       >
@@ -57,7 +57,7 @@ export function PerformPlayerRow() {
         : formatTime(at);
   return (
     <div
-      className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
+      className="flex min-w-0 flex-wrap items-center gap-2 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
       role="region"
       aria-label="Backing track"
     >
