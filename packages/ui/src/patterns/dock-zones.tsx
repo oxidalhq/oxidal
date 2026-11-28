@@ -16,6 +16,8 @@ import {
   type DragEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  useCallback,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
@@ -633,7 +635,32 @@ function DropTargets({ layout, act }: { layout: DockLayout; act: Act }) {
   );
 }
 
-/** What a screen places itself: the bottom zone, and (with `inside`) the glass zones and folded strips. */
+/**
+ * A folded strip a screen placed itself, such as in the Rig's IN and OUT
+ * lanes beside the guitar and the output level. While it is shown, the dock
+ * does not draw its own copy at the screen's edge.
+ */
+function PlacedStrip({
+  side,
+  onPlaced,
+  children,
+}: {
+  side: 'left' | 'right';
+  onPlaced: (side: 'left' | 'right', placed: boolean) => void;
+  children: ReactNode;
+}) {
+  useLayoutEffect(() => {
+    onPlaced(side, true);
+    return () => onPlaced(side, false);
+  }, [side, onPlaced]);
+  return children;
+}
+
+/**
+ * What a screen places itself: the bottom zone, and (with `inside`) the glass
+ * zones. The folded strips are always offered: a screen that places one
+ * (beside IN and OUT) takes it from the edge.
+ */
 export type DockParts = {
   bottom: ReactNode;
   glass: ReactNode;
@@ -661,8 +688,9 @@ export function DockZones({
   menuOpenFor?: string;
   /**
    * The caller places the glass zones (over the Rig's chain only, clear of
-   * the bottom zone and the bar) and the folded side strips (beside IN and
-   * OUT). Otherwise they float at the screen's edges.
+   * the bottom zone and the bar). Otherwise they float at the screen's
+   * edges. The folded side strips go wherever the caller places
+   * `strips` (beside IN and OUT), and at the edges when it does not.
    */
   inside?: boolean;
   children: (parts: DockParts) => ReactNode;
@@ -673,6 +701,13 @@ export function DockZones({
   const shown = fitLayout(layout, bothSides);
   const root = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState<string | null>(null);
+  /** Folded strips the screen placed itself (in the Rig's lanes). */
+  const [placed, setPlaced] = useState({ left: false, right: false });
+  const onPlaced = useCallback(
+    (side: 'left' | 'right', on: boolean) =>
+      setPlaced((p) => (p[side] === on ? p : { ...p, [side]: on })),
+    [],
+  );
   const [over, setOver] = useState<ZoneId | null>(null);
   const act: Act = {
     move: (id, to, at) => {
@@ -739,13 +774,20 @@ export function DockZones({
       />
     ) : null;
   };
+  const placeable = (id: 'left' | 'right') => {
+    const folded = strip(id, true);
+    return (
+      folded && (
+        <PlacedStrip side={id} onPlaced={onPlaced}>
+          {folded}
+        </PlacedStrip>
+      )
+    );
+  };
   const parts: DockParts = {
     bottom: zone('bottom'),
     glass: inside && floating,
-    strips: {
-      left: inside && strip('left', true),
-      right: inside && strip('right', true),
-    },
+    strips: { left: placeable('left'), right: placeable('right') },
   };
   return (
     <div
@@ -775,20 +817,13 @@ export function DockZones({
         {!inside && (
           <>
             {floating}
-            {strip(
-              'left',
-              false,
-              // Folded panels wait at the top of the edge, under the capsule,
-              // where they are seen; not halfway down the page.
-              'absolute top-20 left-1 z-20',
-            )}
-            {strip(
-              'right',
-              false,
-              // Folded panels wait at the top of the edge, under the capsule,
-              // where they are seen; not halfway down the page.
-              'absolute top-20 right-1 z-20',
-            )}
+            {/* Folded panels wait at the top of the edge, under the capsule,
+                where they are seen, unless the screen placed them (the
+                Rig's lanes, so they never sit on a meter). */}
+            {!placed.left &&
+              strip('left', false, 'absolute top-20 left-1 z-20')}
+            {!placed.right &&
+              strip('right', false, 'absolute top-20 right-1 z-20')}
           </>
         )}
       </div>

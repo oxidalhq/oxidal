@@ -12,6 +12,7 @@ import { OutLevelButton } from '../../MasterLevel';
 import { boostKey } from '../../presetChoices';
 import { useResource } from '../../resourceContext';
 import { requestScreen } from '../../screenNavigation';
+import { useDockParts } from '../dock/dockParts';
 import type { RigViewProps } from './useMixedRigSession';
 
 const minus = (text: string) => text.replace('-', '−');
@@ -113,6 +114,9 @@ export function DeviceEdgeLanes({
   const moving = useMoving();
   const midiName = usePortName(midiPort, !!midi?.connected);
   const message = useMidiMessage(midi);
+  // The folded dock icons sit in the lanes' bottom rows, beside the guitar
+  // and the output level, never over a meter (as in Storybook's Rig).
+  const strips = useDockParts()?.strips;
   if (!resource) return null;
   const { readings, levels, running } = resource;
   const input = loudest(levels?.input);
@@ -180,11 +184,25 @@ export function DeviceEdgeLanes({
       stopped={!running}
       playing={running}
       moving={moving}
-      input={{ level: input, figures: left, control: <GuitarLane /> }}
+      input={{
+        level: input,
+        figures: left,
+        control: (
+          <span className="flex items-center gap-4">
+            <GuitarLane />
+            {strips?.left}
+          </span>
+        ),
+      }}
       output={{
         level: output,
         figures: right,
-        control: <OutLevelButton boost={boost} />,
+        control: (
+          <span className="flex items-center gap-4">
+            {strips?.right}
+            <OutLevelButton boost={boost} />
+          </span>
+        ),
       }}
     />
   );
