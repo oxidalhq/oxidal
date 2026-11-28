@@ -1089,6 +1089,7 @@ export function RigSurface({
               <ChainCanvas
                 toolbar="none"
                 control={canvas}
+                flowing={playing}
                 graph={mapped.graph}
                 selected={selected}
                 onSelect={(id) => id && select(id)}

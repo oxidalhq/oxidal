@@ -29,6 +29,7 @@ import type { ChainCanvasControl } from '../lib/chain-canvas-control';
 import {
   type ChainGraph,
   edgeMid,
+  edgeShape,
   type GraphEdge,
   type GraphNode,
   layoutGraph,
@@ -189,6 +190,7 @@ export function ChainCanvas({
   insetTop = 0,
   insetSide = 0,
   control,
+  flowing = false,
   className,
 }: {
   graph: ChainGraph;
@@ -243,10 +245,65 @@ export function ChainCanvas({
   insetSide?: number;
   /** Zoom, fit, centre, list, minimap and Follow driven from outside, such as by the chain bar. */
   control?: ChainCanvasControl;
+  /** Audio is running: the dashes move along the lines the sound takes. */
+  flowing?: boolean;
   className?: string;
 }) {
   const { nodes, edges } = graph;
   const lay = useMemo(() => layoutGraph(graph), [graph]);
+  // What changed since the drawing before: a block that arrived or moved
+  // settles, and a line that is new or redrawn fades in where it now runs,
+  // while the other blocks glide to their places. Nothing is drawn afresh.
+  const shape = useMemo(() => {
+    const at = (id: string) => nodes.find((n) => n.id === id)!;
+    return {
+      blocks: new Map(nodes.map((n) => [n.id, `${nodeX(n, lay)},${nodeY(n)}`])),
+      lines: new Map(
+        edges.map(([a, b]) => [`${a}>${b}`, edgeShape(at(a), at(b), lay).d]),
+      ),
+    };
+  }, [nodes, edges, lay]);
+  const before = useRef<typeof shape | null>(null);
+  /** The block just dropped somewhere new: it settles where it lands. */
+  const dropped = useRef<string | null>(null);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [arrived, setArrived] = useState<{
+    blocks: Set<string>;
+    lines: Set<string>;
+  }>({ blocks: new Set(), lines: new Set() });
+  useEffect(() => {
+    const prev = before.current;
+    before.current = shape;
+    if (!prev) return;
+    const blocks = new Set(
+      [...shape.blocks]
+        .filter(
+          ([id, at]) =>
+            !prev.blocks.has(id) ||
+            (id === dropped.current && prev.blocks.get(id) !== at),
+        )
+        .map(([id]) => id),
+    );
+    if (dropped.current && blocks.has(dropped.current)) dropped.current = null;
+    const lines = new Set(
+      [...shape.lines]
+        .filter(([key, d]) => prev.lines.get(key) !== d)
+        .map(([key]) => key),
+    );
+    if (!blocks.size && !lines.size) return;
+    setArrived({ blocks, lines });
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    settleTimer.current = setTimeout(
+      () => setArrived({ blocks: new Set(), lines: new Set() }),
+      600,
+    );
+  }, [shape]);
+  useEffect(
+    () => () => {
+      if (settleTimer.current) clearTimeout(settleTimer.current);
+    },
+    [],
+  );
   const editable = !disabled && !!(onInsert || onBranch || onMove || onPlus);
   const byId = (id: string) => nodes.find((n) => n.id === id)!;
 
@@ -496,6 +553,7 @@ export function ChainCanvas({
       const target = over(ev.clientX, ev.clientY);
       setMoving(null);
       if (target) {
+        dropped.current = n.id;
         onMove(n.id, target);
         if (follow) setTimeout(() => focus(n.id), 0);
       }
@@ -651,6 +709,7 @@ export function ChainCanvas({
       tabIndex={0}
       role="application"
       aria-label="Signal chain. Drag to pan, pinch or press plus and minus to zoom, arrow keys to move between blocks."
+      data-slot="chain-canvas"
       className={cn(
         'relative h-full min-h-0 cursor-grab touch-none overflow-clip outline-none select-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing',
         className,
@@ -784,14 +843,15 @@ export function ChainCanvas({
           {edges.map(([a, b]) => {
             const p = byId(a);
             const q = byId(b);
-            const { x1, x2 } = edgeMid(p, q, lay);
-            const mx = (x1 + x2) / 2;
+            const { d } = edgeShape(p, q, lay);
             const hi = selected === a || selected === b;
             const faded = dim(p) || dim(q) || !lay.reach.has(a);
             return (
               <path
                 key={`${a}-${b}`}
-                d={`M ${x1} ${nodeY(p)} C ${mx} ${nodeY(p)}, ${mx} ${nodeY(q)}, ${x2} ${nodeY(q)}`}
+                d={d}
+                data-flow={(flowing && !faded) || undefined}
+                data-line-new={arrived.lines.has(`${a}>${b}`) || undefined}
                 fill="none"
                 strokeWidth={hi ? 1.75 : 1.25}
                 strokeDasharray="5 5"
@@ -818,6 +878,8 @@ export function ChainCanvas({
             return (
               <div
                 key={`+${a}-${b}`}
+                data-slot="chain-plus"
+                data-pulse={target || undefined}
                 className="absolute z-10"
                 style={{ left: x, top: y }}
               >
@@ -991,6 +1053,8 @@ export function ChainCanvas({
                 round ? 'size-10' : 'h-14 w-[168px]',
                 (dim(n) || off?.(n.id) || moving?.id === n.id) && 'opacity-30',
               )}
+              data-slot="chain-node"
+              data-settle={arrived.blocks.has(n.id) || undefined}
               style={{ left: nodeX(n, lay), top: nodeY(n) }}
             >
               <button

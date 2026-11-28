@@ -423,6 +423,59 @@
     outline-offset: 3px;
   }
 }
+/* The chain map in motion: sound flowing along the lines it takes, blocks
+   gliding to their new places, a changed line fading in where it now runs,
+   a block settling where it arrives, and the + under a dragged block
+   pulsing once. None on e-paper or with reduced motion. */
+@keyframes chain-flow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+@keyframes chain-line-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes chain-settle {
+  from {
+    scale: 1.06;
+  }
+  to {
+    scale: 1;
+  }
+}
+@keyframes chain-pulse {
+  50% {
+    scale: 1.3;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-display='epaper']) [data-slot='chain-canvas'] {
+    & [data-flow] {
+      animation: chain-flow calc(1.6s * var(--c2-speed, 1)) linear infinite;
+    }
+    & [data-line-new] {
+      animation: chain-line-in calc(450ms * var(--c2-speed, 1)) ease-out;
+    }
+    & [data-flow][data-line-new] {
+      animation:
+        chain-flow calc(1.6s * var(--c2-speed, 1)) linear infinite,
+        chain-line-in calc(450ms * var(--c2-speed, 1)) ease-out;
+    }
+    & :is([data-slot='chain-node'], [data-slot='chain-plus']) {
+      transition-property: left, top;
+      transition-duration: calc(300ms * var(--c2-speed, 1));
+      transition-timing-function: ease-out;
+    }
+    & [data-slot='chain-node'][data-settle] > button {
+      animation: chain-settle calc(320ms * var(--c2-speed, 1)) ease-out;
+    }
+    & [data-slot='chain-plus'][data-pulse] > * {
+      animation: chain-pulse calc(450ms * var(--c2-speed, 1)) ease-out;
+    }
+  }
+}
 @media (prefers-reduced-motion: no-preference) {
   :root:not([data-display='epaper'])
     :is(
