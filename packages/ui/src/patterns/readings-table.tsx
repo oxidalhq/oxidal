@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 
 import {
   Table,
@@ -8,6 +8,12 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '../components/ui/tabs';
 import { cn } from '../lib/cn';
 
 /** One reading: what it is, its value, and what it means. */
@@ -109,5 +115,70 @@ export function ReadingsTable({
         </TableBody>
       </Table>
     </section>
+  );
+}
+
+export type ReadingsGroup = {
+  title: string;
+  note?: ReactNode;
+  readings: Reading[];
+  valueHeading?: string;
+};
+
+/**
+ * Several reading groups as tabs (Loudness, Guitar, Interface…), so none is
+ * pushed below the others. A tab whose group has a reading that needs a look
+ * carries a small light, and the first such group opens first.
+ */
+export function ReadingsTabs({
+  groups,
+  label = 'Readings',
+  className,
+}: {
+  groups: ReadingsGroup[];
+  label?: string;
+  className?: string;
+}) {
+  const needsLook = (g: ReadingsGroup) => g.readings.some((r) => r.attention);
+  // Until a tab is chosen, the first group that needs a look is open, as
+  // the readings arrive.
+  const [tab, setTab] = useState<string | null>(null);
+  const shown =
+    tab && groups.some((g) => g.title === tab)
+      ? tab
+      : ((groups.find(needsLook) ?? groups[0])?.title ?? '');
+  return (
+    <Tabs
+      value={shown}
+      onValueChange={setTab}
+      data-slot="readings-tabs"
+      className={cn('grid min-w-0 gap-3', className)}
+    >
+      {/* Every group stays in sight: the tabs wrap instead of scrolling. */}
+      <TabsList
+        aria-label={label}
+        className="flex-wrap overflow-visible [mask-image:none]"
+      >
+        {groups.map((group) => (
+          <TabsTrigger key={group.title} value={group.title}>
+            {group.title}
+            {needsLook(group) && (
+              <>
+                <span
+                  aria-hidden="true"
+                  className="ml-1.5 inline-block size-1.5 rounded-full bg-brand"
+                />
+                <span className="sr-only">, needs a look</span>
+              </>
+            )}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+      {groups.map((group) => (
+        <TabsContent key={group.title} value={group.title}>
+          <ReadingsTable {...group} />
+        </TabsContent>
+      ))}
+    </Tabs>
   );
 }

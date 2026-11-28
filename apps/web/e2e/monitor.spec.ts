@@ -204,6 +204,8 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   await goTo(page, 'Library');
   await expect(strip).toBeVisible();
   await goTo(page, 'Levels');
+  // The readings are tabs; the guitar's are under Guitar.
+  await page.getByRole('tab', { name: /^Guitar/ }).click();
   await expect(page.getByText('Current input verified')).toBeVisible();
   await selectWorkspaceSection(page, 'Levels', 'Diagnostics');
   const panel = page.getByRole('region', {
@@ -349,6 +351,7 @@ test('monitor shows device history after browser reload and exports retained sam
   await page.goto('/#rig');
   await goTo(page, 'Levels');
   await selectWorkspaceSection(page, 'Levels', 'Diagnostics');
+  await page.getByRole('tab', { name: 'History', exact: true }).click();
   await page.getByText('Device history', { exact: true }).click();
   await expect(
     page.getByRole('figure', { name: 'Recorded DSP and CPU · %' }),
@@ -394,6 +397,7 @@ test('monitor shows device history after browser reload and exports retained sam
   await page.reload();
   await goTo(page, 'Levels');
   await selectWorkspaceSection(page, 'Levels', 'Diagnostics');
+  await page.getByRole('tab', { name: 'History', exact: true }).click();
   await page.getByText('Device history', { exact: true }).click();
   await expect(
     page.getByRole('figure', { name: 'Recorded DSP and CPU · %' }),
@@ -434,11 +438,17 @@ test('monitor shows redacted control audit with filters and reload persistence',
   await page.goto('/#rig');
   await goTo(page, 'Levels');
   await selectWorkspaceSection(page, 'Levels', 'Diagnostics');
+  await page
+    .getByRole('tab', { name: 'Control changes', exact: true })
+    .click();
   const recent = page.getByRole('list', { name: 'Audit log entries' });
   await page.getByRole('radio', { name: 'Refused' }).click();
   await expect(recent).toContainText('Wi-Fi / device');
   await expect(recent).toContainText('Refused');
   await page.getByRole('radio', { name: 'All', exact: true }).click();
+  await page
+    .getByRole('tab', { name: 'Control changes', exact: true })
+    .click();
   await page.getByText('Control audit', { exact: true }).click();
   const panel = page.getByRole('region', { name: 'Control request history' });
   await expect(panel.getByText(/Accepted means/)).toBeVisible();
@@ -507,6 +517,9 @@ test('monitor shows redacted control audit with filters and reload persistence',
   await page.reload();
   await goTo(page, 'Levels');
   await selectWorkspaceSection(page, 'Levels', 'Diagnostics');
+  await page
+    .getByRole('tab', { name: 'Control changes', exact: true })
+    .click();
   await page.getByText('Control audit', { exact: true }).click();
   await expect(page.getByRole('list', { name: 'Audit entries' })).toContainText(
     'Wi-Fi / device',

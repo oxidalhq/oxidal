@@ -14,7 +14,7 @@ import {
   LEVELS_SECTIONS,
   type LevelsSection,
 } from '../patterns/levels-sections';
-import { ReadingsTable } from '../patterns/readings-table';
+import { ReadingsTabs } from '../patterns/readings-table';
 import { LEVELS_READINGS } from '../patterns/readings-table.data';
 import { Workspace } from '../patterns/workspace';
 import {
@@ -285,9 +285,8 @@ export function Levels({
                 />
               </Card>
             </div>
-            {LEVELS_READINGS.map((group) => (
-              <ReadingsTable key={group.title} {...group} />
-            ))}
+            {/* The readings as tabs, so none is pushed to the bottom. */}
+            <ReadingsTabs groups={LEVELS_READINGS} />
           </div>
         )}
       </Workspace>

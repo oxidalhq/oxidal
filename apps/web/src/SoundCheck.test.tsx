@@ -185,16 +185,20 @@ it('summarises measured loudness, guitar, interface and distinct level stages', 
   ).toBeVisible();
   expect(screen.getByText(/Modern Lead -14.0 LUFS/)).toBeVisible();
   expect(screen.getByText(/Ambient Clean -25.0 LUFS/)).toBeVisible();
+  fireEvent.click(
+    screen.getAllByRole('button', { name: 'Preset library' })[0]!,
+  );
+  expect(onLibrary).toHaveBeenCalledOnce();
+  // The readings are tabs: each group opens on its own.
+  await user.click(screen.getByRole('tab', { name: /^Guitar/ }));
   expect(screen.getByText(/Strum -11.5 dBFS · noise -68.5 dBFS/)).toBeVisible();
   expect(screen.getByText('Current input verified')).toBeVisible();
   expect(
     screen.getByText(/Levels follows the active profile automatically/),
   ).toBeVisible();
+  await user.click(screen.getByRole('tab', { name: /^Interface/ }));
   expect(screen.getByText(/Jogg capture → Jogg playback/)).toBeVisible();
-  fireEvent.click(
-    screen.getAllByRole('button', { name: 'Preset library' })[0]!,
-  );
-  expect(onLibrary).toHaveBeenCalledOnce();
+  await user.click(screen.getByRole('tab', { name: /^Playing level stages/ }));
   expect(screen.getByText('+1.5 dB')).toBeVisible();
   expect(screen.getByText('+2.0 dB')).toBeVisible();
   expect(screen.getByText('+1.0 dB')).toBeVisible();
@@ -292,6 +296,9 @@ it('separates physical input gain from digital output clipping advice', async ()
 
   expect(screen.getByText('Reduce interface input gain')).toBeVisible();
   expect(screen.getByText('Reduce digital output level')).toBeVisible();
+  await userEvent
+    .setup()
+    .click(screen.getByRole('tab', { name: /^Interface/ }));
   expect(
     screen.getByText('2 input clips · 3 output clips in this audio session.'),
   ).toBeVisible();

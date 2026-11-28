@@ -13,6 +13,12 @@ import {
 
 import { Button } from '@oxidal/design-system/components/button';
 import { ChartContainer } from '@oxidal/design-system/components/chart';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@oxidal/design-system/components/tabs';
 import { Caption } from '@oxidal/design-system/components/text';
 import { Meter } from '@oxidal/design-system/widgets/meter';
 
@@ -96,6 +102,7 @@ function ChannelMeter({
 }
 export function Monitoring({ displayMode }: { displayMode: string }) {
   const [state, setState] = useState<Readings | null>(null);
+  const [tab, setTab] = useState('live');
   const [history, setHistory] = useState<Point[]>([]);
   const [error, setError] = useState('');
   const [frozen, setFrozen] = useState(false);
@@ -231,281 +238,303 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
           </Button>
         </div>
       </div>
-      <div
-        className="grid min-w-0 gap-x-4 border-t border-border sm:grid-cols-2"
-        aria-label="Levels"
-      >
-        {['Input L', 'Input R', 'Output L', 'Output R'].map((label, i) => (
-          <ChannelMeter
-            key={label}
-            label={label}
-            channel={channels[i]}
-            clips={Math.max(0, (channels[i]?.clips ?? 0) - (baseline[i] ?? 0))}
-            stale={stale}
-          />
-        ))}
-      </div>
-      <div className="grid min-w-0 gap-3 lg:grid-cols-2">
-        <ChartContainer label="Output peak · dBFS" config={colour}>
-          <LineChart
-            accessibilityLayer
-            data={history}
-            margin={{ left: 0, right: 5 }}
+      {/* Tabs, so the history, the control changes and the measurement
+          notes are not pushed far below the live charts. */}
+      <Tabs value={tab} onValueChange={setTab} className="grid min-w-0 gap-4">
+        <TabsList aria-label="Diagnostics">
+          <TabsTrigger value="live">Live</TabsTrigger>
+          <TabsTrigger value="history">History</TabsTrigger>
+          <TabsTrigger value="changes">Control changes</TabsTrigger>
+          <TabsTrigger value="about">About these readings</TabsTrigger>
+        </TabsList>
+        <TabsContent value="live" className="grid min-w-0 gap-4">
+          <div
+            className="grid min-w-0 gap-x-4 border-t border-border sm:grid-cols-2"
+            aria-label="Levels"
           >
-            <CartesianGrid vertical={false} stroke="var(--border)" />
-            <XAxis dataKey="time" hide />
-            <YAxis
-              width={38}
-              domain={[-60, 0]}
-              ticks={[-60, -30, 0]}
-              tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
-            />
-            <ReferenceLine y={0} stroke="var(--destructive)" />
-            <Tooltip contentStyle={tooltipStyle} />
-            <Line
-              name="Left dBFS"
-              type="linear"
-              dataKey="left"
-              stroke="var(--color-left)"
-              dot={false}
-              isAnimationActive={false}
-            />
-            <Line
-              name="Right dBFS"
-              type="linear"
-              dataKey="right"
-              stroke="var(--color-right)"
-              strokeDasharray="6 4"
-              dot={false}
-              isAnimationActive={false}
-            />
-          </LineChart>
-        </ChartContainer>
-        <ChartContainer
-          label="Processing budget · %"
-          config={{
-            deadline: { label: 'DSP p95', color: 'var(--control-accent)' },
-            cpu: {
-              label: 'System CPU',
-              color: 'var(--chart-secondary)',
-              dashed: true,
-            },
-          }}
-        >
-          <AreaChart accessibilityLayer data={history}>
-            <CartesianGrid vertical={false} stroke="var(--border)" />
-            <XAxis dataKey="time" hide />
-            <YAxis
-              width={38}
-              domain={[0, 100]}
-              tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
-            />
-            <ReferenceLine y={100} stroke="var(--destructive)" />
-            <Tooltip contentStyle={tooltipStyle} />
-            <Area
-              name="DSP deadline %"
-              type="linear"
-              dataKey="deadline"
-              stroke="var(--color-deadline)"
-              fill="var(--color-deadline)"
-              fillOpacity={0.12}
-              isAnimationActive={false}
-            />
-            <Line
-              name="System CPU %"
-              type="linear"
-              dataKey="cpu"
-              stroke="var(--color-cpu)"
-              strokeDasharray="6 4"
-              dot={false}
-              isAnimationActive={false}
-            />
-          </AreaChart>
-        </ChartContainer>
-      </div>
-      <div className="grid min-w-0 gap-3 lg:grid-cols-2">
-        <ChartContainer
-          label="Memory & temperature"
-          config={{
-            memory: { label: 'RAM · MiB', color: 'var(--control-accent)' },
-            temperature: {
-              label: 'CPU · °C',
-              color: 'var(--chart-secondary)',
-              dashed: true,
-            },
-          }}
-        >
-          <LineChart accessibilityLayer data={history}>
-            <CartesianGrid vertical={false} stroke="var(--border)" />
-            <XAxis dataKey="time" hide />
-            <YAxis
-              yAxisId="memory"
-              width={42}
-              domain={[0, 'auto']}
-              tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
-            />
-            <YAxis
-              yAxisId="temperature"
-              orientation="right"
-              width={30}
-              domain={[0, 100]}
-              tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
-            />
-            <Tooltip contentStyle={tooltipStyle} />
-            <Line
-              yAxisId="memory"
-              name="RAM MiB"
-              dataKey="memory"
-              stroke="var(--color-memory)"
-              dot={false}
-              isAnimationActive={false}
-            />
-            <Line
-              yAxisId="temperature"
-              name="CPU °C"
-              dataKey="temperature"
-              stroke="var(--color-temperature)"
-              strokeDasharray="6 4"
-              dot={false}
-              isAnimationActive={false}
-            />
-          </LineChart>
-        </ChartContainer>
-        <ChartContainer
-          label="Audio recovery · xruns"
-          config={{
-            xruns: { label: 'Worker total', color: 'var(--destructive)' },
-          }}
-        >
-          <LineChart accessibilityLayer data={history}>
-            <CartesianGrid vertical={false} stroke="var(--border)" />
-            <XAxis dataKey="time" hide />
-            <YAxis
-              width={38}
-              domain={[0, 'auto']}
-              allowDecimals={false}
-              tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
-            />
-            <Tooltip contentStyle={tooltipStyle} />
-            <Line
-              name="Recovered xruns"
-              type="stepAfter"
-              dataKey="xruns"
-              stroke="var(--color-xruns)"
-              dot={false}
-              isAnimationActive={false}
-            />
-          </LineChart>
-        </ChartContainer>
-      </div>
-      <dl className="m-0 grid grid-cols-2 border-t border-border sm:grid-cols-3 [&_dd]:m-0 [&_dd]:font-mono [&_dd]:break-words [&_dd]:tabular-nums [&_dt]:text-xs [&_dt]:text-muted-foreground [&>div]:grid [&>div]:min-w-0 [&>div]:gap-0.5 [&>div]:border-b [&>div]:border-border [&>div]:py-2 [&>div]:pr-2">
-        <div>
-          <dt className="text-muted-foreground">
-            Recent block time p50 / p95 / max
-          </dt>
-          <dd className="font-mono">
-            {stale || !state?.audio
-              ? 'Unavailable'
-              : `${ms(state.audio.process_us_p50)} / ${ms(state.audio.process_us_p95)} / ${ms(state.audio.process_us_max)} ms of ${ms(state.audio.deadline_us)}`}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">
-            Session peak / missed deadlines
-          </dt>
-          <dd className="font-mono">
-            {stale ||
-            state?.audio?.process_us_peak == null ||
-            state.audio.deadline_misses == null
-              ? 'Unavailable'
-              : `${ms(state.audio.process_us_peak)} ms / ${state.audio.deadline_misses}`}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Sample rate / period</dt>
-          <dd>
-            {stream
-              ? `${stream.input.sample_rate} Hz / ${stream.input.period_frames} frames`
-              : 'Unavailable'}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Capture / playback buffer</dt>
-          <dd>
-            {stream
-              ? `${stream.input.period_frames * stream.input.periods} / ${stream.output.period_frames * stream.output.periods} frames`
-              : 'Unavailable'}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">System CPU</dt>
-          <dd>{number(error ? null : state?.host.cpu_percent, '%')}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Per-core CPU</dt>
-          <dd>
-            {!error && state?.host.cpu_cores?.length
-              ? state.host.cpu_cores
-                  .map(
-                    ({ core, percent }) =>
-                      `CPU ${core} · ${number(percent, '%')}`,
-                  )
-                  .join(' / ')
-              : 'Unavailable'}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Audio thread CPU</dt>
-          <dd>
-            {stale || state?.audio?.audio_cpu == null
-              ? 'Unavailable'
-              : `Last observed on CPU ${state.audio.audio_cpu}`}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">CPU temperature</dt>
-          <dd>{number(state?.host.temperature_c, ' °C')}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Memory used</dt>
-          <dd>
-            {state?.host.memory_used_bytes != null
-              ? `${Math.round(state.host.memory_used_bytes / 1048576)} / ${Math.round((state.host.memory_total_bytes ?? 0) / 1048576)} MiB`
-              : 'Unavailable'}
-          </dd>
-        </div>
-      </dl>
-      {state?.error && (
-        <p
-          role="alert"
-          className="mb-4 min-w-0 rounded-lg border border-destructive px-3 py-2.5 wrap-anywhere text-destructive"
-        >
-          {state.error}
-        </p>
-      )}
-      <MonitoringHistory />
-      <ControlAudit />
-      <details>
-        <summary>Measurement details</summary>
-        <Caption className="break-words">
-          TONE3000 audio: {state?.audio_phase || 'reading'} · Effects audio:{' '}
-          {state?.graph_phase || 'reading'} · Portable rigs:{' '}
-          {state?.rig_phase || 'reading'}
-          {stream && ` · ${stream.input.endpoint} → ${stream.output.endpoint}`}
-        </Caption>
+            {['Input L', 'Input R', 'Output L', 'Output R'].map((label, i) => (
+              <ChannelMeter
+                key={label}
+                label={label}
+                channel={channels[i]}
+                clips={Math.max(
+                  0,
+                  (channels[i]?.clips ?? 0) - (baseline[i] ?? 0),
+                )}
+                stale={stale}
+              />
+            ))}
+          </div>
+          <div className="grid min-w-0 gap-3 lg:grid-cols-2">
+            <ChartContainer label="Output peak · dBFS" config={colour}>
+              <LineChart
+                accessibilityLayer
+                data={history}
+                margin={{ left: 0, right: 5 }}
+              >
+                <CartesianGrid vertical={false} stroke="var(--border)" />
+                <XAxis dataKey="time" hide />
+                <YAxis
+                  width={38}
+                  domain={[-60, 0]}
+                  ticks={[-60, -30, 0]}
+                  tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
+                />
+                <ReferenceLine y={0} stroke="var(--destructive)" />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Line
+                  name="Left dBFS"
+                  type="linear"
+                  dataKey="left"
+                  stroke="var(--color-left)"
+                  dot={false}
+                  isAnimationActive={false}
+                />
+                <Line
+                  name="Right dBFS"
+                  type="linear"
+                  dataKey="right"
+                  stroke="var(--color-right)"
+                  strokeDasharray="6 4"
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              </LineChart>
+            </ChartContainer>
+            <ChartContainer
+              label="Processing budget · %"
+              config={{
+                deadline: { label: 'DSP p95', color: 'var(--control-accent)' },
+                cpu: {
+                  label: 'System CPU',
+                  color: 'var(--chart-secondary)',
+                  dashed: true,
+                },
+              }}
+            >
+              <AreaChart accessibilityLayer data={history}>
+                <CartesianGrid vertical={false} stroke="var(--border)" />
+                <XAxis dataKey="time" hide />
+                <YAxis
+                  width={38}
+                  domain={[0, 100]}
+                  tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
+                />
+                <ReferenceLine y={100} stroke="var(--destructive)" />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Area
+                  name="DSP deadline %"
+                  type="linear"
+                  dataKey="deadline"
+                  stroke="var(--color-deadline)"
+                  fill="var(--color-deadline)"
+                  fillOpacity={0.12}
+                  isAnimationActive={false}
+                />
+                <Line
+                  name="System CPU %"
+                  type="linear"
+                  dataKey="cpu"
+                  stroke="var(--color-cpu)"
+                  strokeDasharray="6 4"
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              </AreaChart>
+            </ChartContainer>
+          </div>
+          <div className="grid min-w-0 gap-3 lg:grid-cols-2">
+            <ChartContainer
+              label="Memory & temperature"
+              config={{
+                memory: { label: 'RAM · MiB', color: 'var(--control-accent)' },
+                temperature: {
+                  label: 'CPU · °C',
+                  color: 'var(--chart-secondary)',
+                  dashed: true,
+                },
+              }}
+            >
+              <LineChart accessibilityLayer data={history}>
+                <CartesianGrid vertical={false} stroke="var(--border)" />
+                <XAxis dataKey="time" hide />
+                <YAxis
+                  yAxisId="memory"
+                  width={42}
+                  domain={[0, 'auto']}
+                  tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
+                />
+                <YAxis
+                  yAxisId="temperature"
+                  orientation="right"
+                  width={30}
+                  domain={[0, 100]}
+                  tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
+                />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Line
+                  yAxisId="memory"
+                  name="RAM MiB"
+                  dataKey="memory"
+                  stroke="var(--color-memory)"
+                  dot={false}
+                  isAnimationActive={false}
+                />
+                <Line
+                  yAxisId="temperature"
+                  name="CPU °C"
+                  dataKey="temperature"
+                  stroke="var(--color-temperature)"
+                  strokeDasharray="6 4"
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              </LineChart>
+            </ChartContainer>
+            <ChartContainer
+              label="Audio recovery · xruns"
+              config={{
+                xruns: { label: 'Worker total', color: 'var(--destructive)' },
+              }}
+            >
+              <LineChart accessibilityLayer data={history}>
+                <CartesianGrid vertical={false} stroke="var(--border)" />
+                <XAxis dataKey="time" hide />
+                <YAxis
+                  width={38}
+                  domain={[0, 'auto']}
+                  allowDecimals={false}
+                  tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
+                />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Line
+                  name="Recovered xruns"
+                  type="stepAfter"
+                  dataKey="xruns"
+                  stroke="var(--color-xruns)"
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              </LineChart>
+            </ChartContainer>
+          </div>
+          <dl className="m-0 grid grid-cols-2 border-t border-border sm:grid-cols-3 [&_dd]:m-0 [&_dd]:font-mono [&_dd]:break-words [&_dd]:tabular-nums [&_dt]:text-xs [&_dt]:text-muted-foreground [&>div]:grid [&>div]:min-w-0 [&>div]:gap-0.5 [&>div]:border-b [&>div]:border-border [&>div]:py-2 [&>div]:pr-2">
+            <div>
+              <dt className="text-muted-foreground">
+                Recent block time p50 / p95 / max
+              </dt>
+              <dd className="font-mono">
+                {stale || !state?.audio
+                  ? 'Unavailable'
+                  : `${ms(state.audio.process_us_p50)} / ${ms(state.audio.process_us_p95)} / ${ms(state.audio.process_us_max)} ms of ${ms(state.audio.deadline_us)}`}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">
+                Session peak / missed deadlines
+              </dt>
+              <dd className="font-mono">
+                {stale ||
+                state?.audio?.process_us_peak == null ||
+                state.audio.deadline_misses == null
+                  ? 'Unavailable'
+                  : `${ms(state.audio.process_us_peak)} ms / ${state.audio.deadline_misses}`}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Sample rate / period</dt>
+              <dd>
+                {stream
+                  ? `${stream.input.sample_rate} Hz / ${stream.input.period_frames} frames`
+                  : 'Unavailable'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">
+                Capture / playback buffer
+              </dt>
+              <dd>
+                {stream
+                  ? `${stream.input.period_frames * stream.input.periods} / ${stream.output.period_frames * stream.output.periods} frames`
+                  : 'Unavailable'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">System CPU</dt>
+              <dd>{number(error ? null : state?.host.cpu_percent, '%')}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Per-core CPU</dt>
+              <dd>
+                {!error && state?.host.cpu_cores?.length
+                  ? state.host.cpu_cores
+                      .map(
+                        ({ core, percent }) =>
+                          `CPU ${core} · ${number(percent, '%')}`,
+                      )
+                      .join(' / ')
+                  : 'Unavailable'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Audio thread CPU</dt>
+              <dd>
+                {stale || state?.audio?.audio_cpu == null
+                  ? 'Unavailable'
+                  : `Last observed on CPU ${state.audio.audio_cpu}`}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">CPU temperature</dt>
+              <dd>{number(state?.host.temperature_c, ' °C')}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Memory used</dt>
+              <dd>
+                {state?.host.memory_used_bytes != null
+                  ? `${Math.round(state.host.memory_used_bytes / 1048576)} / ${Math.round((state.host.memory_total_bytes ?? 0) / 1048576)} MiB`
+                  : 'Unavailable'}
+              </dd>
+            </div>
+          </dl>
+          {state?.error && (
+            <p
+              role="alert"
+              className="mb-4 min-w-0 rounded-lg border border-destructive px-3 py-2.5 wrap-anywhere text-destructive"
+            >
+              {state.error}
+            </p>
+          )}
+        </TabsContent>
+        <TabsContent value="history">
+          <MonitoringHistory />
+        </TabsContent>
+        <TabsContent value="changes">
+          <ControlAudit />
+        </TabsContent>
+        <TabsContent value="about" className="grid gap-2">
+          <Caption className="break-words">
+            TONE3000 audio: {state?.audio_phase || 'reading'} · Effects audio:{' '}
+            {state?.graph_phase || 'reading'} · Portable rigs:{' '}
+            {state?.rig_phase || 'reading'}
+            {stream &&
+              ` · ${stream.input.endpoint} → ${stream.output.endpoint}`}
+          </Caption>
 
-        <Caption>
-          Levels measure the mapped DSP input/output, before physical output
-          mixing. −120 dBFS is the display floor. Clip counts are full-scale
-          samples; Reset view clears only this browser’s history and clip hold.
-          The audio interface accepts these settings exactly or refuses to
-          start. Processing statistics cover the latest 128 blocks and exclude
-          device I/O. Buffer sizes are not a round-trip latency measurement.
-          Recovered xruns are counted since audio last started. Throttling flags
-          remain unavailable. Charts retain at most 120 samples in this browser;
-          sampling slows on e-paper and pauses while the page is hidden.
-        </Caption>
-      </details>
+          <Caption>
+            Levels measure the mapped DSP input/output, before physical output
+            mixing. −120 dBFS is the display floor. Clip counts are full-scale
+            samples; Reset view clears only this browser’s history and clip
+            hold. The audio interface accepts these settings exactly or refuses
+            to start. Processing statistics cover the latest 128 blocks and
+            exclude device I/O. Buffer sizes are not a round-trip latency
+            measurement. Recovered xruns are counted since audio last started.
+            Throttling flags remain unavailable. Charts retain at most 120
+            samples in this browser; sampling slows on e-paper and pauses while
+            the page is hidden.
+          </Caption>
+        </TabsContent>
+      </Tabs>
     </section>
   );
 }
