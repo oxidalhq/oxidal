@@ -4,6 +4,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle } from '../components/ui/card';
 import { Progress } from '../components/ui/states';
 import { Caption } from '../components/ui/text';
+import { SettingGroup } from './settings-page';
 
 export type SoundCheckItem = {
   ok: boolean;
@@ -20,13 +21,54 @@ export function SoundCheck({
   onAction,
   title = 'Sound check',
   caption = 'Most useful first',
+  plain = false,
 }: {
   checks: SoundCheckItem[];
   onAction?: (check: SoundCheckItem) => void;
   /** The same list serves "Before you play" in Settings. */
   title?: string;
   caption?: string;
+  /**
+   * A settings group instead of a card: on a Settings page, where every
+   * section is a group of rows and the page already carries the title.
+   */
+  plain?: boolean;
 }) {
+  const list = (
+    <ul aria-label={title} className="m-0 grid list-none gap-0 p-0">
+      {checks.map((c) => (
+        <li
+          key={c.title}
+          className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 border-t border-border py-2 first:border-t-0"
+        >
+          {c.ok ? (
+            <CheckCircle aria-label="Fine" className="size-5" />
+          ) : (
+            <Warning aria-label="Fix" className="size-5 text-brand" />
+          )}
+          <span className="grid gap-0.5">
+            <span className="text-sm font-medium">{c.title}</span>
+            <Caption as="span" className="text-xs">
+              {c.fix}
+            </Caption>
+          </span>
+          {c.action ? (
+            <Button size="sm" variant="outline" onClick={() => onAction?.(c)}>
+              {c.action}
+            </Button>
+          ) : (
+            <span />
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+  if (plain)
+    return (
+      <SettingGroup title={caption}>
+        <div className="grid border-b border-border">{list}</div>
+      </SettingGroup>
+    );
   return (
     <Card>
       <CardHeader>
@@ -35,33 +77,7 @@ export function SoundCheck({
           {caption}
         </Caption>
       </CardHeader>
-      <ul aria-label={title} className="m-0 grid list-none gap-0 p-0">
-        {checks.map((c) => (
-          <li
-            key={c.title}
-            className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 border-t border-border py-2 first:border-t-0"
-          >
-            {c.ok ? (
-              <CheckCircle aria-label="Fine" className="size-5" />
-            ) : (
-              <Warning aria-label="Fix" className="size-5 text-brand" />
-            )}
-            <span className="grid gap-0.5">
-              <span className="text-sm font-medium">{c.title}</span>
-              <Caption as="span" className="text-xs">
-                {c.fix}
-              </Caption>
-            </span>
-            {c.action ? (
-              <Button size="sm" variant="outline" onClick={() => onAction?.(c)}>
-                {c.action}
-              </Button>
-            ) : (
-              <span />
-            )}
-          </li>
-        ))}
-      </ul>
+      {list}
     </Card>
   );
 }
@@ -162,109 +178,6 @@ export function LevelMatch({
           </div>
         </div>
       )}
-    </Card>
-  );
-}
-
-export type PresetLoudness = {
-  key?: string;
-  name: string;
-  /** Loudness in LUFS, now. */
-  lufs: number;
-};
-
-export function PresetLoudnessChart({
-  presets,
-  target,
-}: {
-  presets: PresetLoudness[];
-  target?: number | null;
-}) {
-  const position = (value: number) =>
-    Math.max(0, Math.min(100, ((value + 30) / 20) * 100));
-  return (
-    <ul aria-label="Preset loudness" className="m-0 grid list-none gap-1.5 p-0">
-      {presets.map(({ key, name, lufs: v }) => {
-        return (
-          <li
-            key={key ?? name}
-            className="grid grid-cols-[8rem_minmax(0,1fr)_auto] items-center gap-2 text-sm"
-          >
-            <span className="truncate">{name}</span>
-            <span
-              aria-hidden="true"
-              className="relative h-2 rounded-full bg-wire/30"
-            >
-              <span
-                className="absolute inset-y-0 left-0 rounded-full bg-foreground transition-[width] duration-300"
-                style={{ width: `${position(v)}%` }}
-              />
-              {target != null && (
-                <span
-                  className="absolute inset-y-[-3px] w-0.5 bg-brand"
-                  style={{ left: `${position(target)}%` }}
-                />
-              )}
-            </span>
-            <span className="font-mono text-xs tabular-nums">
-              {v.toFixed(1)}
-            </span>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-/**
- * Even out all: every preset and scene to the same loudness so switching
- * never jumps. Corrections are bounded; only new or changed presets
- * are measured again.
- */
-export function EvenOut({
-  presets,
-  target = -18,
-  progress,
-  evened,
-  scenes,
-  onStart,
-}: {
-  presets: PresetLoudness[];
-  /** The shared loudness in LUFS. */
-  target?: number;
-  /** 0 to 100 while measuring. */
-  progress?: number;
-  /** True once presets have been evened out. */
-  evened: boolean;
-  /** How many scenes are measured with the presets. */
-  scenes: number;
-  onStart: () => void;
-}) {
-  const measuring = progress !== undefined;
-  const values = presets.map((p) => p.lufs);
-  const spread = (Math.max(...values) - Math.min(...values)).toFixed(1);
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Even out all</CardTitle>
-        <Caption as="span" className="text-xs">
-          Loudest to quietest: {spread} dB
-        </Caption>
-      </CardHeader>
-      <PresetLoudnessChart presets={presets} target={target} />
-      {measuring && <Progress value={progress} label="Measuring presets" />}
-      <div className="flex flex-wrap items-center gap-2">
-        <Button disabled={measuring} onClick={onStart}>
-          {evened ? 'Even out again' : 'Even out all'}
-        </Button>
-        <Caption as="span" role="status" className="text-xs">
-          {measuring
-            ? `Measuring ${presets.length} presets and ${scenes} scenes…`
-            : evened
-              ? 'Done. The vertical line marks the shared loudness target.'
-              : `The oxide line is the shared loudness, ${target} LUFS.`}
-        </Caption>
-      </div>
     </Card>
   );
 }

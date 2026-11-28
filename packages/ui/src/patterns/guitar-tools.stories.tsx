@@ -42,10 +42,12 @@ export const EvenAll: StoryObj = {
     await expect(
       canvas.getByText(/Loudest to quietest: 9\.5 dB/),
     ).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: 'Even out all' }));
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Even out 8 new or changed' }),
+    );
     await expect(
       await canvas.findByText(
-        /Loudest to quietest: 0\.8 dB/,
+        /Loudest to quietest: 0\.4 dB/,
         {},
         { timeout: 4000 },
       ),

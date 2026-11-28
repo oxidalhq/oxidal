@@ -3,7 +3,6 @@ import { useState } from 'react';
 
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
-import { CollapsibleSection } from '../components/ui/collapsible';
 import { NumberField } from '../components/ui/number-field';
 import {
   Select,
@@ -38,6 +37,7 @@ import {
 import { SoundCheck } from '../patterns/guitar-tools';
 import { NetworkSettingsDemo } from '../patterns/network-settings.demo';
 import {
+  SettingDisclosure,
   SettingGroup,
   SettingRow,
   SettingsPage,
@@ -247,7 +247,7 @@ function Maintenance() {
           </Button>
         </SettingRow>
       </SettingGroup>
-      <CollapsibleSection title="Advanced">
+      <SettingDisclosure label="Advanced">
         <SettingRow
           label="Debug shell"
           caption="A bounded shell for support. Off unless you turn it on."
@@ -259,7 +259,7 @@ function Maintenance() {
             Download logs
           </Button>
         </SettingRow>
-      </CollapsibleSection>
+      </SettingDisclosure>
       <StorageLockDemo />
       <DebugConsoleDemo />
     </>
@@ -283,54 +283,67 @@ function About() {
 
 function Essentials() {
   return (
-    <SoundCheck
-      title="Before you play"
-      caption="What needs a look is first"
-      checks={[
-        {
-          ok: false,
-          title: 'Lead boost is 4 dB louder than your other presets',
-          fix: 'Even out all sets every preset to the same loudness.',
-          action: 'Even out all',
-        },
-        {
-          ok: false,
-          title: 'System storage is unlocked',
-          fix: 'Lock it before the gig so a power cut cannot damage it.',
-          action: 'Lock storage',
-        },
-        {
-          ok: true,
-          title: 'Output: stereo, master −6 dB, Venue EQ "Friday gig"',
-          fix: 'Peak boost +3 dB, with 5 dB to spare.',
-          action: 'Open levels',
-        },
-        {
-          ok: true,
-          title: 'Audio: 128 × 3 at 48 kHz, 8.0 ms round trip',
-          fix: 'No dropouts in the last hour on the Hotone Jogg.',
-          action: 'Audio',
-        },
-        {
-          ok: true,
-          title: 'Foot controller: MIDI Captain, 10 switches',
-          fix: 'Scenes layout; every switch was checked on 14 Nov.',
-          action: 'MIDI',
-        },
-        {
-          ok: true,
-          title: 'Set list: Friday set, 6 songs',
-          fix: 'Every preset, capture and backing track is on the device.',
-          action: 'Open set list',
-        },
-        {
-          ok: true,
-          title: 'Reachable on the hotspot Oxidal-7F2A',
-          fix: 'It turns on by itself when no saved Wi-Fi is in range.',
-          action: 'Network',
-        },
-      ]}
-    />
+    <>
+      <SoundCheck
+        plain
+        title="Before you play"
+        caption="What needs a look is first"
+        checks={[
+          {
+            ok: false,
+            title: 'Lead boost is 4 dB louder than your other presets',
+            fix: 'Even out all sets every preset to the same loudness.',
+            action: 'Even out all',
+          },
+          {
+            ok: false,
+            title: 'System storage is unlocked',
+            fix: 'Lock it before the gig so a power cut cannot damage it.',
+            action: 'Lock storage',
+          },
+          {
+            ok: true,
+            title: 'Output: stereo, master −6 dB, Venue EQ "Friday gig"',
+            fix: 'Peak boost +3 dB, with 5 dB to spare.',
+            action: 'Open levels',
+          },
+          {
+            ok: true,
+            title: 'Audio: 128 × 3 at 48 kHz, 8.0 ms round trip',
+            fix: 'No dropouts in the last hour on the Hotone Jogg.',
+            action: 'Audio',
+          },
+          {
+            ok: true,
+            title: 'Foot controller: MIDI Captain, 10 switches',
+            fix: 'Scenes layout; every switch was checked on 14 Nov.',
+            action: 'MIDI',
+          },
+          {
+            ok: true,
+            title: 'Set list: Friday set, 6 songs',
+            fix: 'Every preset, capture and backing track is on the device.',
+            action: 'Open set list',
+          },
+          {
+            ok: true,
+            title: 'Reachable on the hotspot Oxidal-7F2A',
+            fix: 'It turns on by itself when no saved Wi-Fi is in range.',
+            action: 'Network',
+          },
+        ]}
+      />
+      <SettingGroup title="Setup">
+        <SettingRow
+          label="Setup guide"
+          caption="Step through audio, guitar, controller and network again."
+        >
+          <Button size="sm" variant="outline">
+            Open setup guide
+          </Button>
+        </SettingRow>
+      </SettingGroup>
+    </>
   );
 }
 

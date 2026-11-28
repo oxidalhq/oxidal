@@ -44,6 +44,12 @@ export function GuitarWorkspace({
           <CardHeader>
             <CardTitle>Your guitars</CardTitle>
           </CardHeader>
+          {guitars.length === 0 && (
+            <Caption className="m-0">
+              No guitars yet. Add the guitar you play; its trim and gate then
+              apply to every preset.
+            </Caption>
+          )}
           <List>
             {guitars.map((g) => (
               <ListRow

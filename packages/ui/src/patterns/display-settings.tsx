@@ -23,6 +23,8 @@ export function DisplaySettings({
   fullscreenSupported = true,
   fullscreenError,
   onToggleFullscreen,
+  keepMenuOpen,
+  onKeepMenuOpenChange,
   help,
 }: {
   mode: string;
@@ -38,6 +40,9 @@ export function DisplaySettings({
   fullscreenSupported?: boolean;
   fullscreenError?: string;
   onToggleFullscreen: () => void;
+  /** The floating capsule: keep it open while playing instead of folding it into the bubble. */
+  keepMenuOpen?: boolean;
+  onKeepMenuOpenChange?: (keep: boolean) => void;
   help?: ReactNode;
 }) {
   return (
@@ -60,14 +65,27 @@ export function DisplaySettings({
             <Segment value="epaper">E-paper</Segment>
           </SegmentedControl>
         </SettingRow>
+        {onKeepMenuOpenChange && (
+          <SettingRow
+            id="keep-menu-open"
+            label="Keep the menu open while playing"
+            caption="Off: the menu folds into a small bubble a few seconds after you start playing, and comes back when you reach for it."
+          >
+            <Switch
+              id="keep-menu-open"
+              checked={!!keepMenuOpen}
+              onCheckedChange={onKeepMenuOpenChange}
+            />
+          </SettingRow>
+        )}
       </SettingGroup>
       <SettingGroup title="Device status">
         <SettingRow
           label="Status at the top"
           caption={
             status === 'simple'
-              ? 'One word: All good, Busy, Dropouts or Running hot. Tap it for the numbers.'
-              : 'The full strip: processing, CPU, memory, temperature, dropouts and clips.'
+              ? 'A light in the menu only when something needs attention; open the menu for the word and the numbers.'
+              : 'The light and its word stay in the menu: All good, Busy, Dropouts or Running hot. Tap it for the numbers.'
           }
           stacked
         >

@@ -350,3 +350,12 @@ export function glyphForSource(source: {
         : 'amp';
   return glyphFor('', `${source.category ?? ''} ${source.title}`);
 }
+
+/** A block family's light colour, as the `Led` component names it. */
+export type LedKind = 'amp' | 'cab' | 'pedal' | 'time' | 'mod' | 'lv2';
+
+/** The glyph's light colour: anything without a family reads as a plugin. */
+export function ledKindFor(glyph: GlyphKey): LedKind {
+  const kind = glyphs[glyph].kind;
+  return kind === 'other' ? 'lv2' : (kind as LedKind);
+}

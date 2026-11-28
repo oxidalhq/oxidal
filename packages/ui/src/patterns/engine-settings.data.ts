@@ -1,4 +1,9 @@
+import {
+  ENGINE_EFFECTS as ENGINE_EFFECT_LIST,
+  oxidalEffectsFromCatalogue,
+} from '../lib/oxidal-effects';
 import type { BuiltInEffect, NamEngine, Pack } from './engine-settings';
+import OXIDAL_CATALOGUE from './oxidal-effects.fixture.json';
 
 /** Example packs; the device lists the real catalogue and its qualification. */
 export const PACKS: Pack[] = [
@@ -38,21 +43,10 @@ export const PACKS: Pack[] = [
 ];
 
 /** Oxidal's own effects and the TONE3000 engine's, as built in today. */
-export const OWN_EFFECTS: BuiltInEffect[] = [
-  'Bloom reverb',
-  'Echo delay',
-  'Motion',
-  'Moment',
-  'Sustain',
-].map((name) => ({ name, caption: "Oxidal's own · Rust · built in" }));
-export const ENGINE_EFFECTS: BuiltInEffect[] = [
-  ['Hold', 'Freezes a note'],
-  ['Swell', 'Volume swells'],
-  ['Pitch', 'Pitch shift; needs the pitch engine on in NAM engine'],
-].map(([name, what]) => ({
-  name: name!,
-  caption: `${what} · part of the TONE3000 engine`,
-}));
+/** Settings › Effects from the device's own catalogue, as the app reads it. */
+export const OWN_EFFECTS: BuiltInEffect[] =
+  oxidalEffectsFromCatalogue(OXIDAL_CATALOGUE);
+export const ENGINE_EFFECTS: BuiltInEffect[] = [...ENGINE_EFFECT_LIST];
 
 export const NAM_ENGINE: NamEngine = {
   loudness: '-18',

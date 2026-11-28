@@ -16,6 +16,7 @@ import { StableLabel } from '../components/ui/stable-label';
 import { Caption } from '../components/ui/text';
 import { Toggle } from '../components/ui/toggle';
 import { responseCurve, type VenueSettings } from '../lib/venue-eq';
+import { SettingGroup, SettingRow } from './settings-page';
 
 export type EqBand = { id: number; name: string; hz: number };
 export type EqPosition = 'before' | 'after';
@@ -254,9 +255,11 @@ export function StorageLock({
   onChange: (mode: StorageMode) => void;
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>System storage</CardTitle>
+    <SettingGroup title="System storage">
+      <SettingRow
+        label="Now"
+        caption="Locking protects system files at the next boot. Presets and unit data stay on the writable data partition. Unsaved changes can still be lost if power is cut. This never remounts a playing system."
+      >
         <Badge size="sm">
           {current === 'locked'
             ? 'Locked now'
@@ -264,58 +267,58 @@ export function StorageLock({
               ? 'Unlocked now'
               : 'Current state unknown'}
         </Badge>
-      </CardHeader>
-      <Caption>
-        Locking protects system files at the next boot. Presets and unit data
-        stay on the writable data partition. Unsaved changes can still be lost
-        if power is cut. This never remounts a playing system.
-      </Caption>
-      <div
-        role="group"
-        aria-label="Mode at next boot"
-        className="grid gap-2 sm:grid-cols-2"
+      </SettingRow>
+      <SettingRow
+        stacked
+        label="At next boot"
+        caption={`Next boot: ${
+          nextBoot === 'locked'
+            ? 'Locked'
+            : nextBoot === 'unlocked'
+              ? 'Unlocked'
+              : 'Unknown'
+        }.`}
       >
-        <Button
-          variant="outline"
-          className="h-auto justify-start py-3 text-left aria-pressed:border-foreground aria-pressed:bg-accent"
-          aria-pressed={nextBoot === 'unlocked'}
-          disabled={disabled}
-          onClick={() => onChange('unlocked')}
+        <div
+          role="group"
+          aria-label="Mode at next boot"
+          className="grid w-full max-w-xl gap-2 sm:grid-cols-2"
         >
-          <LockSimpleOpen aria-hidden="true" />
-          <span className="grid">
-            <strong>Unlocked</strong>
-            <span className="text-xs font-normal">
-              Updates and installs work
+          <Button
+            variant="outline"
+            className="h-auto justify-start py-2.5 text-left aria-pressed:border-foreground aria-pressed:bg-accent"
+            aria-pressed={nextBoot === 'unlocked'}
+            disabled={disabled}
+            onClick={() => onChange('unlocked')}
+          >
+            <LockSimpleOpen aria-hidden="true" />
+            <span className="grid">
+              <strong>Unlocked</strong>
+              <span className="text-xs font-normal">
+                Updates and installs work
+              </span>
             </span>
-          </span>
-        </Button>
-        <Button
-          variant="outline"
-          className="h-auto justify-start py-3 text-left aria-pressed:border-foreground aria-pressed:bg-accent"
-          aria-pressed={nextBoot === 'locked'}
-          disabled={disabled}
-          onClick={() => onChange('locked')}
-        >
-          <LockSimple aria-hidden="true" />
-          <span className="grid">
-            <strong>Locked</strong>
-            <span className="text-xs font-normal">System files read-only</span>
-          </span>
-        </Button>
-      </div>
-      <Caption>
-        Next boot:{' '}
-        {nextBoot === 'locked'
-          ? 'Locked'
-          : nextBoot === 'unlocked'
-            ? 'Unlocked'
-            : 'Unknown'}
-        .
-      </Caption>
+          </Button>
+          <Button
+            variant="outline"
+            className="h-auto justify-start py-2.5 text-left aria-pressed:border-foreground aria-pressed:bg-accent"
+            aria-pressed={nextBoot === 'locked'}
+            disabled={disabled}
+            onClick={() => onChange('locked')}
+          >
+            <LockSimple aria-hidden="true" />
+            <span className="grid">
+              <strong>Locked</strong>
+              <span className="text-xs font-normal">
+                System files read-only
+              </span>
+            </span>
+          </Button>
+        </div>
+      </SettingRow>
       {notice}
       {restart}
-    </Card>
+    </SettingGroup>
   );
 }
 
@@ -333,28 +336,31 @@ export function BootPlayback({
   onMode: (mode: BootMode) => void;
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>When Oxidal starts</CardTitle>
-      </CardHeader>
-      <SegmentedControl
-        size="sm"
-        value={mode}
-        onValueChange={(v) => v && onMode(v as BootMode)}
-        aria-label="Mode at next boot"
+    <SettingGroup title="When Oxidal starts">
+      <SettingRow
+        stacked
+        label="Start with"
+        caption={
+          mode === 'off'
+            ? 'Audio waits until you press Play.'
+            : mode === 'last'
+              ? `Plays ${lastSession}, as it was saved. About 20 s after power-on.`
+              : 'Choose the preset in Library › Mine › ⋯ › Play when Oxidal starts.'
+        }
       >
-        <Segment value="off">Stay silent</Segment>
-        <Segment value="last">Last session</Segment>
-        <Segment value="preset">A preset</Segment>
-      </SegmentedControl>
-      <Caption className="text-xs">
-        {mode === 'off'
-          ? 'Audio waits until you press Play.'
-          : mode === 'last'
-            ? `Plays ${lastSession}, as it was saved. About 20 s after power-on.`
-            : 'Choose the preset in Library › Mine › ⋯ › Play when Oxidal starts.'}
-      </Caption>
-    </Card>
+        <SegmentedControl
+          size="sm"
+          className="w-full max-w-xl"
+          value={mode}
+          onValueChange={(v) => v && onMode(v as BootMode)}
+          aria-label="When Oxidal starts"
+        >
+          <Segment value="off">Stay silent</Segment>
+          <Segment value="last">Last session</Segment>
+          <Segment value="preset">A preset</Segment>
+        </SegmentedControl>
+      </SettingRow>
+    </SettingGroup>
   );
 }
 

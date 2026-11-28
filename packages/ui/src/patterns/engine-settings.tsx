@@ -16,7 +16,9 @@ import { Segment, SegmentedControl } from '../components/ui/segmented';
 import { Progress } from '../components/ui/states';
 import { Switch } from '../components/ui/switch';
 import { Caption } from '../components/ui/text';
-import { SettingGroup, SettingRow } from './settings-page';
+import type { EffectSummary } from '../lib/oxidal-effects';
+import { BlockTile } from '../widgets/block-tile';
+import { SettingGroup, SettingNotice, SettingRow } from './settings-page';
 
 /** An LV2 plugin pack Oxidal has qualified but does not ship. */
 export type Pack = {
@@ -34,10 +36,98 @@ export type Pack = {
   usedBy: string[] | null;
 };
 
-export type BuiltInEffect = { name: string; caption: string };
+/** One effect that comes with Oxidal, as Settings › Effects shows it. */
+export type BuiltInEffect = EffectSummary;
 
 /**
- * Effects that come with Oxidal. Oxidal's own five are original Rust; the
+ * One effect as a card: its block tile in the family colour (the same glyph
+ * and light the Rig draws), what it is, one line, its modes, and the facts a
+ * player chooses by: mono or stereo, how many controls, whether it adds
+ * latency. The plugin's long description stays one press away.
+ */
+export function EffectCard({ effect }: { effect: BuiltInEffect }) {
+  const [open, setOpen] = useState(false);
+  const facts = [
+    effect.channels?.join(' and '),
+    effect.controls ? `${effect.controls} controls` : undefined,
+    effect.latency === undefined
+      ? undefined
+      : effect.latency
+        ? 'Adds latency'
+        : 'No latency',
+  ].filter(Boolean);
+  return (
+    <article
+      data-slot="effect-card"
+      aria-label={effect.name}
+      className="grid min-w-0 content-start gap-3 rounded-xl border border-border bg-card p-4"
+    >
+      <header className="flex min-w-0 items-start gap-3">
+        <BlockTile glyph={effect.glyph} tinted size="lg" />
+        <div className="grid min-w-0 gap-0.5">
+          <span className="small-caps text-xs font-medium text-muted-foreground">
+            {effect.kind}
+          </span>
+          <h4 className="m-0 font-display text-xl leading-tight font-semibold">
+            {effect.name}
+          </h4>
+        </div>
+      </header>
+      {effect.summary && (
+        <p className="m-0 text-sm text-pretty">{effect.summary}</p>
+      )}
+      {!!effect.modes?.length && (
+        <ul
+          aria-label={`${effect.name} modes`}
+          className="m-0 flex list-none flex-wrap gap-1 p-0"
+        >
+          {effect.modes.map((mode) => (
+            <li key={mode}>
+              <Badge size="sm">{mode}</Badge>
+            </li>
+          ))}
+        </ul>
+      )}
+      {(facts.length > 0 || effect.details) && (
+        <footer className="mt-auto flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
+          {facts.map((fact) => (
+            <span key={fact}>{fact}</span>
+          ))}
+          {effect.details && (
+            <Button
+              variant="ghost"
+              size="xs"
+              className="ms-auto -me-2"
+              aria-expanded={open}
+              onClick={() => setOpen((v) => !v)}
+            >
+              {open ? 'Less' : 'How it works'}
+            </Button>
+          )}
+        </footer>
+      )}
+      {open && effect.details && (
+        <p className="m-0 text-xs text-pretty text-muted-foreground">
+          {effect.details}
+        </p>
+      )}
+    </article>
+  );
+}
+
+/** Effect cards in a grid: one column on a phone, up to three on a laptop. */
+export function EffectGrid({ effects }: { effects: BuiltInEffect[] }) {
+  return (
+    <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {effects.map((effect) => (
+        <EffectCard key={effect.id} effect={effect} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Effects that come with Oxidal. Oxidal's own are original Rust; the
  * TONE3000 engine's are part of that engine and named as such. Plugin
  * packs (LV2, made by others and installed by the player) have their own
  * page, because installing is a different job.
@@ -53,20 +143,18 @@ export function BuiltInEffects({
 }) {
   return (
     <>
-      <SettingGroup title="Oxidal effects">
-        {own.map((e) => (
-          <SettingRow key={e.name} label={e.name} caption={e.caption}>
-            <Badge size="sm">Built in</Badge>
-          </SettingRow>
-        ))}
+      <SettingGroup title="Oxidal's own">
+        <Caption className="mb-3 max-w-prose text-xs">
+          Written in Rust for Oxidal, always installed, and in the block chooser
+          of every preset.
+        </Caption>
+        <EffectGrid effects={own} />
       </SettingGroup>
-      <SettingGroup title="From the TONE3000 engine">
-        {engine.map((e) => (
-          <SettingRow key={e.name} label={e.name} caption={e.caption}>
-            <Badge size="sm">Built in</Badge>
-          </SettingRow>
-        ))}
-      </SettingGroup>
+      {engine.length > 0 && (
+        <SettingGroup title="Part of the TONE3000 engine">
+          <EffectGrid effects={engine} />
+        </SettingGroup>
+      )}
       <Caption>
         LV2 effects made by others are in Settings › LV2. You install those
         yourself.
@@ -115,19 +203,13 @@ export function PluginPacks({
   return (
     <>
       {playing && (
-        <p
-          role="status"
-          className="m-0 rounded-lg border border-border bg-card px-3 py-2 text-sm"
-        >
+        <SettingNotice tone="warning">
           Stop audio to install or remove a pack. This keeps the playing sound
           safe from disk activity.
-        </p>
+        </SettingNotice>
       )}
       {working && job && (
-        <div
-          role="status"
-          className="grid gap-1.5 rounded-lg border border-border bg-card px-3 py-2"
-        >
+        <div role="status" className="grid gap-1.5 border-b border-border py-2">
           <span className="text-sm">
             {jobLabel} {working.name}… You can leave this page; the device
             finishes the job.
@@ -227,15 +309,17 @@ export function PluginPacks({
     return (
       <ListRow
         key={p.id}
+        className="px-0"
+        leading={<BlockTile glyph="plugin" tinted on={p.installed} />}
         title={p.name}
         caption={
           <>
+            {p.installed &&
+              p.usedBy &&
+              `${p.usedBy.length ? `Used by ${p.usedBy.length} ${p.usedBy.length === 1 ? 'preset' : 'presets'}` : 'Not used by saved presets'} · `}
             {p.effects} usable effects · about {p.sizeMib} MiB
             {p.licence && ` · ${p.licence}`} · {p.qualification}
             {p.version && ` · ${p.version}`}
-            {p.installed &&
-              p.usedBy &&
-              ` · ${p.usedBy.length ? `used by ${p.usedBy.length} ${p.usedBy.length === 1 ? 'preset' : 'presets'}` : 'not used by saved presets'}`}
           </>
         }
         trailing={

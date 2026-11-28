@@ -13,7 +13,7 @@ import {
 } from '../components/ui/select';
 import { Description } from '../components/ui/text';
 import { ConfirmChange } from './confirm-change';
-import { SettingGroup, SettingRow } from './settings-page';
+import { SettingDisclosure, SettingGroup, SettingRow } from './settings-page';
 
 export type WifiNetwork = {
   ssid: string;
@@ -145,6 +145,7 @@ export function NetworkSettings({
           {networks.map((n) => (
             <ListRow
               key={`${n.ssid}-${n.secured}`}
+              className="px-0"
               leading={<Bars n={n.strength} />}
               title={n.ssid}
               caption={
@@ -200,29 +201,26 @@ export function NetworkSettings({
             />
           ))}
         </List>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="justify-self-start"
-          disabled={busy}
-          onClick={onScan}
-        >
-          Scan again
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="justify-self-start"
-          disabled={disabled || busy || Boolean(pending)}
-          onClick={onManualJoin}
-        >
-          Enter Wi-Fi name…
-        </Button>
+        <div className="flex flex-wrap items-center gap-2 border-b border-border py-2">
+          <Button size="sm" variant="outline" disabled={busy} onClick={onScan}>
+            Scan again
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={disabled || busy || Boolean(pending)}
+            onClick={onManualJoin}
+          >
+            Enter Wi-Fi name…
+          </Button>
+        </div>
         {interfaceControl}
-        <details>
-          <summary className="min-h-touch cursor-pointer py-3 text-sm">
-            Saved networks
-          </summary>
+        <SettingDisclosure
+          label="Saved networks"
+          caption={
+            saved.length === 1 ? '1 network' : `${saved.length} networks`
+          }
+        >
           <List aria-label="Saved networks">
             {saved.length === 0 && (
               <Description>No saved networks.</Description>
@@ -230,6 +228,7 @@ export function NetworkSettings({
             {saved.map((profile) => (
               <ListRow
                 key={profile.uuid}
+                className="px-0"
                 title={profile.name}
                 caption={
                   profile.active
@@ -271,7 +270,7 @@ export function NetworkSettings({
               />
             ))}
           </List>
-        </details>
+        </SettingDisclosure>
       </SettingGroup>
       <SettingGroup title="Hotspot">
         <Description className="mb-1">
@@ -279,13 +278,17 @@ export function NetworkSettings({
           join, connect your phone or tablet to it like any other network. It
           has no internet, so your phone may say so: stay connected.
         </Description>
-        <SettingRow label="Turn the hotspot on" stacked>
+        <SettingRow label="Turn the hotspot on">
           <Select
             value={hotspot.policy ?? ''}
             disabled={disabled || busy || Boolean(pending)}
             onValueChange={(v) => onPolicy(v as HotspotPolicy)}
           >
-            <SelectTrigger aria-label="Turn the hotspot on" className="w-full">
+            <SelectTrigger
+              size="sm"
+              aria-label="Turn the hotspot on"
+              className="w-72 max-w-full"
+            >
               <SelectValue placeholder="Appliance default" />
             </SelectTrigger>
             <SelectContent>

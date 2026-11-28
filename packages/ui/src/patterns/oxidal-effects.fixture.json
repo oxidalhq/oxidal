@@ -1,0 +1,1351 @@
+[
+  {
+    "uri": "urn:oxidal:plugin:bloom#mono",
+    "name": "Oxidal Bloom (Mono)",
+    "category": "Reverb",
+    "comment": "Bloom is a reverb with eight voices behind the Mode control: Room, Hall, Plate, Spring, Cloud (a huge slow wash), Bloom (a tail that swells after the note), Shimmer (an octave or fifth rising in the tail) and Nonlinear (gated, reverse and swell shapes). Decay is the length of the tail in seconds; Pre-delay holds the reverb back behind the note; Size sets how big the space is; Tone darkens the tail; Low cut keeps bass out of it; Mod and Mod speed add slow movement. Shimmer and Shimmer interval work in Shimmer, Shape in Nonlinear, Build in Bloom. Mix blends the reverb in and leaves the tail ringing when turned down; Freeze holds the tail for as long as it is on. No latency.",
+    "ports": [
+      {
+        "symbol": "mode",
+        "control": true,
+        "input": true,
+        "scale_points": [
+          {
+            "label": "Room"
+          },
+          {
+            "label": "Hall"
+          },
+          {
+            "label": "Plate"
+          },
+          {
+            "label": "Spring"
+          },
+          {
+            "label": "Cloud"
+          },
+          {
+            "label": "Bloom"
+          },
+          {
+            "label": "Shimmer"
+          },
+          {
+            "label": "Nonlinear"
+          }
+        ]
+      },
+      {
+        "symbol": "decay",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "predelay",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "size",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "tone",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "lowcut",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "mod",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "speed",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "shimmer",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "interval",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "shape",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "build",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "mix",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "freeze",
+        "control": true,
+        "input": true
+      }
+    ]
+  },
+  {
+    "uri": "urn:oxidal:plugin:bloom#stereo",
+    "name": "Oxidal Bloom (Stereo)",
+    "category": "Reverb",
+    "comment": "Stereo Bloom: the reverb spreads a mono or stereo input into a wide stereo field. Mode, Decay, Pre-delay, Size, Tone, Low cut, Mod, Mod speed, Shimmer, Shimmer interval, Shape, Build, Mix and Freeze work as in the mono plugin. No latency.",
+    "ports": [
+      {
+        "symbol": "mode",
+        "control": true,
+        "input": true,
+        "scale_points": [
+          {
+            "label": "Room"
+          },
+          {
+            "label": "Hall"
+          },
+          {
+            "label": "Plate"
+          },
+          {
+            "label": "Spring"
+          },
+          {
+            "label": "Cloud"
+          },
+          {
+            "label": "Bloom"
+          },
+          {
+            "label": "Shimmer"
+          },
+          {
+            "label": "Nonlinear"
+          }
+        ]
+      },
+      {
+        "symbol": "decay",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "predelay",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "size",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "tone",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "lowcut",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "mod",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "speed",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "shimmer",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "interval",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "shape",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "build",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "mix",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "freeze",
+        "control": true,
+        "input": true
+      }
+    ]
+  },
+  {
+    "uri": "urn:oxidal:plugin:echo#mono",
+    "name": "Oxidal Echo (Mono)",
+    "category": "Delay",
+    "comment": "Echo is eight kinds of delay behind one Mode control: Digital (clean), Tape (one sliding head with wow, flutter and wear), Heads (four heads on one loop), Bucket (bucket-brigade: darker as it gets longer, companded, a little noisy), Reverse (repeats play backwards), Duck (repeats drop while you play), Filter (a resonant sweep on the repeats) and Ping (as Digital in mono). Time sets the delay in milliseconds, or with Sync on, BPM and Division set it as a note value. Feedback is the number of repeats and goes a little past endless; Tone runs from dark through open to thin; Mod is wow and flutter, the Duck amount, the Filter depth or a gentle chorus; Age is tape wear and bucket noise; Heads and Spacing choose and place the heads in Heads mode; Mix runs from dry to repeats only and lets the tail ring out when turned down; Hold loops what is in the memory. Up to 4 s. No latency.",
+    "ports": [
+      {
+        "symbol": "mode",
+        "control": true,
+        "input": true,
+        "scale_points": [
+          {
+            "label": "Digital"
+          },
+          {
+            "label": "Tape"
+          },
+          {
+            "label": "Heads"
+          },
+          {
+            "label": "Bucket"
+          },
+          {
+            "label": "Reverse"
+          },
+          {
+            "label": "Duck"
+          },
+          {
+            "label": "Filter"
+          },
+          {
+            "label": "Ping"
+          }
+        ]
+      },
+      {
+        "symbol": "time",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "sync",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "bpm",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "division",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "feedback",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "tone",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "mod",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "age",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "heads",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "spacing",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "width",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "mix",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "hold",
+        "control": true,
+        "input": true
+      }
+    ]
+  },
+  {
+    "uri": "urn:oxidal:plugin:echo#stereo",
+    "name": "Oxidal Echo (Stereo)",
+    "category": "Delay",
+    "comment": "Stereo Echo: each side has its own delay memory. Width spreads the repeats, from mono at 0 to wide at 100: the right repeat trails the left by a few milliseconds, modulation runs out of step, heads sit across the image, and in Ping the repeats alternate left and right. All other controls work as in the mono plugin. No latency.",
+    "ports": [
+      {
+        "symbol": "mode",
+        "control": true,
+        "input": true,
+        "scale_points": [
+          {
+            "label": "Digital"
+          },
+          {
+            "label": "Tape"
+          },
+          {
+            "label": "Heads"
+          },
+          {
+            "label": "Bucket"
+          },
+          {
+            "label": "Reverse"
+          },
+          {
+            "label": "Duck"
+          },
+          {
+            "label": "Filter"
+          },
+          {
+            "label": "Ping"
+          }
+        ]
+      },
+      {
+        "symbol": "time",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "sync",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "bpm",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "division",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "feedback",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "tone",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "mod",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "age",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "heads",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "spacing",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "width",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "mix",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "hold",
+        "control": true,
+        "input": true
+      }
+    ]
+  },
+  {
+    "uri": "urn:oxidal:plugin:fuzz#mono",
+    "name": "Oxidal Fuzz (Mono)",
+    "category": "Distortion",
+    "comment": null,
+    "ports": [
+      {
+        "symbol": "drive",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "tone",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "mix",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "level",
+        "control": true,
+        "input": true
+      }
+    ]
+  },
+  {
+    "uri": "urn:oxidal:plugin:fuzz#stereo",
+    "name": "Oxidal Fuzz (Stereo)",
+    "category": "Distortion",
+    "comment": null,
+    "ports": [
+      {
+        "symbol": "drive",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "tone",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "mix",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "level",
+        "control": true,
+        "input": true
+      }
+    ]
+  },
+  {
+    "uri": "urn:oxidal:plugin:hold#mono",
+    "name": "Oxidal Hold (Mono)",
+    "category": "Spectral",
+    "comment": "Hold captures the note you are playing and keeps it sounding as a steady drone while you play over it. Focus keeps only the note's partials, not noise or room; Attack and Release fade it in and out; Level sets it against the dry signal; Dry off leaves only the held sound.",
+    "ports": [
+      {
+        "symbol": "hold",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "attack",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "release",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "level",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "dry",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "focus",
+        "control": true,
+        "input": true
+      }
+    ]
+  },
+  {
+    "uri": "urn:oxidal:plugin:hold#stereo",
+    "name": "Oxidal Hold (Stereo)",
+    "category": "Spectral",
+    "comment": "Stereo Hold: each side keeps its own sound. Width pulls the held sides toward the centre (100 keeps the original image); Focus keeps only the note's partials, not noise or room.",
+    "ports": [
+      {
+        "symbol": "hold",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "attack",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "release",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "level",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "dry",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "focus",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "width",
+        "control": true,
+        "input": true
+      }
+    ]
+  },
+  {
+    "uri": "urn:oxidal:plugin:moment#mono",
+    "name": "Oxidal Moment (Mono)",
+    "category": "Delay",
+    "comment": "Moment catches what you just played and turns it into a moving texture. The loop half records all the time: Catch keeps the most recent audio as a loop. Tape plays it at another speed or backwards, Stretch spreads it into slow overlapping slices, and Touch sticks on a slice while you play. Overdub adds to the loop and Fade sets how much of it stays on each pass. The wet half is Smear (separate echoes to a wash), Delay or Slip (a sliding pitch shift), with Chance letting sound in only some of the time and Freeze holding it. Route sends the input, the loop or both through the wet half, and the wet half is recorded while Catch is off. Clock sets the working sample rate of everything: lower is longer, deeper and darker; Grit makes it stepped and aliased. No latency.",
+    "ports": [
+      {
+        "symbol": "clock",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "steps",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "grit",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "route",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "balance",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "catch",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "loopmode",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "length",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "move",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "overdub",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "fade",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "direct",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "wet",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "wetmode",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "time",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "shape",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "tone",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "chance",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "freeze",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "link",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "bpm",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "division",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "width",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "mix",
+        "control": true,
+        "input": true
+      }
+    ]
+  },
+  {
+    "uri": "urn:oxidal:plugin:moment#stereo",
+    "name": "Oxidal Moment (Stereo)",
+    "category": "Delay",
+    "comment": "Stereo Moment: each side has its own memory. Width 0 keeps the incoming stereo picture; higher values add each mode's own movement: Tape plays one side backwards, Stretch and Slip pan slowly, Touch pans while a slice is held, Smear scatters its taps and Delay crosses from side to side. All other controls work as in the mono plugin. No latency.",
+    "ports": [
+      {
+        "symbol": "clock",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "steps",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "grit",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "route",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "balance",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "catch",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "loopmode",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "length",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "move",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "overdub",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "fade",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "direct",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "wet",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "wetmode",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "time",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "shape",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "tone",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "chance",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "freeze",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "link",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "bpm",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "division",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "width",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "mix",
+        "control": true,
+        "input": true
+      }
+    ]
+  },
+  {
+    "uri": "urn:oxidal:plugin:motion#mono",
+    "name": "Oxidal Motion (Mono)",
+    "category": "Modulator",
+    "comment": "Motion is nine modulation effects behind one Mode control: Chorus, Flanger, Phaser, Vibe, Rotary speaker, Tremolo, Harmonic tremolo, Vibrato and Ring modulation. Rate sets the speed, or Sync locks it to Tempo and Division; in Ring it tunes the carrier from 20 Hz to 2 kHz, and in Rotary it is the slow speed, which Fast multiplies by eight with the horn and drum gathering speed at their own pace. Depth sets how far the effect moves; Feedback sharpens Flanger, Phaser and Vibe; Tone brightens the effect or moves its centre; Shape picks one of three variants of each mode. Mix at 0 is the untouched signal; Chorus, Flanger A, Phaser and Vibe blend up to the effect alone at 100, the other modes are fully on from 50. Changing Mode crossfades. No latency.",
+    "ports": [
+      {
+        "symbol": "mode",
+        "control": true,
+        "input": true,
+        "scale_points": [
+          {
+            "label": "Chorus"
+          },
+          {
+            "label": "Flanger"
+          },
+          {
+            "label": "Phaser"
+          },
+          {
+            "label": "Vibe"
+          },
+          {
+            "label": "Rotary"
+          },
+          {
+            "label": "Tremolo"
+          },
+          {
+            "label": "Harmonic"
+          },
+          {
+            "label": "Vibrato"
+          },
+          {
+            "label": "Ring"
+          }
+        ]
+      },
+      {
+        "symbol": "rate",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "sync",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "bpm",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "division",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "depth",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "feedback",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "tone",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "shape",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "stereo",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "fast",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "mix",
+        "control": true,
+        "input": true
+      }
+    ]
+  },
+  {
+    "uri": "urn:oxidal:plugin:motion#stereo",
+    "name": "Oxidal Motion (Stereo)",
+    "category": "Modulator",
+    "comment": "Stereo Motion: the nine modulation effects of the mono plugin with one oscillator for each side. Stereo sets how far apart the two sides move, from together (0) to opposite (180 degrees), which gives width even from a mono input; in Rotary it is the angle between two microphones around one cabinet. Every other control works as in the mono plugin. No latency.",
+    "ports": [
+      {
+        "symbol": "mode",
+        "control": true,
+        "input": true,
+        "scale_points": [
+          {
+            "label": "Chorus"
+          },
+          {
+            "label": "Flanger"
+          },
+          {
+            "label": "Phaser"
+          },
+          {
+            "label": "Vibe"
+          },
+          {
+            "label": "Rotary"
+          },
+          {
+            "label": "Tremolo"
+          },
+          {
+            "label": "Harmonic"
+          },
+          {
+            "label": "Vibrato"
+          },
+          {
+            "label": "Ring"
+          }
+        ]
+      },
+      {
+        "symbol": "rate",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "sync",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "bpm",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "division",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "depth",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "feedback",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "tone",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "shape",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "stereo",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "fast",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "mix",
+        "control": true,
+        "input": true
+      }
+    ]
+  },
+  {
+    "uri": "urn:oxidal:plugin:pitch#mono",
+    "name": "Oxidal Pitch (Mono)",
+    "category": "Pitch Shifter",
+    "comment": "Independent pinned TONE3000 pitch engine. Tonality 20000 Hz is off. Powered-on zero semitones retains the engine delay; Enabled off fades to dry. Reported latency is a configured convention, not measured interface latency. Supported sample rates 44100–192000 Hz.",
+    "ports": [
+      {
+        "symbol": "enabled",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "semitones",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "step",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "tonality",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "window",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "latency",
+        "control": true,
+        "latency": true
+      },
+      {
+        "symbol": "input_mode",
+        "control": true,
+        "input": true
+      }
+    ]
+  },
+  {
+    "uri": "urn:oxidal:plugin:pitch#stereo",
+    "name": "Oxidal Pitch (Stereo)",
+    "category": "Pitch Shifter",
+    "comment": "Shared stereo control/tap, separate channel rings. Input Left or Right duplicates that source before pitch; Stereo preserves both channels. Same controls and sample-rate limits as the mono variant. Serial pitch latencies add; inverse shifts do not promise exact recovery.",
+    "ports": [
+      {
+        "symbol": "enabled",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "semitones",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "step",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "tonality",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "window",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "latency",
+        "control": true,
+        "latency": true
+      },
+      {
+        "symbol": "input_mode",
+        "control": true,
+        "input": true
+      }
+    ]
+  },
+  {
+    "uri": "urn:oxidal:plugin:sustain#mono",
+    "name": "Oxidal Sustain (Mono)",
+    "category": "Dynamics",
+    "comment": "Sustain keeps every single note sounding at a steady level until you mute it or play the next one, with nothing to press. While the string rings it follows bends and vibrato; when the string has died it holds the last pitch. Mode chooses the note itself (Normal), a harmonic of it (Harmonic) or a note that blooms into the harmonic like amplifier feedback (Mix); Harmonic picks which one; Bloom is how long Mix takes. Drive sets how soon and how firmly the sustain takes over; Sensitivity how readily a mute or a new note is recognised; Tone the brightness of the sustained sound; Level its volume. Dry off leaves only the sustained sound. A chord is held as a whole. Place it before drive and amp blocks. No latency.",
+    "ports": [
+      {
+        "symbol": "on",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "mode",
+        "control": true,
+        "input": true,
+        "scale_points": [
+          {
+            "label": "Normal"
+          },
+          {
+            "label": "Harmonic"
+          },
+          {
+            "label": "Mix"
+          }
+        ]
+      },
+      {
+        "symbol": "harmonic",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "drive",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "bloom",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "sensitivity",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "tone",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "level",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "dry",
+        "control": true,
+        "input": true
+      }
+    ]
+  },
+  {
+    "uri": "urn:oxidal:plugin:sustain#stereo",
+    "name": "Oxidal Sustain (Stereo)",
+    "category": "Dynamics",
+    "comment": "Stereo Sustain: it listens to both sides together, keeps the dry signal in stereo and adds the same sustained note to both sides. On, Mode, Harmonic, Drive, Bloom, Sensitivity, Tone, Level and Dry work as in the mono plugin. No latency.",
+    "ports": [
+      {
+        "symbol": "on",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "mode",
+        "control": true,
+        "input": true,
+        "scale_points": [
+          {
+            "label": "Normal"
+          },
+          {
+            "label": "Harmonic"
+          },
+          {
+            "label": "Mix"
+          }
+        ]
+      },
+      {
+        "symbol": "harmonic",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "drive",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "bloom",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "sensitivity",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "tone",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "level",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "dry",
+        "control": true,
+        "input": true
+      }
+    ]
+  },
+  {
+    "uri": "urn:oxidal:plugin:swell#mono",
+    "name": "Oxidal Swell (Mono)",
+    "category": "Envelope",
+    "comment": "Swell fades each new note in instead of letting it start on the pick, like a volume pedal worked by your playing. Threshold sets how loud a note must be to count; Sensitivity sets how big a jump in level retriggers a swell while a note still rings (0 waits for silence); Swell time is the fade-in; Release is the fade-out when the note dies away; Curve shapes the fade from linear to slow-starting; Mix blends back the unswelled signal. No latency.",
+    "ports": [
+      {
+        "symbol": "threshold",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "sensitivity",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "time",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "release",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "curve",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "mix",
+        "control": true,
+        "input": true
+      }
+    ]
+  },
+  {
+    "uri": "urn:oxidal:plugin:swell#stereo",
+    "name": "Oxidal Swell (Stereo)",
+    "category": "Envelope",
+    "comment": "Stereo Swell: one detector listens to both sides and both fade in together, so the stereo image is kept. Threshold, Sensitivity, Swell time, Release, Curve and Mix work as in the mono plugin. No latency.",
+    "ports": [
+      {
+        "symbol": "threshold",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "sensitivity",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "time",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "release",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "curve",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "mix",
+        "control": true,
+        "input": true
+      }
+    ]
+  },
+  {
+    "uri": "urn:oxidal:plugin:wah#mono",
+    "name": "Oxidal Wah (Mono)",
+    "category": "Filter",
+    "comment": null,
+    "ports": [
+      {
+        "symbol": "position",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "resonance",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "range",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "mix",
+        "control": true,
+        "input": true
+      }
+    ]
+  },
+  {
+    "uri": "urn:oxidal:plugin:wah#stereo",
+    "name": "Oxidal Wah (Stereo)",
+    "category": "Filter",
+    "comment": null,
+    "ports": [
+      {
+        "symbol": "position",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "resonance",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "range",
+        "control": true,
+        "input": true
+      },
+      {
+        "symbol": "mix",
+        "control": true,
+        "input": true
+      }
+    ]
+  }
+]

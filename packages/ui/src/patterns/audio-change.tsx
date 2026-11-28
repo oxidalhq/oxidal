@@ -19,12 +19,14 @@ import {
 } from '../components/ui/select';
 import { Progress } from '../components/ui/states';
 import { Caption } from '../components/ui/text';
+import { cn } from '../lib/cn';
 import { ConfirmChange } from './confirm-change';
 
 const RATES = ['44100', '48000', '96000'];
 const FRAMES = ['48', '64', '96', '128', '256'];
+/** Device buffer length, as the app works it out: period size × periods at the rate. */
 const ms = (frames: number, periods: number, rate: number) =>
-  ((frames * periods * 2) / rate) * 1000;
+  ((frames * periods) / rate) * 1000;
 
 export type AudioSetting = { rate: number; frames: number; periods: number };
 export type AudioChangePhase = 'idle' | 'restarting' | 'proving' | 'reverting';
@@ -83,7 +85,10 @@ export function AudioChange({
   recovery,
   finderOpen,
   onFinderOpenChange,
+  caption,
 }: {
+  /** A line under the heading, such as what Resume keeps. */
+  caption?: React.ReactNode;
   current: AudioSetting;
   phase: AudioChangePhase;
   /** While proving: seconds until it goes back on its own. */
@@ -91,7 +96,16 @@ export function AudioChange({
   finder?: BufferFinderRun;
   finderOpen?: boolean;
   onFinderOpenChange?: (open: boolean) => void;
-  choices?: { rates: number[]; frames: number[]; periods: number[] };
+  choices?: {
+    rates: number[];
+    frames: number[];
+    periods: number[];
+    /**
+     * Rarer values, offered in an "Other…" list beside the common ones so a
+     * setting such as a 512 buffer or 6 periods stays one step away.
+     */
+    more?: { rates?: number[]; frames?: number[]; periods?: number[] };
+  };
   disabled?: boolean;
   additionalChanges?: boolean;
   details?: React.ReactNode;
@@ -127,59 +141,102 @@ export function AudioChange({
   const left = secondsLeft;
   const changed = JSON.stringify(draft) !== currentKey || additionalChanges;
   const locked = disabled || phase !== 'idle';
+  // Up to five choices show side by side; more than that is a Select. Rarer
+  // values sit in an "Other…" list after them.
   const field = (
     key: keyof AudioSetting,
     label: string,
     values: number[],
     format: (value: number) => string = String,
-  ) =>
-    choices !== undefined || values.length > 5 ? (
-      <Select
-        value={String(draft[key])}
-        disabled={locked}
-        onValueChange={(value) => setDraft({ ...draft, [key]: Number(value) })}
-      >
-        <SelectTrigger aria-label={label}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
+  ) => {
+    const rarer = (
+      choices?.more?.[
+        key === 'rate' ? 'rates' : key === 'frames' ? 'frames' : 'periods'
+      ] ?? []
+    ).filter((v) => !values.includes(v));
+    const pick = (value: string) =>
+      setDraft({ ...draft, [key]: Number(value) });
+    const main =
+      values.length > 5 ? (
+        <Select
+          value={String(draft[key])}
+          disabled={locked}
+          onValueChange={pick}
+        >
+          <SelectTrigger aria-label={label}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {[...values, ...rarer].map((value) => (
+              <SelectItem key={value} value={String(value)}>
+                {format(value)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : (
+        <SegmentedControl
+          size="sm"
+          value={values.includes(draft[key]) ? String(draft[key]) : ''}
+          disabled={locked}
+          onValueChange={(value) => value && pick(value)}
+          aria-label={label}
+          className="w-full"
+        >
           {values.map((value) => (
-            <SelectItem key={value} value={String(value)}>
+            <Segment key={value} value={String(value)}>
               {format(value)}
-            </SelectItem>
+            </Segment>
           ))}
-        </SelectContent>
-      </Select>
-    ) : (
-      <SegmentedControl
-        size="sm"
-        value={String(draft[key])}
-        disabled={locked}
-        onValueChange={(value) => setDraft({ ...draft, [key]: Number(value) })}
-        aria-label={label}
-      >
-        {values.map((value) => (
-          <Segment key={value} value={String(value)}>
-            {format(value)}
-          </Segment>
-        ))}
-      </SegmentedControl>
+        </SegmentedControl>
+      );
+    if (values.length > 5 || !rarer.length) return main;
+    const other = rarer.includes(draft[key]);
+    return (
+      <div className="flex min-w-0 items-center gap-1.5">
+        <div className="min-w-0 flex-1">{main}</div>
+        <Select
+          value={other ? String(draft[key]) : ''}
+          disabled={locked}
+          onValueChange={pick}
+        >
+          <SelectTrigger
+            size="sm"
+            aria-label={`${label}: other values`}
+            className={cn('w-auto shrink-0', other && 'border-foreground')}
+          >
+            <SelectValue placeholder="Other…" />
+          </SelectTrigger>
+          <SelectContent>
+            {rarer.map((value) => (
+              <SelectItem key={value} value={String(value)}>
+                {format(value)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
     );
+  };
 
   return (
     <section
       aria-label="Adjust current session"
-      className="grid gap-3 rounded-lg border border-border bg-card p-4"
+      data-slot="setting-group"
+      className="grid gap-3 border-b border-border pb-4"
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="text-md font-semibold">Adjust current session</span>
-        <span className="font-mono text-sm tabular-nums">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <h3 className="m-0 flex min-h-control items-center small-caps text-sm font-medium text-muted-foreground">
+          Adjust current session
+        </h3>
+        <span className="font-mono text-xs text-muted-foreground tabular-nums">
           {current.frames} × {current.periods} · {current.rate / 1000} kHz ·{' '}
           {(
             currentBufferMs ?? ms(current.frames, current.periods, current.rate)
           ).toFixed(1)}{' '}
           ms calculated buffer time
         </span>
+        {caption && <Caption className="basis-full text-xs">{caption}</Caption>}
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="grid gap-1">
@@ -222,6 +279,7 @@ export function AudioChange({
       {phase === 'idle' && (
         <div className="flex flex-wrap items-center gap-2">
           <Button
+            size="sm"
             disabled={!changed || disabled || !canApply}
             onClick={() => apply(draft)}
           >
@@ -229,6 +287,7 @@ export function AudioChange({
           </Button>
           {finder && (
             <Button
+              size="sm"
               variant="outline"
               disabled={disabled && finder.state === 'idle'}
               onClick={() => setFinding(true)}
@@ -242,6 +301,7 @@ export function AudioChange({
           )}
           {changed && (
             <Button
+              size="sm"
               variant="outline"
               disabled={disabled}
               onClick={() => {

@@ -1,7 +1,7 @@
 import * as React from 'react';
 
+import { EvenOutPanel } from './even-out';
 import {
-  EvenOut,
   LevelMatch,
   type LevelMatchState,
   SoundCheck,
@@ -93,26 +93,47 @@ export function LevelMatchDemo() {
   );
 }
 
-const LOUDNESS = [
-  ['Rhythm section', -18.2, -18.0],
-  ['Ambient swell', -22.9, -18.3],
-  ['Lead boost', -13.4, -17.6],
-  ['Brown Crunch', -16.1, -18.1],
-  ['Neon Clean', -21.0, -18.4],
-] as const;
+/** Measured before correction, and the correction a run stores. */
+const LOUDNESS: [string, number, number][] = [
+  ['Rhythm section · Verse', -18.2, -1.8],
+  ['Rhythm section · Chorus', -16.9, -3.1],
+  ['Ambient swell · Pad', -22.9, 2.6],
+  ['Lead boost', -13.4, -6.5],
+  ['Brown Crunch · Intro', -16.1, -3.8],
+  ['Brown Crunch · Rhythm', -15.4, -4.7],
+  ['Neon Clean', -21.0, 1.1],
+  ['Doom Smoke · Lead', -14.6, -5.3],
+];
 
+/** Even out on sample sounds: a run measures for two seconds, then evens. */
 export function EvenOutDemo() {
   const m = useMeasure(2000);
   return (
-    <EvenOut
-      presets={LOUDNESS.map(([name, before, after]) => ({
+    <EvenOutPanel
+      sounds={LOUDNESS.map(([name, lufs, offset]) => ({
+        key: name,
         name,
-        lufs: m.done ? after : before,
+        lufs,
+        offset_db: m.done ? offset : 0,
       }))}
-      progress={m.progress}
-      evened={m.done}
-      scenes={14}
-      onStart={m.start}
+      target={m.done ? -20 : null}
+      pending={m.done ? 0 : LOUDNESS.length}
+      progress={{
+        running: m.progress !== undefined,
+        done: Math.round(((m.progress ?? 0) / 100) * LOUDNESS.length),
+        total: LOUDNESS.length,
+        current:
+          LOUDNESS[
+            Math.min(
+              LOUDNESS.length - 1,
+              Math.round(((m.progress ?? 0) / 100) * LOUDNESS.length),
+            )
+          ]![0],
+      }}
+      onAction={(action) => {
+        if (action === 'run' || action === 'run_all') m.start();
+        if (action === 'reset') m.reset();
+      }}
     />
   );
 }

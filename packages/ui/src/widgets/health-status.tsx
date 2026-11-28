@@ -121,7 +121,7 @@ export function HealthStatus({
           data-slot="health-status"
           data-tone={health.tone}
           className={cn(
-            'inline-flex min-h-touch items-center gap-2 rounded-full border border-border bg-background px-3 text-sm font-semibold hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+            'inline-flex h-control items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [@media(pointer:coarse)]:min-h-touch',
             health.tone === 'hot' && 'border-brand',
             className,
           )}
@@ -130,7 +130,7 @@ export function HealthStatus({
             aria-hidden="true"
             className={cn('size-2.5 rounded-full', DOT[health.tone])}
           />
-          {health.word}
+          <span data-slot="health-word">{health.word}</span>
           <span className="sr-only">, device health. Show details</span>
         </button>
       </PopoverTrigger>

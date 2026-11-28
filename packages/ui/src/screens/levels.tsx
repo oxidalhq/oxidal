@@ -9,10 +9,13 @@ import { Caption, Readout } from '../components/ui/text';
 import { PageHeading } from '../patterns/app-shell';
 import { DeviceDashboard } from '../patterns/device-dashboard';
 import { READINGS } from '../patterns/device-dashboard.data';
+import { EvenOutDemo } from '../patterns/guitar-tools.demo';
 import {
   LEVELS_SECTIONS,
   type LevelsSection,
 } from '../patterns/levels-sections';
+import { ReadingsTable } from '../patterns/readings-table';
+import { LEVELS_READINGS } from '../patterns/readings-table.data';
 import { Workspace } from '../patterns/workspace';
 import {
   BrowserListeningDemo,
@@ -187,98 +190,104 @@ export function Levels({
         {view === 'diagnostics' && <DeviceDashboard readings={READINGS} />}
         {view === 'loudness' && (
           <>
+            <EvenOutDemo />
             <CaptureReferencesDemo />
             <BrowserListeningDemo />
             <ParallelListeningDemo />
           </>
         )}
         {view === 'overview' && (
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-            <SegmentedControl
-              size="sm"
-              value={range}
-              onValueChange={setRange}
-              className="lg:col-span-2"
-              aria-label="History range"
-            >
-              <Segment value="1m">1 min</Segment>
-              <Segment value="10m">10 min</Segment>
-              <Segment value="1h">1 h</Segment>
-            </SegmentedControl>
-            <Output />
-            <Card>
-              <CardHeader>
-                <CardTitle>Now</CardTitle>
-                <Badge tone="live">Running</Badge>
-              </CardHeader>
-              <div className="grid gap-5">
-                <StereoMeter
-                  label="Input"
-                  left={live.il}
-                  right={live.ir}
-                  peaks={[live.il + 3, live.ir + 3]}
-                  size="lg"
+          <div className="grid gap-6">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+              <SegmentedControl
+                size="sm"
+                value={range}
+                onValueChange={setRange}
+                className="lg:col-span-2"
+                aria-label="History range"
+              >
+                <Segment value="1m">1 min</Segment>
+                <Segment value="10m">10 min</Segment>
+                <Segment value="1h">1 h</Segment>
+              </SegmentedControl>
+              <Output />
+              <Card>
+                <CardHeader>
+                  <CardTitle>Now</CardTitle>
+                  <Badge tone="live">Running</Badge>
+                </CardHeader>
+                <div className="grid gap-5">
+                  <StereoMeter
+                    label="Input"
+                    left={live.il}
+                    right={live.ir}
+                    peaks={[live.il + 3, live.ir + 3]}
+                    size="lg"
+                  />
+                  <StereoMeter
+                    label="Output"
+                    left={live.ol}
+                    right={live.or}
+                    peaks={[live.ol + 2, live.or + 2]}
+                    size="lg"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    ['Xruns', '0'],
+                    ['Clips', '0'],
+                    ['Recovered', '2'],
+                  ].map(([k, v]) => (
+                    <div
+                      key={k}
+                      className="grid gap-0.5 rounded-lg border border-border p-3"
+                    >
+                      <span className="small-caps text-xs font-medium text-muted-foreground">
+                        {k}
+                      </span>
+                      <Readout size="lg">{v}</Readout>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    Last{' '}
+                    {range === '1m'
+                      ? 'minute'
+                      : range === '10m'
+                        ? 'ten minutes'
+                        : 'hour'}
+                  </CardTitle>
+                  <Caption as="span" className="text-xs">
+                    The dashed line is the period deadline.
+                  </Caption>
+                </CardHeader>
+                <History
+                  label="Processing, p95 of the period"
+                  data={dsp}
+                  unit="%"
+                  limit={100}
                 />
-                <StereoMeter
-                  label="Output"
-                  left={live.ol}
-                  right={live.or}
-                  peaks={[live.ol + 2, live.or + 2]}
-                  size="lg"
+                <History
+                  label="Host CPU"
+                  data={cpu}
+                  unit="%"
+                  colour="var(--wire)"
                 />
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  ['Xruns', '0'],
-                  ['Clips', '0'],
-                  ['Recovered', '2'],
-                ].map(([k, v]) => (
-                  <div
-                    key={k}
-                    className="grid gap-0.5 rounded-lg border border-border p-3"
-                  >
-                    <span className="small-caps text-xs font-medium text-muted-foreground">
-                      {k}
-                    </span>
-                    <Readout size="lg">{v}</Readout>
-                  </div>
-                ))}
-              </div>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  Last{' '}
-                  {range === '1m'
-                    ? 'minute'
-                    : range === '10m'
-                      ? 'ten minutes'
-                      : 'hour'}
-                </CardTitle>
-                <Caption as="span" className="text-xs">
-                  The dashed line is the period deadline.
-                </Caption>
-              </CardHeader>
-              <History
-                label="Processing, p95 of the period"
-                data={dsp}
-                unit="%"
-                limit={100}
-              />
-              <History
-                label="Host CPU"
-                data={cpu}
-                unit="%"
-                colour="var(--wire)"
-              />
-              <History
-                label="Temperature"
-                data={temp}
-                unit="°"
-                limit={80}
-                colour="var(--wire)"
-              />
-            </Card>
+                <History
+                  label="Temperature"
+                  data={temp}
+                  unit="°"
+                  limit={80}
+                  colour="var(--wire)"
+                />
+              </Card>
+            </div>
+            {LEVELS_READINGS.map((group) => (
+              <ReadingsTable key={group.title} {...group} />
+            ))}
           </div>
         )}
       </Workspace>
