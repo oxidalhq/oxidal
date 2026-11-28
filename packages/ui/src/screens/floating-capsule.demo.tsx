@@ -395,6 +395,8 @@ export function C2Sample({
       className="absolute inset-x-0 top-2"
       destination={where}
       onNavigate={setWhere}
+      // The wordmark goes home to the Rig, as in the app.
+      onHome={() => setWhere('rig')}
       status={
         stopped
           ? { word: 'Audio stopped', problem: true }

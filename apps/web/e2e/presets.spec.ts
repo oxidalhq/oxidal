@@ -6268,6 +6268,104 @@ test('mixed rig authoring builds a split and changes a level with buttons only o
   });
 });
 
+test('an edit of an Oxidal sound plays at once and stays unsaved until Save a copy', async ({
+  page,
+  request,
+}, info) => {
+  test.skip(
+    info.project.name === 'chromium',
+    'The wide screen opens routing from the block box (Routing…); the phone project covers this sheet.',
+  );
+  const manifest = JSON.parse(
+    buildRoute(
+      'canvas',
+      'Plain',
+      [canvasEffect('Echo'), canvasEffect('Verb')],
+      'prof',
+    ).manifest_json,
+  );
+  manifest.extensions['urn:oxidal:authoring'] = {
+    ...(manifest.extensions['urn:oxidal:authoring'] ?? {}),
+    origin: 'oxidal_example',
+  };
+  const unit = await mockCanvasUnit(page, request, manifest);
+  const bodies: Record<string, unknown>[] = [];
+  await page.route(/\/api\/v1\/presets\/rigs(\?.*)?$/, async (route) => {
+    if (route.request().method() === 'POST')
+      bodies.push(route.request().postDataJSON());
+    await route.fallback();
+  });
+  // The device's catalog: the edit's copy is a working copy until kept.
+  let kept: Record<string, unknown> | null = null;
+  const row = (id: string, origin: string, extra = {}) => ({
+    kind: 'rig',
+    id,
+    name: 'Plain',
+    source_name: 'Plain',
+    origin,
+    archived: false,
+    superseded: false,
+    in_set_list: false,
+    ...extra,
+  });
+  await page.route('**/api/v1/presets/catalog', async (route) => {
+    if (route.request().method() === 'POST')
+      kept = route.request().postDataJSON();
+    const copy = `canvas-${unit.published.length}`;
+    await route.fulfill({
+      json: {
+        revision: 'catalog-1',
+        starter_offered: true,
+        items: [
+          row('canvas-0', 'oxidal_example'),
+          ...(unit.published.length
+            ? [
+                kept
+                  ? row(copy, 'mine', { name: 'My plain', in_set_list: true })
+                  : row(copy, 'mine', {
+                      superseded: true,
+                      working_of: 'canvas-0',
+                    }),
+              ]
+            : []),
+        ],
+      },
+    });
+  });
+  await page.goto('/#rig');
+  const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
+  await rig.getByRole('button', { name: /^Echo(?: (?:time|lv2|Delay · Reverb))?$/i }).click();
+  const routing = await openRouting(page, rig, 'Echo');
+  await routing.getByRole('button', { name: 'Split here' }).click();
+  await expect.poll(() => unit.published.length).toBe(1);
+  await closeRouting(page, routing);
+  // The edit plays at once as a working copy of the Oxidal sound.
+  expect(bodies[0]).toMatchObject({
+    working: true,
+    source: { kind: 'rig', id: 'canvas-0' },
+  });
+  expect(unit.route()).toMatchObject([{ branches: [['echo'], []] }, 'verb']);
+  const notice = page
+    .getByRole('status')
+    .filter({ hasText: 'Changes to Plain are not saved yet' });
+  await expect(notice).toBeVisible();
+  await notice.getByRole('button', { name: 'Save a copy…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Save a copy' });
+  const name = dialog.getByRole('textbox', { name: 'Name' });
+  await expect(name).toHaveValue('Plain copy');
+  await name.fill('My plain');
+  await dialog.getByRole('button', { name: 'Save a copy' }).click();
+  await expect
+    .poll(() => kept)
+    .toMatchObject({
+      entry_kind: 'rig',
+      id: 'canvas-1',
+      action: { kind: 'keep', name: 'My plain' },
+    });
+  await expect(dialog).toHaveCount(0);
+  await expect(notice).toHaveCount(0);
+});
+
 test('mixed rig authoring moves blocks across paths by keys, buttons and drag', async ({
   page,
   request,

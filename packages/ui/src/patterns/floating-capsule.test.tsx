@@ -69,6 +69,19 @@ describe('FloatingCapsule', () => {
     expect(onNavigate).toHaveBeenCalledWith('levels');
   });
 
+  it('goes home to the Rig from the wordmark', async () => {
+    const user = userEvent.setup();
+    const onHome = vi.fn();
+    render(capsule({ onHome }));
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Oxidal, go to the Rig',
+        hidden: true,
+      }),
+    );
+    expect(onHome).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps Mute and the now-playing part working', async () => {
     const user = userEvent.setup();
     const onMute = vi.fn();

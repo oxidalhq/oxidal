@@ -169,6 +169,7 @@ export function FloatingCapsule({
   media,
   midi,
   wordmark = '/brand/wordmark.svg',
+  onHome,
   statusAlways = false,
   className,
 }: {
@@ -232,6 +233,8 @@ export function FloatingCapsule({
   midi?: { name: string; connected: boolean };
   /** The wordmark image. */
   wordmark?: string;
+  /** The wordmark goes home (the Rig) when pressed. */
+  onHome?: () => void;
   /** Settings › Display › Status: the light and its word stay at rest too. */
   statusAlways?: boolean;
   className?: string;
@@ -431,7 +434,22 @@ export function FloatingCapsule({
           STILL,
         )}
       >
-        <img src={wordmark} alt="Oxidal" className="h-5 w-auto" />
+        {onHome ? (
+          <button
+            type="button"
+            onClick={onHome}
+            title="Go to the Rig"
+            className="block rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+          >
+            <img
+              src={wordmark}
+              alt="Oxidal, go to the Rig"
+              className="h-5 w-auto"
+            />
+          </button>
+        ) : (
+          <img src={wordmark} alt="Oxidal" className="h-5 w-auto" />
+        )}
       </span>
 
       <nav

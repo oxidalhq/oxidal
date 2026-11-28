@@ -902,7 +902,7 @@ it('performs a preset with effects: a Hold tile engages the hold, other tiles sw
   ).toBeVisible();
 });
 
-it('copies a read-only example on its first confirmed control edit', async () => {
+it('keeps an edit of a read-only example as an unsaved working copy until Save a copy', async () => {
   const state = setup('oxidal_example');
   const edited = {
     ...state,
@@ -930,6 +930,10 @@ it('copies a read-only example on its first confirmed control edit', async () =>
   vi.mocked(rigAudioCommand)
     .mockResolvedValueOnce(edited)
     .mockResolvedValueOnce(saved);
+  vi.mocked(libraryCatalog).mockResolvedValue({
+    revision: 'catalog',
+    items: [{ kind: 'rig', id: copy, origin: 'mine', name: 'Test rig' }],
+  } as never);
   vi.mocked(rigAudioState).mockResolvedValue(
     copied as Awaited<ReturnType<typeof rigAudioState>>,
   );
@@ -938,18 +942,39 @@ it('copies a read-only example on its first confirmed control edit', async () =>
   fireEvent.click(
     screen.getByRole('button', { name: /^Adjust\s*Gate enabled/ }),
   );
-  expect(await screen.findByText('Editing a copy of Test rig')).toBeVisible();
+  expect(
+    await screen.findByText('Changes to Test rig are not saved yet'),
+  ).toBeVisible();
   expect(rigAudioCommand).toHaveBeenNthCalledWith(2, edited, {
     kind: 'save',
     name: 'Test rig',
+    working: true,
   });
   expect(playScenes).toHaveBeenCalledWith(copy);
   // The copy notice sits under the open All controls sheet: close it first.
   closeTop();
-  fireEvent.click(screen.getByRole('button', { name: 'Keep copy' }));
-  expect(
-    screen.queryByText('Editing a copy of Test rig'),
-  ).not.toBeInTheDocument();
+  await waitFor(() =>
+    expect(screen.queryAllByRole('dialog', { hidden: true })).toHaveLength(0),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Save a copy…' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Save a copy' });
+  const name = within(dialog).getByRole('textbox', { name: 'Name' });
+  expect(name).toHaveValue('Test rig copy');
+  fireEvent.change(name, { target: { value: 'My rig' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save a copy' }));
+  await waitFor(() =>
+    expect(libraryCatalog).toHaveBeenCalledWith({
+      expected_revision: 'catalog',
+      entry_kind: 'rig',
+      id: copy,
+      action: { kind: 'keep', name: 'My rig' },
+    }),
+  );
+  await waitFor(() =>
+    expect(
+      screen.queryByText('Changes to Test rig are not saved yet'),
+    ).not.toBeInTheDocument(),
+  );
 });
 
 /** Two parallel effects, Clean and Dirt, sounding with a path level each side. */

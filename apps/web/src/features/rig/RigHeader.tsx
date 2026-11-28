@@ -9,7 +9,11 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { Button } from '@oxidal/design-system/components/button';
-import { ActionRow } from '@oxidal/design-system/components/form-layout';
+import {
+  ActionRow,
+  FormField,
+  FormGrid,
+} from '@oxidal/design-system/components/form-layout';
 import { Caption } from '@oxidal/design-system/components/text';
 import { useMedia } from '@oxidal/design-system/lib/use-media';
 import { BarSlotContext } from '@oxidal/design-system/patterns/dock-context';
@@ -97,6 +101,8 @@ export function RigHeader({ rig, vm }: RigViewProps) {
   } = rig;
   const { changed, disabled, draftCount, performSwitching, running, state } =
     vm;
+  /** The name in Save a copy, while it is open. */
+  const [copyName, setCopyName] = useState<string | null>(null);
   // The dock's Set list tool, while it is open.
   const presetSlot = usePresetSlot();
   // The one search plays a preset through this screen, with its unsaved-edit checks.
@@ -393,24 +399,61 @@ export function RigHeader({ rig, vm }: RigViewProps) {
           className="rounded-md border border-border bg-card p-3"
           role="status"
         >
-          <strong>Editing a copy of {copyOnEdit.sourceName}</strong>
+          <strong>Changes to {copyOnEdit.sourceName} are not saved yet</strong>
           <Caption>
-            Your first change created this preset in Mine. The original is
-            unchanged.
+            You hear them now; {copyOnEdit.sourceName} stays as it is. Save a
+            copy to keep them in Mine, or discard them.
           </Caption>
           <ActionRow>
-            <Button disabled={busy} onClick={() => void resolveMixedCopy(true)}>
-              Keep copy
+            <Button
+              disabled={busy}
+              onClick={() => setCopyName(`${copyOnEdit.sourceName} copy`)}
+            >
+              Save a copy…
             </Button>
             <Button
               variant="outline"
               disabled={busy}
               onClick={() => void resolveMixedCopy(false)}
             >
-              Discard copy
+              Discard changes
             </Button>
           </ActionRow>
         </div>
+      )}
+      {copyOnEdit && copyName !== null && (
+        <AdjustmentDialog
+          title="Save a copy"
+          onCancel={() => {
+            if (!busy) setCopyName(null);
+          }}
+        >
+          <Caption>
+            The copy goes in Mine with your changes. {copyOnEdit.sourceName}{' '}
+            stays as it is.
+          </Caption>
+          <FormGrid>
+            <FormField>
+              Name
+              <input
+                value={copyName}
+                onChange={(e) => setCopyName(e.target.value)}
+                maxLength={120}
+                disabled={busy}
+              />
+            </FormField>
+            <Button
+              disabled={busy || !copyName.trim()}
+              onClick={() =>
+                void resolveMixedCopy(true, copyName).then((saved) => {
+                  if (saved) setCopyName(null);
+                })
+              }
+            >
+              {busy ? 'Saving…' : 'Save a copy'}
+            </Button>
+          </FormGrid>
+        </AdjustmentDialog>
       )}
       {unsaved && (
         <AdjustmentDialog

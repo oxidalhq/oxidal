@@ -424,14 +424,37 @@ export function useMixedRigSession({
       );
     else sessionStorage.removeItem('oxidal.mixed.copy-on-edit');
   }, [copyOnEdit]);
+  // The device marks an edit's copy of a preset that is not in Mine as an
+  // unsaved working copy, and the mark follows every later edit. The banner
+  // follows the playing revision's mark, so it also returns after a reload.
   useEffect(() => {
-    if (
-      !resolvingCopy.current &&
-      revision &&
-      copyOnEdit &&
-      revision !== copyOnEdit.copy
-    )
-      setCopyOnEdit(null);
+    if (!revision || (copyOnEdit && copyOnEdit.copy === revision)) return;
+    let live = true;
+    void Promise.resolve()
+      .then(() => libraryCatalog())
+      .then((catalog) => {
+        if (!live || resolvingCopy.current) return;
+        const item = catalog.items.find(
+          (i) => i.kind === 'rig' && i.id === revision,
+        );
+        const source = item?.working_of;
+        if (!item || !source) {
+          setCopyOnEdit(null);
+          return;
+        }
+        const from = catalog.items.find(
+          (i) => i.kind === 'rig' && i.id === source,
+        );
+        setCopyOnEdit({
+          copy: revision,
+          source,
+          sourceName: from?.name ?? item.name,
+        });
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
   }, [revision, copyOnEdit]);
   useEffect(() => {
     if (copyOnEdit) setPerform({ on: false });
@@ -492,9 +515,11 @@ export function useMixedRigSession({
       const copyName =
         Array.from(source.manifest.name).slice(0, 100).join('').trim() ||
         'My preset';
+      // Unlisted until the player chooses Save a copy or Discard.
       let cursor = await rigAudioCommand(after, {
         kind: 'save',
         name: copyName,
+        working: true,
       });
       accept(cursor);
       const until = performance.now() + 65_000;
@@ -876,8 +901,7 @@ export function useMixedRigSession({
    * the Rig keeps the chain it had until the new version plays. */
   const [applying, setApplying] = useState(false);
   useEffect(() => {
-    if (applying && !editing && state?.phase !== 'starting')
-      setApplying(false);
+    if (applying && !editing && state?.phase !== 'starting') setApplying(false);
   }, [applying, editing, state?.phase]);
   /** The stage view: scene pads and effect switches, nothing to edit. */
   const { on: performing } = usePerform();
@@ -958,11 +982,15 @@ export function useMixedRigSession({
           request.manifest_json = JSON.stringify(manifest);
         }
         request.source = { kind: 'rig', id: opened.revision };
+        // The first edit of a preset that is not in Mine makes a working
+        // copy: it plays now and stays out of the Library until kept.
+        if (origin !== 'mine') request.working = true;
         const published = await publishRig(request);
         if (!request.prepare_sleep_branches)
           publishedJson.current.set(published.revision, request.manifest_json);
         // An edit of a preset in Mine replaces it and can be undone; the
-        // first edit of anything else makes a copy, undone with Discard copy.
+        // first edit of anything else makes an unsaved working copy, kept
+        // with Save a copy or dropped with Discard changes.
         setHistory((h) =>
           recordEdit(
             h,
@@ -1289,12 +1317,32 @@ export function useMixedRigSession({
     )
       setSaveOpening(null);
   }
-  async function resolveMixedCopy(keep: boolean) {
+  /**
+   * Save a copy (`keep`, named `name`) puts the working copy in Mine; Discard
+   * plays the preset it was made from again and removes the working copy.
+   */
+  async function resolveMixedCopy(keep: boolean, name?: string) {
     const copy = copyOnEdit;
     if (!copy || busy) return;
     if (keep) {
-      setCopyOnEdit(null);
-      return;
+      setBusy(true);
+      setError('');
+      try {
+        const catalog = await libraryCatalog();
+        await libraryCatalog({
+          expected_revision: catalog.revision,
+          entry_kind: 'rig',
+          id: copy.copy,
+          action: { kind: 'keep', name: name?.trim() || null },
+        });
+        setCopyOnEdit(null);
+        return true;
+      } catch (cause) {
+        setError(friendlyError(cause, 'save the copy'));
+        return false;
+      } finally {
+        if (alive.current) setBusy(false);
+      }
     }
     setBusy(true);
     resolvingCopy.current = true;
@@ -1320,7 +1368,7 @@ export function useMixedRigSession({
       setHistory((h) => (h?.revisions.includes(copy.copy) ? null : h));
     } catch (cause) {
       setError(
-        `The original is playing, but the copy remains in Mine: ${errorDetails(cause)}`,
+        `${copy.sourceName} is playing again, but the edited copy could not be removed; it stays out of the Library: ${errorDetails(cause)}`,
       );
     } finally {
       resolvingCopy.current = false;

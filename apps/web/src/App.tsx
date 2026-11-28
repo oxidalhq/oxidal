@@ -747,6 +747,9 @@ function InstrumentApp() {
             displayMode === 'stage'
               ? '/brand/wordmark-white.svg'
               : '/brand/wordmark.svg',
+          onHome: () => {
+            window.location.hash = '#rig';
+          },
         }}
         tempo={resource.tempo}
         levels={resource.levels}

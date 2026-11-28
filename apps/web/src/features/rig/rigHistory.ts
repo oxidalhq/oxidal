@@ -25,7 +25,8 @@ export const HISTORY_LIMIT = 50;
  * The history after an edit published `to` in place of `from`. `replaced` is
  * whether the new revision took the earlier one's place (an edit of a preset
  * in Mine); a first edit of an Oxidal sound or a TONE3000 chain makes a copy
- * instead, whose history starts at that copy ("Discard copy" goes back).
+ * instead (a working copy, unsaved until Save a copy), whose history starts
+ * at that copy ("Discard changes" goes back).
  */
 export function recordEdit(
   history: RigHistory | null,

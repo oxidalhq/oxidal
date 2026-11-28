@@ -51,6 +51,8 @@ export type CapsuleShell = {
   media?: React.ComponentProps<typeof FloatingCapsule>['media'];
   midi?: { name: string; connected: boolean };
   wordmark?: string;
+  /** The wordmark goes home (the Rig) when pressed. */
+  onHome?: () => void;
 };
 
 export function PlayingPreset({ name }: { name?: string | null }) {
@@ -260,6 +262,7 @@ export function AppShell({
             media={capsule.media}
             midi={capsule.midi}
             wordmark={capsule.wordmark}
+            onHome={capsule.onHome}
             statusAlways={status === 'detailed'}
             preset={
               capsule.rig
