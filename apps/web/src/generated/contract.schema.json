@@ -6546,6 +6546,22 @@
           },
           "additionalProperties": false,
           "required": ["kind"]
+        },
+        {
+          "description": "Keep an edit's working copy: it joins Mine (and the set list, as a\nnew preset in Mine does), named `name` when given.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "keep"
+            },
+            "name": {
+              "type": ["string", "null"],
+              "default": null
+            }
+          },
+          "additionalProperties": false,
+          "required": ["kind"]
         }
       ]
     },
@@ -6621,6 +6637,10 @@
           "description": "An earlier saved revision of a preset that was saved again. It is kept\nas history and hidden from Library and the Removed list.",
           "type": "boolean",
           "default": false
+        },
+        "working_of": {
+          "description": "An edit's working copy that was not saved yet: the revision of the\npreset it was made from. Hidden like an earlier revision (marked\n`superseded`) and never in the set list, until it is kept or removed.",
+          "type": ["string", "null"]
         }
       },
       "additionalProperties": false,
@@ -11231,6 +11251,10 @@
             },
             "name": {
               "type": "string"
+            },
+            "working": {
+              "description": "The saved copy is an edit's unsaved working copy of the playing\npreset: hidden from the Library and the set list until kept.",
+              "type": "boolean"
             }
           },
           "additionalProperties": false,
@@ -11548,6 +11572,10 @@
             }
           ],
           "default": null
+        },
+        "working": {
+          "description": "An edit of a preset that is not in Mine: the new revision is its\nunsaved working copy, hidden from the Library and the set list until\nthe player keeps it. Needs `source`.",
+          "type": "boolean"
         }
       },
       "additionalProperties": false,

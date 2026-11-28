@@ -304,6 +304,7 @@ mod tests {
             archived: false,
             superseded: false,
             in_set_list: false,
+            working_of: None,
         };
         let items = vec![item('a'), item('b')];
         let mut store = CatalogStore::open(root.clone()).unwrap();

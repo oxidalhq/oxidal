@@ -109,6 +109,11 @@ pub struct LibraryItem {
     /// never are.
     #[serde(default)]
     pub in_set_list: bool,
+    /// An edit's working copy that was not saved yet: the revision of the
+    /// preset it was made from. Hidden like an earlier revision (marked
+    /// `superseded`) and never in the set list, until it is kept or removed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub working_of: Option<String>,
 }
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -161,6 +166,12 @@ pub enum LibraryAction {
     /// Make "Name copy" in Mine with the preset's scenes, MIDI and levels.
     /// The copy is not in the set list; the reply names it in `created`.
     Duplicate,
+    /// Keep an edit's working copy: it joins Mine (and the set list, as a
+    /// new preset in Mine does), named `name` when given.
+    Keep {
+        #[serde(default)]
+        name: Option<String>,
+    },
 }
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -201,6 +212,10 @@ struct Preferences {
     added: BTreeSet<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     starter_offered: bool,
+    /// Working copies an edit made and the player has not kept yet, with the
+    /// revision each was made from.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    working: BTreeMap<String, String>,
 }
 impl Preferences {
     fn revision(&self) -> Result<String> {
@@ -334,6 +349,12 @@ impl CatalogStore {
                 set.remove(&new);
             }
         }
+        // An unsaved working copy stays one through every later edit.
+        if let Some(source) = candidate.working.remove(&old) {
+            candidate.working.insert(new.clone(), source);
+        } else {
+            candidate.working.remove(&new);
+        }
         candidate.archived.insert(old.clone());
         candidate.superseded.insert(old);
         candidate.superseded.remove(&new);
@@ -343,6 +364,18 @@ impl CatalogStore {
         Ok(())
     }
 
+    /// Marks a revision an edit just published as its unsaved working copy
+    /// of `source`: hidden from the Library and the set list until kept.
+    pub fn mark_working(&mut self, kind: LibraryKind, id: &str, source: &str) -> Result<()> {
+        let key = kind.key(id)?;
+        kind.key(source)?;
+        let mut candidate = self.preferences.clone();
+        candidate.working.insert(key, source.into());
+        if candidate.working.len() > 4096 {
+            return Err(Error::Invalid("Too many unsaved working copies"));
+        }
+        self.persist(candidate)
+    }
     /// Whether a later save of the same preset has replaced this revision.
     pub fn is_superseded(&self, kind: LibraryKind, id: &str) -> Result<bool> {
         Ok(self.preferences.superseded.contains(&kind.key(id)?)
@@ -366,6 +399,7 @@ impl CatalogStore {
         candidate.superseded.remove(&key);
         candidate.left_out.remove(&key);
         candidate.added.remove(&key);
+        candidate.working.remove(&key);
         self.persist(candidate)?;
         crate::DetailsStore::new(self.root.clone()).forget(kind, id)
     }
@@ -489,7 +523,12 @@ impl CatalogStore {
         for item in &mut items {
             item.name = self.label(item.kind, &item.id, &item.source_name)?.into();
             item.archived = !self.visible(item.kind, &item.id)?;
-            item.superseded = self.is_superseded(item.kind, &item.id)?;
+            item.working_of = self
+                .preferences
+                .working
+                .get(&item.kind.key(&item.id)?)
+                .cloned();
+            item.superseded = self.is_superseded(item.kind, &item.id)? || item.working_of.is_some();
             item.in_set_list = self.member(item)?;
         }
         items.sort_by(|a, b| {
@@ -615,6 +654,20 @@ impl CatalogStore {
             return Err(Error::Invalid("Library entry is unavailable"));
         }
         match request.action {
+            LibraryAction::Keep { name } => {
+                if candidate.working.remove(&key).is_none() {
+                    return Err(Error::Invalid("This preset has no unsaved changes"));
+                }
+                if let Some(name) = name {
+                    let name = name.trim();
+                    if name.is_empty() || name.len() > 120 || name.chars().any(char::is_control) {
+                        return Err(Error::Invalid(
+                            "Use a name of 1–120 bytes without control characters",
+                        ));
+                    }
+                    candidate.labels.insert(key, name.into());
+                }
+            }
             LibraryAction::Rename { name } => {
                 let name = name.trim();
                 if name.is_empty() || name.len() > 120 || name.chars().any(char::is_control) {
@@ -998,6 +1051,7 @@ mod tests {
             archived: false,
             superseded: false,
             in_set_list: false,
+            working_of: None,
         };
         let legacy = row("a");
         let fresh = row("b");
@@ -1046,6 +1100,89 @@ mod tests {
     }
 
     #[test]
+    fn an_edits_working_copy_stays_hidden_until_kept() {
+        let root = std::env::temp_dir().join(format!("oxidal-working-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let rig = |letter: &str, origin| LibraryItem {
+            kind: LibraryKind::Rig,
+            id: letter.repeat(64),
+            name: format!("Rig {letter}"),
+            source_name: format!("Rig {letter}"),
+            origin,
+            archived: false,
+            superseded: false,
+            in_set_list: false,
+            working_of: None,
+        };
+        let source = rig("a", LibraryOrigin::OxidalExample);
+        let copy = rig("b", LibraryOrigin::Mine);
+        let edited = rig("c", LibraryOrigin::Mine);
+        let mine = rig("d", LibraryOrigin::Mine);
+        let items = vec![source.clone(), copy.clone(), edited.clone(), mine.clone()];
+        let find = |catalog: &LibraryCatalog, id: &str| {
+            catalog.items.iter().find(|i| i.id == id).unwrap().clone()
+        };
+        let mut store = CatalogStore::open(root.clone()).unwrap();
+        store.reconcile(items.clone()).unwrap();
+        store
+            .mark_working(LibraryKind::Rig, &copy.id, &source.id)
+            .unwrap();
+        let catalog = store.reconcile(items.clone()).unwrap();
+        let shown = find(&catalog, &copy.id);
+        assert_eq!(shown.working_of.as_deref(), Some(source.id.as_str()));
+        assert!(shown.superseded && !shown.in_set_list);
+        // A later edit of the working copy replaces it and stays unsaved.
+        store
+            .supersede(LibraryKind::Rig, &copy.id, &edited.id)
+            .unwrap();
+        let catalog = store.reconcile(items.clone()).unwrap();
+        assert_eq!(find(&catalog, &copy.id).working_of, None);
+        let shown = find(&catalog, &edited.id);
+        assert_eq!(shown.working_of.as_deref(), Some(source.id.as_str()));
+        assert!(shown.superseded && !shown.in_set_list);
+        // Keep needs a working copy.
+        let keep = |revision: String, id: &str, name: Option<&str>| LibraryUpdate {
+            expected_revision: revision,
+            entry_kind: LibraryKind::Rig,
+            id: id.into(),
+            action: LibraryAction::Keep {
+                name: name.map(Into::into),
+            },
+        };
+        assert!(
+            store
+                .update(
+                    items.clone(),
+                    keep(catalog.revision.clone(), &mine.id, None)
+                )
+                .is_err()
+        );
+        let kept = store
+            .update(
+                items.clone(),
+                keep(catalog.revision.clone(), &edited.id, Some("My lead")),
+            )
+            .unwrap();
+        let shown = find(&kept, &edited.id);
+        assert_eq!(shown.working_of, None);
+        assert!(!shown.superseded && shown.in_set_list);
+        assert_eq!(shown.name, "My lead");
+        // Removing a working copy drops its mark.
+        store
+            .mark_working(LibraryKind::Rig, &mine.id, &source.id)
+            .unwrap();
+        store.forget(LibraryKind::Rig, &mine.id).unwrap();
+        let reopened = CatalogStore::open(root.clone()).unwrap();
+        assert!(
+            !reopened
+                .preferences
+                .working
+                .contains_key(&LibraryKind::Rig.key(&mine.id).unwrap())
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn saving_again_keeps_the_place_name_and_hides_the_earlier_revision() {
         let root = std::env::temp_dir().join(format!("oxidal-supersede-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
@@ -1058,6 +1195,7 @@ mod tests {
             archived: false,
             superseded: false,
             in_set_list: false,
+            working_of: None,
         };
         let mut rows = vec![rig("a"), rig("b"), rig("c")];
         let mut store = CatalogStore::open(root.clone()).unwrap();
@@ -1163,6 +1301,7 @@ mod tests {
             archived: false,
             superseded: false,
             in_set_list: false,
+            working_of: None,
         };
         let mut rows = vec![
             item(LibraryKind::Original, "a", "Original"),
@@ -1274,6 +1413,7 @@ mod tests {
                 archived: false,
                 superseded: false,
                 in_set_list: false,
+                working_of: None,
             },
             LibraryItem {
                 kind: LibraryKind::Graph,
@@ -1284,6 +1424,7 @@ mod tests {
                 archived: false,
                 superseded: false,
                 in_set_list: false,
+                working_of: None,
             },
         ];
         let mut store = CatalogStore::open(root.clone()).unwrap();
@@ -1331,6 +1472,7 @@ mod tests {
                 archived: false,
                 superseded: false,
                 in_set_list: false,
+                working_of: None,
             },
             LibraryItem {
                 kind: LibraryKind::Original,
@@ -1341,6 +1483,7 @@ mod tests {
                 archived: false,
                 superseded: false,
                 in_set_list: false,
+                working_of: None,
             },
         ];
         let mut store = CatalogStore::open(root.clone()).unwrap();
@@ -1420,6 +1563,7 @@ mod tests {
             archived: false,
             superseded: false,
             in_set_list: false,
+            working_of: None,
         };
         let rows = vec![
             row("a", LibraryOrigin::Tone3000),
@@ -1481,6 +1625,7 @@ mod tests {
             archived: false,
             superseded: false,
             in_set_list: false,
+            working_of: None,
         }];
         let mut store = CatalogStore::open(root.clone()).unwrap();
         let revision = store.view(rows.clone()).unwrap().revision;
@@ -1545,6 +1690,7 @@ mod tests {
                 archived: false,
                 superseded: false,
                 in_set_list: false,
+                working_of: None,
             })
             .collect()
     }

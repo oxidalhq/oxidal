@@ -726,6 +726,10 @@ export type LibraryAction =
     }
   | {
       kind: 'duplicate';
+    }
+  | {
+      kind: 'keep';
+      name?: string | null;
     };
 export type MediaKind = 'backing' | 'di' | 'reamp';
 export type UploadFormat = 'wav' | 'mp3';
@@ -1164,6 +1168,11 @@ export type RigAudioAction =
   | {
       kind: 'save';
       name: string;
+      /**
+       * The saved copy is an edit's unsaved working copy of the playing
+       * preset: hidden from the Library and the set list until kept.
+       */
+      working?: boolean;
     }
   | {
       kind: 'save_version';
@@ -2852,6 +2861,12 @@ export interface LibraryItem {
    * as history and hidden from Library and the Removed list.
    */
   superseded?: boolean;
+  /**
+   * An edit's working copy that was not saved yet: the revision of the
+   * preset it was made from. Hidden like an earlier revision (marked
+   * `superseded`) and never in the set list, until it is kept or removed.
+   */
+  working_of?: string | null;
 }
 export interface LibraryUpdate {
   action: LibraryAction;
@@ -4356,6 +4371,12 @@ export interface RigPublish {
    * Saving an explicit named version binds the edit to the catalog and source bytes.
    */
   version_target?: VersionTarget | null;
+  /**
+   * An edit of a preset that is not in Mine: the new revision is its
+   * unsaved working copy, hidden from the Library and the set list until
+   * the player keeps it. Needs `source`.
+   */
+  working?: boolean;
 }
 export interface RigSleepPlan {
   inserted_sends: SleepSendBoundary[];

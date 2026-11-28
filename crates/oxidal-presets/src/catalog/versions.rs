@@ -511,6 +511,7 @@ mod tests {
             archived: false,
             superseded: false,
             in_set_list: false,
+            working_of: None,
         };
         let revision = store.reconcile(vec![item]).unwrap().revision;
         let bytes = fs::read(root.join("library.json")).unwrap();

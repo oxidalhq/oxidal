@@ -738,6 +738,10 @@ pub enum RigAudioAction {
     },
     Save {
         name: String,
+        /// The saved copy is an edit's unsaved working copy of the playing
+        /// preset: hidden from the Library and the set list until kept.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        working: bool,
     },
     SaveVersion {
         name: String,

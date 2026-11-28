@@ -105,6 +105,8 @@ struct Export {
     started: Instant,
     name: String,
     source: String,
+    /// Mark the saved copy as an unsaved working copy of `source`.
+    working: bool,
 }
 struct Owner {
     change: Arc<Change>,
@@ -802,6 +804,7 @@ impl Owner {
         name: String,
         target: Option<oxidal_audio::lifecycle::VersionTarget>,
         copy_id: Option<String>,
+        working: bool,
     ) -> Result<(), String> {
         if copy_id
             .as_deref()
@@ -871,6 +874,7 @@ impl Owner {
             started: Instant::now(),
             name,
             source,
+            working,
         });
         self.state.save = Some(SaveState {
             copy_id,
@@ -956,6 +960,7 @@ impl Owner {
             let root = self.root.clone();
             let expected = export.name.clone();
             let source = export.source.clone();
+            let working = export.working;
             let revision = id.clone();
             tokio::task::spawn_blocking(move || {
                 let details_root = root
@@ -968,18 +973,29 @@ impl Owner {
                 if bundle.manifest().name != expected {
                     return Err("Saved name differs".to_owned());
                 }
-                oxidal_presets::DetailsStore::new(details_root)
+                oxidal_presets::DetailsStore::new(details_root.clone())
                     .inherit(
                         oxidal_presets::LibraryReference {
                             kind: oxidal_presets::LibraryKind::Rig,
-                            id: revision,
+                            id: revision.clone(),
                         },
                         oxidal_presets::LibraryReference {
                             kind: oxidal_presets::LibraryKind::Rig,
-                            id: source,
+                            id: source.clone(),
                         },
                     )
                     .map_err(|e| e.to_string())?;
+                if working {
+                    oxidal_presets::CatalogStore::open(details_root)
+                        .and_then(|mut catalog| {
+                            catalog.mark_working(
+                                oxidal_presets::LibraryKind::Rig,
+                                &revision,
+                                &source,
+                            )
+                        })
+                        .map_err(|e| e.to_string())?;
+                }
                 Ok(())
             })
             .await
@@ -1790,11 +1806,11 @@ impl Owner {
                 }
             }
             RigAudioAction::CopyPlaying { name, copy_id } => {
-                self.save(name, None, Some(copy_id)).await?
+                self.save(name, None, Some(copy_id), false).await?
             }
-            RigAudioAction::Save { name } => self.save(name, None, None).await?,
+            RigAudioAction::Save { name, working } => self.save(name, None, None, working).await?,
             RigAudioAction::SaveVersion { name, target } => {
-                self.save(name, Some(target), None).await?
+                self.save(name, Some(target), None, false).await?
             }
             RigAudioAction::SetBoot { enabled } => {
                 if enabled {

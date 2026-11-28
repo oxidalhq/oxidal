@@ -282,6 +282,11 @@ pub struct RigPublish {
     /// immutable revision. The source itself is never changed.
     #[serde(default)]
     pub source: Option<oxidal_presets::LibraryReference>,
+    /// An edit of a preset that is not in Mine: the new revision is its
+    /// unsaved working copy, hidden from the Library and the set list until
+    /// the player keeps it. Needs `source`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub working: bool,
 }
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -526,6 +531,9 @@ pub async fn publish(
         return crate::protect::locked(reason);
     }
     job(shared, false, move |root| {
+        if request.working && (request.source.is_none() || request.version_target.is_some()) {
+            return Err(Error::Invalid("A working copy names its source"));
+        }
         let mut manifest = Manifest::parse(request.manifest_json.as_bytes())?;
         manifest.check_required_extensions()?;
         let manifest_bytes = if request.prepare_sleep_branches {
@@ -689,6 +697,8 @@ pub async fn publish(
             // the map moves so the earlier revision keeps no copy.
             oxidal_presets::MidiMapStore::new(root.clone()).follow_rig(&manifest, source, &oxidal_presets::LibraryReference { kind: oxidal_presets::LibraryKind::Rig, id: revision.clone() }, false)?;
         }
+        let working = request.working;
+        let working_source = request.source.as_ref().map(|source| source.id.clone());
         if let Some(source) = request.source {
             oxidal_presets::DetailsStore::new(root.clone()).inherit(
                 oxidal_presets::LibraryReference {
@@ -697,6 +707,15 @@ pub async fn publish(
                 },
                 source,
             )?;
+        }
+        if working && !replaces {
+            if let Some(source) = working_source {
+                oxidal_presets::CatalogStore::open(root.clone())?.mark_working(
+                    oxidal_presets::LibraryKind::Rig,
+                    &revision,
+                    &source,
+                )?;
+            }
         }
         if !replaces && oxidal_presets::LibraryOrigin::from_manifest(&manifest)?
             == oxidal_presets::LibraryOrigin::Mine

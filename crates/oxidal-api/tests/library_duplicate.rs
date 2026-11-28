@@ -394,3 +394,100 @@ async fn named_versions_read_and_edit_owned_metadata_without_an_audio_worker() {
     let _ = std::fs::remove_file(mapping);
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[tokio::test]
+async fn an_edits_working_copy_stays_out_of_the_library_until_kept() {
+    let (url, task, _) = start().await;
+    let client = reqwest::Client::new();
+    let manifest = |id: &str, gain: f64| {
+        json!({
+            "format": "oxidal.preset",
+            "formatVersion": 1,
+            "id": id,
+            "name": "Working",
+            "tone3000": {"instances": []},
+            "oxidal": {
+                "graph": {
+                    "nodes": [
+                        {"id":"in","kind":"input","audioInputs":0,"audioOutputs":1},
+                        {"id":"scene-gain","kind":"gain","audioInputs":1,"audioOutputs":1,"inputGains":[gain]},
+                        {"id":"out","kind":"output","audioInputs":1,"audioOutputs":0}
+                    ],
+                    "edges": [
+                        {"from":{"node":"in","port":0},"to":{"node":"scene-gain","port":0}},
+                        {"from":{"node":"scene-gain","port":0},"to":{"node":"out","port":0}}
+                    ]
+                },
+                "lv2": [],
+                "recall": {"tails":"cut"}
+            },
+            "resources": [],
+            "extensions": {"urn:oxidal:gain:1": {}},
+            "requiredExtensions": ["urn:oxidal:gain:1"]
+        })
+        .to_string()
+    };
+    let publish = |body: Value| {
+        let (client, url) = (client.clone(), format!("{url}/presets/rigs"));
+        async move {
+            let (status, body) = post(&client, url, body).await;
+            assert_eq!(status, 200, "{body}");
+            body["revision"].as_str().unwrap().to_owned()
+        }
+    };
+    let source_id = "1c1e2f3a-4b5d-4e6f-8a9b-0c1d2e3f4a5b";
+    let copy_id = "2c1e2f3a-4b5d-4e6f-8a9b-0c1d2e3f4a5b";
+    let source = publish(json!({"manifest_json": manifest(source_id, 1.0), "resources": {}})).await;
+    // A working copy names its source.
+    let (status, _) = post(
+        &client,
+        format!("{url}/presets/rigs"),
+        json!({"manifest_json": manifest(copy_id, 0.5), "resources": {}, "working": true}),
+    )
+    .await;
+    assert_eq!(status, 422);
+    let copy = publish(json!({
+        "manifest_json": manifest(copy_id, 0.5), "resources": {},
+        "source": {"kind": "rig", "id": source}, "working": true
+    }))
+    .await;
+    let catalog = get(&client, format!("{url}/presets/catalog")).await;
+    let shown = row(&catalog, "rig", &copy).unwrap();
+    assert_eq!(shown["working_of"], source.as_str());
+    assert_eq!(shown["superseded"], true);
+    assert_eq!(shown["in_set_list"], false);
+    // The next edit replaces the working copy and stays unsaved.
+    let edited = publish(json!({
+        "manifest_json": manifest(copy_id, 0.25), "resources": {},
+        "source": {"kind": "rig", "id": copy}
+    }))
+    .await;
+    let catalog = get(&client, format!("{url}/presets/catalog")).await;
+    assert_eq!(
+        row(&catalog, "rig", &edited).unwrap()["working_of"],
+        source.as_str()
+    );
+    assert!(
+        row(&catalog, "rig", &copy)
+            .unwrap()
+            .get("working_of")
+            .is_none()
+    );
+    // Kept with a name: it joins Mine and the set list.
+    let (status, kept) = post(
+        &client,
+        format!("{url}/presets/catalog"),
+        json!({
+            "expected_revision": catalog["revision"], "entry_kind": "rig", "id": edited,
+            "action": {"kind": "keep", "name": "Working copy"}
+        }),
+    )
+    .await;
+    assert_eq!(status, 200, "{kept}");
+    let shown = row(&kept, "rig", &edited).unwrap();
+    assert!(shown.get("working_of").is_none());
+    assert_eq!(shown["superseded"], false);
+    assert_eq!(shown["in_set_list"], true);
+    assert_eq!(shown["name"], "Working copy");
+    task.abort();
+}
