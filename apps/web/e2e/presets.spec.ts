@@ -4614,38 +4614,35 @@ test('live model comparison stays open, waits for application and rejects a chan
       },
     }),
   );
-  await page.route('**/api/v1/tone3000/models?*', (route) =>
-    route.fulfill({
+  // Each tone's first model is the one Try plays: tone 1 is clean, tone 2 drives.
+  await page.route('**/api/v1/tone3000/models?*', (route) => {
+    const tone = Number(
+      new URL(route.request().url()).searchParams.get('tone_id'),
+    );
+    return route.fulfill({
       json: {
         page: 1,
         total_pages: 1,
         data: [
           {
-            id: 1,
-            tone_id: 1,
-            name: 'Clean fixture',
-            size: null,
-            architecture_version: '2',
-          },
-          {
-            id: 2,
-            tone_id: 1,
-            name: 'Drive fixture',
+            id: tone,
+            tone_id: tone,
+            name: tone === 2 ? 'Drive fixture' : 'Clean fixture',
             size: null,
             architecture_version: '2',
           },
         ],
       },
-    }),
-  );
+    });
+  });
   await page.route('**/api/v1/tone3000/stage', (route) => {
     const id = route.request().postDataJSON().model_id;
     return route.fulfill({
       json: {
         id: String(id).repeat(64),
-        tone_id: 1,
+        tone_id: id,
         model_id: id,
-        title: 'Comparison amp',
+        title: id === 2 ? 'Silver anniversary' : 'Comparison amp',
         name: 'Fixture',
         sha256: String(id).repeat(64),
       },
@@ -4664,47 +4661,41 @@ test('live model comparison stays open, waits for application and rejects a chan
   ).toHaveCount(0);
   await picker.getByRole('button', { name: 'Show more' }).click();
   await expect(
-    picker.getByRole('button', { name: /Silver anniversary/ }),
+    picker.getByRole('button', { name: 'Try Silver anniversary' }),
   ).toBeVisible();
-  await picker.getByRole('button', { name: /Comparison amp/ }).click();
-  await picker.getByRole('button', { name: /Clean fixture/ }).click();
+  const clean = picker.getByRole('button', { name: 'Try Comparison amp' });
+  const drive = picker.getByRole('button', { name: 'Try Silver anniversary' });
+  await clean.click();
   await expect.poll(() => assignments).toBe(1);
-  await expect(
-    picker.getByRole('button', { name: /Drive fixture/ }),
-  ).toBeDisabled();
+  // While the device prepares the model, nothing else can be tried.
+  await expect(drive).toBeDisabled();
+  await expect(picker.getByText('Playing', { exact: true })).toHaveCount(0);
   audio = {
     ...audio,
     revision: audio.revision + 1,
     model_change: { ...audio.model_change, phase: 'applied' },
   };
-  await expect(picker.getByRole('status')).toContainText(
-    'Auditioning Clean fixture',
-  );
   await expect(
-    picker.getByRole('button', { name: /Clean fixture/ }),
-  ).toHaveAttribute('aria-pressed', 'true');
-  await picker.getByRole('button', { name: /Drive fixture/ }).click();
+    picker.getByRole('status').filter({ hasText: 'Auditioning Clean fixture' }),
+  ).toBeVisible();
+  await expect(picker.getByText('Playing', { exact: true })).toHaveCount(1);
+  await expect(clean).toHaveCount(0);
+  await drive.click();
   await expect.poll(() => assignments).toBe(2);
   audio = {
     ...audio,
     revision: audio.revision + 1,
     model_change: { ...audio.model_change, phase: 'applied' },
   };
-  await expect(picker.getByRole('status')).toContainText(
-    'Auditioning Drive fixture',
-  );
   await expect(
-    picker.getByRole('button', { name: /Drive fixture/ }),
-  ).toHaveAttribute('aria-pressed', 'true');
-  await expect(
-    picker.getByRole('button', { name: /Clean fixture/ }),
-  ).toHaveAttribute('aria-pressed', 'false');
+    picker.getByRole('status').filter({ hasText: 'Auditioning Drive fixture' }),
+  ).toBeVisible();
+  await expect(picker.getByText('Playing', { exact: true })).toHaveCount(1);
+  await expect(drive).toHaveCount(0);
   // The model chooser stays a sheet: the dock beside the chain is for the
   // Player, Stems, Sheet, Set list, Tuner and Venue EQ (C2).
   audio = { ...audio, session: 'replacement-session' };
-  await expect(
-    picker.getByRole('button', { name: /Clean fixture/ }),
-  ).toBeDisabled();
+  await expect(clean).toBeDisabled();
   expect(assignments).toBe(2);
   await picker.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(picker).toHaveCount(0);
@@ -5795,7 +5786,7 @@ test('device portrait preset details edit and category search never recall audio
     .getByTestId(`preset-${imported.sha256}`)
     .getByRole('button', { name: /^Details:/ })
     .click();
-  const dialog = page.getByRole('dialog').filter({ hasText: 'Preset details' });
+  const dialog = page.getByRole('dialog').filter({ hasText: 'Description' });
   await expect(dialog.getByText('No description yet.')).toBeVisible();
   await dialog
     .getByRole('button', { name: 'Edit details', exact: true })
@@ -5845,7 +5836,7 @@ test('device portrait preset details edit and category search never recall audio
   await expect(
     page
       .getByRole('dialog')
-      .filter({ hasText: 'Preset details' })
+      .filter({ hasText: 'Description' })
       .getByText(/Warm neck pickup/),
   ).toBeVisible();
   expect(commands).toEqual([]);
@@ -6525,11 +6516,12 @@ test('wide screen: the block box opens routing and every control from its own bu
   await routing.getByRole('button', { name: 'Split here' }).click();
   await expect.poll(() => unit.published.length).toBe(1);
   await page.keyboard.press('Escape');
+  // On a wide screen every control opens in the block card, not a sheet.
   await box.getByRole('button', { name: /^All controls/ }).click();
-  const sheet = page.getByRole('dialog', { name: 'Echo' });
-  await expect(sheet.getByRole('button', { name: 'Done' })).toBeVisible();
-  await sheet.getByRole('button', { name: 'Done' }).click();
-  await expect(sheet).toBeHidden();
+  const every = page.getByRole('region', { name: 'Echo: every control' });
+  await expect(every).toBeVisible();
+  await box.getByRole('button', { name: 'Fewer controls' }).click();
+  await expect(every).toBeHidden();
 });
 
 /**

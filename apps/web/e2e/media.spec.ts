@@ -5,7 +5,12 @@ import {
   test,
 } from '@playwright/test';
 
-import { expectWorkspaceSection, goTo, setDisplayMode } from './display';
+import {
+  expectWorkspaceSection,
+  goTo,
+  openTool,
+  setDisplayMode,
+} from './display';
 
 /**
  * Sprint 09 backing player against the real daemon (its own temporary media
@@ -141,18 +146,44 @@ async function trackAction(page: Page, name: string, action: string) {
 /** The track now playing: the phone's mini player, or the capsule's now-playing part. */
 const nowPlaying = (page: Page) =>
   page
+    .locator(
+      '[data-slot="mini-player"], [data-slot="capsule-media"], [aria-label="Right dock"]',
+    )
+    .filter({ visible: true });
+
+/**
+ * The cued track where each screen shows it: the mini-player on a phone, the
+ * capsule while it plays or is paused partway, otherwise the dock's Player
+ * (☰ › Player). A track only cued at the start waits in the Player, so the
+ * capsule does not carry it.
+ */
+async function nowShowing(page: Page) {
+  const shown = page
     .locator('[data-slot="mini-player"], [data-slot="capsule-media"]')
     .filter({ visible: true });
+  const dock = page.getByRole('region', { name: 'Right dock', exact: true });
+  if (!(await shown.count()) && !(await dock.isVisible().catch(() => false)))
+    await openTool(page, 'Player');
+  return nowPlaying(page);
+}
 
 /** Opens the dock's Player from the track now playing. */
 async function openPlayerTool(page: Page) {
-  const now = nowPlaying(page);
   const phone = await page.locator('[data-slot="mini-player"]').isVisible();
-  if (phone) await now.locator('button').first().click();
-  else await now.click();
-  return phone
-    ? page.getByRole('dialog')
-    : page.getByRole('region', { name: 'Right dock', exact: true });
+  if (phone) {
+    await page
+      .locator('[data-slot="mini-player"]')
+      .locator('button')
+      .first()
+      .click();
+    return page.getByRole('dialog');
+  }
+  const dock = page.getByRole('region', { name: 'Right dock', exact: true });
+  const capsule = page.locator('[data-slot="capsule-media"]');
+  if (await capsule.isVisible().catch(() => false)) await capsule.click();
+  else if (!(await dock.isVisible().catch(() => false)))
+    await openTool(page, 'Player');
+  return dock;
 }
 
 /** The full backing player, one step on from the dock's Player. */
@@ -188,13 +219,15 @@ test('backing tracks import an MP3 through the device and play needs running aud
       .filter({ hasText: 'Start the audio to play the track.' }),
   ).toBeVisible();
   await expect(row.getByText('Cued')).toBeVisible();
-  await expect(nowPlaying(page)).toContainText(title);
-  await expect(nowPlaying(page)).toContainText('0:00');
+  await expect(await nowShowing(page)).toContainText(title);
+  await expect(await nowShowing(page)).toContainText('0:00');
 });
 
 test('backing mini-player stays on every page and opens the full player', async ({
   page,
 }, testInfo) => {
+  // Every page, every display mode and a rotation: slow on the e-paper tablet.
+  test.setTimeout(180000);
   const duplicateKeys: string[] = [];
   page.on('console', (entry) => {
     if (entry.type() === 'error' && entry.text().includes('same key'))
@@ -202,7 +235,7 @@ test('backing mini-player stays on every page and opens the full player', async 
   });
   const list = await importFixture(page);
   await list.getByRole('button', { name: `Cue: ${title}` }).click();
-  await expect(nowPlaying(page)).toContainText(title);
+  await expect(await nowShowing(page)).toContainText(title);
   for (const destination of [
     'Rig',
     'Guitars',
@@ -211,10 +244,22 @@ test('backing mini-player stays on every page and opens the full player', async 
     'Settings',
   ] as const) {
     await goTo(page, destination);
-    await expect(nowPlaying(page)).toBeVisible();
-    await expect(nowPlaying(page)).toContainText(title);
+    await expect(await nowShowing(page)).toBeVisible();
+    await expect(await nowShowing(page)).toContainText(title);
     await expectBottomPlayerClear(page);
   }
+  // Close the Player (a sheet, or a panel pinned beside the page) before
+  // changing the display mode: a pinned panel narrows Settings.
+  if (await page.getByRole('dialog').isVisible().catch(() => false))
+    await page.keyboard.press('Escape');
+  // ☰ › Player is a toggle: choosing it again puts the Player away.
+  if (
+    await page
+      .getByRole('region', { name: 'Right dock', exact: true })
+      .isVisible()
+      .catch(() => false)
+  )
+    await openTool(page, 'Player');
   for (const mode of ['stage', 'sunlight', 'epaper', 'default'] as const) {
     await setDisplayMode(page, mode);
     await expectBottomPlayerClear(page);
@@ -235,7 +280,7 @@ test('backing mini-player stays on every page and opens the full player', async 
   await page.setViewportSize(original);
   await setDisplayMode(page, 'default');
   await page.reload();
-  await expect(nowPlaying(page)).toContainText(title);
+  await expect(await nowShowing(page)).toContainText(title);
   const before = page.url();
   const sheet = await openFullPlayer(page);
   await expect(sheet).toBeVisible();
@@ -458,7 +503,7 @@ test('backing player on e-paper uses the bottom bar, words and step buttons', as
   const list = await importFixture(page);
   await list.getByRole('button', { name: `Cue: ${title}` }).click();
   await setDisplayMode(page, 'epaper');
-  const bar = nowPlaying(page);
+  const bar = await nowShowing(page);
   await expect(bar).toContainText('0:00');
   // The shared bottom area keeps the phone's mini player above its
   // navigation and clear of scrollable content.

@@ -18,20 +18,23 @@ test('IR discovery keeps its empty state full width and returns keyboard focus',
     .getByRole('button', { name: 'TONE3000', exact: true });
   await launch.click();
   const dialog = page.getByRole('dialog', { name: 'Get IRs' });
-  const empty = dialog.getByRole('status');
-  await expect(empty).toContainText('No IRs in the latest feed');
+  // The shared TONE3000 browser: its count, and a plain empty message that
+  // runs the full width of the list.
+  await expect(dialog.getByRole('status').first()).toContainText(
+    '0 from TONE3000',
+  );
+  const empty = dialog.getByText('Nothing on TONE3000 matches.');
+  await expect(empty).toBeVisible();
   const widths = await empty.evaluate((element) => ({
     content: element.parentElement!.getBoundingClientRect().width,
     empty: element.getBoundingClientRect().width,
   }));
   expect(widths.empty).toBeGreaterThanOrEqual(widths.content - 2);
-  const collection = await dialog.getByRole('combobox').boundingBox();
-  const filter = await dialog
-    .getByRole('radiogroup', { name: 'Gear type' })
-    .boundingBox();
-  expect(filter!.y - collection!.y - collection!.height).toBeGreaterThanOrEqual(
-    8,
-  );
+  // The collection and gear filters sit side by side, clear of each other.
+  const [collection, gear] = await dialog.getByRole('combobox').all();
+  const a = (await collection!.boundingBox())!;
+  const b = (await gear!.boundingBox())!;
+  expect(b.x >= a.x + a.width || b.y >= a.y + a.height).toBe(true);
   await page.screenshot({
     path: testInfo.outputPath('ir-empty-state.png'),
     fullPage: true,
