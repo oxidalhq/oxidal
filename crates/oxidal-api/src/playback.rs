@@ -211,7 +211,8 @@ impl Owner {
             self.resume_eq.clone(),
         );
         recovery.write(&self.preset_dir.join("last-audio-session.json"))?;
-        if !candidate {
+        // An original's unsaved edits are not kept for its next recall.
+        if !candidate && (settings.owned || settings.draft) {
             recovery.write(&self.rig_session_path(&settings))?;
         }
         Ok(())
@@ -1436,6 +1437,7 @@ impl Owner {
             name,
         };
         let name = request.name.clone();
+        let target_was_copy = target.is_none();
         let input = match target {
             Some(version_target) if request.settings.owned && !request.settings.draft => {
                 oxidal_audio::lifecycle::SaveInput::Version {
@@ -1511,6 +1513,25 @@ impl Owner {
         }
         let id = result?;
         self.check_exit();
+        // Saving an edited original keeps the copy playing: the chain already
+        // sounds as the copy, so it becomes the playing preset without a
+        // reload, and later edits are the copy's.
+        let adopt = target_was_copy
+            && self
+                .state
+                .configured
+                .as_ref()
+                .is_some_and(|c| !c.owned && !c.draft);
+        if adopt {
+            if let Some(configured) = self.state.configured.as_mut() {
+                configured.preset_id = id.clone();
+                configured.owned = true;
+            }
+            self.state.preset_name = Some(name.trim().to_owned());
+            self.state.modified = false;
+            self.recovery_due = Some(std::time::Instant::now());
+            self.checkpoint();
+        }
         self.state.saved_copy = Some(id);
         self.publish(self.state.phase, self.state.error.clone());
         Ok(self.state.clone())
@@ -1644,37 +1665,18 @@ impl Owner {
             }
         }
     }
+    /// Editing a TONE3000 original stays live on the playing chain, so tone
+    /// chasing is heard at once: no copy is made and nothing is reloaded.
+    /// The edits are kept only by Save copy, which then plays on as the copy;
+    /// until then they never enter the per-preset recovery store, so a later
+    /// recall of the original plays it as published.
     async fn promote_original_edit(&mut self) -> Result<(), String> {
         let Some(source) = self.state.configured.clone() else {
             return Ok(());
         };
-        if source.owned
-            || source.draft
-            || !self.state.modified
-            || self.state.copy_on_edit.is_some()
-            || self
-                .state
-                .authoring
-                .as_ref()
-                .is_some_and(|s| s.gesture.is_some())
-        {
+        if source.owned || source.draft || !self.state.modified {
             return Ok(());
         }
-        let source_name = self
-            .state
-            .preset_name
-            .clone()
-            .unwrap_or_else(|| "My preset".into());
-        let mut name = source_name.clone();
-        while name.len() > 100 {
-            name.pop();
-        }
-        let name = name.trim();
-        let name = if oxidal_audio::lifecycle::valid_preset_name(name) {
-            name.to_owned()
-        } else {
-            "My preset".into()
-        };
         // A provider preset is immutable. Do not leave its transient edits in
         // the per-preset recovery store where a later recall could revive them.
         match std::fs::remove_file(self.rig_session_path(&source)) {
@@ -1682,25 +1684,6 @@ impl Owner {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => return Err(format!("Cannot clear source recovery: {error}")),
         }
-        self.save_copy(name, None).await?;
-        let copy_id = self
-            .state
-            .saved_copy
-            .clone()
-            .ok_or("Saved copy identity missing")?;
-        self.load_preset(copy_id.clone(), true, false, false)
-            .await?;
-        self.state.copy_on_edit = Some(oxidal_audio::lifecycle::CopyOnEdit {
-            copy_id: copy_id.clone(),
-            source_id: source.preset_id,
-            source_name,
-        });
-        self.state.saved_copy = Some(copy_id);
-        // Publish the Mine identity as the crash-recovery target immediately;
-        // no later timer may put the immutable source back into recovery.
-        self.recovery_due = Some(std::time::Instant::now());
-        self.checkpoint();
-        self.publish(AudioPhase::Running, None);
         Ok(())
     }
     async fn reconfigure(&mut self, stream: oxidal_audio::StreamConfig, restoring: bool) -> Reply {

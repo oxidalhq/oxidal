@@ -98,20 +98,30 @@ async fn protect_reaches_native_worker_and_keeps_tuner_and_saved_pin_available()
     assert!(state["copy_on_edit"].is_null());
     assert_eq!(state["modified"], false);
     state = first_edit_eq(&client, &url, state, true).await;
-    assert_eq!(state["configured"]["owned"], true);
-    assert_ne!(state["configured"]["preset_id"], original);
+    // An edited original keeps playing as itself, edited: no copy and no
+    // reload, so tone chasing is heard at once.
+    assert_eq!(state["configured"]["owned"], false);
+    assert_eq!(state["configured"]["preset_id"], original);
+    assert!(state["copy_on_edit"].is_null());
+    assert_eq!(state["modified"], true);
     assert_eq!(state["eq"][0]["eq"]["bands"][1]["gainDb"], 3.0);
-    let restored = send(
+    // Discard: stop and start the original again; its edits were never kept.
+    let settings = state["configured"].clone();
+    let discarded = send(&client, &url, &state, json!({"kind":"stop"})).await;
+    assert_eq!(discarded.status(), 200);
+    state = discarded.json().await.unwrap();
+    let restarted = send(
         &client,
         &url,
         &state,
-        json!({"kind":"resolve_copy","keep":false}),
+        json!({"kind":"start","settings":settings}),
     )
     .await;
-    assert_eq!(restored.status(), 200);
-    state = restored.json().await.unwrap();
+    assert_eq!(restarted.status(), 200);
+    state = wait_phase(&client, &url, "running").await;
     assert_eq!(state["configured"]["preset_id"], original);
     assert_eq!(state["eq"], opening);
+    assert_eq!(state["modified"], false);
     let changed = send(
         &client,
         &url,
@@ -121,9 +131,10 @@ async fn protect_reaches_native_worker_and_keeps_tuner_and_saved_pin_available()
     .await;
     assert_eq!(changed.status(), 200);
     state = changed.json().await.unwrap();
-    // Originals create a saved copy immediately, but the player must still
-    // resolve Keep/Discard before that copy may become a startup selection.
-    assert!(state["copy_on_edit"].is_object());
+    // An edited original cannot become a startup selection until its edits
+    // are saved as a copy or discarded.
+    assert!(state["copy_on_edit"].is_null());
+    assert_eq!(state["modified"], true);
     let dirty = json!({"follow":false,"expected":pinned,"capture":{"owner":"native","session":state["session"],"revision":state["revision"]}});
     assert_eq!(
         client
@@ -139,15 +150,19 @@ async fn protect_reaches_native_worker_and_keeps_tuner_and_saved_pin_available()
         serde_json::from_slice(&std::fs::read(root.join("presets/boot-audio.json")).unwrap())
             .unwrap();
     assert_eq!(after, disk);
+    // Save copy keeps the edits: the copy goes on playing, without a reload.
     let resolved = send(
         &client,
         &url,
         &state,
-        json!({"kind":"resolve_copy","keep":true}),
+        json!({"kind":"save_copy","name":"Sounding copy"}),
     )
     .await;
     assert_eq!(resolved.status(), 200);
     state = resolved.json().await.unwrap();
+    assert_eq!(state["configured"]["owned"], true);
+    assert_ne!(state["configured"]["preset_id"], original);
+    assert_eq!(state["modified"], false);
     let owned = state["configured"]["preset_id"].clone();
     let opening = state["eq"].clone();
     state = first_edit_eq(&client, &url, state, false).await;

@@ -133,6 +133,8 @@ export function LiveRig({
     }
   });
   const [restoreOpening, setRestoreOpening] = useState<AudioState | null>(null);
+  /** A switch asked for while an original has unsaved edits. */
+  const [leaving, setLeaving] = useState<PresetChoice | null>(null);
   const [artwork, setArtwork] = useState<{
     id: string;
     owned: boolean;
@@ -340,8 +342,18 @@ export function LiveRig({
       if (alive.current) setBusy(false);
     }
   }
-  async function recall(choice: PresetChoice) {
+  /** Unsaved edits to a TONE3000 original: nothing keeps them but Save copy. */
+  const originalEdited =
+    !!state?.modified &&
+    !!state.configured &&
+    !state.configured.owned &&
+    !state.configured.draft;
+  async function recall(choice: PresetChoice, confirmed = false) {
     if (!state || sending.current || adjustment.current || eqEditing) return;
+    if (originalEdited && !confirmed) {
+      setLeaving(choice);
+      return;
+    }
     sending.current = true;
     generation.current += 1;
     setBusy(true);
@@ -1860,6 +1872,59 @@ export function LiveRig({
                       </Button>
                     ))}
                   </div>
+                </AdjustmentDialog>
+              )}
+              {leaving && (
+                <AdjustmentDialog
+                  title="Keep these edits?"
+                  onCancel={() => setLeaving(null)}
+                >
+                  <p>
+                    {state.preset_name ?? 'This preset'} is a TONE3000 original,
+                    so your edits are kept only by saving a copy.
+                  </p>
+                  <ActionRow>
+                    <Button
+                      disabled={disabled || busy}
+                      onClick={() => {
+                        const next = leaving;
+                        setLeaving(null);
+                        void (async () => {
+                          try {
+                            const saved = await playbackCommand(state, {
+                              kind: 'save_copy',
+                              name: (state.preset_name ?? 'My preset').slice(
+                                0,
+                                100,
+                              ),
+                            });
+                            if (alive.current) setState(saved);
+                          } catch (cause) {
+                            if (alive.current)
+                              setError(friendlyError(cause, 'save a copy'));
+                            return;
+                          }
+                          void recall(next, true);
+                        })();
+                      }}
+                    >
+                      Save a copy and switch
+                    </Button>
+                    <Button
+                      variant="outline"
+                      disabled={disabled || busy}
+                      onClick={() => {
+                        const next = leaving;
+                        setLeaving(null);
+                        void recall(next, true);
+                      }}
+                    >
+                      Switch without saving
+                    </Button>
+                    <Button variant="ghost" onClick={() => setLeaving(null)}>
+                      Keep editing
+                    </Button>
+                  </ActionRow>
                 </AdjustmentDialog>
               )}
               {restoreOpening && (
