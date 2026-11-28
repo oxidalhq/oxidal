@@ -2152,24 +2152,14 @@ test('asset artwork stays identifiable offline in portrait and landscape', async
   await expect
     .poll(() => image.evaluate((el) => (el as HTMLImageElement).naturalWidth))
     .toBe(1);
-  await expect(
-    page.locator('figcaption').filter({ hasText: 'No image supplied' }),
-  ).not.toBeVisible();
-  await page.getByText('1 asset without artwork', { exact: true }).click();
-  await expect(
-    page.locator('figcaption').filter({ hasText: 'No image supplied' }),
-  ).toBeVisible();
-  const status = await page
-    .locator('figcaption > span')
-    .filter({ hasText: 'Saved offline' })
-    .first()
-    .boundingBox();
-  expect(status!.height).toBeLessThan(30);
+  // The artwork view is a grid of covers; each preset's details list every
+  // source, with or without a picture.
   await page
-    .getByRole('button', { name: 'Save artwork offline', exact: true })
+    .getByRole('list', { name: 'TONE3000 presets' })
+    .getByRole('button', { name: 'Artwork fixture', exact: true })
     .click();
-  await expect(page.getByText(/Audio is unaffected/)).toBeVisible();
-  await expect(image).toBeVisible();
+  await expect(page.getByRole('dialog')).toContainText('Shared name');
+  await page.keyboard.press('Escape');
   const viewport = page.viewportSize()!;
   await page.setViewportSize({
     width: viewport.height,

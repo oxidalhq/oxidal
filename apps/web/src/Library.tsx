@@ -1,4 +1,4 @@
-import { Plus, UploadSimple } from '@phosphor-icons/react';
+import { Play, Plus, UploadSimple } from '@phosphor-icons/react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
@@ -15,12 +15,15 @@ import {
 } from '@oxidal/design-system/components/select';
 import { StateNotice } from '@oxidal/design-system/components/states';
 import { Caption } from '@oxidal/design-system/components/text';
+import { cn } from '@oxidal/design-system/lib/cn';
 import { useRemembered } from '@oxidal/design-system/lib/use-remembered';
 import { LIBRARY_SECTIONS } from '@oxidal/design-system/patterns/library-sections';
 import { SettingNotice } from '@oxidal/design-system/patterns/settings-page';
 import { Workspace } from '@oxidal/design-system/patterns/workspace';
+import { ArtworkMosaic } from '@oxidal/design-system/widgets/artwork-mosaic';
 
 import {
+  artworkPath,
   type AssetArtwork,
   type AudioState,
   importPreset,
@@ -409,7 +412,12 @@ export function Library({
                 setPreview({ kind: isOwned ? 'owned' : 'original', id, name })
         }
         actions={toneActions(id, name, isOwned, download, setList)}
-        extra={showArtwork && <ArtworkDeck id={id} owned={isOwned} />}
+        // Artwork is a view of the TONE3000 tab (shipped and imported
+        // presets); Mine and the set list stay plain lists.
+        extra={
+          showArtwork &&
+          section === 'tone3000' && <ArtworkDeck id={id} owned={isOwned} />
+        }
       />
     );
   }
@@ -673,7 +681,6 @@ export function Library({
                   <Plus aria-hidden="true" /> New preset
                 </Button>
               }
-              toolbar={viewToggle}
               toolbarEnd={categorySelect}
               owned={owned.map((p) => {
                 const download = `/api/v1/presets/owned/${p.id}/download`;
@@ -836,6 +843,87 @@ export function Library({
                       ? 'No TONE3000 presets match these filters.'
                       : 'No TONE3000 presets yet. Import a preset file with Import….'}
                   </Caption>
+                ) : showArtwork ? (
+                  // Storybook's artwork view: square cover cards in a grid,
+                  // each with its preset's picture, name and contents;
+                  // opening one shows its details and every source.
+                  <ul
+                    aria-label="TONE3000 presets"
+                    className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-4 p-0"
+                  >
+                    {originalsShown.map((preset) => {
+                      const art = (originalArt[preset.sha256] ?? []).filter(
+                        (item) => item.cached && item.key,
+                      );
+                      const active =
+                        playing?.phase === 'running' &&
+                        playing.configured?.preset_id === preset.sha256 &&
+                        !playing.configured.owned;
+                      return (
+                        <li
+                          key={preset.sha256}
+                          className="relative grid gap-1.5"
+                        >
+                          <span
+                            className={cn(
+                              'relative grid aspect-square w-full place-items-center overflow-hidden rounded-pad border border-border bg-card',
+                              active && 'border-foreground shadow-raised',
+                            )}
+                          >
+                            {art.length ? (
+                              <ArtworkMosaic
+                                sources={art.map((item) => ({
+                                  src: artworkPath(
+                                    preset.sha256,
+                                    false,
+                                    item.key!,
+                                  ),
+                                  title: `${item.title} · ${item.gear}`,
+                                }))}
+                              />
+                            ) : (
+                              <span
+                                aria-hidden="true"
+                                className="font-display text-3xl font-semibold text-muted-foreground"
+                              >
+                                {preset.name.slice(0, 1)}
+                              </span>
+                            )}
+                          </span>
+                          {/* The name opens the details; it covers the card,
+                              so the whole card is the way in. */}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPreview({
+                                kind: 'original',
+                                id: preset.sha256,
+                                name: preset.name,
+                              })
+                            }
+                            className="truncate rounded-sm text-left text-sm font-medium after:absolute after:inset-0 after:rounded-pad focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                          >
+                            {preset.name}
+                          </button>
+                          <Caption as="span" className="truncate text-xs">
+                            {preset.block_count} blocks
+                            {art.length ? ` · ${art.length} with artwork` : ''}
+                          </Caption>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={!connected || loadingId !== null}
+                            aria-label={`Play ${preset.name}`}
+                            className="relative z-10"
+                            onClick={() => void play(preset.sha256, false)}
+                          >
+                            <Play aria-hidden="true" />{' '}
+                            {active ? 'Playing' : 'Play'}
+                          </Button>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 ) : (
                   <ul className="m-0 grid list-none gap-2 p-0">
                     {originalsShown.map((preset) =>
