@@ -17,6 +17,25 @@ type Result<T> = std::result::Result<T, &'static str>;
 const CONNECTIONS: &str = "/etc/NetworkManager/system-connections";
 const STATE: &str = "/var/lib/oxidal-device";
 const NETWORK_TRIAL: Duration = Duration::from_secs(90);
+/// How long the recovery hotspot stays up before the first look for remembered
+/// Wi-Fi, and the longest wait between looks while that Wi-Fi stays away.
+const HOME_FIRST: Duration = Duration::from_secs(120);
+const HOME_LONGEST: Duration = Duration::from_secs(300);
+/// Remembered networks tried in one look; each try can take up to the nmcli wait.
+const HOME_TRIES: usize = 3;
+
+/// Outcome of one look for remembered Wi-Fi while the recovery hotspot is up.
+#[derive(Debug, PartialEq, Eq)]
+enum Home {
+    /// The hotspot is down, wanted by the policy, or there is nothing to try.
+    Idle,
+    /// A phone or laptop is joined to the hotspot; it is left alone.
+    InUse,
+    /// A remembered network connected.
+    Back,
+    /// No remembered network answered; the hotspot is back up.
+    NotFound,
+}
 
 // stderr may contain an SSID or a secret; never forward it into a response/log.
 async fn run(program: &str, args: &[&str]) -> Result<String> {
@@ -244,6 +263,9 @@ pub struct Network {
     message: String,
     policy_checked: Instant,
     policy_candidate: Option<bool>,
+    home_checked: Instant,
+    home_wait: Duration,
+    hotspot_seen: bool,
     region: PathBuf,
 }
 impl Default for Network {
@@ -255,6 +277,9 @@ impl Default for Network {
             message: String::new(),
             policy_checked: Instant::now(),
             policy_candidate: None,
+            home_checked: Instant::now(),
+            home_wait: HOME_FIRST,
+            hotspot_seen: false,
             region: "/etc/default/oxidal-wireless".into(),
         }
     }
@@ -499,6 +524,129 @@ impl Network {
                 self.message = "Automatic hotspot check will retry".into();
             }
         }
+        if self.pending.is_none()
+            && !self.state_dir.join("pending.json").exists()
+            && self.home_checked.elapsed() >= self.home_wait
+        {
+            self.check_home().await;
+        }
+    }
+    /// One scheduled look for remembered Wi-Fi. The first look comes at least
+    /// HOME_FIRST after the hotspot is first seen; each miss doubles the wait up to
+    /// HOME_LONGEST, so an absent router costs a few seconds of hotspot now and then.
+    async fn check_home(&mut self) {
+        self.home_checked = Instant::now();
+        match self.return_home().await {
+            Ok(Home::NotFound) => {
+                self.home_wait = (self.home_wait * 2).min(HOME_LONGEST);
+                eprintln!("Recovery hotspot: remembered Wi-Fi not found; hotspot restored");
+            }
+            Ok(Home::Back) => {
+                self.home_wait = HOME_FIRST;
+                eprintln!("Recovery hotspot: back on remembered Wi-Fi");
+            }
+            Ok(Home::Idle | Home::InUse) | Err(_) => self.home_wait = HOME_FIRST,
+        }
+    }
+    /// NetworkManager falls back to the recovery hotspot (autoconnect priority
+    /// -100) when the remembered Wi-Fi disappears, but it never leaves a working
+    /// connection for a better one, and a single radio cannot scan while it
+    /// broadcasts. Without this, a short router outage strands the appliance on
+    /// its hotspot until a power cycle. While nobody is joined to the hotspot,
+    /// try the remembered networks and put the hotspot straight back if none
+    /// connects. A hotspot the policy wants regardless (Always, or No Ethernet
+    /// without a cable) is left alone, and any doubt (an unreadable station list)
+    /// keeps the hotspot up.
+    async fn return_home(&mut self) -> Result<Home> {
+        if !self.connections.join("oxidal.nmconnection").is_file() {
+            return Ok(Home::Idle);
+        }
+        let policy = self.policy()?;
+        let state = self.status(false).await?;
+        let Some(radio) = state.interfaces.iter().find(|d| {
+            d.kind == "wifi" && d.state == "connected" && d.connection == "oxidal-hotspot"
+        }) else {
+            self.hotspot_seen = false;
+            return Ok(Home::Idle);
+        };
+        // The first sighting only starts the clock, so the first look comes
+        // HOME_FIRST to twice that after the hotspot went up.
+        if !std::mem::replace(&mut self.hotspot_seen, true) {
+            return Ok(Home::Idle);
+        }
+        let ethernet = state
+            .interfaces
+            .iter()
+            .any(|d| d.kind == "ethernet" && d.state == "connected");
+        if let Some(policy) = &policy {
+            use crate::policy::Mode;
+            let wanted_anyway = match policy.mode {
+                Mode::Always => true,
+                Mode::NoEthernet => !ethernet,
+                // Never takes the hotspot down in reconcile_policy.
+                Mode::Never => true,
+                Mode::NotAtHome | Mode::NoRemembered => false,
+            };
+            if wanted_anyway || policy.interface != radio.name {
+                return Ok(Home::Idle);
+            }
+        }
+        let stations = run("/usr/sbin/iw", &["dev", &radio.name, "station", "dump"]).await?;
+        if stations.lines().any(|line| line.starts_with("Station ")) {
+            return Ok(Home::InUse);
+        }
+        let mut tries = Vec::new();
+        for saved in state.saved.iter().filter(|s| s.managed && !s.active) {
+            if tries.len() == HOME_TRIES {
+                break;
+            }
+            if let Some(policy) = policy
+                .as_ref()
+                .filter(|p| p.mode == crate::policy::Mode::NotAtHome)
+            {
+                // Only the chosen home network ends Not at home; any other would
+                // be dropped again by the next policy check.
+                let ssid = nm(&[
+                    "--escape",
+                    "no",
+                    "--get-values",
+                    "802-11-wireless.ssid",
+                    "connection",
+                    "show",
+                    "uuid",
+                    &saved.uuid,
+                ])
+                .await?;
+                if ssid.trim_end_matches('\n') != policy.home_ssid {
+                    continue;
+                }
+            }
+            tries.push(saved.uuid.clone());
+        }
+        if tries.is_empty() {
+            return Ok(Home::Idle);
+        }
+        let interface = radio.name.clone();
+        for uuid in tries {
+            if nm(&["connection", "up", "uuid", &uuid, "ifname", &interface])
+                .await
+                .is_ok()
+            {
+                self.policy_candidate = None;
+                self.hotspot_seen = false;
+                return Ok(Home::Back);
+            }
+        }
+        nm(&[
+            "connection",
+            "up",
+            "id",
+            "oxidal-hotspot",
+            "ifname",
+            &interface,
+        ])
+        .await?;
+        Ok(Home::NotFound)
     }
     pub async fn status(&self, scan: bool) -> Result<NetworkState> {
         let devices = nm(&[
@@ -1920,6 +2068,173 @@ mod tests {
                 COMMANDS.with(|q| assert!(q.borrow().is_empty()));
             })
             .await;
+    }
+    fn write_policy(fixture: &Fixture, mode: crate::policy::Mode, home_ssid: &str) {
+        let settings = crate::policy::Settings {
+            interface: "wlan0".into(),
+            mode,
+            home_ssid: home_ssid.into(),
+        };
+        atomic(
+            &fixture.root.join("state/policy.json"),
+            &serde_json::to_vec(&settings).unwrap(),
+        )
+        .unwrap();
+    }
+    const HOME_UP: &str = "connection up uuid 11111111-1111-1111-1111-111111111111 ifname wlan0";
+    #[tokio::test]
+    async fn idle_hotspot_goes_back_to_remembered_wifi() {
+        let fixture = Fixture::new();
+        save_client(&fixture);
+        let mut network = fixture.network();
+        network.hotspot_seen = true;
+        let mut commands = saved_status(false);
+        commands.extend(responses(&[
+            ("iw dev wlan0 station dump", Ok("")),
+            (HOME_UP, Ok("")),
+        ]));
+        COMMANDS
+            .scope(RefCell::new(commands), async {
+                assert_eq!(network.return_home().await.unwrap(), Home::Back);
+                assert!(!network.hotspot_seen);
+                COMMANDS.with(|q| assert!(q.borrow().is_empty()));
+            })
+            .await;
+    }
+    #[tokio::test]
+    async fn joined_hotspot_is_left_alone() {
+        let fixture = Fixture::new();
+        save_client(&fixture);
+        let mut network = fixture.network();
+        network.hotspot_seen = true;
+        let mut commands = saved_status(false);
+        commands.extend(responses(&[(
+            "iw dev wlan0 station dump",
+            Ok("Station 12:34:56:78:9a:bc (on wlan0)\n\tinactive time:\t10 ms\n"),
+        )]));
+        COMMANDS
+            .scope(RefCell::new(commands), async {
+                assert_eq!(network.return_home().await.unwrap(), Home::InUse);
+                COMMANDS.with(|q| assert!(q.borrow().is_empty()));
+            })
+            .await;
+    }
+    #[tokio::test]
+    async fn unreadable_station_list_keeps_the_hotspot() {
+        let fixture = Fixture::new();
+        save_client(&fixture);
+        let mut network = fixture.network();
+        network.hotspot_seen = true;
+        let mut commands = saved_status(false);
+        commands.extend(responses(&[(
+            "iw dev wlan0 station dump",
+            Err("Device command unavailable"),
+        )]));
+        COMMANDS
+            .scope(RefCell::new(commands), async {
+                assert!(network.return_home().await.is_err());
+                COMMANDS.with(|q| assert!(q.borrow().is_empty()));
+            })
+            .await;
+    }
+    #[tokio::test]
+    async fn absent_home_restores_the_hotspot_and_waits_longer() {
+        let fixture = Fixture::new();
+        save_client(&fixture);
+        let mut network = fixture.network();
+        network.hotspot_seen = true;
+        let mut commands = Responses::new();
+        for _ in 0..2 {
+            commands.extend(saved_status(false));
+            commands.extend(responses(&[
+                ("iw dev wlan0 station dump", Ok("")),
+                (
+                    HOME_UP,
+                    Err("NetworkManager could not complete the operation"),
+                ),
+                ("connection up id oxidal-hotspot ifname wlan0", Ok("")),
+            ]));
+        }
+        COMMANDS
+            .scope(RefCell::new(commands), async {
+                network.check_home().await;
+                assert_eq!(network.home_wait, HOME_FIRST * 2);
+                network.check_home().await;
+                assert_eq!(network.home_wait, HOME_LONGEST);
+                COMMANDS.with(|q| assert!(q.borrow().is_empty()));
+            })
+            .await;
+    }
+    #[tokio::test]
+    async fn first_sighting_of_the_hotspot_only_starts_the_clock() {
+        let fixture = Fixture::new();
+        save_client(&fixture);
+        let mut network = fixture.network();
+        COMMANDS
+            .scope(RefCell::new(saved_status(false)), async {
+                assert_eq!(network.return_home().await.unwrap(), Home::Idle);
+                assert!(network.hotspot_seen);
+                COMMANDS.with(|q| assert!(q.borrow().is_empty()));
+            })
+            .await;
+    }
+    #[tokio::test]
+    async fn ordinary_wifi_needs_no_look() {
+        let fixture = Fixture::new();
+        save_client(&fixture);
+        let mut network = fixture.network();
+        network.hotspot_seen = true;
+        let mut commands = saved_status(true);
+        commands.front_mut().unwrap().1 = Ok("wlan0:wifi:connected:oxidal-wifi\n");
+        COMMANDS
+            .scope(RefCell::new(commands), async {
+                assert_eq!(network.return_home().await.unwrap(), Home::Idle);
+                assert!(!network.hotspot_seen);
+                COMMANDS.with(|q| assert!(q.borrow().is_empty()));
+            })
+            .await;
+    }
+    #[tokio::test]
+    async fn policies_that_want_the_hotspot_keep_it() {
+        use crate::policy::Mode;
+        for mode in [Mode::Always, Mode::NoEthernet, Mode::Never] {
+            let fixture = Fixture::new();
+            save_client(&fixture);
+            write_policy(&fixture, mode, "");
+            let mut network = fixture.network();
+            network.hotspot_seen = true;
+            COMMANDS
+                .scope(RefCell::new(saved_status(false)), async {
+                    assert_eq!(network.return_home().await.unwrap(), Home::Idle);
+                    COMMANDS.with(|q| assert!(q.borrow().is_empty()));
+                })
+                .await;
+        }
+    }
+    #[tokio::test]
+    async fn not_at_home_only_tries_the_home_network() {
+        use crate::policy::Mode;
+        for (ssid, expected) in [("Studio\n", Home::Idle), ("Home\n", Home::Back)] {
+            let fixture = Fixture::new();
+            save_client(&fixture);
+            write_policy(&fixture, Mode::NotAtHome, "Home");
+            let mut network = fixture.network();
+            network.hotspot_seen = true;
+            let mut commands = saved_status(false);
+            commands.extend(responses(&[
+                ("iw dev wlan0 station dump", Ok("")),
+                ("--get-values 802-11-wireless.ssid", Ok(ssid)),
+            ]));
+            if expected == Home::Back {
+                commands.extend(responses(&[(HOME_UP, Ok(""))]));
+            }
+            COMMANDS
+                .scope(RefCell::new(commands), async {
+                    assert_eq!(network.return_home().await.unwrap(), expected);
+                    COMMANDS.with(|q| assert!(q.borrow().is_empty()));
+                })
+                .await;
+        }
     }
     #[tokio::test]
     async fn rollback_restores_persisted_country_before_reactivating_hotspot() {
