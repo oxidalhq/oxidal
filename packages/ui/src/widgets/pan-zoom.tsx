@@ -246,7 +246,7 @@ export function PanZoom({
       }
       data-slot="pan-zoom"
       className={cn(
-        'relative h-full min-h-0 cursor-grab touch-none overflow-clip outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing',
+        'relative h-full min-h-0 cursor-grab touch-none overflow-clip outline-none select-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing',
         className,
       )}
       onKeyDown={(e) => {
