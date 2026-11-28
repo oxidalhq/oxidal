@@ -510,10 +510,16 @@ export function mixedRigViewModel({
   const nativeTiles = (n: (typeof nodes)[number]): RigBlockVM[] => {
     const layout = state.control?.authoring?.find((a) => a.node === n.id)
       ?.status.layout;
+    // A stereo chain keeps each block's lane, so it draws as two lanes.
+    const laneOf = new Map<object, 'left' | 'right'>();
     const blocks = [
       ...(layout?.left ?? []),
       ...(layout?.stereo ? (layout.right ?? []) : []),
     ];
+    if (layout?.stereo) {
+      for (const b of layout.left ?? []) laneOf.set(b, 'left');
+      for (const b of layout.right ?? []) laneOf.set(b, 'right');
+    }
     const instance = n.instance ?? '';
     return blocks
       .filter(
@@ -526,6 +532,7 @@ export function mixedRigViewModel({
       .map((block) => {
         if (block.insert)
           return {
+            stereoLane: laneOf.get(block),
             id: laneBlockId(n.id, block.id),
             label: 'Empty slot',
             kind: blockKind('', ''),
@@ -547,6 +554,7 @@ export function mixedRigViewModel({
           ?.assignments.some((assignment) => assignment.target === block.id);
         const gear = assigned ? '' : (gears[instance]?.[block.id] ?? '');
         return {
+          stereoLane: laneOf.get(block),
           // Lanes reuse block ids; the lane prefix keeps selection to one tile.
           id: laneBlockId(n.id, block.id),
           label: name,

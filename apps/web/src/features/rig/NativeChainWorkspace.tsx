@@ -61,8 +61,8 @@ function nativeRoute(lanes: RigLaneVM[]): IdStep[] {
   if (lanes.length < 2) return lanes[0] ? ids(lanes[0]) : [];
   return [
     {
-      split: 'native-stereo',
-      merge: 'native-stereo',
+      split: 'native~stereo',
+      merge: 'native~stereo',
       gains: lanes.map(() => 1),
       branches: lanes.map(ids),
     },

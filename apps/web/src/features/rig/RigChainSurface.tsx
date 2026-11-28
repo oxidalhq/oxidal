@@ -13,7 +13,7 @@ import {
   type RouteTreeProps,
 } from '../../components/RouteTree';
 import { useEpaper } from '../../components/RouteTree.display';
-import { routeSpot } from '../../rigChain';
+import { type IdStep, routeSpot } from '../../rigChain';
 import { pathMix, type RouteAt } from '../../rigRoute';
 import { useChainView } from './chainView';
 import { laneBlockId, rigLocked } from './mixedRigViewModel';
@@ -41,6 +41,11 @@ const KIND_LABEL = {
  * `control`); without them the map keeps its own floating tools.
  * @see docs/interface.md
  */
+/** Drawing-only names for a stereo TONE3000 chain's split and lanes. */
+const STEREO = '~stereo';
+const LEFT = '~L';
+const RIGHT = '~R';
+
 export function RigChainSurface({
   rig,
   vm,
@@ -120,6 +125,32 @@ export function RigChainSurface({
       (s) => s.id === vm.state.control?.scene,
     ) ?? -1;
   const map = view === 'map' && !epaper;
+  // A stereo TONE3000 chain draws as its two lanes, Left and Right, as the
+  // TONE3000-only Rig draws it; the split is for drawing only.
+  const stereo = new Set(
+    nodes
+      .filter(
+        (n) =>
+          n.kind === 'tone3000' &&
+          nativeTiles(n).some((t) => t.stereoLane === 'right'),
+      )
+      .map((n) => n.id),
+  );
+  const expand = (steps: IdStep[]): IdStep[] =>
+    steps.map((step) =>
+      typeof step === 'string'
+        ? stereo.has(step)
+          ? {
+              split: `${step}${STEREO}`,
+              merge: `${step}${STEREO}`,
+              gains: [1, 1],
+              branches: [[`${step}${LEFT}`], [`${step}${RIGHT}`]],
+            }
+          : step
+        : { ...step, branches: step.branches.map(expand) },
+    );
+  const drawnRoute = stereo.size ? expand(canvasRoute) : canvasRoute;
+  const inStereo = (at: RouteAt) => !!at.split?.endsWith(STEREO);
   // In the work area the tree pans and zooms like the map (not on a phone,
   // where it runs down the page, nor on E-paper, which edits a list).
   const drawn = map || (!!control && !epaper && !vertical);
@@ -169,20 +200,31 @@ export function RigChainSurface({
               </div>
             )
           }
-          route={canvasRoute}
+          route={drawnRoute}
           // E-paper edits a chain as a list with buttons; a drawing that
           // cannot be rearranged has nothing to press but its blocks.
           list={epaper && editing}
           plain={!fullRoute}
           scenes={sceneCanvas}
-          tiles={(id) => {
+          tiles={(drawnId) => {
+            // One lane of a stereo TONE3000 chain: that lane's blocks only.
+            const lane = drawnId.endsWith(LEFT)
+              ? 'left'
+              : drawnId.endsWith(RIGHT)
+                ? 'right'
+                : null;
+            const id = lane ? drawnId.slice(0, -LEFT.length) : drawnId;
             const n = nodes.find((node) => node.id === id);
             if (!n) return [];
             // A TONE3000 block draws its own blocks once they are known.
             const inner = n.kind === 'tone3000' ? nativeTiles(n) : [];
-            const tiles = inner.length
-              ? inner
-              : [{ ...describeNode(n).block, id: laneBlockId(n.id, '') }];
+            const tiles = (
+              inner.length
+                ? inner
+                : [{ ...describeNode(n).block, id: laneBlockId(n.id, '') }]
+            ).filter(
+              (t) => !lane || ('stereoLane' in t && t.stereoLane === lane),
+            );
             // The map shows each block as a card: its type and main values.
             const card = view === 'map' && !epaper;
             const host = rig.matching?.manifest.oxidal;
@@ -222,15 +264,25 @@ export function RigChainSurface({
             const at = laneTarget(tile);
             if (at?.block) setLaneSlot({ node: at.node, target: at.block });
           }}
-          gaps={editing ? gaps : undefined}
+          gaps={editing ? (at) => !inStereo(at) && gaps(at) : undefined}
           onGap={
             open ? (at) => setCanvasChoice({ kind: 'gap', at }) : undefined
           }
           onAdd={
             open ? (at) => setCanvasChoice({ kind: 'add', at }) : undefined
           }
-          movable={editing && running ? movable : undefined}
-          onMove={editing && running ? dropBlock : undefined}
+          movable={
+            editing && running
+              ? (id) => !id.endsWith(LEFT) && !id.endsWith(RIGHT) && movable(id)
+              : undefined
+          }
+          onMove={
+            editing && running
+              ? (id, at) => {
+                  if (!inStereo(at)) dropBlock(id, at);
+                }
+              : undefined
+          }
           onAddBefore={
             running && !locked ? (tile) => void rig.addBefore(tile) : undefined
           }

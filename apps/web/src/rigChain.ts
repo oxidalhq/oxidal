@@ -23,6 +23,8 @@ export interface RigBlockVM {
   tint?: string;
   /** An empty slot: drawn as a + tile where a block can be added. */
   empty?: boolean;
+  /** In a stereo TONE3000 chain: which of its two lanes the block is in. */
+  stereoLane?: 'left' | 'right';
 }
 
 export interface RigLaneVM {

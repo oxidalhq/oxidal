@@ -220,6 +220,8 @@ function parseGap(key: string): RouteAt {
 }
 /** Path 1 · 100% · Centre, from the split's merge gains. */
 function caption(split: Split, path: number) {
+  // A stereo TONE3000 chain's two lanes.
+  if (split.split.endsWith('~stereo')) return path === 0 ? 'Left' : 'Right';
   const mix = pathMix(split.gains[path] ?? 1, split.rightGains?.[path]);
   return [
     `Path ${path + 1}`,
