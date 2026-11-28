@@ -6396,7 +6396,7 @@ test('mixed rig authoring moves blocks across paths by keys, buttons and drag', 
     ]);
   }
   // Buttons: the same moves without a pointer or keys (and on E-paper).
-  await rig.getByRole('button', { name: /^Verb(?: (?:time|lv2))?$/i }).click();
+  await rig.getByRole('button', { name: /^Verb(?: (?:time|lv2|Effect))?$/i }).click();
   let routing = await openRouting(page, rig, 'Verb');
   await page
     .getByRole('group', { name: 'Arrange' })
@@ -6412,7 +6412,7 @@ test('mixed rig authoring moves blocks across paths by keys, buttons and drag', 
         : [['verb'], ['echo', 'hall']],
     },
   ]);
-  await rig.getByRole('button', { name: /^Verb(?: (?:time|lv2))?$/i }).click();
+  await rig.getByRole('button', { name: /^Verb(?: (?:time|lv2|Effect))?$/i }).click();
   routing = await openRouting(page, rig, 'Verb');
   await page
     .getByRole('group', { name: 'Arrange' })
@@ -6423,7 +6423,7 @@ test('mixed rig authoring moves blocks across paths by keys, buttons and drag', 
   expect(JSON.stringify(unit.route())).toContain('verb');
   // Drag: a mouse drops a block on the gap nearest the pointer.
   if (info.project.name === 'chromium') {
-    const verb = rig.getByRole('button', { name: /^Verb(?: (?:time|lv2))?$/i });
+    const verb = rig.getByRole('button', { name: /^Verb(?: (?:time|lv2|Effect))?$/i });
     const first = rig.getByRole('button', {
       name: 'Add or split at position 1',
     });
