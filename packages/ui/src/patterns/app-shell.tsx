@@ -18,9 +18,40 @@ import {
   type ResourceState,
   ResourceStrip,
 } from '../widgets/resource-strip';
-import { LauncherSlotContext } from './dock-context';
+import { type BarLevels, type BarTempo, DisplayBar } from './display-bar';
+import {
+  BarSlotContext,
+  type LauncherEntry,
+  LauncherSlotContext,
+  ToolLauncherContext,
+} from './dock-context';
+import { type CapsuleMenuItem, FloatingCapsule } from './floating-capsule';
 
 export type Destination = 'rig' | 'guitars' | 'library' | 'levels' | 'settings';
+
+/** What the floating capsule needs from the app (`bar="capsule"`). */
+export type CapsuleShell = {
+  /** One word for the device, and whether something needs attention. */
+  status: { word: string; problem?: boolean };
+  muted: boolean;
+  onMute: (muted: boolean) => void;
+  muteDisabled?: boolean;
+  /** The ☰ menu; the tool dock's tools join it as their own group. */
+  menu: CapsuleMenuItem[][];
+  /** Audio is running, and the guitar's input level: the capsule squeezes only while a guitar plays. */
+  playing: boolean;
+  inputLevel: number | null;
+  /** Settings › Display › Keep the menu open while playing. */
+  keepOpen: boolean;
+  /** The Rig: the playing preset and its picker sit in the capsule. */
+  rig: boolean;
+  /** The preset's name, for the bubble and while the Rig shows Perform. */
+  presetName?: string | null;
+  menuNote?: string;
+  media?: React.ComponentProps<typeof FloatingCapsule>['media'];
+  midi?: { name: string; connected: boolean };
+  wordmark?: string;
+};
 
 export function PlayingPreset({ name }: { name?: string | null }) {
   return name ? (
@@ -47,6 +78,23 @@ const DESTINATIONS: {
   { id: 'settings', label: 'Settings', icon: <Gear /> },
 ];
 
+/** True from tablet width up. Read once on first render so the bar does not flash. */
+function useWide() {
+  const query = '(min-width: 768px)';
+  const [wide, setWide] = React.useState(
+    () => typeof window !== 'undefined' && !!window.matchMedia?.(query).matches,
+  );
+  React.useEffect(() => {
+    if (!window.matchMedia) return;
+    const list = window.matchMedia(query);
+    const update = () => setWide(list.matches);
+    update();
+    list.addEventListener('change', update);
+    return () => list.removeEventListener('change', update);
+  }, []);
+  return wide;
+}
+
 /**
  * The frame every screen sits in (D-3): the ink masthead with the wordmark,
  * what is playing, and the five destinations as ghost buttons on `md+`;
@@ -66,6 +114,11 @@ export function AppShell({
   resourceConnected = resourceState !== 'disconnected',
   resourceLabel,
   status = 'detailed',
+  bar = 'classic',
+  capsule,
+  tempo,
+  levels,
+  onSearch,
   children,
   className,
 }: {
@@ -80,11 +133,58 @@ export function AppShell({
   resourceLabel?: string;
   /** Simple shows one health word in the masthead; Detailed shows the full strip. */
   status?: 'simple' | 'detailed';
+  /**
+   * `display` replaces the masthead and the resource strip with the display
+   * bar on tablet width and wider; narrower screens keep the classic masthead.
+   */
+  bar?: 'classic' | 'display' | 'capsule';
+  /**
+   * `capsule` replaces the masthead and the resource strip with the
+   * wordmark and the floating capsule on every width; a phone keeps its
+   * bottom tabs.
+   */
+  capsule?: CapsuleShell;
+  /** Shown in the display bar. */
+  tempo?: BarTempo;
+  levels?: BarLevels | null;
+  /** Opens the one search from the display bar. */
+  onSearch?: () => void;
   children: React.ReactNode;
   className?: string;
 }) {
   // The tool dock draws its buttons here, in the masthead.
   const [tools, setTools] = React.useState<HTMLElement | null>(null);
+  const [identity, setIdentity] = React.useState<HTMLElement | null>(null);
+  const [actions, setActions] = React.useState<HTMLElement | null>(null);
+  const [extras, setExtras] = React.useState<HTMLElement | null>(null);
+  const [toolEntries, setToolEntries] = React.useState<LauncherEntry[] | null>(
+    null,
+  );
+  const wide = useWide();
+  const floating = bar === 'capsule' && !!capsule;
+  const display = bar === 'display' && wide;
+  const rigInCapsule = floating && !!capsule?.rig;
+  const barSlots = React.useMemo(
+    () =>
+      rigInCapsule
+        ? // A phone shows the extras in a tray under the opened capsule.
+          { identity, actions, extras, capsule: true }
+        : display
+          ? { identity, actions }
+          : null,
+    [rigInCapsule, display, identity, actions, extras],
+  );
+  const toolMenu: CapsuleMenuItem[][] = toolEntries?.length
+    ? [
+        toolEntries.map((entry) => ({
+          id: `tool-${entry.id}`,
+          label: entry.title,
+          icon: entry.icon,
+          checked: entry.open,
+          onSelect: entry.toggle,
+        })),
+      ]
+    : [];
   const frame = React.useRef<HTMLDivElement>(null);
   const bottom = React.useRef<HTMLDivElement>(null);
   React.useLayoutEffect(() => {
@@ -115,75 +215,186 @@ export function AppShell({
         className,
       )}
     >
-      <header className="sticky top-0 z-strip flex items-center gap-3 bg-enclosure px-page pt-[var(--safe-top)] text-enclosure-foreground">
-        <a
-          href="#rig"
-          aria-label="Oxidal home"
-          onClick={(event) => {
-            if (
-              event.button ||
-              event.metaKey ||
-              event.ctrlKey ||
-              event.shiftKey ||
-              event.altKey
-            )
-              return;
-            event.preventDefault();
-            onNavigate('rig');
-          }}
-          className="flex h-12 shrink-0 items-center"
+      {floating && capsule ? (
+        <div
+          data-slot="capsule-header"
+          className="pointer-events-none sticky top-0 z-strip h-16 pt-[var(--safe-top)]"
         >
-          <img src="/brand/wordmark-white.svg" alt="" className="h-5 w-auto" />
-        </a>
-        <div className="min-w-0 flex-1 truncate text-sm text-enclosure-foreground/80">
-          {nowPlaying}
+          {/* A short fade keeps the capsule readable over the page. */}
+          <div
+            aria-hidden="true"
+            className="absolute inset-x-0 top-0 h-20 bg-linear-to-b from-background via-background/80 to-transparent [[data-display=epaper]_&]:hidden"
+          />
+          <FloatingCapsule
+            className="absolute inset-x-0 top-[calc(0.5rem+var(--safe-top))]"
+            destination={destination}
+            onNavigate={(to) => to !== 'tools' && onNavigate(to)}
+            status={capsule.status}
+            muted={capsule.muted}
+            onMute={capsule.onMute}
+            muteDisabled={capsule.muteDisabled}
+            onSearch={() => onSearch?.()}
+            statusDetails={
+              <aside
+                aria-label="DSP and system resources"
+                data-connected={resourceConnected}
+              >
+                {resourceLabel && (
+                  <span className="sr-only" data-testid="resource-state">
+                    {resourceLabel}
+                  </span>
+                )}
+                <HealthStatus
+                  readings={readings}
+                  state={resourceState}
+                  onDetails={() => onNavigate('levels')}
+                  className="h-control-xs border-transparent bg-transparent px-2 [@media(pointer:coarse)]:min-h-touch"
+                />
+              </aside>
+            }
+            menu={[...toolMenu, ...capsule.menu]}
+            menuNote={capsule.menuNote}
+            playing={capsule.playing}
+            inputLevel={capsule.inputLevel}
+            keepOpen={capsule.keepOpen}
+            media={capsule.media}
+            midi={capsule.midi}
+            wordmark={capsule.wordmark}
+            statusAlways={status === 'detailed'}
+            preset={
+              capsule.rig
+                ? {
+                    name: capsule.presetName ?? 'No preset playing',
+                    picker: (
+                      <>
+                        <span
+                          ref={setIdentity}
+                          data-slot="capsule-preset"
+                          className="peer contents"
+                        />
+                        {/* While the Rig shows Perform, the name alone. */}
+                        <span className="hidden max-w-[16rem] truncate px-2 text-sm font-semibold peer-empty:inline">
+                          {capsule.presetName ?? 'No preset playing'}
+                        </span>
+                      </>
+                    ),
+                  }
+                : undefined
+            }
+            actions={
+              capsule.rig ? (
+                <span
+                  ref={setActions}
+                  data-slot="capsule-actions"
+                  data-capsule-slot=""
+                  // Whatever the screen puts here takes the capsule's height.
+                  className="contents [&_button]:h-control-xs [&_button]:min-h-control-xs [&_button]:px-2 [&_button]:text-sm [&_button_svg]:size-4 [@media(pointer:coarse)]:[&_button]:h-auto [@media(pointer:coarse)]:[&_button]:min-h-touch"
+                />
+              ) : undefined
+            }
+            openExtras={
+              capsule.rig ? (
+                <span
+                  ref={setExtras}
+                  data-slot="capsule-extras"
+                  data-capsule-slot=""
+                  // Whatever the screen puts here takes the capsule's height.
+                  className="contents [&_button]:h-control-xs [&_button]:min-h-control-xs [&_button]:px-2 [&_button]:text-sm [&_button_svg]:size-4 [@media(pointer:coarse)]:[&_button]:h-auto [@media(pointer:coarse)]:[&_button]:min-h-touch"
+                />
+              ) : undefined
+            }
+          />
         </div>
-        <nav
-          aria-label="Instrument navigation"
-          className="hidden items-center gap-1 md:flex [@media(pointer:coarse)]:gap-[max(8px,0.5rem)]"
-        >
-          {DESTINATIONS.map((item) => (
-            <Button
-              key={item.id}
-              variant="ghost"
-              size="sm"
-              aria-current={destination === item.id ? 'page' : undefined}
-              onClick={() => onNavigate(item.id)}
-              // On a tablet the words stay and the icons make room.
-              className="text-enclosure-foreground/70 hover:bg-enclosure-border hover:text-enclosure-foreground aria-[current=page]:bg-enclosure-border aria-[current=page]:text-enclosure-foreground max-lg:[&_svg]:hidden"
-            >
-              {item.icon}
-              {item.label}
-            </Button>
-          ))}
-        </nav>
-        {/* What the device is doing and what you keep open sit together, last. */}
-        <span
-          aria-hidden="true"
-          className="hidden h-6 w-px shrink-0 bg-enclosure-border md:block"
+      ) : display ? (
+        <DisplayBar
+          destination={destination}
+          onNavigate={onNavigate}
+          nowPlaying={nowPlaying}
+          tempo={tempo}
+          levels={levels}
+          onSearch={onSearch}
+          readings={readings}
+          state={resourceState}
+          resourceLabel={resourceLabel}
+          setIdentity={setIdentity}
+          setActions={setActions}
+          setTools={setTools}
         />
-        {status === 'simple' && (
-          <aside
-            aria-label="DSP and system resources"
-            data-connected={resourceConnected}
+      ) : (
+        <header className="sticky top-0 z-strip flex items-center gap-3 bg-enclosure px-page pt-[var(--safe-top)] text-enclosure-foreground">
+          <a
+            href="#rig"
+            aria-label="Oxidal home"
+            onClick={(event) => {
+              if (
+                event.button ||
+                event.metaKey ||
+                event.ctrlKey ||
+                event.shiftKey ||
+                event.altKey
+              )
+                return;
+              event.preventDefault();
+              onNavigate('rig');
+            }}
+            className="flex h-12 shrink-0 items-center"
           >
-            {resourceLabel && (
-              <span className="sr-only" data-testid="resource-state">
-                {resourceLabel}
-              </span>
-            )}
-            <HealthStatus
-              readings={readings}
-              state={resourceState}
-              onDetails={() => onNavigate('levels')}
-              className="shrink-0 border-enclosure-border bg-enclosure text-enclosure-foreground hover:bg-enclosure-border"
+            <img
+              src="/brand/wordmark-white.svg"
+              alt=""
+              className="h-5 w-auto"
             />
-          </aside>
-        )}
-        <div ref={setTools} data-slot="shell-tools" className="contents" />
-      </header>
+          </a>
+          <div className="min-w-0 flex-1 truncate text-sm text-enclosure-foreground/80">
+            {nowPlaying}
+          </div>
+          <nav
+            aria-label="Instrument navigation"
+            className="hidden items-center gap-1 md:flex [@media(pointer:coarse)]:gap-[max(8px,0.5rem)]"
+          >
+            {DESTINATIONS.map((item) => (
+              <Button
+                key={item.id}
+                variant="ghost"
+                size="sm"
+                aria-current={destination === item.id ? 'page' : undefined}
+                onClick={() => onNavigate(item.id)}
+                // On a tablet the words stay and the icons make room.
+                className="text-enclosure-foreground/70 hover:text-enclosure-foreground aria-[current=page]:bg-enclosure-border aria-[current=page]:text-enclosure-foreground max-lg:[&_svg]:hidden"
+              >
+                {item.icon}
+                {item.label}
+              </Button>
+            ))}
+          </nav>
+          {/* What the device is doing and what you keep open sit together, last. */}
+          <span
+            aria-hidden="true"
+            className="hidden h-6 w-px shrink-0 bg-enclosure-border md:block"
+          />
+          {status === 'simple' && (
+            <aside
+              aria-label="DSP and system resources"
+              data-connected={resourceConnected}
+            >
+              {resourceLabel && (
+                <span className="sr-only" data-testid="resource-state">
+                  {resourceLabel}
+                </span>
+              )}
+              <HealthStatus
+                readings={readings}
+                state={resourceState}
+                onDetails={() => onNavigate('levels')}
+                className="shrink-0 border-enclosure-border bg-enclosure text-enclosure-foreground hover:bg-enclosure-border"
+              />
+            </aside>
+          )}
+          <div ref={setTools} data-slot="shell-tools" className="contents" />
+        </header>
+      )}
       <div className="sticky top-[calc(3rem+var(--safe-top))] z-strip">
-        {status === 'detailed' && (
+        {status === 'detailed' && !display && !floating && (
           <aside
             aria-label="DSP and system resources"
             data-connected={resourceConnected}
@@ -205,9 +416,13 @@ export function AppShell({
         data-slot="app-content"
         className="m-0 w-full max-w-none min-w-0 p-0 pb-[calc(var(--app-bottom-height,4.5rem)+var(--spacing-page))]"
       >
-        <LauncherSlotContext.Provider value={tools}>
-          {children}
-        </LauncherSlotContext.Provider>
+        <ToolLauncherContext.Provider value={floating ? setToolEntries : null}>
+          <LauncherSlotContext.Provider value={tools}>
+            <BarSlotContext.Provider value={barSlots}>
+              {children}
+            </BarSlotContext.Provider>
+          </LauncherSlotContext.Provider>
+        </ToolLauncherContext.Provider>
       </main>
       <div
         ref={bottom}

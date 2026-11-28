@@ -35,3 +35,38 @@ export const DockContext = React.createContext<Dock | null>(null);
 export const LauncherSlotContext = React.createContext<HTMLElement | null>(
   null,
 );
+
+/**
+ * Where a screen's own heading actions go when the shell shows the display
+ * bar: the preset name and picker, and the action buttons. Null draws them in
+ * the page, as on a phone.
+ */
+export type BarSlots = {
+  identity: HTMLElement | null;
+  actions: HTMLElement | null;
+  /**
+   * The floating capsule only: the parts an opened capsule shows (Tuner,
+   * Save, More). Null on a phone, where they stay in the page.
+   */
+  extras?: HTMLElement | null;
+  /** The floating capsule holds Mute and Protect itself. */
+  capsule?: boolean;
+};
+export const BarSlotContext = React.createContext<BarSlots | null>(null);
+
+/** A tool the dock offers, as the floating capsule's ☰ menu lists it. */
+export type LauncherEntry = {
+  id: string;
+  title: string;
+  icon: React.ReactNode;
+  open: boolean;
+  toggle: () => void;
+};
+
+/**
+ * Where the tool dock hands its tools when the shell lists them in a menu
+ * (the floating capsule's ☰) instead of drawing its own launcher.
+ */
+export const ToolLauncherContext = React.createContext<
+  ((entries: LauncherEntry[] | null) => void) | null
+>(null);

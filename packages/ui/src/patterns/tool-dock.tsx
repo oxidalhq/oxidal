@@ -29,6 +29,7 @@ import {
   type Dock,
   DockContext,
   LauncherSlotContext,
+  ToolLauncherContext,
   type ToolPlace,
   type ToolPlaces,
   type ToolPosition,
@@ -189,17 +190,53 @@ export function ToolDock({
   };
 
   const slot = React.useContext(LauncherSlotContext);
+  // The floating capsule lists the tools in its ☰ menu instead.
+  const register = React.useContext(ToolLauncherContext);
+  const toggleRef = React.useRef<(id: string) => void>(() => {});
+  const openKey = tools
+    .map((t) => `${t.id}:${placeOf(t.id) !== 'closed'}`)
+    .join(' ');
+  const titleKey = tools.map((t) => `${t.id}=${t.title}`).join(' ');
+  const iconsRef = React.useRef(tools);
+  React.useEffect(() => {
+    iconsRef.current = tools;
+  });
+  React.useEffect(() => {
+    if (!register) return;
+    const open = new Set(
+      openKey
+        .split(' ')
+        .filter((part) => part.endsWith(':true'))
+        .map((part) => part.slice(0, part.lastIndexOf(':'))),
+    );
+    register(
+      iconsRef.current.map((t) => ({
+        id: t.id,
+        title: t.title,
+        icon: t.icon,
+        open: open.has(t.id),
+        toggle: () => toggleRef.current(t.id),
+      })),
+    );
+  }, [register, openKey, titleKey]);
+  React.useEffect(() => () => register?.(null), [register]);
+  const toggle = (tool: DockTool) =>
+    put(
+      tool.id,
+      placeOf(tool.id) !== 'closed'
+        ? 'closed'
+        : lastPlaces?.[tool.id] === 'closed'
+          ? 'sheet'
+          : (lastPlaces?.[tool.id] ?? 'sheet'),
+    );
+  React.useEffect(() => {
+    toggleRef.current = (id) => {
+      const tool = tools.find((t) => t.id === id);
+      if (tool) toggle(tool);
+    };
+  });
   /** The tools: one labelled menu in the shell's masthead, or a row above the page. */
   const launcher = (masthead: boolean) => {
-    const toggle = (tool: DockTool) =>
-      put(
-        tool.id,
-        placeOf(tool.id) !== 'closed'
-          ? 'closed'
-          : lastPlaces?.[tool.id] === 'closed'
-            ? 'sheet'
-            : (lastPlaces?.[tool.id] ?? 'sheet'),
-      );
     const open = tools.filter((t) => placeOf(t.id) !== 'closed').length;
     const quiet =
       'text-enclosure-foreground/70 hover:bg-enclosure-border hover:text-enclosure-foreground aria-[pressed=true]:bg-enclosure-border aria-[pressed=true]:text-enclosure-foreground';
@@ -288,7 +325,11 @@ export function ToolDock({
           <div ref={setLeft} className="contents" />
         </aside>
         <div className="col-start-2 min-w-0">
-          {slot ? createPortal(launcher(true), slot) : launcher(false)}
+          {register
+            ? null
+            : slot
+              ? createPortal(launcher(true), slot)
+              : launcher(false)}
           {children}
         </div>
         <aside
