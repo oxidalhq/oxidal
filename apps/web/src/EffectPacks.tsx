@@ -174,6 +174,7 @@ export function EffectPacks({
             qualification: pack.qualification,
             website: pack.website,
             version: pack.version,
+            package: pack.package,
             licenceUrl: pack.copyright_available
               ? `/api/v1/packs/${encodeURIComponent(pack.id)}/copyright`
               : undefined,

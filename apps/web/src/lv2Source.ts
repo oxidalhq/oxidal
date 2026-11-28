@@ -37,6 +37,7 @@ export function lv2Source(
     author: plugin.author ?? undefined,
     category: plugin.category ?? undefined,
     uri: plugin.uri,
+    homepage: plugin.homepage ?? undefined,
     pack: {
       name: pack.name,
       package: pack.package,

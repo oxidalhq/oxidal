@@ -27,6 +27,7 @@ import { VisualControl } from '@oxidal/design-system/widgets/visual-control';
 
 import type { RigControl } from '../../api';
 import { controlLabel } from '../../lv2Control';
+import { usePluginSource } from '../../PluginSourceDetails';
 import type { IdStep } from '../../rigChain';
 import { useToneSource } from '../../useToneSource';
 import { ControlGrid } from './ControlGrid';
@@ -87,6 +88,11 @@ export function BlockBox({ rig, vm }: RigViewProps) {
   const [minimised, setMinimised] = useState(false);
   const tone = useToneSource(selectedToneId ?? null);
   const lv2 = useLv2Controls({ rig, vm });
+  // An effect credits its maker, website and pack (Guitarix and its site,
+  // the package and version), as a TONE3000 block credits its creator.
+  const pluginSource = usePluginSource(
+    selected?.kind === 'lv2' ? lv2.plugin : null,
+  );
   // While a value is on its way to the device the controls stay usable: the
   // slider shows where it was dragged, and the newest value waits and goes
   // next. Disabling them for each step made the whole box flicker.
@@ -258,7 +264,7 @@ export function BlockBox({ rig, vm }: RigViewProps) {
             insert: false,
           })
       : undefined;
-  const source = tone.source;
+  const source = selected.kind === 'lv2' ? pluginSource : tone.source;
   const caption =
     selected.kind === 'tone3000'
       ? (source?.kind === 'tone3000'

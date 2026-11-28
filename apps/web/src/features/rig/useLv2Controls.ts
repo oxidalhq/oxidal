@@ -77,6 +77,8 @@ export function effectControls(
     main,
     /** The plugin's own kind, such as "Reverb". */
     category: plugin?.category ?? undefined,
+    /** The installed plugin, for its maker, website and pack. */
+    plugin,
   };
 }
 

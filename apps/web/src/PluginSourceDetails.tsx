@@ -1,15 +1,26 @@
 import { useEffect, useState } from 'react';
 
-import { SourceCard } from '@oxidal/design-system/widgets/block-source';
+import {
+  type BlockSource,
+  SourceCard,
+} from '@oxidal/design-system/widgets/block-source';
 
 import { type EffectPacks, effectPacks, type Lv2Plugin } from './api';
 import { lv2Source } from './lv2Source';
 
-/** Reading source details never changes the selected plugin or its sound. */
-export function PluginSourceDetails({ plugin }: { plugin: Lv2Plugin }) {
+/**
+ * Where an LV2 plugin comes from: its maker and website, the pack it ships
+ * in (such as Guitarix) with that project's site, and the installed package
+ * and version. Oxidal's own effects name their crate. Reading it never
+ * changes the plugin or its sound.
+ */
+export function usePluginSource(
+  plugin: Lv2Plugin | null | undefined,
+): BlockSource | undefined {
   const [packs, setPacks] = useState<EffectPacks['packs']>([]);
+  const packId = plugin?.pack_id;
   useEffect(() => {
-    if (!plugin.pack_id) return;
+    if (!packId) return;
     let active = true;
     void effectPacks().then(
       (found) => {
@@ -22,7 +33,11 @@ export function PluginSourceDetails({ plugin }: { plugin: Lv2Plugin }) {
     return () => {
       active = false;
     };
-  }, [plugin.pack_id]);
-  const source = lv2Source(plugin, packs);
+  }, [packId]);
+  return plugin ? lv2Source(plugin, packs) : undefined;
+}
+
+export function PluginSourceDetails({ plugin }: { plugin: Lv2Plugin }) {
+  const source = usePluginSource(plugin);
   return source ? <SourceCard source={source} /> : null;
 }
