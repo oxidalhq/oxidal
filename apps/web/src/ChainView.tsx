@@ -207,19 +207,24 @@ export function SlotTile({
   dropBefore?: boolean;
   onAdd: () => void;
 }) {
+  // The same free slot as the map and the design system's tree: a round,
+  // dashed +, not a card. Running down a phone it says Add beside the +.
   return (
-    <Button
-      variant="outline"
+    <button
       type="button"
-      className="relative min-h-touch shrink-0 gap-1 border-dashed bg-background px-3 text-muted-foreground group-data-[orientation=vertical]/chain:self-start group-data-[orientation=vertical]/route:self-start data-drop-before:border-solid data-drop-before:outline-2 data-drop-before:outline-brand"
+      className="relative inline-flex size-10 shrink-0 items-center justify-center gap-1 rounded-full border-2 border-dashed border-input bg-background text-muted-foreground group-data-[orientation=vertical]/chain:my-1 group-data-[orientation=vertical]/chain:h-9 group-data-[orientation=vertical]/chain:w-24 group-data-[orientation=vertical]/chain:self-start group-data-[orientation=vertical]/route:my-1 group-data-[orientation=vertical]/route:h-9 group-data-[orientation=vertical]/route:w-24 group-data-[orientation=vertical]/route:self-start hover:border-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-40 data-drop-before:border-solid data-drop-before:outline-2 data-drop-before:outline-brand [@media(pointer:coarse)]:size-touch"
       data-tile={id}
       data-drop-before={dropBefore || undefined}
       aria-label="Add a block here"
+      title="Add a block here"
       disabled={disabled}
       onClick={onAdd}
     >
-      <Plus aria-hidden="true" /> Add
-    </Button>
+      <Plus weight="bold" className="size-3.5" aria-hidden="true" />
+      <span className="hidden text-xs small-caps group-data-[orientation=vertical]/chain:inline group-data-[orientation=vertical]/route:inline">
+        Add
+      </span>
+    </button>
   );
 }
 

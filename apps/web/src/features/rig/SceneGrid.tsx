@@ -33,6 +33,8 @@ export function SceneGrid({
     source: string;
   }>();
   const [copyNotice, setCopyNotice] = useState('');
+  /** Show only the blocks that play differently in some scene. */
+  const [diffOnly, setDiffOnly] = useState(false);
   const control = vm.state.control;
   if (!control?.scenes || !rig.matching) return null;
   const manifest = rig.matching.manifest;
@@ -120,6 +122,10 @@ export function SceneGrid({
           which draft to share.
         </p>
       )}
+      <label className="mb-3 flex items-center gap-2 text-sm">
+        <Switch checked={diffOnly} onCheckedChange={setDiffOnly} />
+        Show only blocks that differ between scenes
+      </label>
       <div className="max-w-full overflow-x-auto rounded-lg border border-border">
         <table className="w-full border-collapse text-sm">
           <caption className="sr-only">
@@ -166,16 +172,47 @@ export function SceneGrid({
             </tr>
           </thead>
           <tbody>
-            {nodes.map((node) => {
-              const label = vm.describeNode(node).block.label;
+            {(diffOnly
+              ? nodes.filter(
+                  (node) =>
+                    new Set(
+                      scenes.map(
+                        (scene) =>
+                          draft?.bypass?.[scene.id]?.find(
+                            (b) => b.node === node.id,
+                          )?.value ??
+                          scene.bypass?.find((b) => b.node === node.id)
+                            ?.value ??
+                          node.bypassed ??
+                          false,
+                      ),
+                    ).size > 1,
+                )
+              : nodes
+            ).map((node) => {
+              const described = vm.describeNode(node).block;
+              const label = described.label;
               return (
                 <tr key={node.id} className="border-b border-border">
                   <th
                     scope="row"
                     className="sticky left-0 z-10 bg-card px-3 py-2 text-left font-medium"
                   >
-                    <span className="flex items-center gap-1">
-                      {label}
+                    <span className="flex items-center gap-2">
+                      <span
+                        aria-hidden="true"
+                        className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-md bg-secondary [&_svg]:size-5"
+                      >
+                        {described.face}
+                      </span>
+                      <span className="grid min-w-0">
+                        <span className="truncate">{label}</span>
+                        {described.caption && (
+                          <span className="truncate text-xs font-normal text-muted-foreground">
+                            {described.caption}
+                          </span>
+                        )}
+                      </span>
                       {source && canCopy.has(node.id) && (
                         <SceneBlockActions
                           label={label}
@@ -201,7 +238,10 @@ export function SceneGrid({
                     return (
                       <td key={scene.id} className="p-1 text-center">
                         <Button
-                          variant={bypass ? 'ghost' : 'outline'}
+                          variant={bypass ? 'ghost' : 'secondary'}
+                          className={
+                            bypass ? 'text-muted-foreground' : 'gap-1.5'
+                          }
                           aria-label={`${label} in ${scene.name}`}
                           aria-pressed={!bypass}
                           disabled={disabled}
@@ -228,6 +268,12 @@ export function SceneGrid({
                             });
                           }}
                         >
+                          {!bypass && (
+                            <span
+                              aria-hidden="true"
+                              className="size-1.5 rounded-full bg-led-pedal"
+                            />
+                          )}
                           {bypass ? 'Off' : 'On'}
                         </Button>
                       </td>

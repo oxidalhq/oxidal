@@ -25,6 +25,8 @@ vi.mock('./features/stage/StageControls', () => ({
   StageControls: () => null,
 }));
 vi.mock('./api', () => ({
+  // The edge lanes ask for the controller's name.
+  midiDevices: vi.fn(async () => ({ inputs: [], outputs: [] })),
   presetArtwork: vi.fn(),
   playbackCommand: vi.fn(),
   playbackState: vi.fn(),
@@ -60,7 +62,7 @@ vi.mock('./RigPresetSelector', () => ({
 }));
 vi.mock('./GuitarSettings', () => ({
   GuitarPicker: () => null,
-  GuitarSwitch: () => null,
+  GuitarLane: () => null,
 }));
 vi.mock('./SceneMidi', () => ({ MidiControls: () => null }));
 vi.mock('./NativeAuthoring', () => ({ NativeAuthoring: () => null }));
@@ -143,7 +145,8 @@ function show() {
 }
 it('keeps bypass in the block detail, opens a single model inspector and retains display preference', async () => {
   show();
-  await screen.findByRole('button', { name: 'Save copy' });
+  // Save a copy is on the chain bar, as on a mixed preset.
+  await screen.findByRole('button', { name: /^Save/ });
   expect(
     screen.queryByRole('button', { name: 'Compact' }),
   ).not.toBeInTheDocument();

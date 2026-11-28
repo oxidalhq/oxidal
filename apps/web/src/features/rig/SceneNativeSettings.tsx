@@ -1,7 +1,5 @@
-import { Checkbox } from '@oxidal/design-system/components/checkbox';
-import { Caption } from '@oxidal/design-system/components/text';
-
 import type { useNativeSceneSettings } from './SceneNativeSettingsState';
+import { SceneSettingsList } from './SceneSettingsList';
 
 export function NativeSceneSettings({
   settings,
@@ -18,33 +16,19 @@ export function NativeSceneSettings({
   return (
     <>
       {warning}
-      <fieldset className="my-2 grid gap-1.5">
-        <legend className="font-semibold">Capture settings in scenes</legend>
-        <Caption>
-          Tick a changed setting to keep it per scene. Capture gain and mix
-          glide over 50 ms.
-        </Caption>
-        <ul className="grid gap-1">
-          {settings.offered.map((s) => (
-            <li key={s.key}>
-              <label className="flex min-h-touch items-center gap-2">
-                <Checkbox
-                  checked={s.inScenes || settings.chosen.has(s.key)}
-                  disabled={s.inScenes}
-                  onCheckedChange={() => settings.toggle(s.key)}
-                />
-                <span>
-                  {s.label} {s.display}
-                  <Caption as="span">
-                    {s.inScenes ? ' · in every scene' : ''}
-                    {s.changed ? ' · changed' : ''}
-                  </Caption>
-                </span>
-              </label>
-            </li>
-          ))}
-        </ul>
-      </fieldset>
+      <SceneSettingsList
+        title="Capture settings in scenes"
+        help="Tick a changed setting to keep it per scene. Capture gain and mix glide over 50 ms."
+        rows={settings.offered.map((s) => ({
+          key: s.key,
+          label: s.label,
+          display: s.display,
+          inScenes: s.inScenes,
+          changed: s.changed,
+          checked: s.inScenes || settings.chosen.has(s.key),
+          onToggle: () => settings.toggle(s.key),
+        }))}
+      />
     </>
   );
 }

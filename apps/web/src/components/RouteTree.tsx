@@ -6,6 +6,7 @@ import {
   type ReactNode,
   type RefObject,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
@@ -22,6 +23,53 @@ import { panLabel } from '../lib/panLabel';
 import type { IdStep, RigBlockVM } from '../rigChain';
 import { pathMix, type RouteAt } from '../rigRoute';
 
+/**
+ * A connection between two parts of the chain: a dashed line ending in an
+ * arrow at the part it feeds, as the chain map draws it. Running down a
+ * phone the line and its arrow point down.
+ */
+const LINK = [
+  'group/gap relative grid min-h-touch w-11 shrink-0 place-items-center',
+  'before:absolute before:inset-x-0 before:top-1/2 before:h-0 before:border-t before:border-dashed before:border-wire',
+  'after:absolute after:top-1/2 after:right-0 after:-translate-y-1/2 after:border-y-4 after:border-l-[6px] after:border-y-transparent after:border-l-wire',
+  'group-data-[orientation=vertical]/route:min-h-5 group-data-[orientation=vertical]/route:w-13 group-data-[orientation=vertical]/route:has-[button]:min-h-touch',
+  'group-data-[orientation=vertical]/route:before:inset-x-auto group-data-[orientation=vertical]/route:before:inset-y-0 group-data-[orientation=vertical]/route:before:h-auto group-data-[orientation=vertical]/route:before:left-1/2 group-data-[orientation=vertical]/route:before:border-t-0 group-data-[orientation=vertical]/route:before:border-l',
+  'group-data-[orientation=vertical]/route:after:top-auto group-data-[orientation=vertical]/route:after:right-auto group-data-[orientation=vertical]/route:after:bottom-0 group-data-[orientation=vertical]/route:after:left-1/2 group-data-[orientation=vertical]/route:after:-translate-x-1/2 group-data-[orientation=vertical]/route:after:translate-y-0 group-data-[orientation=vertical]/route:after:rotate-90',
+].join(' ');
+
+/**
+ * Where the split and join bars start and end: from the line of the first
+ * path to the line of the last, so neither bar runs past them.
+ */
+function useBus(frame: RefObject<HTMLDivElement | null>, key: string) {
+  const [bus, setBus] = useState<{ top: number; height: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = frame.current;
+    if (!el) return;
+    const measure = () => {
+      const lines = el.querySelectorAll<HTMLElement>(
+        ':scope > .route-path > [data-line]',
+      );
+      const first = lines[0];
+      const last = lines[lines.length - 1];
+      if (!first || !last) return setBus(null);
+      const top = first.offsetTop + first.offsetHeight / 2;
+      const bottom = last.offsetTop + last.offsetHeight / 2;
+      setBus((old) =>
+        old && old.top === top && old.height === bottom - top
+          ? old
+          : { top, height: bottom - top },
+      );
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [frame, key]);
+  return bus;
+}
+
 type Split = Exclude<IdStep, string>;
 /** A key that moves the focused block: Alt+arrow, the keyboard drag. */
 export type MoveKey = 'left' | 'right' | 'up' | 'down';
@@ -35,6 +83,8 @@ export type SceneLanes = {
   /** Confirmed branch readback in route order. Unknown branches stay visible. */
   enabled?: (boolean | undefined)[];
 };
+
+export type RouteTreeProps = Props;
 
 type Props = {
   route: IdStep[];
@@ -54,6 +104,11 @@ type Props = {
   /** Blocks (by block id) that can be dragged and moved by key. */
   movable?: (id: string) => boolean;
   onMove?: (id: string, at: RouteAt) => void;
+  /**
+   * Add a block just before this tile, inside its TONE3000 chain, using one
+   * of the chain's free positions.
+   */
+  onAddBefore?: (tile: string) => void;
   onKey?: (id: string, key: MoveKey) => void;
   disabled?: boolean;
   /** E-paper: the chain as a numbered list, buttons only. */
@@ -61,6 +116,8 @@ type Props = {
   /** Paths folded from a graph for drawing only: their levels are not known. */
   plain?: boolean;
   label?: string;
+  /** The switch of chain view, drawn in the top corner. */
+  toolbarExtra?: ReactNode;
 };
 
 /**
@@ -112,12 +169,17 @@ export function RouteTree(props: Props) {
   return (
     <div
       ref={root}
-      className="route-canvas group/route min-w-0 data-dragging:select-none"
+      className="route-canvas group/route relative min-w-0 data-dragging:select-none"
       data-orientation={vertical ? 'vertical' : 'horizontal'}
       role="group"
       aria-label={label}
       data-dragging={drag.active || undefined}
     >
+      {props.toolbarExtra && (
+        <div className="shadow-md absolute top-0 right-0 z-10 rounded-lg border border-border bg-popover p-1">
+          {props.toolbarExtra}
+        </div>
+      )}
       <div
         ref={scroller}
         className="overflow-x-auto pt-1 pb-2 group-data-[orientation=vertical]/route:overflow-visible"
@@ -198,15 +260,30 @@ function RowSteps(
   const { steps, owner, drag } = props;
   const at = (index: number): RouteAt =>
     owner ? { split: owner.split.split, path: owner.path, index } : top(index);
-  const gap = (index: number) => {
+  // A path's last connection runs on to the join bar, so its arrow lands there.
+  // A block's free slot beside this place already offers a +: one is enough.
+  const besideSlot = (index: number) => {
+    const before = steps[index - 1];
+    const after = steps[index];
+    return (
+      (typeof before === 'string' && !!props.tiles(before).at(-1)?.empty) ||
+      (typeof after === 'string' && !!props.tiles(after)[0]?.empty)
+    );
+  };
+  const gap = (index: number, last = false) => {
     const here = at(index);
-    const open = !!props.onGap && !!props.gaps?.(here);
+    const open = !!props.onGap && !!props.gaps?.(here) && !besideSlot(index);
     const key = gapKey(here);
     return (
       <span
         key={`gap-${key}`}
-        className="group/gap relative grid min-h-touch w-11 shrink-0 place-items-center group-data-[orientation=vertical]/route:min-h-5 group-data-[orientation=vertical]/route:w-13 before:absolute before:inset-x-0 before:top-1/2 before:h-px before:bg-wire group-data-[orientation=vertical]/route:before:inset-y-0 group-data-[orientation=vertical]/route:before:left-1/2 group-data-[orientation=vertical]/route:before:h-auto group-data-[orientation=vertical]/route:before:w-px group-data-[orientation=vertical]/route:has-[button]:min-h-touch"
-        data-gap={open ? key : undefined}
+        className={
+          last && owner
+            ? `${LINK} min-w-11 flex-1 group-data-[orientation=vertical]/route:flex-none group-data-[orientation=vertical]/route:after:hidden`
+            : LINK
+        }
+        // A place a dragged block can land, even where nothing can be added.
+        data-gap={open || props.onMove ? key : undefined}
         data-drop={drag.over === key || undefined}
         data-drop-before={drag.over === key || undefined}
       >
@@ -214,7 +291,9 @@ function RowSteps(
           <Button
             variant="outline"
             type="button"
-            className="relative size-9 min-h-0 min-w-0 rounded-full border-wire bg-background p-0 text-muted-foreground group-data-drop/gap:border-2 group-data-drop/gap:border-foreground after:absolute after:-inset-2 hover:border-foreground hover:text-foreground sm:size-7 [@media(pointer:coarse)]:min-w-0"
+            // The chain map's + on a line: small, dashed, half strength until
+            // pointed at; its target is larger than it looks.
+            className="relative size-7 min-h-0 min-w-0 rounded-full border-dashed border-border bg-background p-0 text-muted-foreground opacity-50 group-data-drop/gap:border-2 group-data-drop/gap:border-solid group-data-drop/gap:border-foreground group-data-drop/gap:opacity-100 after:absolute after:-inset-2 hover:border-foreground hover:text-foreground hover:opacity-100 focus-visible:opacity-100 sm:size-6 [&_svg]:size-3 [@media(pointer:coarse)]:min-w-0"
             aria-label={describe(here, owner?.name ?? null)}
             disabled={props.disabled}
             onClick={() => props.onGap!(here)}
@@ -243,13 +322,10 @@ function RowSteps(
           )
         : [];
     out.push(
-      <div
+      <SplitFrame
         key={step.split}
-        className="grid shrink-0 gap-2 border-x-2 border-wire py-1 group-data-[orientation=vertical]/route:min-w-0 group-data-[orientation=vertical]/route:border-r-0 group-data-[orientation=vertical]/route:pl-3"
-        role="group"
-        aria-label={
-          scene ? 'Scene lanes' : `Split · ${step.branches.length} paths`
-        }
+        label={scene ? 'Scene lanes' : `Split · ${step.branches.length} paths`}
+        layout={`${step.branches.length}:${props.silentExpanded}`}
       >
         {step.branches.map((branch, path) => {
           if (
@@ -274,14 +350,18 @@ function RowSteps(
               }
               data-dim={(scene && !sounding) || undefined}
             >
-              <span className="pl-2 font-mono text-2xs font-medium whitespace-nowrap text-muted-foreground group-data-[orientation=vertical]/route:wrap-anywhere group-data-[orientation=vertical]/route:whitespace-normal">
+              {/* The chain map's path label: a small rounded tag. */}
+              <span className="shadow-sm w-fit max-w-full rounded-full border border-border bg-card px-2 py-0.5 text-[11px] whitespace-nowrap group-data-[orientation=vertical]/route:wrap-anywhere group-data-[orientation=vertical]/route:whitespace-normal">
                 {scene
                   ? `${path + 1} ${scene.names[path] ?? ''}${sounding ? ' · Sounding' : ''}`
                   : props.plain
                     ? `Path ${path + 1}`
                     : caption(step, path)}
               </span>
-              <div className="flex w-max shrink-0 items-center group-data-[orientation=vertical]/route:w-full group-data-[orientation=vertical]/route:min-w-0 group-data-[orientation=vertical]/route:flex-col group-data-[orientation=vertical]/route:items-stretch">
+              <div
+                data-line
+                className="flex min-w-max shrink-0 items-center group-data-[orientation=vertical]/route:w-full group-data-[orientation=vertical]/route:min-w-0 group-data-[orientation=vertical]/route:flex-col group-data-[orientation=vertical]/route:items-stretch"
+              >
                 {branch.length ? (
                   <RowSteps
                     {...props}
@@ -290,10 +370,7 @@ function RowSteps(
                   />
                 ) : (
                   <>
-                    <span
-                      className="group/gap relative grid min-h-touch w-11 shrink-0 place-items-center group-data-[orientation=vertical]/route:min-h-5 group-data-[orientation=vertical]/route:w-13 before:absolute before:inset-x-0 before:top-1/2 before:h-px before:bg-wire group-data-[orientation=vertical]/route:before:inset-y-0 group-data-[orientation=vertical]/route:before:left-1/2 group-data-[orientation=vertical]/route:before:h-auto group-data-[orientation=vertical]/route:before:w-px group-data-[orientation=vertical]/route:has-[button]:min-h-touch"
-                      aria-hidden="true"
-                    />
+                    <span className={LINK} aria-hidden="true" />
                     {props.onAdd ? (
                       <Button
                         variant="outline"
@@ -313,7 +390,7 @@ function RowSteps(
                       </span>
                     )}
                     <span
-                      className="group/gap relative grid min-h-touch w-11 shrink-0 place-items-center group-data-[orientation=vertical]/route:min-h-5 group-data-[orientation=vertical]/route:w-13 before:absolute before:inset-x-0 before:top-1/2 before:h-px before:bg-wire group-data-[orientation=vertical]/route:before:inset-y-0 group-data-[orientation=vertical]/route:before:left-1/2 group-data-[orientation=vertical]/route:before:h-auto group-data-[orientation=vertical]/route:before:w-px group-data-[orientation=vertical]/route:has-[button]:min-h-touch"
+                      className={`${LINK} min-w-11 flex-1 group-data-[orientation=vertical]/route:flex-none group-data-[orientation=vertical]/route:after:hidden`}
                       aria-hidden="true"
                     />
                   </>
@@ -329,11 +406,48 @@ function RowSteps(
             onToggle={props.onToggleSilent}
           />
         )}
-      </div>,
+      </SplitFrame>,
     );
   });
-  out.push(gap(steps.length));
+  out.push(gap(steps.length, true));
   return <>{out}</>;
+}
+
+/**
+ * The paths of a split, between the split bar and the join bar. The bars are
+ * dashed like every connection and run only between the first and last
+ * path's lines. Running down a phone, one bar runs down the left.
+ */
+function SplitFrame({
+  label,
+  layout,
+  children,
+}: {
+  label: string;
+  layout: string;
+  children: ReactNode;
+}) {
+  const frame = useRef<HTMLDivElement>(null);
+  const bus = useBus(frame, layout);
+  return (
+    <div
+      ref={frame}
+      className="relative grid shrink-0 gap-2 py-1 group-data-[orientation=vertical]/route:min-w-0 group-data-[orientation=vertical]/route:border-l group-data-[orientation=vertical]/route:border-dashed group-data-[orientation=vertical]/route:border-wire group-data-[orientation=vertical]/route:pl-3"
+      role="group"
+      aria-label={label}
+    >
+      {bus &&
+        (['left-0', 'right-0'] as const).map((side) => (
+          <span
+            key={side}
+            aria-hidden="true"
+            className={`pointer-events-none absolute ${side} border-l border-dashed border-wire group-data-[orientation=vertical]/route:hidden`}
+            style={{ top: bus.top, height: bus.height }}
+          />
+        ))}
+      {children}
+    </div>
+  );
 }
 
 function Block(props: Props & { drag: Drag; id: string }) {
@@ -343,7 +457,7 @@ function Block(props: Props & { drag: Drag; id: string }) {
   // A run of empty slots shows as one + (7.28); it adds at the first.
   return (
     <div
-      className="relative isolate flex shrink-0 gap-1 group-data-[orientation=vertical]/route:w-full group-data-[orientation=vertical]/route:min-w-0 group-data-[orientation=vertical]/route:flex-col group-data-[orientation=vertical]/route:items-stretch group-data-[orientation=vertical]/route:gap-3 group-data-[orientation=vertical]/route:before:absolute group-data-[orientation=vertical]/route:before:inset-y-0 group-data-[orientation=vertical]/route:before:left-6 group-data-[orientation=vertical]/route:before:-z-1 group-data-[orientation=vertical]/route:before:border-l group-data-[orientation=vertical]/route:before:border-wire data-lifted:relative data-lifted:z-2 data-lifted:opacity-70"
+      className="relative isolate flex shrink-0 items-center group-data-[orientation=vertical]/route:w-full group-data-[orientation=vertical]/route:min-w-0 group-data-[orientation=vertical]/route:flex-col group-data-[orientation=vertical]/route:items-stretch group-data-[orientation=vertical]/route:gap-3 group-data-[orientation=vertical]/route:before:absolute group-data-[orientation=vertical]/route:before:inset-y-0 group-data-[orientation=vertical]/route:before:left-6 group-data-[orientation=vertical]/route:before:-z-1 group-data-[orientation=vertical]/route:before:border-l group-data-[orientation=vertical]/route:before:border-wire data-lifted:relative data-lifted:z-2 data-lifted:opacity-70"
       data-node={id}
       data-flip={id}
       data-lifted={drag.moving === id || undefined}
@@ -351,7 +465,16 @@ function Block(props: Props & { drag: Drag; id: string }) {
     >
       {tiles
         .filter((t, i) => !(t.empty && tiles[i - 1]?.empty))
-        .map((t) =>
+        .map((t, i) => [
+          // Blocks inside one node are joined like any others, so a free
+          // slot sits centred between its neighbours.
+          i > 0 && (
+            <span
+              key={`link-${t.id}`}
+              aria-hidden="true"
+              className={`${LINK} group-data-[orientation=vertical]/route:hidden`}
+            />
+          ),
           t.empty ? (
             props.onSlot && (
               <SlotTile
@@ -386,7 +509,7 @@ function Block(props: Props & { drag: Drag; id: string }) {
               />
             </span>
           ),
-        )}
+        ])}
     </div>
   );
 }
@@ -410,32 +533,36 @@ function ListSteps(props: Props & { steps: IdStep[] }) {
     <>
       {props.steps.map((step) =>
         typeof step === 'string' ? (
-          props.tiles(step).map((t) => (
-            <li key={t.id}>
-              {t.empty ? (
-                props.onSlot && (
+          // A run of free slots is one row, as the tree shows one +.
+          props
+            .tiles(step)
+            .filter((t, i, all) => !(t.empty && all[i - 1]?.empty))
+            .map((t) => (
+              <li key={t.id}>
+                {t.empty ? (
+                  props.onSlot && (
+                    <Button
+                      variant="outline"
+                      disabled={props.disabled}
+                      onClick={() => props.onSlot!(t.id)}
+                    >
+                      Add a block here
+                    </Button>
+                  )
+                ) : (
                   <Button
                     variant="outline"
+                    aria-pressed={props.selected === t.id}
+                    aria-label={t.on ? t.label : `${t.label}, bypassed`}
                     disabled={props.disabled}
-                    onClick={() => props.onSlot!(t.id)}
+                    onClick={() => props.onSelect(t.id)}
                   >
-                    Add a block here
+                    {t.label}
+                    {t.on ? '' : ' (off)'}
                   </Button>
-                )
-              ) : (
-                <Button
-                  variant="outline"
-                  aria-pressed={props.selected === t.id}
-                  aria-label={t.on ? t.label : `${t.label}, bypassed`}
-                  disabled={props.disabled}
-                  onClick={() => props.onSelect(t.id)}
-                >
-                  {t.label}
-                  {t.on ? '' : ' (off)'}
-                </Button>
-              )}
-            </li>
-          ))
+                )}
+              </li>
+            ))
         ) : (
           <ListSplit key={step.split} {...props} split={step} />
         ),

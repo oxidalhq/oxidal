@@ -117,6 +117,7 @@ export function StompControls({
             )}
             {!stage && (
               <Button
+                size="sm"
                 variant="ghost"
                 disabled={locked}
                 onClick={() =>
@@ -132,6 +133,7 @@ export function StompControls({
       {!stage && !!blocks.length && groups.length < 16 && (
         <Button
           variant="outline"
+          size="sm"
           disabled={locked}
           onClick={() => setEditing({ revision: matching.revision, id: null })}
         >

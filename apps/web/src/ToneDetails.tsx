@@ -1,8 +1,8 @@
 import { Caption } from '@oxidal/design-system/components/text';
 import {
+  ExpandablePicture,
   SourceCard,
   SourceLine,
-  SourcePicture,
 } from '@oxidal/design-system/widgets/block-source';
 
 import type { TonePage } from './api';
@@ -58,7 +58,7 @@ function ToneCard({
   return (
     <div className="grid gap-2">
       <div className="flex min-w-0 items-center gap-2">
-        <SourcePicture source={source} className="size-12 shrink-0" />
+        <ExpandablePicture source={source} className="size-12 shrink-0" />
         <SourceLine source={source} />
       </div>
       <details>

@@ -23,6 +23,7 @@ export function RowMenu({
   note,
   disabled,
   variant = 'ghost',
+  size = 'icon-sm',
 }: {
   name: string;
   items: MenuItem[];
@@ -30,13 +31,15 @@ export function RowMenu({
   note?: string;
   disabled?: boolean;
   variant?: 'ghost' | 'outline';
+  /** `icon` beside full-height buttons, such as a profile's Save and Revert. */
+  size?: 'icon' | 'icon-sm';
 }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
           variant={variant}
-          size="icon"
+          size={size}
           disabled={disabled}
           aria-label={label}
         >

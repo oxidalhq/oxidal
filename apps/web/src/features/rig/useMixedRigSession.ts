@@ -1239,6 +1239,14 @@ export function useMixedRigSession({
       onClose: clearSelection,
     },
   };
+  // A move, an added block or any other chain edit saves a revised preset
+  // and plays it. While the device swaps them it can briefly report no
+  // preset; the Rig keeps showing the chain it had, so nothing is redrawn
+  // from scratch and the panel keeps its place. The bar says it is applying.
+  const lastView = useRef<typeof view>(null);
+  if (view && view.canvasRoute) lastView.current = view;
+  const shownView =
+    (!view || !view.canvasRoute) && editing ? lastView.current : view;
   async function saveCopy(target?: VersionTarget) {
     const cursor = current.current;
     if (
@@ -1299,6 +1307,48 @@ export function useMixedRigSession({
       if (alive.current) setBusy(false);
     }
   }
+  /**
+   * + on a line inside a TONE3000 chain: one of the chain's free positions
+   * moves to just before this block, then its chooser opens to fill it. The
+   * chain keeps all its positions, so this is a reorder.
+   */
+  async function addBefore(tileId: string) {
+    const { laneTarget } = view!;
+    const at = laneTarget(tileId);
+    const control = current.current?.control;
+    if (!at?.block || !control) return;
+    const status = control.authoring?.find((r) => r.node === at.node)?.status;
+    const lane = (['left', 'right'] as const).find((l) =>
+      status?.layout[l].some((b) => b.id === at.block),
+    );
+    if (!status || !lane) return;
+    const blocks = status.layout[lane];
+    const free = blocks.find((b) => b.insert)?.id;
+    if (!free) {
+      setError(
+        'This TONE3000 chain has no free position. Remove a block from it first.',
+      );
+      return;
+    }
+    const ids = blocks.map((b) => b.id);
+    const rest = ids.filter((id) => id !== free);
+    const place = rest.indexOf(at.block);
+    const order = [...rest.slice(0, place), free, ...rest.slice(place)];
+    if (order.join() !== ids.join())
+      await command({
+        kind: 'authoring',
+        command: {
+          session: control.session,
+          expected_revision: control.revision,
+          node: at.node,
+          action: {
+            kind: 'edit',
+            edit: { kind: 'reorder', lane, block_ids: order },
+          },
+        },
+      });
+    setLaneSlot({ node: at.node, target: free });
+  }
   /** A dragged block dropped on a gap, in its own path or another. */
   function dropBlock(id: string, at: RouteAt) {
     void editChain((route) => routeMoveTo(route, id, at));
@@ -1346,7 +1396,7 @@ export function useMixedRigSession({
     });
   }
   return {
-    view,
+    view: shownView,
     sourceOrigin,
     connected,
     revision,
@@ -1446,6 +1496,7 @@ export function useMixedRigSession({
     saveCopy,
     resolveMixedCopy,
     dropBlock,
+    addBefore,
     selectLaneTile,
     switchTile,
     setSelection,

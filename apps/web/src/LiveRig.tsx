@@ -1,11 +1,5 @@
-import {
-  CaretDown,
-  DotsThree,
-  Lightning,
-  PencilSimple,
-  Plus,
-} from '@phosphor-icons/react';
-import { useEffect, useRef, useState } from 'react';
+import { DotsThree, Plus as PlusIcon } from '@phosphor-icons/react';
+import { useContext, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { Card } from '@oxidal/design-system/components/card';
@@ -24,18 +18,21 @@ import { RelativeAdjustment as TouchAdjust } from '@oxidal/design-system/compone
 import { Slider } from '@oxidal/design-system/components/slider';
 import { Switch } from '@oxidal/design-system/components/switch';
 import { Caption, Title } from '@oxidal/design-system/components/text';
-import { Toggle } from '@oxidal/design-system/components/toggle';
 import { glyphFor } from '@oxidal/design-system/lib/block-glyphs';
 import { shortValue } from '@oxidal/design-system/lib/preview';
-import { useVerticalRig } from '@oxidal/design-system/lib/use-media';
+import { useAllControls } from '@oxidal/design-system/lib/use-all-controls';
+import { useMedia, useVerticalRig } from '@oxidal/design-system/lib/use-media';
+import { BarSlotContext } from '@oxidal/design-system/patterns/dock-context';
 import { RigAudioUnavailable } from '@oxidal/design-system/patterns/rig-audio-unavailable';
 import { RigHeading } from '@oxidal/design-system/patterns/rig-heading';
+import { PerformButton } from '@oxidal/design-system/patterns/rig-top-bar';
+import { BlockDock } from '@oxidal/design-system/widgets/block-dock';
 import {
   BlockEditor,
+  BlockFullEditor,
   type BlockModel,
 } from '@oxidal/design-system/widgets/block-editor';
 import { SourceCard } from '@oxidal/design-system/widgets/block-source';
-import { RouteView } from '@oxidal/design-system/widgets/route-view';
 import {
   BlockPanelControl,
   SelectedBlockPanel,
@@ -61,9 +58,9 @@ import {
 import { ArtworkDeck } from './AssetArtwork';
 import { BlockBandGains } from './BlockBandGains';
 import { BoostControl } from './BoostControl';
-import { ChainView } from './ChainView';
 import { EditQueue } from './editQueue';
 import { SaveSoundVersion } from './features/library/SaveSoundVersion';
+import { NativeChainWorkspace } from './features/rig/NativeChainWorkspace';
 import { StageControls } from './features/stage/StageControls';
 import { GearIcon } from './GearIcon';
 import type { VersionTarget } from './generated/contract';
@@ -97,6 +94,7 @@ import {
   shortControlLabel,
 } from './rigControls';
 import { RigPresetSelector } from './RigPresetSelector';
+import type { RouteAt } from './rigRoute';
 import { MidiControls } from './SceneMidi';
 import { SlotChooser } from './SlotChooser';
 import { type Placement, playingTone, presetWithEffect } from './slotEffects';
@@ -122,8 +120,9 @@ export function LiveRig({
   onAudioSetup: () => void;
   hideInactive?: boolean;
 }) {
+  // With the floating capsule, Perform sits beside the preset in the capsule.
+  const inCapsule = !!useContext(BarSlotContext)?.capsule;
   const [state, setState] = useState<AudioState | null>(null);
-  const [editingChain, setEditingChain] = useState(false);
   const [chainView, setChainView] = useState<'compact' | 'artwork'>(() => {
     try {
       return localStorage.getItem('oxidal-chain-view') === 'artwork'
@@ -192,6 +191,9 @@ export function LiveRig({
   const target =
     selection.session === state?.session ? selection.target : 'outputLevel';
   const phone = useVerticalRig();
+  const narrow = useMedia('(max-width: 47.99rem)');
+  // Every control: in the block card on a laptop, in a sheet otherwise.
+  const allControls = useAllControls();
   const [fullBlock, setFullBlock] = useState<string | null>(null);
   const [quickBlock, setQuickBlock] = useState<string | null>(null);
   // A closed phone sheet must not reopen on top of a different dialog
@@ -1180,6 +1182,71 @@ export function LiveRig({
     if (!open && adjustment.current && !adjusting) void finishAdjustment(true);
     setFullBlock(open ? (selectedBlock ?? null) : null);
   }
+  /**
+   * A block dragged onto a line of its chain: it is taken out and put back
+   * before the block (or free position) the line leads to, or at the end.
+   * The chain keeps all its positions, so this is a reorder; free positions
+   * shift. A block stays in its own chain (left or right).
+   */
+  function moveBlockTo(id: string, at: RouteAt) {
+    const layout = state?.authoring?.layout;
+    if (!layout) return;
+    const lane: 'left' | 'right' = at.split && at.path === 1 ? 'right' : 'left';
+    const ids = layout[lane].map((block) => block.id);
+    if (!ids.includes(id)) {
+      setError('A block moves within its own chain, left or right.');
+      return;
+    }
+    // The drawn lane shows a run of free positions as one.
+    const drawn = (chainLanes.find((l) => l.id === lane)?.blocks ?? [])
+      .filter((b, i, all) => !(b.empty && all[i - 1]?.empty))
+      .map((b) => b.id);
+    const before = drawn[at.index];
+    const rest = ids.filter((x) => x !== id);
+    const found = before && before !== id ? rest.indexOf(before) : -1;
+    const place = found < 0 ? rest.length : found;
+    const order = [...rest.slice(0, place), id, ...rest.slice(place)];
+    if (order.join() === ids.join()) return;
+    void author({
+      kind: 'edit',
+      edit: { kind: 'reorder', lane, block_ids: order },
+    });
+  }
+  /** A lane's free positions (insertion tiles the device offers to fill). */
+  const freeIn = (lane: 'left' | 'right') => {
+    const slotIds = new Set(state?.slots?.map((slot) => slot.target));
+    return (state?.authoring?.layout?.[lane] ?? []).filter(
+      (b) => b.insert && slotIds.has(b.id),
+    );
+  };
+  const laneOf = (at: RouteAt): 'left' | 'right' =>
+    at.split && at.path === 1 ? 'right' : 'left';
+  /**
+   * + on a line: one of the chain's free positions moves to this place (a
+   * reorder; the chain keeps all its positions), then its chooser opens.
+   */
+  async function addAt(at: RouteAt) {
+    const layout = state?.authoring?.layout;
+    if (!layout) return;
+    const lane = laneOf(at);
+    const free = freeIn(lane)[0]?.id;
+    if (!free) return;
+    const ids = layout[lane].map((b) => b.id);
+    const drawn = (chainLanes.find((l) => l.id === lane)?.blocks ?? [])
+      .filter((b, i, all) => !(b.empty && all[i - 1]?.empty))
+      .map((b) => b.id);
+    const before = drawn[at.index];
+    const rest = ids.filter((x) => x !== free);
+    const found = before && before !== free ? rest.indexOf(before) : -1;
+    const place = found < 0 ? rest.length : found;
+    const order = [...rest.slice(0, place), free, ...rest.slice(place)];
+    if (order.join() !== ids.join())
+      await author({
+        kind: 'edit',
+        edit: { kind: 'reorder', lane, block_ids: order },
+      });
+    setSlot(free);
+  }
   const blockActions = selectedBlock && orderedBlocks.length > 1 && (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -1361,7 +1428,21 @@ export function LiveRig({
         )}
         onChange={changeBlockModel}
         changeDisabled={disabled || !!draft}
-        onAllControls={() => setNativeFull(true)}
+        onAllControls={() =>
+          allControls.inPlace ? allControls.toggle() : setNativeFull(true)
+        }
+        allControls={
+          allControls.open && blockModel ? (
+            <>
+              {selectedEq && editBlockEq(selectedEq.block_id)}
+              <BlockFullEditor
+                block={blockModel}
+                onControl={(id, value) => void apply(id, value)}
+                disabled={disabled}
+              />
+            </>
+          ) : undefined
+        }
         controlCount={selectedControls.length}
         modelStepper={
           <NativeModelStepper
@@ -1477,6 +1558,16 @@ export function LiveRig({
         {error && <p role="alert">{error}</p>}
       </>
     );
+  // The shared Perform button, as Storybook's capsule draws it.
+  const performButton = (
+    <PerformButton
+      size={inCapsule ? 'xs' : 'sm'}
+      compact={narrow}
+      label="Perform view"
+      disabled={disabled || !!draft || !!picker}
+      onPerform={() => setPerformance(true)}
+    />
+  );
   return (
     <section
       className="live-rig landscape:max-h-[500px]:p-0 min-w-0 space-y-2 py-0 py-1 max-[600px]:p-0 [&_[data-slot=caption]]:my-2 [&>[data-slot=rig-heading]]:-mx-page [&>details]:border-t [&>details]:border-border [&>details]:py-1 [&>details[open]>summary]:mb-2 [&>details[open]>summary]:text-foreground"
@@ -1498,52 +1589,27 @@ export function LiveRig({
             onSelect={(choice) => void recall(choice)}
           />
         }
+        primary={inCapsule ? performButton : undefined}
       >
-        <StageControls connected={connected} compact />
-        <Button
-          variant="outline"
-          aria-label="Perform view"
-          disabled={disabled || !!draft || !!picker}
-          onClick={() => setPerformance(true)}
-        >
-          <Lightning aria-hidden="true" />
-          <span className="phone-hidden">Perform</span>
-        </Button>
-        <TunerButton />
-        {/* Save and the preset actions form one split button. */}
-        <div className="inline-flex shrink-0" role="group" aria-label="Save">
+        {/* With the floating capsule, Mute is in the capsule and Protect in its ☰ menu. */}
+        {!inCapsule && <StageControls connected={connected} compact />}
+        {!inCapsule && performButton}
+        {/* Save a copy is on the chain bar; Tuner and the preset actions
+            sit with the capsule's Rig tools, as on a mixed preset. */}
+        <div role="group" aria-label="Rig tools" className="flex items-center">
+          <TunerButton compact />
           <Button
-            className="rounded-r-none"
-            aria-label="Save copy"
-            title="Save a copy for offline use"
-            variant={state.modified ? 'default' : 'outline'}
-            disabled={disabled || !!draft || !!picker}
-            onClick={() => {
-              setCopyName(state.preset_name ?? 'My preset');
-              setSaveOpening(state);
-            }}
-          >
-            Save
-          </Button>
-          <Button
-            variant={state.modified ? 'default' : 'outline'}
+            variant="ghost"
+            size="sm"
             aria-label="Preset actions"
             aria-haspopup="dialog"
             title="MIDI, Revert, Match level and appearance"
-            className="min-w-touch rounded-l-none border-l-current/35 px-2"
             disabled={disabled || !!draft || !!picker}
             onClick={() => setActionsOpen(true)}
           >
-            <CaretDown aria-hidden="true" />
+            More
           </Button>
         </div>
-        <Toggle
-          pressed={editingChain}
-          onPressedChange={setEditingChain}
-          disabled={disabled || !!draft}
-        >
-          <PencilSimple /> Edit
-        </Toggle>
       </RigHeading>
       {state.copy_on_edit && (
         <div
@@ -1591,705 +1657,756 @@ export function LiveRig({
           </Button>
         </div>
       )}
-      <div
-        className="rig-workspace grid grid-cols-[minmax(0,1fr)] items-start gap-3"
-        data-inspecting={!!selectedBlock}
-      >
-        <div className="rig-chain-column min-w-0 space-y-3">
-          {editingChain && (
-            <div className="flex min-h-touch flex-wrap items-center gap-0.5 [&>h3]:mr-auto [&>h3]:font-semibold">
-              <h3>Chain</h3>
-              {!!state.slots?.length && (
+      {/* The C2 workspace, as on a mixed preset: the chain and the panel
+          share the screen's height and the panel scrolls on its own. */}
+      <div className="flex h-[calc(100dvh-4rem-var(--safe-top)-var(--app-bottom-height,0px)-var(--spacing-page))] min-h-[30rem]">
+        <NativeChainWorkspace
+          lanes={chainLanes}
+          selected={selectedBlock ?? undefined}
+          onSelect={selectNativeBlock}
+          onSlot={(id) => setSlot(id)}
+          onMove={
+            state.authoring?.layout && !draft && !making
+              ? moveBlockTo
+              : undefined
+          }
+          onGap={
+            state.authoring?.layout && !draft && !making
+              ? (at) => void addAt(at)
+              : undefined
+          }
+          gaps={(at) => freeIn(laneOf(at)).length > 0}
+          disabled={disabled || !!draft || making}
+          onAdd={state.slots?.length ? () => setAdding(true) : undefined}
+          addWaits={
+            state.slots?.length
+              ? undefined
+              : 'This preset has no free position for another block'
+          }
+          undo={{
+            canUndo: !draft && !!state.authoring?.can_undo,
+            canRedo: !draft && !!state.authoring?.can_redo,
+            onUndo: () => void author({ kind: 'undo' }),
+            onRedo: () => void author({ kind: 'redo' }),
+          }}
+          onSave={() => {
+            setCopyName(state.preset_name ?? 'My preset');
+            setSaveOpening(state);
+          }}
+          canSave={!disabled && !draft && !picker}
+          saveTitle="Save a copy for offline use"
+          stream={state.configured?.stream.input}
+          midi={state.midi}
+          midiPort={state.configured?.midi?.input || undefined}
+          boost={
+            state.configured && !state.configured.draft ? (
+              <BoostControl
+                targets={[
+                  {
+                    key: boostKey.tone3000(
+                      state.configured.preset_id,
+                      state.configured.owned,
+                    ),
+                    label: state.preset_name ?? 'This preset',
+                  },
+                ]}
+              />
+            ) : undefined
+          }
+        >
+          {(layout) => (
+            <div
+              className="grid min-w-0 content-start gap-3 pt-2"
+              data-inspecting={!!selectedBlock}
+            >
+              {adding && !state.configured && (
+                <AddBlockChooser
+                  onCancel={() => setAdding(false)}
+                  onChoose={(format) => {
+                    setAdding(false);
+                    setInsertion({ opening: state, format });
+                  }}
+                />
+              )}
+              {matching && (
+                <AdjustmentDialog
+                  title="Match preset level"
+                  onCancel={() => setMatching(null)}
+                >
+                  <LevelMatch
+                    output={state.controls.find(
+                      (c) => c.target === 'outputLevel',
+                    )}
+                    disabled={disabled || busy}
+                    preset={state.preset_name ?? 'Current preset'}
+                    stale={
+                      state.session !== matching.session ||
+                      state.revision !== matching.revision
+                    }
+                    onApply={async (value) => {
+                      const updated = await apply(
+                        'outputLevel',
+                        value,
+                        matching,
+                      );
+                      const reported = updated?.controls.find(
+                        (c) => c.target === 'outputLevel',
+                      );
+                      if (
+                        !updated ||
+                        updated.session !== matching.session ||
+                        !reported ||
+                        Math.abs(reported.value - value) > 0.0001
+                      )
+                        return false;
+                      setMatching((current) =>
+                        current === matching ? updated : current,
+                      );
+                      return true;
+                    }}
+                    onClose={() => setMatching(null)}
+                  />
+                </AdjustmentDialog>
+              )}
+              {actionsOpen && (
+                <AdjustmentDialog
+                  title="Preset actions"
+                  onCancel={() => setActionsOpen(false)}
+                >
+                  <div className="grid divide-y divide-border [&>button]:h-auto [&>button]:justify-start [&>button]:rounded-none [&>button]:py-2.5 [&>button]:text-left [&>button]:whitespace-normal">
+                    <Button
+                      variant="ghost"
+                      type="button"
+                      disabled={disabled || !!draft || !!picker}
+                      onClick={() => {
+                        setActionsOpen(false);
+                        requestMidiAssignments();
+                      }}
+                    >
+                      MIDI assignments…
+                      <Caption as="span">
+                        Assign this preset&apos;s switches and controls
+                      </Caption>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      type="button"
+                      aria-label="Reload saved"
+                      disabled={
+                        disabled ||
+                        !!draft ||
+                        !state.modified ||
+                        !state.configured ||
+                        state.configured.draft
+                      }
+                      onClick={() => {
+                        setActionsOpen(false);
+                        setRestoreOpening(state);
+                      }}
+                    >
+                      Revert to saved…
+                      <Caption as="span">
+                        Discards edits since the last save
+                      </Caption>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      type="button"
+                      disabled={
+                        disabled ||
+                        !!draft ||
+                        state.phase !== 'running' ||
+                        !state.controls.some((c) => c.target === 'outputLevel')
+                      }
+                      onClick={() => {
+                        setActionsOpen(false);
+                        setMatching(state);
+                      }}
+                    >
+                      Match level…
+                      <Caption as="span">
+                        Play for eight seconds to level this preset with the
+                        others
+                      </Caption>
+                    </Button>
+                  </div>
+                  <div
+                    className="mt-3 flex flex-wrap items-center gap-2 [&_[aria-pressed=true]]:bg-foreground [&_[aria-pressed=true]]:text-background [&>span]:mr-auto [&>span]:font-semibold"
+                    role="group"
+                    aria-label="Chain appearance"
+                  >
+                    <span>Chain appearance</span>
+                    {(
+                      [
+                        ['compact', 'Connected icons', 'Icons'],
+                        ['artwork', 'Model artwork', 'Artwork'],
+                      ] as const
+                    ).map(([view, label, text]) => (
+                      <Button
+                        key={view}
+                        variant="outline"
+                        aria-label={label}
+                        aria-pressed={chainView === view}
+                        onClick={() => {
+                          setChainView(view);
+                          try {
+                            localStorage.setItem('oxidal-chain-view', view);
+                          } catch {
+                            /* Optional preference. */
+                          }
+                        }}
+                      >
+                        {text}
+                      </Button>
+                    ))}
+                  </div>
+                </AdjustmentDialog>
+              )}
+              {restoreOpening && (
+                <AdjustmentDialog
+                  title="Reload saved preset?"
+                  onCancel={() => setRestoreOpening(null)}
+                >
+                  <p>
+                    This discards the live edits and reloads the saved version
+                    of {restoreOpening.preset_name}. Audio will briefly restart.
+                  </p>
+                  <ActionRow>
+                    <Button
+                      disabled={
+                        disabled ||
+                        state.session !== restoreOpening.session ||
+                        state.revision !== restoreOpening.revision
+                      }
+                      onClick={() => {
+                        void reloadSaved(restoreOpening);
+                      }}
+                    >
+                      Discard edits and reload
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => setRestoreOpening(null)}
+                    >
+                      Keep editing
+                    </Button>
+                  </ActionRow>
+                  {(state.session !== restoreOpening.session ||
+                    state.revision !== restoreOpening.revision) && (
+                    <p role="status">
+                      The rig changed. Close and reopen Reload saved.
+                    </p>
+                  )}
+                </AdjustmentDialog>
+              )}
+              {making && <p role="status">Making a preset with that effect…</p>}
+              {/* The chain bar leaves Add out when it is compact: the panel
+                  has it then, and only then. */}
+              {layout.phone && !!state.slots?.length && (
                 <Button
-                  variant="ghost"
-                  aria-label="Add block"
-                  disabled={disabled || !!draft}
+                  variant="outline"
+                  size="sm"
+                  className="justify-self-start"
+                  aria-label="Add a block"
+                  disabled={disabled || !!draft || making}
                   onClick={() => setAdding(true)}
                 >
-                  <Plus aria-hidden="true" />
-                  Add
+                  <PlusIcon aria-hidden="true" /> Add a block
                 </Button>
               )}
-              <Button
-                variant="ghost"
-                aria-label="Undo change"
-                title="Undo the last chain edit"
-                disabled={disabled || !!draft || !state.authoring?.can_undo}
-                onClick={() => void author({ kind: 'undo' })}
-              >
-                Undo
-              </Button>
-              <Button
-                variant="ghost"
-                aria-label="Redo change"
-                title="Redo the last undone chain edit"
-                disabled={disabled || !!draft || !state.authoring?.can_redo}
-                onClick={() => void author({ kind: 'redo' })}
-              >
-                Redo
-              </Button>
-            </div>
-          )}
-          {adding && !state.configured && (
-            <AddBlockChooser
-              onCancel={() => setAdding(false)}
-              onChoose={(format) => {
-                setAdding(false);
-                setInsertion({ opening: state, format });
-              }}
-            />
-          )}
-          {matching && (
-            <AdjustmentDialog
-              title="Match preset level"
-              onCancel={() => setMatching(null)}
-            >
-              <LevelMatch
-                output={state.controls.find((c) => c.target === 'outputLevel')}
-                disabled={disabled || busy}
-                preset={state.preset_name ?? 'Current preset'}
-                stale={
-                  state.session !== matching.session ||
-                  state.revision !== matching.revision
-                }
-                onApply={async (value) => {
-                  const updated = await apply('outputLevel', value, matching);
-                  const reported = updated?.controls.find(
-                    (c) => c.target === 'outputLevel',
-                  );
-                  if (
-                    !updated ||
-                    updated.session !== matching.session ||
-                    !reported ||
-                    Math.abs(reported.value - value) > 0.0001
-                  )
-                    return false;
-                  setMatching((current) =>
-                    current === matching ? updated : current,
-                  );
-                  return true;
-                }}
-                onClose={() => setMatching(null)}
-              />
-            </AdjustmentDialog>
-          )}
-          {actionsOpen && (
-            <AdjustmentDialog
-              title="Preset actions"
-              onCancel={() => setActionsOpen(false)}
-            >
-              <div className="grid divide-y divide-border [&>button]:h-auto [&>button]:justify-start [&>button]:rounded-none [&>button]:py-2.5 [&>button]:text-left [&>button]:whitespace-normal">
-                <Button
-                  variant="ghost"
-                  type="button"
-                  disabled={disabled || !!draft || !!picker}
-                  onClick={() => {
-                    setActionsOpen(false);
-                    requestMidiAssignments();
+              {(slot || adding) && state.configured && (
+                <SlotChooser
+                  sampleRate={state.configured.stream.input.sample_rate}
+                  presetName={state.preset_name ?? 'this preset'}
+                  modified={state.modified}
+                  allowEffects={!state.configured.draft}
+                  onCancel={() => {
+                    setSlot(null);
+                    setAdding(false);
                   }}
-                >
-                  MIDI assignments…
-                  <Caption as="span">
-                    Assign this preset&apos;s switches and controls
-                  </Caption>
-                </Button>
-                <Button
-                  variant="ghost"
-                  type="button"
-                  aria-label="Reload saved"
-                  disabled={
-                    disabled ||
-                    !!draft ||
-                    !state.modified ||
-                    !state.configured ||
-                    state.configured.draft
+                  onModel={(format) => {
+                    if (!slot) {
+                      setAdding(false);
+                      setInsertion({ opening: state, format });
+                      return;
+                    }
+                    const position = state.slots?.find(
+                      (s) => s.target === slot,
+                    );
+                    setPicker({
+                      target: slot,
+                      name: position
+                        ? `${position.position.lane === 0 ? 'Left' : 'Right'} chain · position ${position.position.index + 1}`
+                        : 'Empty slot',
+                      opening: state,
+                      insert: true,
+                      format,
+                    });
+                    setSlot(null);
+                  }}
+                  onEffect={(plugin, placement) =>
+                    void addEffect(plugin, placement)
                   }
-                  onClick={() => {
-                    setActionsOpen(false);
-                    setRestoreOpening(state);
-                  }}
+                />
+              )}
+              {insertion && (
+                <AdjustmentDialog
+                  title={`Add ${insertion.format.toUpperCase()} · position`}
+                  onCancel={() => setInsertion(null)}
                 >
-                  Revert to saved…
-                  <Caption as="span">
-                    Discards edits since the last save
+                  <Caption>
+                    Choose an available position in the signal chain.
                   </Caption>
-                </Button>
-                <Button
-                  variant="ghost"
-                  type="button"
-                  disabled={
-                    disabled ||
-                    !!draft ||
-                    state.phase !== 'running' ||
-                    !state.controls.some((c) => c.target === 'outputLevel')
+                  <div
+                    className="grid gap-2"
+                    aria-label="Available insertion positions"
+                  >
+                    {insertion.opening.slots?.map((slot) => (
+                      <Button
+                        key={slot.target}
+                        variant="outline"
+                        disabled={
+                          disabled ||
+                          state.session !== insertion.opening.session ||
+                          state.revision !== insertion.opening.revision
+                        }
+                        onClick={() => {
+                          setPicker({
+                            target: slot.target,
+                            name: `${slot.position.lane === 0 ? 'Left' : 'Right'} chain · position ${slot.position.index + 1}`,
+                            opening: insertion.opening,
+                            insert: true,
+                            format: insertion.format,
+                          });
+                          setInsertion(null);
+                        }}
+                      >
+                        {slot.position.lane === 0 ? 'Left' : 'Right'} chain ·
+                        position {slot.position.index + 1}
+                      </Button>
+                    ))}
+                  </div>
+                  {(state.session !== insertion.opening.session ||
+                    state.revision !== insertion.opening.revision) && (
+                    <p role="status">
+                      The chain changed. Close and choose the position again.
+                    </p>
+                  )}
+                </AdjustmentDialog>
+              )}
+              {picker && (
+                <ModelPicker
+                  name={picker.name}
+                  initialFormat={picker.format}
+                  intent={picker.insert ? 'add' : 'replace'}
+                  comparison={
+                    picker.insert
+                      ? undefined
+                      : {
+                          pending: modelPending,
+                          appliedAsset:
+                            state.model_change?.request === picker.request &&
+                            state.model_change?.phase === 'applied'
+                              ? state.model_change.assignment.asset
+                              : undefined,
+                          error:
+                            state.model_change?.request === picker.request
+                              ? state.model_change?.error
+                              : undefined,
+                          blocked: state.session !== picker.opening.session,
+                        }
                   }
-                  onClick={() => {
-                    setActionsOpen(false);
-                    setMatching(state);
+                  onClose={() => setPicker(null)}
+                  onAudition={async (asset) => {
+                    const next = await auditionNativeModel(
+                      picker.opening,
+                      picker.target,
+                      asset,
+                      picker.request,
+                    );
+                    if (alive.current)
+                      setPicker({
+                        ...picker,
+                        request: next.model_change?.request,
+                      });
                   }}
+                />
+              )}
+              {modelPending && (
+                <div
+                  className="flex flex-wrap items-center gap-2"
+                  role="status"
                 >
-                  Match level…
-                  <Caption as="span">
-                    Play for eight seconds to level this preset with the others
-                  </Caption>
-                </Button>
-              </div>
-              <div
-                className="mt-3 flex flex-wrap items-center gap-2 [&_[aria-pressed=true]]:bg-foreground [&_[aria-pressed=true]]:text-background [&>span]:mr-auto [&>span]:font-semibold"
-                role="group"
-                aria-label="Chain appearance"
-              >
-                <span>Chain appearance</span>
-                {(
-                  [
-                    ['compact', 'Connected icons', 'Icons'],
-                    ['artwork', 'Model artwork', 'Artwork'],
-                  ] as const
-                ).map(([view, label, text]) => (
+                  <span>
+                    {state.model_change?.phase === 'applying'
+                      ? 'Applying model…'
+                      : 'Preparing model…'}
+                  </span>
                   <Button
-                    key={view}
                     variant="outline"
-                    aria-label={label}
-                    aria-pressed={chainView === view}
-                    onClick={() => {
-                      setChainView(view);
+                    disabled={busy}
+                    onClick={async () => {
+                      generation.current += 1;
+                      sending.current = true;
+                      setBusy(true);
                       try {
-                        localStorage.setItem('oxidal-chain-view', view);
-                      } catch {
-                        /* Optional preference. */
+                        const current = await playbackState();
+                        if (
+                          current.session !== state.session ||
+                          current.model_change?.request !==
+                            state.model_change?.request
+                        )
+                          throw new Error(
+                            'Model selection changed. Review it before cancelling.',
+                          );
+                        const next = await playbackCommand(current, {
+                          kind: 'cancel_model',
+                          request: state.model_change!.request,
+                        });
+                        if (alive.current) setState(next);
+                      } catch (cause) {
+                        if (alive.current)
+                          setError(friendlyError(cause, 'update the rig'));
+                      } finally {
+                        sending.current = false;
+                        if (alive.current) setBusy(false);
                       }
                     }}
                   >
-                    {text}
+                    Cancel model
                   </Button>
-                ))}
-              </div>
-            </AdjustmentDialog>
-          )}
-          {restoreOpening && (
-            <AdjustmentDialog
-              title="Reload saved preset?"
-              onCancel={() => setRestoreOpening(null)}
-            >
-              <p>
-                This discards the live edits and reloads the saved version of{' '}
-                {restoreOpening.preset_name}. Audio will briefly restart.
-              </p>
-              <ActionRow>
-                <Button
-                  disabled={
-                    disabled ||
-                    state.session !== restoreOpening.session ||
-                    state.revision !== restoreOpening.revision
-                  }
-                  onClick={() => {
-                    void reloadSaved(restoreOpening);
-                  }}
-                >
-                  Discard edits and reload
-                </Button>
-                <Button variant="ghost" onClick={() => setRestoreOpening(null)}>
-                  Keep editing
-                </Button>
-              </ActionRow>
-              {(state.session !== restoreOpening.session ||
-                state.revision !== restoreOpening.revision) && (
-                <p role="status">
-                  The rig changed. Close and reopen Reload saved.
-                </p>
-              )}
-            </AdjustmentDialog>
-          )}
-          {editingChain || chainView === 'artwork' ? (
-            <ChainView
-              label="Sounding tone blocks"
-              appearance={chainView}
-              disabled={disabled || !!draft || making}
-              onAdd={(target) => setSlot(target)}
-              selected={selectedBlock}
-              onSelect={selectNativeBlock}
-              lanes={chainLanes}
-            />
-          ) : (
-            <div className="native-signal-route" data-chain-view={chainView}>
-              {chainLanes.map((lane) => (
-                <div key={lane.id}>
-                  {chainLanes.length > 1 && (
-                    <span className="small-caps">{lane.input}</span>
-                  )}
-                  <RouteView
-                    label={
-                      chainLanes.length > 1
-                        ? lane.id + ' signal chain'
-                        : 'Sounding tone blocks'
-                    }
-                    route={lane.blocks
-                      .filter((block) => !block.empty)
-                      .map((block) => ({
-                        id: block.id,
-                        label: block.label,
-                        kind: block.kind === 'other' ? 'lv2' : block.kind,
-                        caption: block.caption,
-                        icon: block.face,
-                        preview: block.preview,
-                        on: block.on,
-                      }))}
-                    selected={selectedBlock}
-                    disabled={disabled || !!draft || making}
-                    onSelect={selectNativeBlock}
-                  />
                 </div>
-              ))}
-            </div>
-          )}
-          {making && <p role="status">Making a preset with that effect…</p>}
-          {(slot || adding) && state.configured && (
-            <SlotChooser
-              sampleRate={state.configured.stream.input.sample_rate}
-              presetName={state.preset_name ?? 'this preset'}
-              modified={state.modified}
-              allowEffects={!state.configured.draft}
-              onCancel={() => {
-                setSlot(null);
-                setAdding(false);
-              }}
-              onModel={(format) => {
-                if (!slot) {
-                  setAdding(false);
-                  setInsertion({ opening: state, format });
-                  return;
-                }
-                const position = state.slots?.find((s) => s.target === slot);
-                setPicker({
-                  target: slot,
-                  name: position
-                    ? `${position.position.lane === 0 ? 'Left' : 'Right'} chain · position ${position.position.index + 1}`
-                    : 'Empty slot',
-                  opening: state,
-                  insert: true,
-                  format,
-                });
-                setSlot(null);
-              }}
-              onEffect={(plugin, placement) =>
-                void addEffect(plugin, placement)
-              }
-            />
-          )}
-          {insertion && (
-            <AdjustmentDialog
-              title={`Add ${insertion.format.toUpperCase()} · position`}
-              onCancel={() => setInsertion(null)}
-            >
-              <Caption>
-                Choose an available position in the signal chain.
-              </Caption>
-              <div
-                className="grid gap-2"
-                aria-label="Available insertion positions"
-              >
-                {insertion.opening.slots?.map((slot) => (
-                  <Button
-                    key={slot.target}
-                    variant="outline"
-                    disabled={
-                      disabled ||
-                      state.session !== insertion.opening.session ||
-                      state.revision !== insertion.opening.revision
-                    }
-                    onClick={() => {
-                      setPicker({
-                        target: slot.target,
-                        name: `${slot.position.lane === 0 ? 'Left' : 'Right'} chain · position ${slot.position.index + 1}`,
-                        opening: insertion.opening,
-                        insert: true,
-                        format: insertion.format,
-                      });
-                      setInsertion(null);
-                    }}
-                  >
-                    {slot.position.lane === 0 ? 'Left' : 'Right'} chain ·
-                    position {slot.position.index + 1}
-                  </Button>
-                ))}
-              </div>
-              {(state.session !== insertion.opening.session ||
-                state.revision !== insertion.opening.revision) && (
-                <p role="status">
-                  The chain changed. Close and choose the position again.
-                </p>
               )}
-            </AdjustmentDialog>
-          )}
-          {picker && (
-            <ModelPicker
-              name={picker.name}
-              initialFormat={picker.format}
-              intent={picker.insert ? 'add' : 'replace'}
-              comparison={
-                picker.insert
-                  ? undefined
-                  : {
-                      pending: modelPending,
-                      appliedAsset:
-                        state.model_change?.request === picker.request &&
-                        state.model_change?.phase === 'applied'
-                          ? state.model_change.assignment.asset
-                          : undefined,
-                      error:
-                        state.model_change?.request === picker.request
-                          ? state.model_change?.error
-                          : undefined,
-                      blocked: state.session !== picker.opening.session,
-                    }
-              }
-              onClose={() => setPicker(null)}
-              onAudition={async (asset) => {
-                const next = await auditionNativeModel(
-                  picker.opening,
-                  picker.target,
-                  asset,
-                  picker.request,
-                );
-                if (alive.current)
-                  setPicker({ ...picker, request: next.model_change?.request });
-              }}
-            />
-          )}
-          {modelPending && (
-            <div className="flex flex-wrap items-center gap-2" role="status">
-              <span>
-                {state.model_change?.phase === 'applying'
-                  ? 'Applying model…'
-                  : 'Preparing model…'}
-              </span>
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={async () => {
-                  generation.current += 1;
-                  sending.current = true;
-                  setBusy(true);
-                  try {
-                    const current = await playbackState();
-                    if (
-                      current.session !== state.session ||
-                      current.model_change?.request !==
-                        state.model_change?.request
-                    )
-                      throw new Error(
-                        'Model selection changed. Review it before cancelling.',
-                      );
-                    const next = await playbackCommand(current, {
-                      kind: 'cancel_model',
-                      request: state.model_change!.request,
-                    });
-                    if (alive.current) setState(next);
-                  } catch (cause) {
-                    if (alive.current)
-                      setError(friendlyError(cause, 'update the rig'));
-                  } finally {
-                    sending.current = false;
-                    if (alive.current) setBusy(false);
-                  }
-                }}
+              {state.model_change?.error && (
+                <p role="alert">{state.model_change.error}</p>
+              )}
+              <div
+                className="rig-inspector-column min-w-0 scroll-mt-2 space-y-3 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+                ref={inspector}
+                tabIndex={-1}
+                aria-label="Sound controls"
               >
-                Cancel model
-              </Button>
-            </div>
-          )}
-          {state.model_change?.error && (
-            <p role="alert">{state.model_change.error}</p>
-          )}
-        </div>
-        <div
-          className="rig-inspector-column min-w-0 scroll-mt-2 space-y-3 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
-          ref={inspector}
-          tabIndex={-1}
-          aria-label="Sound controls"
-        >
-          {desktopBlock}
-          {sharedEditor}
-          {!selectedBlock && (
-            <>
-              <div className="flex" aria-label="Control groups">
-                {(
-                  [
-                    ['tone', 'Tone'],
-                    ['gate', 'Gate'],
-                    ['pitch', 'Pitch'],
-                    ['stereo', 'Stereo'],
-                  ] as const
-                )
-                  .filter(([id]) =>
-                    state.controls.some(
-                      (c) =>
-                        !c.target.startsWith('block:') &&
-                        controlGroup(c.target) === id,
-                    ),
-                  )
-                  .map(([id, label]) => (
-                    <Button
-                      key={id}
-                      variant="ghost"
-                      aria-pressed={!selectedBlock && group === id}
-                      disabled={disabled || !!draft}
-                      onClick={() => {
-                        setGroup(id);
-                        setTarget(
-                          state.controls.find(
+                {desktopBlock}
+                {sharedEditor}
+                {!selectedBlock && (
+                  <BlockDock
+                    aria-label="Preset controls"
+                    className="min-w-0 lg:grid-cols-1"
+                  >
+                    <div className="flex" aria-label="Control groups">
+                      {(
+                        [
+                          ['tone', 'Tone'],
+                          ['gate', 'Gate'],
+                          ['pitch', 'Pitch'],
+                          ['stereo', 'Stereo'],
+                        ] as const
+                      )
+                        .filter(([id]) =>
+                          state.controls.some(
                             (c) =>
                               !c.target.startsWith('block:') &&
                               controlGroup(c.target) === id,
-                          )!.target,
-                        );
-                        setDraft(null);
-                      }}
+                          ),
+                        )
+                        .map(([id, label]) => (
+                          <Button
+                            key={id}
+                            variant="ghost"
+                            aria-pressed={!selectedBlock && group === id}
+                            disabled={disabled || !!draft}
+                            onClick={() => {
+                              setGroup(id);
+                              setTarget(
+                                state.controls.find(
+                                  (c) =>
+                                    !c.target.startsWith('block:') &&
+                                    controlGroup(c.target) === id,
+                                )!.target,
+                              );
+                              setDraft(null);
+                            }}
+                          >
+                            {label}
+                          </Button>
+                        ))}
+                    </div>
+                    <div
+                      className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
+                      aria-label="Sounding controls"
                     >
-                      {label}
-                    </Button>
-                  ))}
+                      {state.controls
+                        .filter(
+                          (item) =>
+                            !item.target.startsWith('block:') &&
+                            controlGroup(item.target) === group,
+                        )
+                        .map((item) => (
+                          <Button
+                            variant="outline"
+                            type="button"
+                            className="live-value-trigger flex h-auto min-h-16 flex-col items-start gap-1 p-3 text-left whitespace-normal"
+                            aria-label={`Adjust sounding ${shortControlLabel(item.label)} ${item.display}`}
+                            data-toggle={item.toggle || undefined}
+                            key={item.target}
+                            disabled={disabled}
+                            aria-haspopup={item.toggle ? undefined : 'dialog'}
+                            aria-pressed={
+                              item.toggle ? item.value === 1 : undefined
+                            }
+                            onClick={() => {
+                              setTarget(item.target);
+                              setDraft(null);
+                              if (item.toggle)
+                                void apply(
+                                  item.target,
+                                  item.value === 1 ? 0 : 1,
+                                );
+                              else openAdjustment(item);
+                            }}
+                          >
+                            <span className="min-w-0 text-base wrap-anywhere">
+                              {shortControlLabel(item.label)}
+                            </span>{' '}
+                            <strong className="font-mono text-lg font-medium tabular-nums">
+                              {item.display}
+                            </strong>
+                          </Button>
+                        ))}
+                    </div>
+                  </BlockDock>
+                )}
               </div>
-              <div
-                className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
-                aria-label="Sounding controls"
-              >
-                {state.controls
-                  .filter(
-                    (item) =>
-                      !item.target.startsWith('block:') &&
-                      controlGroup(item.target) === group,
-                  )
-                  .map((item) => (
+              {/* Output row: on a phone; wider screens have the guitar under IN and
+          the level and boost under OUT, in the edge lanes. */}
+              {phone ? (
+                <div className="grid gap-3 border-t border-border pt-3">
+                  {knobStrip}
+                  <MasterLevel
+                    extra={
+                      <>
+                        <GuitarPicker />
+                        {state.configured && !state.configured.draft && (
+                          <BoostControl
+                            targets={[
+                              {
+                                key: boostKey.tone3000(
+                                  state.configured.preset_id,
+                                  state.configured.owned,
+                                ),
+                                label: state.preset_name ?? 'This preset',
+                              },
+                            ]}
+                          />
+                        )}
+                      </>
+                    }
+                  />
+                </div>
+              ) : null}
+              <output className="sr-only" data-testid="live-readback">
+                Confirmed: {control?.display ?? '—'}
+              </output>
+              {adjusting && adjusted && (
+                <AdjustmentDialog
+                  title={adjusted.label}
+                  onCancel={() => {
+                    if (!busy) void finishAdjustment(true);
+                  }}
+                >
+                  {error && (
+                    <p
+                      role="alert"
+                      className="mb-4 min-w-0 rounded-lg border border-destructive px-3 py-2.5 wrap-anywhere text-destructive"
+                    >
+                      {error}
+                    </p>
+                  )}
+                  <TouchAdjust
+                    label="sounding value"
+                    commitHint="Changes sound immediately. Done keeps edits; Cancel restores the opening value."
+                    value={draft?.value ?? adjusted.value}
+                    baseline={draft?.baseline ?? adjusted.value}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    disabled={disabled || draftStale}
+                    format={(v) =>
+                      confirmedControlDisplay(
+                        adjusted.display,
+                        v !== adjusted.value,
+                      )
+                    }
+                    onChange={(value) => {
+                      latestValue.current = value;
+                      setDraft((old) => (old ? { ...old, value } : old));
+                      adjustment.current?.preview(value);
+                    }}
+                  />
+                  <div className="mt-2 flex flex-wrap gap-2 [&>button]:min-h-[48px] [&>button]:min-w-[48px]">
                     <Button
-                      variant="outline"
-                      type="button"
-                      className="live-value-trigger flex h-auto min-h-16 flex-col items-start gap-1 p-3 text-left whitespace-normal"
-                      aria-label={`Adjust sounding ${shortControlLabel(item.label)} ${item.display}`}
-                      data-toggle={item.toggle || undefined}
-                      key={item.target}
-                      disabled={disabled}
-                      aria-haspopup={item.toggle ? undefined : 'dialog'}
-                      aria-pressed={item.toggle ? item.value === 1 : undefined}
-                      onClick={() => {
-                        setTarget(item.target);
-                        setDraft(null);
-                        if (item.toggle)
-                          void apply(item.target, item.value === 1 ? 0 : 1);
-                        else openAdjustment(item);
-                      }}
+                      disabled={disabled || draftStale}
+                      onClick={() => void finishAdjustment(false)}
                     >
-                      <span className="min-w-0 text-base wrap-anywhere">
-                        {shortControlLabel(item.label)}
-                      </span>{' '}
-                      <strong className="font-mono text-lg font-medium tabular-nums">
-                        {item.display}
-                      </strong>
+                      Done
                     </Button>
-                  ))}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-      {/* Output row under the chain (7.28). */}
-      <div className="grid gap-3 border-t border-border pt-3">
-        {knobStrip}
-        <MasterLevel
-          extra={
-            <>
-              <GuitarPicker />
-              {state.configured && !state.configured.draft && (
-                <BoostControl
-                  targets={[
-                    {
-                      key: boostKey.tone3000(
-                        state.configured.preset_id,
-                        state.configured.owned,
-                      ),
-                      label: state.preset_name ?? 'This preset',
-                    },
-                  ]}
-                />
+                    <Button
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={() => void finishAdjustment(true)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                  {draftStale && (
+                    <p role="alert">
+                      Sounding session changed. Cancel and reopen this control.
+                    </p>
+                  )}
+                </AdjustmentDialog>
               )}
-            </>
-          }
-        />
-      </div>
-      <output className="sr-only" data-testid="live-readback">
-        Confirmed: {control?.display ?? '—'}
-      </output>
-      {adjusting && adjusted && (
-        <AdjustmentDialog
-          title={adjusted.label}
-          onCancel={() => {
-            if (!busy) void finishAdjustment(true);
-          }}
-        >
-          {error && (
-            <p
-              role="alert"
-              className="mb-4 min-w-0 rounded-lg border border-destructive px-3 py-2.5 wrap-anywhere text-destructive"
-            >
-              {error}
-            </p>
-          )}
-          <TouchAdjust
-            label="sounding value"
-            commitHint="Changes sound immediately. Done keeps edits; Cancel restores the opening value."
-            value={draft?.value ?? adjusted.value}
-            baseline={draft?.baseline ?? adjusted.value}
-            min={0}
-            max={1}
-            step={0.01}
-            disabled={disabled || draftStale}
-            format={(v) =>
-              confirmedControlDisplay(adjusted.display, v !== adjusted.value)
-            }
-            onChange={(value) => {
-              latestValue.current = value;
-              setDraft((old) => (old ? { ...old, value } : old));
-              adjustment.current?.preview(value);
-            }}
-          />
-          <div className="mt-2 flex flex-wrap gap-2 [&>button]:min-h-[48px] [&>button]:min-w-[48px]">
-            <Button
-              disabled={disabled || draftStale}
-              onClick={() => void finishAdjustment(false)}
-            >
-              Done
-            </Button>
-            <Button
-              variant="ghost"
-              disabled={busy}
-              onClick={() => void finishAdjustment(true)}
-            >
-              Cancel
-            </Button>
-          </div>
-          {draftStale && (
-            <p role="alert">
-              Sounding session changed. Cancel and reopen this control.
-            </p>
-          )}
-        </AdjustmentDialog>
-      )}
-      <MidiControls
-        trigger={false}
-        configured={state.configured?.midi ?? null}
-        disabled={disabled}
-        preset={
-          state.configured && !state.configured.draft && state.configured.owned
-            ? {
-                kind: 'owned' as const,
-                id: state.configured.preset_id,
-              }
-            : undefined
-        }
-        onApply={configureMidi}
-        control={{
-          midi: state.midi,
-          scenes: null,
-          branches: [],
-          controls: state.controls.map((c) => ({
-            target: { kind: 'native', node: 'native', parameter: c.target },
-            label: c.label,
-            value: c.value,
-            minimum: 0,
-            maximum: 1,
-            integer: c.toggle,
-            toggle: c.toggle,
-            logarithmic: false,
-            display: c.display,
-          })),
-        }}
-      />
-      {state.authoring && (
-        <NativeAuthoring
-          historyControls={false}
-          scope="split"
-          settingsScope="unit"
-          onEngineSettings={onAudioSetup}
-          status={state.authoring}
-          selectedBlock={selectedBlock}
-          disabled={unavailable || !!draft}
-          busy={busy}
-          session={state.session}
-          revision={state.revision}
-          author={author}
-        />
-      )}
-      {saveOpening && (
-        <AdjustmentDialog
-          title="Save copy"
-          onCancel={() => {
-            if (!busy) setSaveOpening(null);
-          }}
-        >
-          <Caption>
-            Keep this sound for offline use. The original preset stays
-            unchanged.
-          </Caption>
-          <FormGrid>
-            <FormField>
-              Name for sounding copy
-              <input
-                value={copyName}
-                onChange={(e) => setCopyName(e.target.value)}
-                maxLength={100}
-                disabled={busy}
+              <MidiControls
+                trigger={false}
+                configured={state.configured?.midi ?? null}
+                disabled={disabled}
+                preset={
+                  state.configured &&
+                  !state.configured.draft &&
+                  state.configured.owned
+                    ? {
+                        kind: 'owned' as const,
+                        id: state.configured.preset_id,
+                      }
+                    : undefined
+                }
+                onApply={configureMidi}
+                control={{
+                  midi: state.midi,
+                  scenes: null,
+                  branches: [],
+                  controls: state.controls.map((c) => ({
+                    target: {
+                      kind: 'native',
+                      node: 'native',
+                      parameter: c.target,
+                    },
+                    label: c.label,
+                    value: c.value,
+                    minimum: 0,
+                    maximum: 1,
+                    integer: c.toggle,
+                    toggle: c.toggle,
+                    logarithmic: false,
+                    display: c.display,
+                  })),
+                }}
               />
-            </FormField>
-            <Button
-              disabled={
-                disabled ||
-                !!draft ||
-                !copyName.trim() ||
-                state.session !== saveOpening.session ||
-                state.revision !== saveOpening.revision
-              }
-              onClick={() => void saveCopy()}
-            >
-              {busy ? 'Saving…' : 'Save a copy'}
-            </Button>
-          </FormGrid>
-          {state.configured?.owned && !state.configured.draft && (
-            <SaveSoundVersion
-              key={state.configured.preset_id}
-              kind="owned"
-              source={state.configured.preset_id}
-              name={copyName}
-              disabled={
-                disabled ||
-                !!draft ||
-                busy ||
-                state.session !== saveOpening.session ||
-                state.revision !== saveOpening.revision
-              }
-              onSave={saveCopy}
-            />
+              {/* The preset's knobs, the block's tone tools and its settings
+                  in one card, framed like the block card above. */}
+              {((!phone && knobStrip) || state.authoring) && (
+                <BlockDock
+                  aria-label={
+                    selectedBlock ? 'This block and preset' : 'Preset settings'
+                  }
+                  className="min-w-0 lg:grid-cols-1"
+                >
+                  {!phone && knobStrip}
+                  {state.authoring && (
+                    <NativeAuthoring
+                      historyControls={false}
+                      scope="split"
+                      settingsScope="unit"
+                      onEngineSettings={onAudioSetup}
+                      status={state.authoring}
+                      selectedBlock={selectedBlock}
+                      disabled={unavailable || !!draft}
+                      busy={busy}
+                      session={state.session}
+                      revision={state.revision}
+                      author={author}
+                    />
+                  )}
+                </BlockDock>
+              )}
+              {saveOpening && (
+                <AdjustmentDialog
+                  title="Save copy"
+                  onCancel={() => {
+                    if (!busy) setSaveOpening(null);
+                  }}
+                >
+                  <Caption>
+                    Keep this sound for offline use. The original preset stays
+                    unchanged.
+                  </Caption>
+                  <FormGrid>
+                    <FormField>
+                      Name for sounding copy
+                      <input
+                        value={copyName}
+                        onChange={(e) => setCopyName(e.target.value)}
+                        maxLength={100}
+                        disabled={busy}
+                      />
+                    </FormField>
+                    <Button
+                      disabled={
+                        disabled ||
+                        !!draft ||
+                        !copyName.trim() ||
+                        state.session !== saveOpening.session ||
+                        state.revision !== saveOpening.revision
+                      }
+                      onClick={() => void saveCopy()}
+                    >
+                      {busy ? 'Saving…' : 'Save a copy'}
+                    </Button>
+                  </FormGrid>
+                  {state.configured?.owned && !state.configured.draft && (
+                    <SaveSoundVersion
+                      key={state.configured.preset_id}
+                      kind="owned"
+                      source={state.configured.preset_id}
+                      name={copyName}
+                      disabled={
+                        disabled ||
+                        !!draft ||
+                        busy ||
+                        state.session !== saveOpening.session ||
+                        state.revision !== saveOpening.revision
+                      }
+                      onSave={saveCopy}
+                    />
+                  )}
+                  {(state.session !== saveOpening.session ||
+                    state.revision !== saveOpening.revision) && (
+                    <p role="status">
+                      The rig changed. Close and reopen Save copy.
+                    </p>
+                  )}
+                  {error && <p role="alert">{error}</p>}
+                </AdjustmentDialog>
+              )}
+              {!!draft && (
+                <Caption>
+                  Finish the audible adjustment before saving a copy.
+                </Caption>
+              )}
+              {state.saved_copy && (
+                <p role="status" data-testid="live-saved">
+                  Copy saved in Library. Audio is still running.
+                </p>
+              )}
+              {stale && !adjusting && (
+                <p role="alert">
+                  The sounding session changed. Discard this adjustment before
+                  editing again.
+                </p>
+              )}
+            </div>
           )}
-          {(state.session !== saveOpening.session ||
-            state.revision !== saveOpening.revision) && (
-            <p role="status">The rig changed. Close and reopen Save copy.</p>
-          )}
-          {error && <p role="alert">{error}</p>}
-        </AdjustmentDialog>
-      )}
-      {!!draft && (
-        <Caption>Finish the audible adjustment before saving a copy.</Caption>
-      )}
-      {state.saved_copy && (
-        <p role="status" data-testid="live-saved">
-          Copy saved in Library. Audio is still running.
-        </p>
-      )}
-      {stale && !adjusting && (
-        <p role="alert">
-          The sounding session changed. Discard this adjustment before editing
-          again.
-        </p>
-      )}
+        </NativeChainWorkspace>
+      </div>
     </section>
   );
 }

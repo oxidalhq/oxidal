@@ -4,7 +4,14 @@ import { Button } from '@oxidal/design-system/components/button';
 import { Checkbox } from '@oxidal/design-system/components/checkbox';
 import { ActionRow } from '@oxidal/design-system/components/form-layout';
 import { Caption, Title } from '@oxidal/design-system/components/text';
-import { LibraryList } from '@oxidal/design-system/patterns/library-list';
+import { useMedia } from '@oxidal/design-system/lib/use-media';
+import {
+  type LibraryBadge,
+  LibraryDetail,
+  type LibraryItem,
+  LibraryList,
+  type RowAction as PanelAction,
+} from '@oxidal/design-system/patterns/library-list';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
@@ -14,8 +21,10 @@ import {
   rigLibrary,
   type RigPage,
 } from './api';
+import type { RowAction } from './components/RowMenu';
 import { FailureNotice } from './FailureNotice';
-import { PresetRow } from './features/library/PresetRow';
+import { presetChain, useLv2Names } from './features/library/presetChain';
+import { PresetRow, PresetTile } from './features/library/PresetRow';
 import { duplicatePreset, setListMember } from './features/library/setList';
 import { useFailure } from './lib/useFailure';
 import { requestMidiAssignments } from './midiNavigation';
@@ -37,32 +46,89 @@ import { detailsMatch, presetSearchText } from './presetMetadata';
  * Keep ready loads chosen presets in the background for gapless switching.
  * @see docs/audio.md
  */
-/** What a Mine row shows about the set list; nothing until it is known. */
-function setListLabel(
+/** The set list chip a Mine row shows; nothing for presets not in it. */
+function setListBadge(
   members: Map<string, number> | null,
   kind: 'rig' | 'owned',
   id: string,
-  shown: boolean,
-): string {
-  if (!shown || !members) return '';
-  const position = members.get(`${kind}:${id}`);
-  return position ? `In set list #${position}` : 'Not in set list';
+): LibraryBadge | null {
+  const position = members?.get(`${kind}:${id}`);
+  return position ? { text: `In set list #${position}` } : null;
 }
 
 /** Set list state and actions SavedRigs hands to rows it does not own. */
 export type SetListControls = {
-  label: (id: string) => string;
+  /** The row's chip, such as "In set list #2"; null when it is not in it. */
+  badge: (id: string) => LibraryBadge | null;
   /** Null until the catalog has been read. */
   isMember: (id: string) => boolean | null;
   toggle: (id: string, name: string, add: boolean) => void;
   disabled: boolean;
 };
 
+/** A row beside the details panel: whether it is shown there, and how to show it. */
+export type PanelSelection = { selected: boolean; onSelect: () => void };
+
 type OwnedRow = {
   id: string;
   name: string;
-  render: (setList: SetListControls, favourite: ReactNode) => ReactNode;
+  /** The one-line summary the details panel repeats. */
+  caption: string;
+  /** The same actions as the row's menu, for the details panel. */
+  actions: (setList: SetListControls) => RowAction[];
+  /** Opens the full Preset details dialog. */
+  onDetails: () => void;
+  render: (
+    setList: SetListControls,
+    favourite: ReactNode,
+    panel: PanelSelection | null,
+  ) => ReactNode;
 };
+
+/** The order the details panel lists actions in (C2): set list first, MIDI last. */
+const PANEL_ORDER = [
+  'Add to set list',
+  'Remove from set list',
+  'Duplicate',
+  'Rename',
+  'Download',
+  'MIDI',
+];
+
+/** The menu's actions as the details panel's buttons; Edit (without playing) gets its own wide button. */
+function panelActions(actions: RowAction[]): PanelAction[] {
+  return actions
+    .filter((action) => action.label !== 'Edit')
+    .map((action): PanelAction =>
+      'href' in action
+        ? {
+            label: action.label,
+            href: action.href,
+            download: action.download,
+            run: () => {},
+          }
+        : {
+            label: action.label,
+            run: action.onSelect,
+            disabled: action.disabled,
+            destructive: action.label.startsWith('Delete'),
+          },
+    )
+    .sort(
+      (a, b) =>
+        (PANEL_ORDER.indexOf(a.label) + 1 || 99) -
+        (PANEL_ORDER.indexOf(b.label) + 1 || 99),
+    );
+}
+
+const addedDate = (at: number | undefined) =>
+  at === undefined
+    ? null
+    : new Date(at).toLocaleDateString(undefined, {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
 
 const favouritesKey = 'oxidal-library-favourites';
 function readFavourites(): string[] {
@@ -93,6 +159,7 @@ export function SavedRigs({
   owned = [],
   primary,
   toolbar,
+  toolbarEnd,
   empty,
   onManage,
 }: {
@@ -109,7 +176,10 @@ export function SavedRigs({
   /** More rows for the same list (owned TONE3000 chains in Mine). */
   owned?: OwnedRow[];
   primary?: ReactNode;
+  /** After Favourites, Sort and List/Artwork. */
   toolbar?: ReactNode;
+  /** At the end of the toolbar line, after Keep ready (the category). */
+  toolbarEnd?: ReactNode;
   /** Shown when the list has loaded and holds nothing. */
   empty?: ReactNode;
   /** Rename or delete a preset; the list refreshes when the parent does. */
@@ -136,6 +206,9 @@ export function SavedRigs({
     }
   }
   const [items, setItems] = useState<RigPage['presets']>([]);
+  const lv2Names = useLv2Names(
+    items.some((p) => p.blocks?.some((b) => b.kind === 'lv2')),
+  );
   const [next, setNext] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -156,6 +229,9 @@ export function SavedRigs({
   const [addedAt, setAddedAt] = useState<Record<string, number | undefined>>(
     {},
   );
+  /** Wide screens show the chosen preset in a panel beside the list (C2). */
+  const wide = useMedia('(min-width: 80rem)');
+  const [chosen, setChosen] = useState<string | null>(null);
   function readMembers() {
     return libraryCatalog()
       .then((catalog) => {
@@ -354,56 +430,222 @@ export function SavedRigs({
     detailsMatch(item.name, details[`${item.kind}:${item.id}`], '', category),
   );
   const byId = new Map(rows.map((item) => [`${item.kind}:${item.id}`, item]));
-  const setList = {
-    label: (id: string) => setListLabel(members, 'owned', id, true),
+  const setList: SetListControls = {
+    badge: (id: string) => setListBadge(members, 'owned', id),
     isMember: (id: string) => members?.has(`owned:${id}`) ?? null,
     toggle: (id: string, name: string, add: boolean) =>
       void member(id, name, add, 'owned'),
     disabled: !connected || busy,
   };
   const readyCount = bankOrder.filter((p) => ready.includes(p.revision)).length;
+  const readyLine = running
+    ? `${readyCount} of ${bankOrder.length}${next ? '+' : ''} presets ready`
+    : 'Nothing is ready while audio is stopped.';
   // Selected but not loaded beside the playing preset: needs a restart.
   const pending = prepared.some((id) => id !== playing && !ready.includes(id));
+  /** The same actions a rig row's ⋯ menu has. */
+  function rigActions(p: RigPage['presets'][number]): RowAction[] {
+    return [
+      ...(onEdit
+        ? [
+            {
+              label: 'Edit',
+              onSelect: () => onEdit(p.revision, p.name),
+              disabled: busy,
+            },
+          ]
+        : []),
+      ...(origin === 'mine'
+        ? [
+            {
+              label: 'Duplicate',
+              onSelect: () => void duplicate(p.revision),
+              disabled: !connected || busy,
+            },
+            members?.has(`rig:${p.revision}`)
+              ? {
+                  label: 'Remove from set list',
+                  onSelect: () => void member(p.revision, p.name, false),
+                  disabled: !connected || busy,
+                }
+              : {
+                  label: 'Add to set list',
+                  onSelect: () => void member(p.revision, p.name, true),
+                  disabled: !connected || busy || !members,
+                },
+          ]
+        : []),
+      {
+        label: 'MIDI',
+        onSelect: () => void play(p.revision, true),
+        disabled: !connected || busy,
+      },
+      ...(onManage
+        ? [
+            {
+              label: 'Rename',
+              onSelect: () =>
+                onManage('rename', {
+                  kind: 'rig',
+                  id: p.revision,
+                  name: p.name,
+                }),
+              disabled: !connected || busy,
+            },
+            {
+              label: 'Delete…',
+              onSelect: () =>
+                onManage('delete', {
+                  kind: 'rig',
+                  id: p.revision,
+                  name: p.name,
+                }),
+              disabled: !connected || busy,
+            },
+          ]
+        : []),
+    ];
+  }
+  /** Status chips after Playing: Unsaved, Ready, In set list. */
+  function rigBadges(p: RigPage['presets'][number]): LibraryBadge[] {
+    const active = playing === p.revision;
+    return [
+      active && modified
+        ? ({ text: 'Unsaved', tone: 'warning' } as const)
+        : null,
+      !active && ready.includes(p.revision) ? { text: 'Ready' } : null,
+      !ready.includes(p.revision) && prepared.includes(p.revision)
+        ? { text: 'Not ready yet' }
+        : null,
+      origin === 'mine' ? setListBadge(members, 'rig', p.revision) : null,
+    ].filter((badge): badge is LibraryBadge => badge !== null);
+  }
+  /** The row the details panel shows: the one you chose, else what plays, else the first. */
+  function panelItem(shown: LibraryItem[]) {
+    if (!wide) return undefined;
+    const playingId = playing ? `rig:${playing}` : null;
+    return (
+      shown.find((i) => i.id === chosen) ??
+      shown.find((i) => i.id === playingId) ??
+      shown[0]
+    );
+  }
+  function aside(shown: LibraryItem[]) {
+    const item = panelItem(shown);
+    const row = item && byId.get(item.id);
+    if (!item || !row) return null;
+    const id = item.id;
+    const facts: [string, string][] = [];
+    const scenes = row.kind === 'rig' ? (row.rig.scenes ?? []) : [];
+    if (scenes.length) facts.push(['Scenes', scenes.join(', ')]);
+    if (members && (row.kind === 'rig' ? origin === 'mine' : true)) {
+      const position = members.get(id);
+      facts.push(['Set list', position ? `#${position}` : 'Not in it']);
+    }
+    const categories = details[id]?.categories ?? [];
+    if (categories.length) facts.push(['Categories', categories.join(', ')]);
+    const added = addedDate(addedAt[id]);
+    if (added) facts.push(['Added', added]);
+    const menu =
+      row.kind === 'rig' ? rigActions(row.rig) : row.actions(setList);
+    const edit = menu.find(
+      (action): action is Extract<RowAction, { onSelect: () => void }> =>
+        action.label === 'Edit' && 'onSelect' in action,
+    );
+    const openDetails =
+      row.kind === 'rig'
+        ? onDetails && (() => onDetails(row.rig.revision, row.rig.name))
+        : row.onDetails;
+    return (
+      <LibraryDetail
+        item={{
+          id,
+          title: row.name,
+          caption:
+            row.kind === 'rig'
+              ? rigTopologyLabel({ ...row.rig, scenes })
+              : row.caption,
+          about: details[id]?.description || undefined,
+          chain:
+            row.kind === 'rig'
+              ? presetChain(row.rig.blocks, lv2Names)
+              : undefined,
+          facts: facts.length ? facts : undefined,
+        }}
+        tile={<PresetTile />}
+        showTitle
+        actions={[
+          ...panelActions(menu),
+          ...(openDetails
+            ? [{ label: 'Details…', run: openDetails } satisfies PanelAction]
+            : []),
+        ]}
+        extra={
+          edit && (
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={edit.disabled}
+              onClick={edit.onSelect}
+            >
+              Edit
+            </Button>
+          )
+        }
+      />
+    );
+  }
+  const panel = (id: string, shown: LibraryItem[]): PanelSelection | null =>
+    wide
+      ? { selected: panelItem(shown)?.id === id, onSelect: () => setChosen(id) }
+      : null;
+  const keepReady = (
+    <Button
+      size="sm"
+      variant="ghost"
+      aria-pressed={choosing}
+      disabled={busy}
+      title={readyLine}
+      onClick={() => setChoosing((v) => !v)}
+    >
+      Keep ready{prepared.length ? ` · ${prepared.length}` : ''}
+    </Button>
+  );
   return (
     <section className="mb-6" aria-label="Saved rigs">
-      <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
-        {title && (
-          <Title as="h2" size="sm">
-            {title}
-          </Title>
-        )}
-        <Button
-          variant="ghost"
-          aria-pressed={choosing}
-          disabled={busy}
-          onClick={() => setChoosing((v) => !v)}
-        >
-          Keep ready{prepared.length ? ` · ${prepared.length}` : ''}
-        </Button>
-      </div>
-      <Caption role="status">
-        {running
-          ? `${readyCount} of ${bankOrder.length}${next ? '+' : ''} presets ready`
-          : 'Nothing is ready while audio is stopped.'}
-      </Caption>
-      {choosing && running && pending && (
-        <ActionRow>
-          <Caption as="span">
-            Selected presets load when audio restarts.
-          </Caption>
-          <Button
-            variant="outline"
-            disabled={busy || !connected}
-            onClick={() => setConfirming(true)}
-          >
-            Prepare &amp; restart audio…
-          </Button>
-        </ActionRow>
+      {title && (
+        <Title as="h2" size="sm" className="mb-4">
+          {title}
+        </Title>
       )}
-      {choosing && !running && !!prepared.length && (
-        <Caption>
-          Your selection is prepared the next time a preset plays.
-        </Caption>
+      {choosing && (
+        <div className="mb-3 grid gap-2">
+          <Caption role="status">{readyLine}</Caption>
+          <Caption>
+            Choose up to {GAPLESS_BANK_SIZE} more presets to keep ready. They
+            stay loaded, so switching between them has no gap. Without custom
+            choices, each adjacent group of {GAPLESS_BANK_SIZE} loads together.
+          </Caption>
+          {running && pending && (
+            <ActionRow>
+              <Caption as="span">
+                Selected presets load when audio restarts.
+              </Caption>
+              <Button
+                variant="outline"
+                disabled={busy || !connected}
+                onClick={() => setConfirming(true)}
+              >
+                Prepare &amp; restart audio…
+              </Button>
+            </ActionRow>
+          )}
+          {!running && !!prepared.length && (
+            <Caption>
+              Your selection is prepared the next time a preset plays.
+            </Caption>
+          )}
+        </div>
       )}
       {confirming && (
         <AdjustmentDialog
@@ -425,13 +667,6 @@ export function SavedRigs({
             </Button>
           </ActionRow>
         </AdjustmentDialog>
-      )}
-      {choosing && (
-        <Caption>
-          Choose up to {GAPLESS_BANK_SIZE} more presets to keep ready. They stay
-          loaded, so switching between them has no gap. Without custom choices,
-          each adjacent group of {GAPLESS_BANK_SIZE} loads together.
-        </Caption>
       )}
       <FailureNotice
         failure={failure}
@@ -477,101 +712,49 @@ export function SavedRigs({
         }}
         primary={primary}
         toolbar={toolbar}
+        toolbarEnd={
+          <>
+            {keepReady}
+            {toolbarEnd}
+          </>
+        }
+        aside={aside}
+        asideLabel="Preset details"
         onOpen={() => {}}
         onFavourite={favourite}
-        renderRow={(item, star) => {
+        renderRow={(item, star, shown) => {
           const row = byId.get(item.id);
           if (!row) return null;
-          if (row.kind === 'owned') return row.render(setList, star);
+          if (row.kind === 'owned')
+            return row.render(setList, star, panel(item.id, shown));
           const p = row.rig;
           const active = playing === p.revision;
           const scenes = p.scenes ?? [];
+          const select = panel(item.id, shown);
           return (
             <PresetRow
               key={p.revision}
               name={p.name}
               favourite={star}
-              meta={[
-                rigTopologyLabel({ ...p, scenes }),
-                scenes.join(', '),
-                setListLabel(members, 'rig', p.revision, origin === 'mine'),
-                ready.includes(p.revision)
-                  ? 'Ready'
-                  : prepared.includes(p.revision)
-                    ? 'Selected · not ready yet'
-                    : '',
-              ]
+              chain={presetChain(p.blocks, lv2Names)}
+              meta={[rigTopologyLabel({ ...p, scenes }), scenes.join(', ')]
                 .filter(Boolean)
                 .join(' · ')}
+              badges={rigBadges(p)}
               playing={active}
               loading={loadingId === p.revision}
               disabled={!connected || busy}
               onPlay={() => void play(p.revision)}
+              selected={select?.selected}
+              hideMenu={!!select}
               onDetails={
-                onDetails ? () => onDetails(p.revision, p.name) : undefined
+                select
+                  ? select.onSelect
+                  : onDetails
+                    ? () => onDetails(p.revision, p.name)
+                    : undefined
               }
-              actions={[
-                ...(onEdit
-                  ? [
-                      {
-                        label: 'Edit',
-                        onSelect: () => onEdit(p.revision, p.name),
-                        disabled: busy,
-                      },
-                    ]
-                  : []),
-                ...(origin === 'mine'
-                  ? [
-                      {
-                        label: 'Duplicate',
-                        onSelect: () => void duplicate(p.revision),
-                        disabled: !connected || busy,
-                      },
-                      members?.has(`rig:${p.revision}`)
-                        ? {
-                            label: 'Remove from set list',
-                            onSelect: () =>
-                              void member(p.revision, p.name, false),
-                            disabled: !connected || busy,
-                          }
-                        : {
-                            label: 'Add to set list',
-                            onSelect: () =>
-                              void member(p.revision, p.name, true),
-                            disabled: !connected || busy || !members,
-                          },
-                    ]
-                  : []),
-                {
-                  label: 'MIDI',
-                  onSelect: () => void play(p.revision, true),
-                  disabled: !connected || busy,
-                },
-                ...(onManage
-                  ? [
-                      {
-                        label: 'Rename',
-                        onSelect: () =>
-                          onManage('rename', {
-                            kind: 'rig',
-                            id: p.revision,
-                            name: p.name,
-                          }),
-                        disabled: !connected || busy,
-                      },
-                      {
-                        label: 'Delete…',
-                        onSelect: () =>
-                          onManage('delete', {
-                            kind: 'rig',
-                            id: p.revision,
-                            name: p.name,
-                          }),
-                        disabled: !connected || busy,
-                      },
-                    ]
-                  : []),
-              ]}
+              actions={rigActions(p)}
               extra={
                 choosing && (
                   <label className="inline-flex min-h-touch items-center gap-2 px-2 text-sm [&_input]:size-5">

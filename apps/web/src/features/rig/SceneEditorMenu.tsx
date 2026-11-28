@@ -1,3 +1,12 @@
+import {
+  ArrowLeft,
+  ArrowRight,
+  Copy,
+  CopySimple,
+  PencilSimple,
+  Stack,
+  Trash,
+} from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
@@ -180,6 +189,15 @@ export function SceneMenu({
         onDone={onDone}
       />
     ) : null;
+  const MENU_ICON: Record<string, React.ReactNode> = {
+    Rename: <PencilSimple aria-hidden="true" />,
+    'Duplicate scene': <Copy aria-hidden="true" />,
+    'Copy to preset…': <Stack aria-hidden="true" />,
+    'Copy block settings…': <CopySimple aria-hidden="true" />,
+    'Move left': <ArrowLeft aria-hidden="true" />,
+    'Move right': <ArrowRight aria-hidden="true" />,
+    'Delete…': <Trash aria-hidden="true" />,
+  };
   const items: [string, () => void, boolean?][] = [
     ['Rename', () => setStep({ kind: 'rename', value: scene.name })],
     [
@@ -241,6 +259,7 @@ export function SceneMenu({
             disabled={!!off || (blocked && label !== 'Copy to preset…')}
             onClick={run}
           >
+            {MENU_ICON[label]}
             {label}
           </Button>
         ))}

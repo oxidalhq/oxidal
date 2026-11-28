@@ -1,4 +1,5 @@
-import { Badge } from '@oxidal/design-system/components/badge';
+import { createPortal } from 'react-dom';
+
 import { Button } from '@oxidal/design-system/components/button';
 import { Card } from '@oxidal/design-system/components/card';
 import {
@@ -6,24 +7,24 @@ import {
   FormGrid,
 } from '@oxidal/design-system/components/form-layout';
 import { Caption } from '@oxidal/design-system/components/text';
+import { useVerticalRig } from '@oxidal/design-system/lib/use-media';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { rigAudioCommand, rigAudioState } from './api';
 import { BoostControl } from './BoostControl';
-import { MaybeSheet } from './components/RigSheet';
 import { FailureNotice } from './FailureNotice';
 import { SaveSoundVersion } from './features/library/SaveSoundVersion';
+import { BlockBox } from './features/rig/BlockBox';
 import { ControlAdjustDialog } from './features/rig/ControlAdjustDialog';
-import { ControlGrid } from './features/rig/ControlGrid';
-import { LiveLv2Panel } from './features/rig/LiveLv2Panel';
 import { rigBusy } from './features/rig/mixedRigViewModel';
+import { NativeLoad } from './features/rig/NativeLoad';
 import { PathLevelsDialog } from './features/rig/PathLevelsDialog';
-import { RigChainSurface } from './features/rig/RigChainSurface';
+import { usePresetSlot } from './features/rig/PresetSlot';
 import { RigChoosers } from './features/rig/RigChoosers';
 import { RigHeader } from './features/rig/RigHeader';
+import { RigPresetPanel } from './features/rig/RigPresetPanel';
+import { RigWorkspace } from './features/rig/RigWorkspace';
 import { SceneEditor } from './features/rig/SceneEditor';
-import { SelectedBlockPanel } from './features/rig/SelectedBlockPanel';
-import { SelectedModelControls } from './features/rig/SelectedModelControls';
 import { StompControls } from './features/rig/StompControls';
 import { useMixedRigSession } from './features/rig/useMixedRigSession';
 import { GuitarPicker } from './GuitarSettings';
@@ -48,6 +49,9 @@ export function MixedRig(props: {
   otherPlaying: boolean;
 }) {
   const rig = useMixedRigSession(props);
+  const phone = useVerticalRig();
+  // The dock's Set list tool, while it is open.
+  const presetSlot = usePresetSlot();
   const vm = rig.view;
   if (!vm) return null;
   const waiting = rigBusy(vm, rig);
@@ -78,7 +82,6 @@ export function MixedRig(props: {
     setName,
     setPerforming,
     setSaveOpening,
-    switchPrepared,
     switchTile,
   } = rig;
   const {
@@ -91,10 +94,9 @@ export function MixedRig(props: {
     performSwitching,
     running,
     saveStale,
-    selected,
-    selectedSheet,
     soundingScene,
     stageLanes,
+    chainBlocks,
     state,
   } = vm;
   if (performing && (running || performSwitching))
@@ -179,6 +181,43 @@ export function MixedRig(props: {
                   fading={!!state.control.scene_transitioning}
                   disabled={waiting}
                   onSelect={(scene) => void recallScene(scene)}
+                  // As C2 Perform: each card says the pedals it switches
+                  // and the MIDI it answers to (this preset's bindings).
+                  fill
+                  details={(scene) => {
+                    const binding = state.configured?.midi?.bindings.find(
+                      (b) => b.scene === scene.id,
+                    );
+                    // The whole chain, not only the sounding scene's path:
+                    // a scene on another path still lists its pedals. A
+                    // hold switch's live state counts as the block's own.
+                    const live = stageLanes.flatMap((l) => l.blocks);
+                    const blocks = chainBlocks.map(
+                      (b) => live.find((x) => x.id === b.id) ?? b,
+                    );
+                    return {
+                      midi:
+                        binding?.controller != null
+                          ? `CC ${binding.controller}`
+                          : binding?.program != null
+                            ? `Program ${binding.program + 1}`
+                            : undefined,
+                      // Every block in the chain, as C2 lists them: on or
+                      // off as the scene sets it, otherwise as it is now.
+                      pedals: blocks.map((block) => {
+                        const set = state.control?.scenes?.scenes
+                          .find((s) => s.id === scene.id)
+                          ?.bypass?.find((b) => b.node === block.id);
+                        return {
+                          id: block.id,
+                          label: block.label,
+                          on: set ? !set.value : block.on,
+                          kind: block.kind,
+                          face: block.face,
+                        };
+                      }),
+                    };
+                  }}
                 />
                 <StompControls rig={rig} vm={vm} stage />
               </>
@@ -204,282 +243,270 @@ export function MixedRig(props: {
               onSelect={(choice) => void choose(choice)}
             />
           }
+          identity={
+            <RigPresetSelector
+              heading
+              phase={state.phase}
+              current={{
+                key: revision ? choiceKey({ kind: 'scenes', revision }) : '',
+                name: matching?.manifest.name,
+                modified: !!changed,
+                refresh: revision,
+              }}
+              disabled={waiting || !!copyOnEdit}
+              onSelect={(choice) => void choose(choice)}
+            />
+          }
         />
         {error && <p role="alert">{error}</p>}
+        {/* Perform keeps the set list in the dock, with the same checks. */}
+        {presetSlot &&
+          createPortal(
+            <RigPresetPanel
+              playingKey={
+                revision ? choiceKey({ kind: 'scenes', revision }) : ''
+              }
+              refresh={revision}
+              disabled={waiting || !!copyOnEdit}
+              onSelect={(choice) => void choose(choice)}
+            />,
+            presetSlot,
+          )}
       </>
     );
   return (
-    <Card
-      className="rig-editor min-w-0 grid-cols-[minmax(0,1fr)] space-y-3 max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:shadow-none data-loading:[&>:not([data-slot=rig-heading]):not([data-rig-switching])]:hidden"
-      aria-label="Sounding mixed rig"
-      data-loading={performSwitching || undefined}
-    >
-      <RigHeader rig={rig} vm={vm} />
-      <SceneEditor rig={rig} vm={vm} />
-      <StompControls rig={rig} vm={vm} />
-      <RecoveryNotice message={state.recovery_error} />
-      {(error || readError || state.error) && (
-        <p
-          role="alert"
-          className="mb-4 min-w-0 rounded-lg border border-destructive px-3 py-2.5 wrap-anywhere text-destructive"
+    <>
+      {/* The Rig fills the screen under the capsule: the chain, its bar and
+          the panel share it, and the panel scrolls on its own. */}
+      <div className="flex h-[calc(100dvh-4rem-var(--safe-top)-var(--app-bottom-height,0px)-var(--spacing-page))] min-h-[30rem]">
+        <Card
+          className="rig-editor flex min-h-0 min-w-0 flex-1 flex-col gap-3 border-0 bg-transparent p-0 shadow-none data-loading:[&>:not([data-slot=rig-heading]):not([data-rig-switching])]:hidden"
+          aria-label="Sounding mixed rig"
+          data-loading={performSwitching || undefined}
         >
-          {error || readError || state.error}
-        </p>
-      )}
-      <FailureNotice
-        failure={editFailure}
-        busy={editing}
-        onRefresh={() => {
-          clearEdit();
-          void rigAudioState().then(accept, () => {});
-        }}
-      />
-      <RigChainSurface rig={rig} vm={vm} />
-      {/* Output row under the chain (7.28). */}
-      <div className="grid gap-3 border-t border-border pt-3">
-        <MasterLevel
-          extra={
-            <>
-              <GuitarPicker />
-              {matching && (
-                <BoostControl
-                  targets={[
-                    {
-                      key: boostKey.scenes(matching.manifest.id),
-                      label: matching.manifest.name,
-                    },
-                    ...(soundingScene
-                      ? [
-                          {
-                            key: boostKey.scene(
-                              matching.manifest.id,
-                              soundingScene.id,
-                            ),
-                            label: `Scene · ${soundingScene.name}`,
-                          },
-                        ]
-                      : []),
-                  ]}
-                />
-              )}
-            </>
-          }
-        />
-        {!!state.control?.prepared?.length && (
-          <details className="min-w-0 border-y border-border [&+details]:border-t-0 [&>[data-slot=caption]]:mx-1 [&>[data-slot=caption]]:mb-2.5 [&>summary]:min-w-0 [&>summary]:gap-2 [&>summary]:px-1 [&>summary>:first-child]:shrink-0 [&>summary>:first-child]:font-semibold">
-            <summary>
-              <span>Ready to switch</span>
-              <Badge>{state.control.prepared.length + 1} presets</Badge>
-              <span className="min-w-0 truncate text-xs font-normal text-muted-foreground">
-                {state.control.prepared.length + 1} loaded ·{' '}
-                {1 +
-                  state.control.prepared.filter((preset) => preset.rendering)
-                    .length}{' '}
-                processing
-              </span>
-            </summary>
-            <Caption>
-              Loaded presets can switch without reopening audio. Playing is the
-              sound you hear; Processing is still rendering a tail; Sleeping is
-              loaded but using no DSP. These are presets, not scenes.
-            </Caption>
-            <div
-              className="flex flex-wrap gap-2 px-1 pb-3 [&>button]:gap-2"
-              role="group"
-              aria-label="Ready presets"
+          <RigHeader rig={rig} vm={vm} />
+          <RecoveryNotice message={state.recovery_error} />
+          {(error || readError || state.error) && (
+            <p
+              role="alert"
+              className="mb-4 min-w-0 rounded-lg border border-destructive px-3 py-2.5 wrap-anywhere text-destructive"
             >
-              <div className="inline-flex min-h-touch items-center gap-1.5 rounded-md border border-foreground px-3 py-2">
-                <strong>{matching?.manifest.name ?? 'Current preset'}</strong>
-                <Badge>Playing</Badge>
-                <Badge>Processing</Badge>
-              </div>
-              {state.control.prepared.map((p) => (
-                <Button
-                  key={p.revision}
-                  className="h-auto min-h-11 max-w-full min-w-0 text-left whitespace-normal"
-                  variant="outline"
-                  disabled={waiting || !!p.error}
-                  onClick={() => void switchPrepared(p.revision)}
-                >
-                  <span className="min-w-0 break-words">
-                    {p.name}
-                    {p.error
-                      ? ' · Unavailable'
-                      : p.modified
-                        ? ' · Modified'
-                        : ''}
-                  </span>
-                  {!p.error && (
-                    <Badge>{p.rendering ? 'Processing' : 'Sleeping'}</Badge>
-                  )}
-                </Button>
-              ))}
-            </div>
-          </details>
-        )}
-      </div>
-      {modelPending && (
-        <div className="flex flex-wrap items-center gap-2" role="status">
-          <span>
-            {modelChange!.progress.phase === 'applying'
-              ? 'Applying model…'
-              : 'Preparing model…'}
-          </span>
-          <Button
-            variant="outline"
-            disabled={busy}
-            onClick={async () => {
-              generationRef.current++;
-              sendingRef.current = true;
-              setBusy(true);
-              try {
-                const fresh = await rigAudioState();
-                if (
-                  fresh.control?.session !== state.control?.session ||
-                  fresh.control?.model_change?.node !== modelChange!.node ||
-                  fresh.control?.model_change?.progress.request !==
-                    modelChange!.progress.request
-                )
-                  throw new Error(
-                    'Model selection changed. Review it before cancelling.',
-                  );
-                accept(
-                  await rigAudioCommand(fresh, {
-                    kind: 'model',
-                    command: {
-                      session: fresh.control.session,
-                      expected_revision: fresh.control.revision,
-                      node: modelChange!.node,
-                      operation: { kind: 'cancel' },
-                    },
-                  }),
-                );
-              } catch (cause) {
-                if (alive.current)
-                  setError(friendlyError(cause, 'update the rig'));
-              } finally {
-                sendingRef.current = false;
-                if (alive.current) setBusy(false);
-              }
+              {error || readError || state.error}
+            </p>
+          )}
+          <FailureNotice
+            failure={editFailure}
+            busy={editing}
+            onRefresh={() => {
+              clearEdit();
+              void rigAudioState().then(accept, () => {});
             }}
-          >
-            Cancel model
-          </Button>
-        </div>
-      )}
-      {modelChange?.progress.error && (
-        <p
-          role="alert"
-          className="mb-4 min-w-0 rounded-lg border border-destructive px-3 py-2.5 wrap-anywhere text-destructive"
-        >
-          {modelChange!.progress.error}
-        </p>
-      )}
-      <RigChoosers rig={rig} vm={vm} />
-      <MaybeSheet sheet={running && selected ? selectedSheet : null}>
-        <SelectedBlockPanel rig={rig} vm={vm} />
-        <SelectedModelControls rig={rig} vm={vm} />
-        {running && selected?.kind === 'lv2' && (
-          <LiveLv2Panel rig={rig} vm={vm} />
-        )}
-        {selected?.kind !== 'lv2' && <ControlGrid rig={rig} vm={vm} />}
-      </MaybeSheet>
-      <ControlAdjustDialog rig={rig} vm={vm} />
-      {nativeLoad.engines > 0 && (
-        <div
-          className="flex flex-wrap gap-1.5"
-          aria-label="Native processing load"
-        >
-          <Badge>
-            {nativeLoad.engines}{' '}
-            {nativeLoad.engines === 1 ? 'NAM block' : 'NAM blocks'}
-          </Badge>
-          <Badge>{nativeLoad.blocks} chain blocks</Badge>
-          {nativeLoad.full + nativeLoad.lite + nativeLoad.scaled > 0 && (
-            <Badge>
-              A2 size · {nativeLoad.full} Full · {nativeLoad.lite} Lite
-              {nativeLoad.scaled > 0 ? ` · ${nativeLoad.scaled} scaled` : ''}
-            </Badge>
-          )}
-          {!!nativeLoad.oversampling.length && (
-            <Badge>Oversampling · {nativeLoad.oversampling.join(' / ')}</Badge>
-          )}
-        </div>
-      )}
-      <SceneMidi
-        trigger={false}
-        state={state}
-        disabled={waiting}
-        onCommand={async (action) => {
-          await command(action);
-        }}
-      />
-      <PathLevelsDialog rig={rig} vm={vm} />
-      {saveOpening && (
-        <AdjustmentDialog
-          title="Save copy"
-          onCancel={() => {
-            if (!busy) setSaveOpening(null);
-          }}
-        >
-          <Caption>
-            Keep this sound for offline use. The original rig stays unchanged.
-          </Caption>
-          <FormGrid>
-            <FormField>
-              Preset name
-              <input
-                disabled={busy}
-                value={name}
-                maxLength={128}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </FormField>
-            <Button
-              disabled={
-                disabled ||
-                !matching ||
-                !!edit ||
-                !!state.save?.running ||
-                !name.trim() ||
-                saveStale
-              }
-              onClick={() => void saveCopy()}
-            >
-              {busy ? 'Saving…' : 'Save'}
-            </Button>
-          </FormGrid>
-          {rig.sourceOrigin === 'mine' && rig.revision && (
-            <SaveSoundVersion
-              key={rig.revision}
-              kind="rig"
-              source={rig.revision}
-              name={name}
-              disabled={
-                disabled ||
-                !matching ||
-                !!edit ||
-                busy ||
-                !!state.save?.running ||
-                saveStale
-              }
-              onSave={saveCopy}
-            />
-          )}
-          {saveStale && (
-            <p role="status">The rig changed. Close and reopen Save copy.</p>
-          )}
-          {error && <p role="alert">{error}</p>}
-        </AdjustmentDialog>
-      )}
-      {currentSave?.error && <p role="alert">{currentSave.error}</p>}
-      {currentSave?.saved_revision && (
-        <p role="status">
-          {changed
-            ? 'Saved earlier settings · newer edits remain'
-            : 'Saved for offline use'}
-        </p>
-      )}
-    </Card>
+          />
+          <RigWorkspace rig={rig} vm={vm}>
+            {() => (
+              <div className="rig-dock grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-3">
+                <div className="min-w-0">
+                  <SceneEditor rig={rig} vm={vm} />
+                </div>
+                {/* Stomp switches follow the scenes, before the block, as
+                    Storybook's Rig orders them. */}
+                <StompControls rig={rig} vm={vm} />
+                <RigChoosers rig={rig} vm={vm} />
+                {/* The same block box on every screen, in the panel under the
+                chain bar (a phone too, as C2 draws it). Routing opens from
+                its ⋯ button. */}
+                <section aria-label="Block controls" className="min-w-0">
+                  <BlockBox rig={rig} vm={vm} />
+                </section>
+                <ControlAdjustDialog rig={rig} vm={vm} />
+                {/* The output level sits below the block box on a phone;
+                wider screens have it under the OUT meter, with the guitar
+                under IN. */}
+                <section
+                  aria-label="Output"
+                  className="grid gap-1 px-1 empty:hidden"
+                >
+                  {phone && (
+                    <div className="grid max-w-3xl gap-3">
+                      {phone && (
+                        <MasterLevel
+                          extra={
+                            <>
+                              <GuitarPicker />
+                              {matching && (
+                                <BoostControl
+                                  targets={[
+                                    {
+                                      key: boostKey.scenes(
+                                        matching.manifest.id,
+                                      ),
+                                      label: matching.manifest.name,
+                                    },
+                                    ...(soundingScene
+                                      ? [
+                                          {
+                                            key: boostKey.scene(
+                                              matching.manifest.id,
+                                              soundingScene.id,
+                                            ),
+                                            label: `Scene · ${soundingScene.name}`,
+                                          },
+                                        ]
+                                      : []),
+                                  ]}
+                                />
+                              )}
+                            </>
+                          }
+                        />
+                      )}
+                    </div>
+                  )}
+                </section>
+                {modelPending && (
+                  <div
+                    className="flex flex-wrap items-center gap-2"
+                    role="status"
+                  >
+                    <span>
+                      {modelChange!.progress.phase === 'applying'
+                        ? 'Applying model…'
+                        : 'Preparing model…'}
+                    </span>
+                    <Button
+                      variant="outline"
+                      disabled={busy}
+                      onClick={async () => {
+                        generationRef.current++;
+                        sendingRef.current = true;
+                        setBusy(true);
+                        try {
+                          const fresh = await rigAudioState();
+                          if (
+                            fresh.control?.session !== state.control?.session ||
+                            fresh.control?.model_change?.node !==
+                              modelChange!.node ||
+                            fresh.control?.model_change?.progress.request !==
+                              modelChange!.progress.request
+                          )
+                            throw new Error(
+                              'Model selection changed. Review it before cancelling.',
+                            );
+                          accept(
+                            await rigAudioCommand(fresh, {
+                              kind: 'model',
+                              command: {
+                                session: fresh.control.session,
+                                expected_revision: fresh.control.revision,
+                                node: modelChange!.node,
+                                operation: { kind: 'cancel' },
+                              },
+                            }),
+                          );
+                        } catch (cause) {
+                          if (alive.current)
+                            setError(friendlyError(cause, 'update the rig'));
+                        } finally {
+                          sendingRef.current = false;
+                          if (alive.current) setBusy(false);
+                        }
+                      }}
+                    >
+                      Cancel model
+                    </Button>
+                  </div>
+                )}
+                {modelChange?.progress.error && (
+                  <p
+                    role="alert"
+                    className="mb-4 min-w-0 rounded-lg border border-destructive px-3 py-2.5 wrap-anywhere text-destructive"
+                  >
+                    {modelChange!.progress.error}
+                  </p>
+                )}
+                {phone && <NativeLoad load={nativeLoad} />}
+                <SceneMidi
+                  trigger={false}
+                  state={state}
+                  disabled={waiting}
+                  onCommand={async (action) => {
+                    await command(action);
+                  }}
+                />
+                <PathLevelsDialog rig={rig} vm={vm} />
+                {saveOpening && (
+                  <AdjustmentDialog
+                    title="Save copy"
+                    onCancel={() => {
+                      if (!busy) setSaveOpening(null);
+                    }}
+                  >
+                    <Caption>
+                      Keep this sound for offline use. The original rig stays
+                      unchanged.
+                    </Caption>
+                    <FormGrid>
+                      <FormField>
+                        Preset name
+                        <input
+                          disabled={busy}
+                          value={name}
+                          maxLength={128}
+                          onChange={(e) => setName(e.target.value)}
+                        />
+                      </FormField>
+                      <Button
+                        disabled={
+                          disabled ||
+                          !matching ||
+                          !!edit ||
+                          !!state.save?.running ||
+                          !name.trim() ||
+                          saveStale
+                        }
+                        onClick={() => void saveCopy()}
+                      >
+                        {busy ? 'Saving…' : 'Save'}
+                      </Button>
+                    </FormGrid>
+                    {rig.sourceOrigin === 'mine' && rig.revision && (
+                      <SaveSoundVersion
+                        key={rig.revision}
+                        kind="rig"
+                        source={rig.revision}
+                        name={name}
+                        disabled={
+                          disabled ||
+                          !matching ||
+                          !!edit ||
+                          busy ||
+                          !!state.save?.running ||
+                          saveStale
+                        }
+                        onSave={saveCopy}
+                      />
+                    )}
+                    {saveStale && (
+                      <p role="status">
+                        The rig changed. Close and reopen Save copy.
+                      </p>
+                    )}
+                    {error && <p role="alert">{error}</p>}
+                  </AdjustmentDialog>
+                )}
+                {currentSave?.error && <p role="alert">{currentSave.error}</p>}
+                {currentSave?.saved_revision && (
+                  <p role="status">
+                    {changed
+                      ? 'Saved earlier settings · newer edits remain'
+                      : 'Saved for offline use'}
+                  </p>
+                )}
+              </div>
+            )}
+          </RigWorkspace>
+        </Card>
+      </div>
+    </>
   );
 }

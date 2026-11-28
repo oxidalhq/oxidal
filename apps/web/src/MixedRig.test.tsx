@@ -54,7 +54,7 @@ vi.mock('./presetChoices', async (importOriginal) => ({
 vi.mock('./RigPresetSelector', () => ({ RigPresetSelector: () => null }));
 vi.mock('./GuitarSettings', () => ({
   GuitarPicker: () => null,
-  GuitarSwitch: () => null,
+  GuitarLane: () => null,
 }));
 vi.mock('./ModelPicker', () => ({
   ModelPicker: ({ name }: { name: string }) => (
@@ -70,6 +70,17 @@ vi.mock('./LiveEq', () => ({ LiveEq: () => null }));
 vi.mock('./SceneMidi', () => ({ SceneMidi: () => null }));
 beforeEach(() => {
   sessionStorage.clear();
+  // These tests cover the phone-size block sheet; the wide screen's block box has its own tests.
+  window.matchMedia = ((query: string) => ({
+    matches: query.includes('max-width: 47.99rem'),
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
   Object.defineProperties(HTMLDialogElement.prototype, {
     showModal: {
       configurable: true,
@@ -93,6 +104,25 @@ afterEach(() => {
   Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
   Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
 });
+/** The block box's full control list: every control, models and the plugin panel. */
+async function openAllControls() {
+  fireEvent.click(await screen.findByRole('button', { name: /^All controls/ }));
+  const more = (await screen.findByText('More for this block')).closest(
+    'details',
+  )!;
+  more.open = true;
+}
+/** Close the sheet or dialog on top so the chain can be pressed again. */
+function closeTop() {
+  const dialogs = screen.queryAllByRole('dialog');
+  const top = dialogs.at(-1);
+  if (top) fireEvent.keyDown(top, { key: 'Escape' });
+}
+/** The block box's routing: split, paths, move and remove. */
+async function openRouting() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Routing…' }));
+}
+
 function setup(
   origin: 'mine' | 'oxidal_example' = 'mine',
   prepared: Array<{
@@ -197,7 +227,7 @@ function setup(
   );
   return state;
 }
-it('keeps gapless-ready presets distinct from scenes in a compact disclosure', async () => {
+it('keeps gapless-ready presets on the chain bar, distinct from scenes', async () => {
   setup('mine', [
     {
       revision: 'other',
@@ -208,14 +238,13 @@ it('keeps gapless-ready presets distinct from scenes in a compact disclosure', a
       tail: false,
     },
   ]);
-  const summary = await screen.findByText('Ready to switch');
-  expect(summary.closest('details')).not.toHaveAttribute('open');
-  expect(screen.getByText('2 presets')).toBeVisible();
-  fireEvent.click(summary);
-  expect(
-    screen.getByText(/Loaded presets can switch without reopening audio/),
-  ).toBeVisible();
-  expect(screen.getByRole('group', { name: 'Ready presets' })).toBeVisible();
+  const loaded = await screen.findByRole('button', { name: /2 loaded/ });
+  fireEvent.click(loaded);
+  const list = within(
+    await screen.findByRole('dialog', { name: 'Loaded presets' }),
+  );
+  expect(list.getByText(/These are presets, not scenes/)).toBeVisible();
+  expect(list.getByRole('button', { name: /Other rig/ })).toBeEnabled();
 });
 
 it('shares exact block scene drafts and retains the local draft after a stale write', async () => {
@@ -238,9 +267,7 @@ it('shares exact block scene drafts and retains the local draft after a stale wr
     ],
   };
   await waitFor(() => expect(vi.mocked(sceneDraft)).toHaveBeenCalled());
-  const editScenes = await screen.findByRole('button', {
-    name: 'Edit scenes',
-  });
+  const editScenes = await sceneOption('Edit scenes');
   await waitFor(() => expect(editScenes).toBeEnabled());
   fireEvent.click(editScenes);
   const grid = screen.getByRole('dialog', { name: 'Edit scenes' });
@@ -301,7 +328,7 @@ it('edits exact inner block scene states from saved defaults without using curre
       { id: 'lead', name: 'Lead', gains: [] },
     ],
   };
-  const edit = await screen.findByRole('button', { name: 'Edit scenes' });
+  const edit = await sceneOption('Edit scenes');
   await waitFor(() => expect(edit).toBeEnabled());
   fireEvent.click(edit);
   const grid = screen.getByRole('dialog', { name: 'Edit scenes' });
@@ -351,12 +378,13 @@ it('offers native capture scene settings only from verified saved defaults', asy
     ],
   };
   state.control!.scene = 'clean';
-  fireEvent.click(await screen.findByText('Current scene ·'));
+  fireEvent.click(await sceneOption(/^Scene settings/));
   const settings = await screen.findByRole('group', {
     name: 'Capture settings in scenes',
   });
   fireEvent.click(within(settings).getByRole('checkbox'));
-  fireEvent.click(screen.getByRole('button', { name: 'Update scene' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Update scene' }));
   await waitFor(() =>
     expect(device.draft?.native_controls?.clean).toEqual([
       { ...target, value: 0.6 },
@@ -429,6 +457,7 @@ it('hides the old Rig chain behind a loader while a preset prepares', async () =
 });
 it('groups native controls in hybrid rigs and toggles booleans without a slider', async () => {
   const state = setup();
+  await openAllControls();
   await screen.findByRole('button', { name: /^Adjust\s*Output/ });
   expect(
     screen.queryByRole('button', { name: /^Adjust\s*Pitch/ }),
@@ -447,6 +476,8 @@ it('groups native controls in hybrid rigs and toggles booleans without a slider'
   fireEvent.click(screen.getByRole('button', { name: 'Gate' }));
   const toggle = screen.getByRole('button', { name: /^Adjust\s*Gate enabled/ });
   expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  // A toggle switches at once: no adjustment dialog opens over the sheet.
+  const sheets = screen.queryAllByRole('dialog').length;
   fireEvent.click(toggle);
   await waitFor(() =>
     expect(rigAudioCommand).toHaveBeenCalledWith(state, {
@@ -459,17 +490,36 @@ it('groups native controls in hybrid rigs and toggles booleans without a slider'
       },
     }),
   );
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.queryAllByRole('dialog')).toHaveLength(sheets);
 });
+
+/** The scene tools sit behind the scene row's ⋯ (C2): open it first. */
+async function sceneOption(name: string | RegExp) {
+  const options = await screen.findByRole('button', { name: 'Scene options' });
+  await waitFor(() => expect(options).toBeEnabled());
+  fireEvent.click(options);
+  return screen.findByRole('button', { name });
+}
+
+/** Save a copy: in More while nothing has changed (the chain bar's Save waits for a change). */
+async function openSaveCopy() {
+  const more = await screen.findByRole('button', {
+    name: 'More preset actions',
+  });
+  await waitFor(() => expect(more).toBeEnabled());
+  fireEvent.click(more);
+  const open = await screen.findByRole('button', { name: /^Save a copy/ });
+  await waitFor(() => expect(open).toBeEnabled());
+  fireEvent.click(open);
+}
 
 it('keeps hybrid save beside the chain and saves only a confirmed opening', async () => {
   const state = setup();
-  const open = await screen.findByRole('button', { name: 'Save copy' });
-  await waitFor(() => expect(open).toBeEnabled());
+  await screen.findByRole('button', { name: 'More preset actions' });
   expect(
     screen.queryByRole('textbox', { name: 'Preset name' }),
   ).not.toBeInTheDocument();
-  fireEvent.click(open);
+  await openSaveCopy();
   expect(screen.getByRole('textbox', { name: 'Preset name' })).toHaveValue(
     'Test rig',
   );
@@ -490,9 +540,7 @@ it('keeps hybrid save beside the chain and saves only a confirmed opening', asyn
 });
 it('rejects saving a different hybrid revision while its name dialog is open', async () => {
   const state = setup();
-  const open = await screen.findByRole('button', { name: 'Save copy' });
-  await waitFor(() => expect(open).toBeEnabled());
-  fireEvent.click(open);
+  await openSaveCopy();
   vi.mocked(rigAudioState).mockResolvedValue({
     ...state,
     control: { ...state.control!, revision: 4 },
@@ -513,6 +561,7 @@ it('offers both hybrid insertion lanes and carries the chosen position to the pi
       ],
     },
   ] as NonNullable<typeof state.control>['slots'];
+  await openAllControls();
   fireEvent.click(await screen.findByRole('button', { name: 'Add block' }));
   fireEvent.click(screen.getByRole('button', { name: 'Add NAM' }));
   expect(
@@ -541,6 +590,7 @@ it('shows artwork for the selected hybrid assignment rather than another block',
       ],
     },
   ] as NonNullable<typeof state.control>['models'];
+  await openAllControls();
   fireEvent.click(
     await screen.findByRole('button', { name: 'Select model 1' }),
   );
@@ -596,10 +646,10 @@ it('explains the sounding scene as a branch mix rather than another chain', asyn
   };
   state.control!.scene = 'scene-1';
 
-  expect(await screen.findByText('Current scene ·')).toBeVisible();
-  expect(screen.getAllByText('Held foreground')).toHaveLength(2);
-  expect(screen.getByText('Live 40% · Held layer 100%')).toBeVisible();
-  fireEvent.click(screen.getByText('Current scene ·'));
+  // The selected tab names the scene; no second line repeats it.
+  expect(await screen.findAllByText('Held foreground')).toHaveLength(1);
+  // The scene's path levels are in Scene settings, behind the scene row's ⋯.
+  fireEvent.click(await sceneOption(/^Scene settings/));
   expect(
     screen.getByText(/Block controls are shared by every scene/),
   ).toBeVisible();
@@ -716,7 +766,13 @@ it('keeps a custom branch mix attached to its scene and offers Update scene', as
     await screen.findByText('1 scene updated · not saved yet.'),
   ).toBeVisible();
   expect(publishRig).not.toHaveBeenCalled();
-  expect(screen.getByRole('button', { name: 'Save copy' })).toBeDisabled();
+  // The chain bar's Save waits until the scene updates are saved or discarded.
+  expect(
+    within(screen.getByRole('toolbar', { name: 'Chain tools' })).getByRole(
+      'button',
+      { name: 'Save' },
+    ),
+  ).toBeDisabled();
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Save preset' })).toBeEnabled(),
   );
@@ -840,7 +896,7 @@ it('performs a preset with effects: a Hold tile engages the hold, other tiles sw
     }),
   );
   // Back to the rig view.
-  fireEvent.click(screen.getByRole('button', { name: 'Back to Rig' }));
+  fireEvent.click(screen.getByRole('button', { name: /back to Rig/i }));
   expect(
     await screen.findByRole('button', { name: 'Perform view' }),
   ).toBeVisible();
@@ -877,6 +933,7 @@ it('copies a read-only example on its first confirmed control edit', async () =>
   vi.mocked(rigAudioState).mockResolvedValue(
     copied as Awaited<ReturnType<typeof rigAudioState>>,
   );
+  await openAllControls();
   fireEvent.click(await screen.findByRole('button', { name: 'Gate' }));
   fireEvent.click(
     screen.getByRole('button', { name: /^Adjust\s*Gate enabled/ }),
@@ -887,6 +944,8 @@ it('copies a read-only example on its first confirmed control edit', async () =>
     name: 'Test rig',
   });
   expect(playScenes).toHaveBeenCalledWith(copy);
+  // The copy notice sits under the open All controls sheet: close it first.
+  closeTop();
   fireEvent.click(screen.getByRole('button', { name: 'Keep copy' }));
   expect(
     screen.queryByText('Editing a copy of Test rig'),
@@ -1017,6 +1076,7 @@ it('copies a path into a third path through the routing tree (7.26)', async () =
       name: /^dirt (?:pedal|lv2)(?: Off)?$/i,
     }),
   );
+  await openRouting();
   const routing = await screen.findByRole('group', {
     name: 'Routing for dirt',
   });
@@ -1087,6 +1147,7 @@ it('copies a path into a third path through the routing tree (7.26)', async () =
       .inputGains,
   ).toEqual([1, 1, 1]);
   // The split itself opens a dialog with every path's level and actions (7.28).
+  closeTop();
   const open = await screen.findByRole('button', {
     name: /Split .*2 paths: path levels/,
   });
@@ -1132,6 +1193,7 @@ it('puts the first side back when the second side of a pan fails', async () => {
       name: /^dirt (?:pedal|lv2)(?: Off)?$/i,
     }),
   );
+  await openRouting();
   const level = await screen.findByLabelText('Path 2 level');
   vi.mocked(rigAudioCommand).mockClear();
   vi.mocked(rigAudioCommand).mockImplementation(async (_, action) => {
@@ -1338,6 +1400,7 @@ it('opens the shared LV2 panel and keeps a live adjustment on the selected node 
       name: /^dirt (?:pedal|lv2)(?: Off)?$/i,
     }),
   );
+  await openAllControls();
   const panel = await screen.findByRole('region', { name: 'Verb controls' });
   const adjust = within(panel).getByRole('button', {
     name: 'Adjust Wet level',
@@ -1426,7 +1489,9 @@ it('opens the shared LV2 panel and keeps a live adjustment on the selected node 
     )?.value,
   ).toBe(1);
 
-  fireEvent.click(screen.getByRole('button', { name: 'clean lv2' }));
+  closeTop();
+  fireEvent.click(await screen.findByRole('button', { name: 'clean lv2' }));
+  await openAllControls();
   const other = await screen.findByRole('region', { name: 'Verb controls' });
   expect(
     within(other).getByRole('button', { name: 'Adjust Wet level' }),
@@ -1457,6 +1522,7 @@ it('shows live symbol controls when discovery is unavailable', async () => {
       name: /^dirt (?:pedal|lv2)(?: Off)?$/i,
     }),
   );
+  await openAllControls();
   const panel = await screen.findByRole('region', { name: 'dirt controls' });
   expect(
     within(panel).getByRole('button', { name: 'Adjust Wet mix' }),
@@ -1543,4 +1609,280 @@ it('keeps a delayed bypass reply on the original block after selecting another b
     await screen.findByRole('switch', { name: 'dirt on' }),
   ).not.toBeChecked();
   expect(command).toHaveBeenCalledTimes(1);
+});
+
+it('on a wide screen shows the selected block as one box and opens every control in a sheet', async () => {
+  // A wide screen: the phone query does not match.
+  window.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
+  const control = (
+    node: string,
+    symbol: string,
+    value: number,
+  ): RigControl => ({
+    target: { kind: 'lv2', node, symbol },
+    label: symbol,
+    value,
+    display: String(value),
+    minimum: 0,
+    maximum: 4,
+    integer: false,
+    logarithmic: false,
+    toggle: false,
+  });
+  twoPaths(
+    [
+      {
+        index: 0,
+        symbol: 'wet_mix',
+        name: 'Wet level',
+        control: true,
+        input: true,
+        audio: false,
+        output: false,
+        integer: false,
+        toggled: false,
+        logarithmic: false,
+        latency: false,
+        minimum: 0,
+        maximum: 4,
+        default: 1,
+      },
+    ],
+    [control('clean', 'wet_mix', 1), control('dirt', 'wet_mix', 2)],
+  );
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: /^dirt (?:pedal|lv2)(?: Off)?$/i,
+    }),
+  );
+  const box = await screen.findByRole('region', { name: 'dirt controls' });
+  expect(within(box).getByText(/Block on/)).toBeVisible();
+  const all = within(box).getByRole('button', { name: /^All controls/ });
+  fireEvent.click(all);
+  const sheet = await screen.findByRole('dialog', { name: 'dirt' });
+  expect(within(sheet).getByRole('button', { name: 'Done' })).toBeVisible();
+  fireEvent.click(within(sheet).getByRole('button', { name: 'Done' }));
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog', { name: 'dirt' })).toBeNull(),
+  );
+});
+
+it('lists what changed since saved, undoes one line and hears the saved sound', async () => {
+  window.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
+  const wet = (node: string, value: number): RigControl => ({
+    target: { kind: 'lv2', node, symbol: 'wet_mix' },
+    label: 'wet_mix',
+    value,
+    display: `${value} dB`,
+    minimum: 0,
+    maximum: 4,
+    integer: false,
+    logarithmic: false,
+    toggle: false,
+  });
+  const { state } = twoPaths(
+    [
+      {
+        index: 0,
+        symbol: 'wet_mix',
+        name: 'Wet level',
+        control: true,
+        input: true,
+        audio: false,
+        output: false,
+        integer: false,
+        toggled: false,
+        logarithmic: false,
+        latency: false,
+        minimum: 0,
+        maximum: 4,
+        default: 1,
+      },
+    ],
+    [wet('clean', 1), { ...wet('dirt', 2), saved: 1 }],
+  );
+  state.control!.modified = true;
+  vi.mocked(rigAudioCommand).mockImplementation(async () => state);
+  const bar = await screen.findByRole('toolbar', { name: 'Chain tools' });
+  fireEvent.click(await within(bar).findByRole('button', { name: '1 change' }));
+  const list = await screen.findByRole('list', { name: 'Changes list' });
+  expect(list).toHaveTextContent(/dirt · Wet mix 1 dB → 2 dB/);
+  fireEvent.click(
+    within(list).getByRole('button', { name: /^Undo: dirt · Wet mix/ }),
+  );
+  await waitFor(() =>
+    expect(rigAudioCommand).toHaveBeenCalledWith(expect.anything(), {
+      kind: 'control',
+      command: expect.objectContaining({
+        target: { kind: 'lv2', node: 'dirt', symbol: 'wet_mix' },
+        value: 1,
+      }),
+    }),
+  );
+});
+
+it('switches to the saved sound and back to the edits', async () => {
+  window.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
+  const wet = (node: string, value: number): RigControl => ({
+    target: { kind: 'lv2', node, symbol: 'wet_mix' },
+    label: 'wet_mix',
+    value,
+    display: `${value} dB`,
+    minimum: 0,
+    maximum: 4,
+    integer: false,
+    logarithmic: false,
+    toggle: false,
+  });
+  const { state } = twoPaths(
+    [
+      {
+        index: 0,
+        symbol: 'wet_mix',
+        name: 'Wet level',
+        control: true,
+        input: true,
+        audio: false,
+        output: false,
+        integer: false,
+        toggled: false,
+        logarithmic: false,
+        latency: false,
+        minimum: 0,
+        maximum: 4,
+        default: 1,
+      },
+    ],
+    [wet('clean', 1), { ...wet('dirt', 2), saved: 1 }],
+  );
+  state.control!.modified = true;
+  let live = state;
+  vi.mocked(rigAudioCommand).mockImplementation(async (_state, action) => {
+    if (action.kind === 'control') {
+      const control = live.control!;
+      live = {
+        ...live,
+        control: {
+          ...control,
+          revision: control.revision + 1,
+          controls: control.controls.map((c) =>
+            JSON.stringify(c.target) === JSON.stringify(action.command.target)
+              ? {
+                  ...c,
+                  value: action.command.value,
+                  display: `${action.command.value} dB`,
+                  // The device reports the saved value only while it differs.
+                  saved:
+                    action.command.value === 1 ? undefined : (c.saved ?? 1),
+                }
+              : c,
+          ),
+        },
+      };
+    }
+    return live;
+  });
+  const bar = await screen.findByRole('toolbar', { name: 'Chain tools' });
+  fireEvent.click(await within(bar).findByRole('radio', { name: 'Saved' }));
+  await waitFor(() =>
+    expect(rigAudioCommand).toHaveBeenLastCalledWith(expect.anything(), {
+      kind: 'control',
+      command: expect.objectContaining({
+        target: { kind: 'lv2', node: 'dirt', symbol: 'wet_mix' },
+        value: 1,
+      }),
+    }),
+  );
+  expect(await screen.findByText(/hearing the saved sound/)).toBeVisible();
+  fireEvent.click(within(bar).getByRole('radio', { name: 'Edited' }));
+  await waitFor(() =>
+    expect(rigAudioCommand).toHaveBeenLastCalledWith(expect.anything(), {
+      kind: 'control',
+      command: expect.objectContaining({
+        target: { kind: 'lv2', node: 'dirt', symbol: 'wet_mix' },
+        value: 2,
+      }),
+    }),
+  );
+});
+
+it('lists nothing when the device reports no saved values that differ', async () => {
+  const { state } = twoPaths(
+    [
+      {
+        index: 0,
+        symbol: 'wet_mix',
+        name: 'Wet level',
+        control: true,
+        input: true,
+        audio: false,
+        output: false,
+        integer: false,
+        toggled: false,
+        logarithmic: false,
+        latency: false,
+        minimum: 0,
+        maximum: 4,
+        default: 1,
+      },
+    ],
+    [
+      {
+        target: { kind: 'lv2', node: 'dirt', symbol: 'wet_mix' },
+        label: 'wet_mix',
+        value: 2,
+        display: '2 dB',
+        minimum: 0,
+        maximum: 4,
+        integer: false,
+        logarithmic: false,
+        toggle: false,
+      },
+    ],
+  );
+  state.control!.modified = true;
+  state.control!.scenes = {
+    fade_ms: 15,
+    branches: [],
+    scenes: [
+      {
+        id: 'lead',
+        name: 'Lead',
+        gains: [],
+        controls: [{ node: 'dirt', symbol: 'wet_mix', value: 2 }],
+      },
+    ],
+  };
+  state.control!.scene = 'lead';
+  expect(
+    await screen.findByRole('button', { name: 'Scene 1: Lead' }),
+  ).toBeVisible();
+  expect(screen.queryByRole('button', { name: /^\d+ changes?$/ })).toBeNull();
 });

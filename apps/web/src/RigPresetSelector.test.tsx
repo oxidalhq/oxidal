@@ -33,6 +33,10 @@ vi.mock('./features/library/oxidal/readySounds', () => ({
   saveReadySound: vi.fn(),
 }));
 vi.mock('./api', () => ({
+  // A TONE3000 file's pictures in its details: none in these tests.
+  presetArtwork: vi.fn(async () => []),
+  artworkPath: () => '',
+  saveArtwork: vi.fn(),
   nativeState: vi.fn(),
   presetLibrary: vi.fn(),
   rigLibrary: vi.fn(),
@@ -520,7 +524,7 @@ it('searches descriptions and opens preset details without recalling it', async 
     screen.queryByRole('dialog', { name: 'Choose a preset' }),
   ).not.toBeInTheDocument();
   expect(select).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
   expect(
     screen.getByRole('dialog', { name: 'Choose a preset' }),
   ).toBeInTheDocument();

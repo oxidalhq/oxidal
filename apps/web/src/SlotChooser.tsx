@@ -2,7 +2,6 @@ import { ArrowLeft, MagnifyingGlass } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
-import { ActionRow } from '@oxidal/design-system/components/form-layout';
 import {
   Sheet,
   SheetBody,
@@ -13,6 +12,7 @@ import { Loading } from '@oxidal/design-system/components/states';
 import { Caption } from '@oxidal/design-system/components/text';
 import {
   EffectChoices,
+  EffectFilters,
   type EffectOption,
   EffectPlacement,
 } from '@oxidal/design-system/patterns/block-chooser';
@@ -172,29 +172,6 @@ export function SlotChooser({
       setStep('place');
     }
   };
-  function chips(
-    label: string,
-    options: readonly string[],
-    value: string | null,
-    choose: (value: string | null) => void,
-  ) {
-    return (
-      options.length > 1 && (
-        <ActionRow role="group" aria-label={label}>
-          {[null, ...options].map((option) => (
-            <Button
-              key={option ?? 'all'}
-              variant="ghost"
-              aria-pressed={value === option}
-              onClick={() => choose(option)}
-            >
-              {option ?? 'All'}
-            </Button>
-          ))}
-        </ActionRow>
-      )
-    );
-  }
   return (
     <Sheet open onOpenChange={(open) => !open && onCancel()}>
       <SheetContent
@@ -298,10 +275,14 @@ export function SlotChooser({
                 />
               </label>
               {!plugins && !error && <Loading label="Reading effects…" />}
-              {chips('Effect type', types, type, (t) =>
-                setType(t as EffectType),
-              )}
-              {chips('Source', sources, source, setSource)}
+              <EffectFilters
+                types={types}
+                type={type}
+                onType={(t) => setType(t as EffectType)}
+                makers={sources}
+                maker={source}
+                onMaker={setSource}
+              />
               <EffectChoices
                 options={options}
                 onSelect={openEffect}

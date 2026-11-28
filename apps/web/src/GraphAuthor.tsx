@@ -1,5 +1,5 @@
 import { Eraser, FloppyDisk, Plus, Stop } from '@phosphor-icons/react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@oxidal/design-system/components/button';
 import {
@@ -7,13 +7,18 @@ import {
   FormField,
   FormGrid,
 } from '@oxidal/design-system/components/form-layout';
+import { Switch } from '@oxidal/design-system/components/switch';
 import { Caption, Title } from '@oxidal/design-system/components/text';
+import { glyphFor } from '@oxidal/design-system/lib/block-glyphs';
+import { useAllControls } from '@oxidal/design-system/lib/use-all-controls';
+import { BarSlotContext } from '@oxidal/design-system/patterns/dock-context';
 import { PluginPanel } from '@oxidal/design-system/patterns/plugin-panel';
 import { RigHeading } from '@oxidal/design-system/patterns/rig-heading';
 import {
   type EffectsPresetOption,
   EffectsPresetPicker,
 } from '@oxidal/design-system/widgets/effects-preset-picker';
+import { SelectedBlockPanel } from '@oxidal/design-system/widgets/selected-block-panel';
 
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { rigAudioState } from './api';
@@ -34,11 +39,12 @@ import {
   type SavedGraph,
   type Snapshot,
 } from './api';
-import { ChainView, LedToggle } from './ChainView';
+import { LedToggle } from './ChainView';
 import { ControlEditor } from './ControlEditor';
 import { NamedSettings } from './features/library/NamedSettings';
 import { supportsNamedSettings } from './features/library/namedSettingValues';
 import { SaveSoundVersion } from './features/library/SaveSoundVersion';
+import { NativeChainWorkspace } from './features/rig/NativeChainWorkspace';
 import { StageControls } from './features/stage/StageControls';
 import { GearIcon } from './GearIcon';
 import { deviceSentence, friendlyError } from './lib/friendlyError';
@@ -48,9 +54,10 @@ import { ModelPicker } from './ModelPicker';
 import { MomentMemoryNotice } from './MomentMemoryNotice';
 import { oxidalEffectControls } from './oxidalEffectLabels';
 import { PluginSourceDetails } from './PluginSourceDetails';
-import { blockKind } from './rigChain';
+import { blockKind, type RigLaneVM } from './rigChain';
 import { RigComposer } from './RigComposer';
 import { type DraftEffect, lv2Effect } from './rigDraft';
+import { TunerButton } from './TunerButton';
 
 const emptyRig: GraphSettings['rig'] = {
   nodes: [
@@ -79,6 +86,8 @@ export function GraphAuthor({
   onOpenRig?: () => void;
   onBrowseLibrary?: () => void;
 }) {
+  // With the floating capsule, Mute is in the capsule and Protect in its ☰ menu.
+  const inCapsule = !!useContext(BarSlotContext)?.capsule;
   const [state, setState] = useState<GraphAudioState | null>(null);
   const [audio, setAudio] = useState<AudioState | null>(null);
   const [library, setLibrary] = useState<SavedGraph[]>([]);
@@ -115,6 +124,9 @@ export function GraphAuthor({
   const name = typedName ?? (running ? playingName : 'New preset');
   const [catalog, setCatalog] = useState<Lv2Plugin[]>([]);
   const [picker, setPicker] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const allControls = useAllControls();
   const [selected, setSelected] = useState<string>();
   const [namPicker, setNamPicker] = useState<'nam' | 'ir' | null>(null);
   const [mixedDraft, setMixedDraft] = useState<DraftEffect[] | null>(null);
@@ -515,16 +527,68 @@ export function GraphAuthor({
   const selectedEffect = effects.some((n) => n.id === selected)
     ? selected
     : effects[0]?.id;
+  const lanes: RigLaneVM[] = [
+    {
+      id: 'main',
+      input: 'IN',
+      blocks: effects.map((node) => {
+        const binding = active?.bindings.find((b) => b.node === node.id);
+        const plugin = catalog.find((p) => p.uri === binding?.uri);
+        const title =
+          plugin?.name ?? binding?.uri.split(/[/#]/).pop() ?? 'Effect';
+        const hint = `${title} ${binding?.uri ?? ''}`;
+        return {
+          id: node.id,
+          label: title,
+          kind: blockKind('', hint),
+          // LV2 hosting exposes one rig-wide bypass, not per-block bypass.
+          on: !state?.control?.bypassed,
+          face: <GearIcon gear="" name={hint} />,
+        };
+      }),
+    },
+  ];
+  const canSave = !!running && !disabled && !state?.control?.edit;
+  // One rig-wide bypass: LV2 hosting has no per-block bypass.
+  const toggleAll = () => {
+    const control = state?.control;
+    if (!control) return;
+    void command({
+      kind: 'control',
+      command: {
+        session: control.session,
+        protocol: 1,
+        request_id: crypto.randomUUID(),
+        expected_revision: control.revision,
+        action: {
+          type: 'set',
+          target: 'rig.bypass',
+          value: control.bypassed ? 0 : 1,
+        },
+      },
+    });
+  };
+  const requestStop = () => {
+    if (!state) return;
+    if (!liveOnly || state.saved_copy) stopAudio(state);
+    else setStopOpening(state);
+  };
   return (
     <section
-      className={liveOnly ? 'panel space-y-3' : 'space-y-3'}
+      className="min-w-0 space-y-2 [&>[data-slot=rig-heading]]:-mx-page"
       aria-label="Effects authoring"
     >
       {liveOnly ? (
         <RigHeading
           playing={running}
           identity={
-            <div className="grid min-w-0 flex-[1_1_12rem]">
+            <div
+              className={
+                inCapsule
+                  ? 'flex min-w-0 items-center'
+                  : 'grid min-w-0 flex-[1_1_12rem]'
+              }
+            >
               <h2 className="sr-only">
                 {running ? playingName : 'Effects presets'}
               </h2>
@@ -548,6 +612,7 @@ export function GraphAuthor({
                 loading={libraryLoading}
                 stopped={!running}
                 edited={!state?.saved_copy}
+                capsule={inCapsule}
                 onOpen={() => {
                   pickerOpening.current = current.current;
                   setLibraryLoading(true);
@@ -560,7 +625,13 @@ export function GraphAuthor({
                   )
                 }
               />
-              <Caption as="span" role="status">
+              {/* In the capsule the status is heard, not shown: the capsule
+                  holds ‹ name ⌄ › only, as on every preset. */}
+              <Caption
+                as="span"
+                role="status"
+                className={inCapsule ? 'sr-only' : undefined}
+              >
                 {openingName
                   ? `Opening ${openingName}…`
                   : running
@@ -578,7 +649,28 @@ export function GraphAuthor({
             </div>
           }
         >
-          <StageControls connected={connected} compact />
+          {/* With the floating capsule, Mute is in the capsule and Protect in its ☰ menu. */}
+          {!inCapsule && <StageControls connected={connected} compact />}
+          {/* Tuner and the preset actions sit with the Rig tools, as on
+              every other preset. */}
+          <div
+            role="group"
+            aria-label="Rig tools"
+            className="flex items-center"
+          >
+            <TunerButton compact />
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="More preset actions"
+              aria-haspopup="dialog"
+              title="All effects on or off, and Stop audio"
+              disabled={disabled || !running || !state.control}
+              onClick={() => setActionsOpen(true)}
+            >
+              More
+            </Button>
+          </div>
         </RigHeading>
       ) : (
         <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
@@ -621,323 +713,552 @@ export function GraphAuthor({
           </ActionRow>
         </AdjustmentDialog>
       )}
-      {!liveOnly && !running && (
-        <>
-          <FormField>
-            Preset name
-            <input
-              value={name}
-              maxLength={80}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </FormField>
-          <ActionRow>
-            <Button
-              variant="outline"
-              disabled={!connected || busy}
-              onClick={() => void compose()}
-            >
-              <Plus aria-hidden="true" /> Add saved tone
-            </Button>
-            <Button
-              disabled={!connected || busy || (!state && !audio)}
-              onClick={() => {
-                setPicker(true);
-                if (state?.phase !== 'unavailable') void loadCatalog();
-              }}
-            >
-              <Plus aria-hidden="true" /> Add effect
-            </Button>
-            <Button
-              variant="outline"
-              disabled={disabled}
-              onClick={() => {
-                setDraft({ rig: emptyRig, bindings: [] });
-                setName('New preset');
-              }}
-            >
-              <Eraser aria-hidden="true" /> Clear draft
-            </Button>
-          </ActionRow>
-          <Caption>
-            Add NAM, IR or installed effects. Use a saved tone to compose a
-            native/LV2 chain.
-          </Caption>
-        </>
-      )}
-      <ChainView
-        label="Effects chain"
-        selected={selectedEffect}
-        onSelect={setSelected}
-        lanes={[
-          {
-            id: 'main',
-            input: 'IN',
-            blocks: effects.map((node) => {
-              const binding = active?.bindings.find((b) => b.node === node.id);
-              const plugin = catalog.find((p) => p.uri === binding?.uri);
-              const title =
-                plugin?.name ?? binding?.uri.split(/[/#]/).pop() ?? 'Effect';
-              const hint = `${title} ${binding?.uri ?? ''}`;
-              return {
-                id: node.id,
-                label: title,
-                kind: blockKind('', hint),
-                // LV2 hosting exposes one rig-wide bypass, not per-block bypass.
-                on: !state?.control?.bypassed,
-                face: <GearIcon gear="" name={hint} />,
-              };
-            }),
-          },
-        ]}
-      />
-      {running && state.control && (
-        <>
-          <ActionRow>
-            <LedToggle
-              on={!state.control.bypassed}
-              kind="lv2"
-              label="All effects on"
-              disabled={disabled || !!state.control.edit}
-              onToggle={() =>
-                void command({
-                  kind: 'control',
-                  command: {
-                    session: state.control!.session,
-                    protocol: 1,
-                    request_id: crypto.randomUUID(),
-                    expected_revision: state.control!.revision,
-                    action: {
-                      type: 'set',
-                      target: 'rig.bypass',
-                      value: state.control!.bypassed ? 0 : 1,
-                    },
-                  },
-                })
-              }
-            />
-            <Button
-              variant="outline"
-              disabled={disabled || !!state.control.edit}
-              onClick={() => {
-                if (!liveOnly || state.saved_copy) stopAudio(state);
-                else setStopOpening(state);
-              }}
-            >
-              <Stop aria-hidden="true" /> Stop audio
-            </Button>
-          </ActionRow>
-          {stopOpening && (
-            <AdjustmentDialog
-              title="Stop effects audio?"
-              onCancel={() => setStopOpening(null)}
-            >
-              <p>
-                You can resume this session after stopping. Save a copy first if
-                you want to keep this sound after opening another preset.
-              </p>
-              <ActionRow>
-                <Button variant="outline" onClick={() => setStopOpening(null)}>
-                  Keep playing
-                </Button>
-                <Button
-                  onClick={() => {
-                    setStopOpening(null);
-                    stopAudio(stopOpening);
-                  }}
-                >
-                  Stop without saving
-                </Button>
-              </ActionRow>
-            </AdjustmentDialog>
-          )}
-          {effects.map((node) => {
-            if (node.id !== selectedEffect) return null;
-            const binding = configured?.bindings.find(
-              (b) => b.node === node.id,
-            );
-            const plugin = catalog.find((p) => p.uri === binding?.uri);
-            const title =
-              plugin?.name ?? binding?.uri.split(/[/#]/).pop() ?? 'Effect';
-            const parameters = state.control!.parameters.filter((p) =>
-              p.id.startsWith(`${node.id}.`),
-            );
-            const bySymbol = new Map(
-              parameters.map((p) => [p.id.slice(node.id.length + 1), p]),
-            );
-            const native = parameters
-              .filter((p) => p.writable)
-              .map((p): RigControl => {
-                const symbol = p.id.slice(node.id.length + 1);
-                const port = plugin?.ports.find((p) => p.symbol === symbol);
-                const scale = controlScale(p.id);
-                return {
-                  target: { kind: 'lv2', node: node.id, symbol },
-                  label: port?.name ?? p.label,
-                  minimum: scale?.min ?? p.min,
-                  maximum: scale?.max ?? p.max,
-                  value: scale?.native(p.value) ?? p.value,
-                  display:
-                    scale?.format(p.value) ??
-                    `${Number((p.value * 100).toFixed(2))}%`,
-                  toggle: port?.toggled ?? false,
-                  integer: port?.integer ?? false,
-                  logarithmic: port?.logarithmic ?? false,
-                  scale_points: port?.scale_points,
-                };
-              });
-            const live = new Map(
-              oxidalEffectControls(native, binding?.uri).flatMap((c) =>
-                c.target.kind === 'lv2' ? [[c.target.symbol, c] as const] : [],
-              ),
-            );
-            const prefix = node.id + '.';
-            const portValues = Object.fromEntries(
-              state.native_values
-                .filter(
-                  (value) =>
-                    value.target.startsWith(prefix) &&
-                    bySymbol.get(value.target.slice(prefix.length))?.writable,
-                )
-                .map((value) => [
-                  value.target.slice(prefix.length),
-                  value.value,
-                ]),
-            );
-            return (
-              <section key={node.id} className="space-y-2" aria-label={title}>
-                <PluginPanel
-                  key={`${state.control!.session}:${node.id}`}
-                  plugin={plugin ? lv2PluginView(plugin) : { name: title }}
-                  controls={liveLv2Controls(plugin, live)}
-                  on
-                  disabled={disabled || !!state.control!.edit}
-                  onRestoreDefaults={
-                    plugin && running
-                      ? () => {
-                          const owner = current.current?.control;
-                          if (!owner || disabled || owner.edit) return;
+      {/* The C2 workspace, as on every other preset: the chain and the panel
+          share the screen's height and the panel scrolls on its own. */}
+      <div
+        className={
+          liveOnly
+            ? 'flex h-[calc(100dvh-4rem-var(--safe-top)-var(--app-bottom-height,0px)-var(--spacing-page))] min-h-[30rem]'
+            : 'flex h-[70dvh] min-h-[30rem]'
+        }
+      >
+        <NativeChainWorkspace
+          lanes={lanes}
+          selected={selectedEffect}
+          onSelect={setSelected}
+          disabled={disabled}
+          onSave={running ? () => setSaveOpen(true) : undefined}
+          canSave={canSave}
+          saveLabel="Save"
+          saveTitle="Save this effects preset"
+          stream={stream?.input}
+          midi={audio?.midi}
+          midiPort={audio?.configured?.midi?.input || undefined}
+        >
+          {() => (
+            <div className="grid min-w-0 content-start gap-3 pt-2">
+              {!liveOnly && !running && (
+                <>
+                  <FormField>
+                    Preset name
+                    <input
+                      value={name}
+                      maxLength={80}
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                  </FormField>
+                  <ActionRow>
+                    <Button
+                      variant="outline"
+                      disabled={!connected || busy}
+                      onClick={() => void compose()}
+                    >
+                      <Plus aria-hidden="true" /> Add saved tone
+                    </Button>
+                    <Button
+                      disabled={!connected || busy || (!state && !audio)}
+                      onClick={() => {
+                        setPicker(true);
+                        if (state?.phase !== 'unavailable') void loadCatalog();
+                      }}
+                    >
+                      <Plus aria-hidden="true" /> Add effect
+                    </Button>
+                    <Button
+                      variant="outline"
+                      disabled={disabled}
+                      onClick={() => {
+                        setDraft({ rig: emptyRig, bindings: [] });
+                        setName('New preset');
+                      }}
+                    >
+                      <Eraser aria-hidden="true" /> Clear draft
+                    </Button>
+                  </ActionRow>
+                  <Caption>
+                    Add NAM, IR or installed effects. Use a saved tone to
+                    compose a native/LV2 chain.
+                  </Caption>
+                </>
+              )}
+              {running && state.control && (
+                <>
+                  {!liveOnly && (
+                    <ActionRow>
+                      <LedToggle
+                        on={!state.control.bypassed}
+                        kind="lv2"
+                        label="All effects on"
+                        disabled={disabled || !!state.control.edit}
+                        onToggle={toggleAll}
+                      />
+                      <Button
+                        variant="outline"
+                        disabled={disabled || !!state.control.edit}
+                        onClick={requestStop}
+                      >
+                        <Stop aria-hidden="true" /> Stop audio
+                      </Button>
+                    </ActionRow>
+                  )}
+                  {stopOpening && (
+                    <AdjustmentDialog
+                      title="Stop effects audio?"
+                      onCancel={() => setStopOpening(null)}
+                    >
+                      <p>
+                        You can resume this session after stopping. Save a copy
+                        first if you want to keep this sound after opening
+                        another preset.
+                      </p>
+                      <ActionRow>
+                        <Button
+                          variant="outline"
+                          onClick={() => setStopOpening(null)}
+                        >
+                          Keep playing
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            setStopOpening(null);
+                            stopAudio(stopOpening);
+                          }}
+                        >
+                          Stop without saving
+                        </Button>
+                      </ActionRow>
+                    </AdjustmentDialog>
+                  )}
+                  {effects.map((node) => {
+                    if (node.id !== selectedEffect) return null;
+                    const binding = configured?.bindings.find(
+                      (b) => b.node === node.id,
+                    );
+                    const plugin = catalog.find((p) => p.uri === binding?.uri);
+                    const title =
+                      plugin?.name ??
+                      binding?.uri.split(/[/#]/).pop() ??
+                      'Effect';
+                    const parameters = state.control!.parameters.filter((p) =>
+                      p.id.startsWith(`${node.id}.`),
+                    );
+                    const bySymbol = new Map(
+                      parameters.map((p) => [
+                        p.id.slice(node.id.length + 1),
+                        p,
+                      ]),
+                    );
+                    const native = parameters
+                      .filter((p) => p.writable)
+                      .map((p): RigControl => {
+                        const symbol = p.id.slice(node.id.length + 1);
+                        const port = plugin?.ports.find(
+                          (p) => p.symbol === symbol,
+                        );
+                        const scale = controlScale(p.id);
+                        return {
+                          target: { kind: 'lv2', node: node.id, symbol },
+                          label: port?.name ?? p.label,
+                          minimum: scale?.min ?? p.min,
+                          maximum: scale?.max ?? p.max,
+                          value: scale?.native(p.value) ?? p.value,
+                          display:
+                            scale?.format(p.value) ??
+                            `${Number((p.value * 100).toFixed(2))}%`,
+                          toggle: port?.toggled ?? false,
+                          integer: port?.integer ?? false,
+                          logarithmic: port?.logarithmic ?? false,
+                          scale_points: port?.scale_points,
+                        };
+                      });
+                    const live = new Map(
+                      oxidalEffectControls(native, binding?.uri).flatMap((c) =>
+                        c.target.kind === 'lv2'
+                          ? [[c.target.symbol, c] as const]
+                          : [],
+                      ),
+                    );
+                    const prefix = node.id + '.';
+                    const portValues = Object.fromEntries(
+                      state.native_values
+                        .filter(
+                          (value) =>
+                            value.target.startsWith(prefix) &&
+                            bySymbol.get(value.target.slice(prefix.length))
+                              ?.writable,
+                        )
+                        .map((value) => [
+                          value.target.slice(prefix.length),
+                          value.value,
+                        ]),
+                    );
+                    const at = effects.findIndex((e) => e.id === node.id);
+                    const everything = (
+                      <>
+                        <PluginPanel
+                          key={`${state.control!.session}:${node.id}`}
+                          plugin={
+                            plugin ? lv2PluginView(plugin) : { name: title }
+                          }
+                          controls={liveLv2Controls(plugin, live)}
+                          on
+                          disabled={disabled || !!state.control!.edit}
+                          onRestoreDefaults={
+                            plugin && running
+                              ? () => {
+                                  const owner = current.current?.control;
+                                  if (!owner || disabled || owner.edit) return;
+                                  void command({
+                                    kind: 'restore_plugin_defaults',
+                                    command: {
+                                      session: owner.session,
+                                      expected_revision: owner.revision,
+                                      node: node.id,
+                                    },
+                                  });
+                                }
+                              : undefined
+                          }
+                          onControl={(symbol, value) => {
+                            const parameter = bySymbol.get(symbol);
+                            const owner = current.current?.control;
+                            if (!parameter?.writable || !owner || disabled)
+                              return;
+                            const normalized =
+                              controlScale(parameter.id)?.normalized(value) ??
+                              value;
+                            void send(
+                              {
+                                type: 'set',
+                                target: parameter.id,
+                                value: normalized,
+                              },
+                              owner.revision,
+                              owner.session,
+                            ).catch((cause) =>
+                              setError(
+                                friendlyError(cause, 'change this control'),
+                              ),
+                            );
+                          }}
+                          renderRange={(control) => {
+                            const parameter = bySymbol.get(control.symbol)!;
+                            const scale = controlScale(parameter.id);
+                            return (
+                              <ControlEditor
+                                key={`${state.control!.session}:${node.id}:${parameter.id}`}
+                                parameter={{
+                                  ...parameter,
+                                  label: control.name ?? parameter.label,
+                                }}
+                                state={state.control!}
+                                connected={connected && !busy}
+                                send={send}
+                                scale={scale}
+                                formatValue={
+                                  scale &&
+                                  ((value) =>
+                                    `${scale.format(value)}${control.unit ? ` ${control.unit}` : ''}`)
+                                }
+                                appearance="value"
+                                accept={() => {}}
+                              />
+                            );
+                          }}
+                        />
+                        {plugin &&
+                          supportsNamedSettings(plugin.uri) &&
+                          running && (
+                            <NamedSettings
+                              key={JSON.stringify([
+                                state.control!.session,
+                                node.id,
+                                plugin.uri,
+                              ])}
+                              live
+                              block={{
+                                name: title,
+                                plugin,
+                                controls: portValues,
+                              }}
+                              disabled={
+                                disabled ||
+                                !!state.control!.edit ||
+                                plugin.ports.some(
+                                  (port) =>
+                                    port.input &&
+                                    port.control &&
+                                    portValues[port.symbol] === undefined,
+                                )
+                              }
+                              onApply={async (controls) => {
+                                const reviewed = state.control!;
+                                const reply = await command({
+                                  kind: 'apply_block_settings',
+                                  plugin: plugin.uri,
+                                  controls,
+                                  command: {
+                                    session: reviewed.session,
+                                    expected_revision: reviewed.revision,
+                                    node: node.id,
+                                  },
+                                });
+                                return (
+                                  reply?.control?.session ===
+                                    reviewed.session &&
+                                  Object.entries(controls).every(
+                                    ([symbol, value]) =>
+                                      reply?.native_values.some(
+                                        (p) =>
+                                          p.target === node.id + '.' + symbol &&
+                                          p.value === Math.fround(value),
+                                      ),
+                                  )
+                                );
+                              }}
+                            />
+                          )}
+                        {plugin && (
+                          <PluginSourceDetails
+                            key={plugin.uri}
+                            plugin={plugin}
+                          />
+                        )}
+                        <MomentMemoryNotice uri={binding?.uri} />
+                        {parameters.some((p) => !p.writable) && (
+                          <dl
+                            className="grid gap-1"
+                            aria-label="Plugin readings"
+                          >
+                            {parameters
+                              .filter((p) => !p.writable)
+                              .map((p) => (
+                                <div
+                                  key={p.id}
+                                  className="flex justify-between gap-3"
+                                >
+                                  <dt>{p.label}</dt>
+                                  <dd>
+                                    <output>
+                                      {controlScale(p.id)?.format(p.value) ??
+                                        p.value}
+                                    </output>
+                                  </dd>
+                                </div>
+                              ))}
+                          </dl>
+                        )}
+                      </>
+                    );
+                    // The same block card as every other Rig. This engine
+                    // has one switch for all its effects, so the card's
+                    // switch says so.
+                    return (
+                      <section
+                        key={node.id}
+                        className="min-w-0"
+                        aria-label={title}
+                      >
+                        <SelectedBlockPanel
+                          title={title}
+                          caption={
+                            plugin
+                              ? (lv2PluginView(plugin).category ?? 'Effect')
+                              : 'Effect'
+                          }
+                          position={`Main line · ${at + 1} of ${effects.length}`}
+                          glyph={glyphFor(
+                            blockKind('', `${title} ${binding?.uri ?? ''}`),
+                          )}
+                          on={!state.control!.bypassed}
+                          switchLabel="All effects"
+                          onPrevious={
+                            at > 0
+                              ? () => setSelected(effects[at - 1]!.id)
+                              : undefined
+                          }
+                          onNext={
+                            at < effects.length - 1
+                              ? () => setSelected(effects[at + 1]!.id)
+                              : undefined
+                          }
+                          onMinimise={() => setSelected(undefined)}
+                          renderSwitch={(id) => (
+                            <Switch
+                              id={id}
+                              aria-label="All effects on"
+                              checked={!state.control!.bypassed}
+                              disabled={disabled || !!state.control!.edit}
+                              onCheckedChange={toggleAll}
+                            />
+                          )}
+                          onAllControls={allControls.toggle}
+                          controlCount={
+                            parameters.filter((p) => p.writable).length
+                          }
+                          controls={null}
+                          // Every control is in the card on a laptop when
+                          // open, and always below it on a narrower screen.
+                          allControls={
+                            !allControls.inPlace || allControls.open
+                              ? everything
+                              : undefined
+                          }
+                        />
+                      </section>
+                    );
+                  })}
+                </>
+              )}
+              {!running && (
+                <ActionRow>
+                  {!liveOnly && (
+                    <Button
+                      disabled={
+                        disabled ||
+                        !stream ||
+                        audio?.device_owned ||
+                        (draft.sampleRate !== undefined &&
+                          draft.sampleRate !== sampleRate)
+                      }
+                      onClick={() => {
+                        if (stream)
                           void command({
-                            kind: 'restore_plugin_defaults',
-                            command: {
-                              session: owner.session,
-                              expected_revision: owner.revision,
-                              node: node.id,
+                            kind: 'start',
+                            settings: {
+                              name: name.trim(),
+                              library_id: draft.libraryId ?? null,
+                              stream,
+                              rig: draft.rig,
+                              bindings: draft.bindings,
+                              recall: draft.recall ?? null,
                             },
                           });
-                        }
-                      : undefined
-                  }
-                  onControl={(symbol, value) => {
-                    const parameter = bySymbol.get(symbol);
-                    const owner = current.current?.control;
-                    if (!parameter?.writable || !owner || disabled) return;
-                    const normalized =
-                      controlScale(parameter.id)?.normalized(value) ?? value;
-                    void send(
-                      { type: 'set', target: parameter.id, value: normalized },
-                      owner.revision,
-                      owner.session,
-                    ).catch((cause) =>
-                      setError(friendlyError(cause, 'change this control')),
-                    );
-                  }}
-                  renderRange={(control) => {
-                    const parameter = bySymbol.get(control.symbol)!;
-                    const scale = controlScale(parameter.id);
-                    return (
-                      <ControlEditor
-                        key={`${state.control!.session}:${node.id}:${parameter.id}`}
-                        parameter={{
-                          ...parameter,
-                          label: control.name ?? parameter.label,
+                      }}
+                    >
+                      Audition preset
+                    </Button>
+                  )}
+                  {configured && (
+                    <Button
+                      variant="outline"
+                      disabled={
+                        disabled || audio?.device_owned || starting || stopping
+                      }
+                      onClick={() => void command({ kind: 'restart' })}
+                    >
+                      Resume effects
+                    </Button>
+                  )}
+                  {liveOnly && onBrowseLibrary && (
+                    <Button variant="ghost" onClick={onBrowseLibrary}>
+                      Browse Library
+                    </Button>
+                  )}
+                  {!stream && (
+                    <p>Choose an audio device in Audio setup first.</p>
+                  )}
+                  {audio?.device_owned && (
+                    <p>
+                      Stop the current audio session before starting another
+                      rig.
+                    </p>
+                  )}
+                  {draft.sampleRate !== undefined &&
+                    draft.sampleRate !== sampleRate && (
+                      <p>
+                        This copy uses {draft.sampleRate} Hz. Match it in Audio
+                        setup before recall.
+                      </p>
+                    )}
+                </ActionRow>
+              )}
+              {!liveOnly && library.length > 0 && (
+                <div className="space-y-2" aria-label="Saved effects rigs">
+                  <h3>Saved presets</h3>
+                  <ActionRow>
+                    {library.map((item) => (
+                      <Button
+                        key={item.id}
+                        variant="outline"
+                        disabled={disabled || running}
+                        onClick={() => {
+                          setDraft({
+                            libraryId: item.id,
+                            rig: item.preset.rig,
+                            bindings: item.preset.bindings,
+                            recall: item.preset.recall,
+                            sampleRate: item.preset.sample_rate,
+                          });
+                          setName(item.preset.name);
                         }}
-                        state={state.control!}
-                        connected={connected && !busy}
-                        send={send}
-                        scale={scale}
-                        formatValue={
-                          scale &&
-                          ((value) =>
-                            `${scale.format(value)}${control.unit ? ` ${control.unit}` : ''}`)
-                        }
-                        appearance="value"
-                        accept={() => {}}
-                      />
-                    );
-                  }}
-                />
-                {plugin && supportsNamedSettings(plugin.uri) && running && (
-                  <NamedSettings
-                    key={JSON.stringify([
-                      state.control!.session,
-                      node.id,
-                      plugin.uri,
-                    ])}
-                    live
-                    block={{
-                      name: title,
-                      plugin,
-                      controls: portValues,
-                    }}
-                    disabled={
-                      disabled ||
-                      !!state.control!.edit ||
-                      plugin.ports.some(
-                        (port) =>
-                          port.input &&
-                          port.control &&
-                          portValues[port.symbol] === undefined,
-                      )
-                    }
-                    onApply={async (controls) => {
-                      const reviewed = state.control!;
-                      const reply = await command({
-                        kind: 'apply_block_settings',
-                        plugin: plugin.uri,
-                        controls,
-                        command: {
-                          session: reviewed.session,
-                          expected_revision: reviewed.revision,
-                          node: node.id,
-                        },
-                      });
-                      return (
-                        reply?.control?.session === reviewed.session &&
-                        Object.entries(controls).every(([symbol, value]) =>
-                          reply?.native_values.some(
-                            (p) =>
-                              p.target === node.id + '.' + symbol &&
-                              p.value === Math.fround(value),
-                          ),
-                        )
-                      );
-                    }}
-                  />
-                )}
-                {plugin && (
-                  <PluginSourceDetails key={plugin.uri} plugin={plugin} />
-                )}
-                <MomentMemoryNotice uri={binding?.uri} />
-                {parameters.some((p) => !p.writable) && (
-                  <dl className="grid gap-1" aria-label="Plugin readings">
-                    {parameters
-                      .filter((p) => !p.writable)
-                      .map((p) => (
-                        <div key={p.id} className="flex justify-between gap-3">
-                          <dt>{p.label}</dt>
-                          <dd>
-                            <output>
-                              {controlScale(p.id)?.format(p.value) ?? p.value}
-                            </output>
-                          </dd>
-                        </div>
-                      ))}
-                  </dl>
-                )}
-              </section>
-            );
-          })}
+                      >
+                        {item.preset.name}
+                      </Button>
+                    ))}
+                  </ActionRow>
+                </div>
+              )}
+            </div>
+          )}
+        </NativeChainWorkspace>
+      </div>
+      {actionsOpen && running && state.control && (
+        <AdjustmentDialog
+          title="Preset actions"
+          onCancel={() => setActionsOpen(false)}
+        >
+          <div className="grid divide-y divide-border [&>button]:h-auto [&>button]:justify-start [&>button]:rounded-none [&>button]:py-2.5 [&>button]:text-left [&>button]:whitespace-normal">
+            <Button
+              variant="ghost"
+              type="button"
+              aria-label={
+                state.control.bypassed
+                  ? 'Turn all effects on'
+                  : 'Turn all effects off'
+              }
+              disabled={disabled || !!state.control.edit}
+              onClick={() => {
+                setActionsOpen(false);
+                toggleAll();
+              }}
+            >
+              <span className="grid gap-0.5">
+                {state.control.bypassed
+                  ? 'Turn all effects on'
+                  : 'Turn all effects off'}
+                <Caption as="span" className="font-normal">
+                  {state.control.bypassed
+                    ? 'Every effect is off; the guitar passes through'
+                    : 'Pass the guitar through without the effects'}
+                </Caption>
+              </span>
+            </Button>
+            <Button
+              variant="ghost"
+              type="button"
+              aria-label="Stop audio"
+              disabled={disabled || !!state.control.edit}
+              onClick={() => {
+                setActionsOpen(false);
+                requestStop();
+              }}
+            >
+              <span className="grid gap-0.5">
+                Stop audio
+                <Caption as="span" className="font-normal">
+                  Silence the device; Resume starts it again
+                </Caption>
+              </span>
+            </Button>
+          </div>
+        </AdjustmentDialog>
+      )}
+      {saveOpen && running && state.control && (
+        <AdjustmentDialog
+          title="Save preset"
+          onCancel={() => setSaveOpen(false)}
+        >
           <FormGrid>
             <FormField>
               Save as
@@ -950,7 +1271,11 @@ export function GraphAuthor({
             <Button
               disabled={disabled || !!state.control.edit || !name.trim()}
               onClick={() =>
-                void command({ kind: 'save_copy', name: name.trim() })
+                void command({ kind: 'save_copy', name: name.trim() }).then(
+                  (next) => {
+                    if (next && alive.current) setSaveOpen(false);
+                  },
+                )
               }
             >
               <FloppyDisk aria-hidden="true" /> Save preset
@@ -968,89 +1293,8 @@ export function GraphAuthor({
               />
             )}
           </FormGrid>
-        </>
-      )}
-      {!running && (
-        <ActionRow>
-          {!liveOnly && (
-            <Button
-              disabled={
-                disabled ||
-                !stream ||
-                audio?.device_owned ||
-                (draft.sampleRate !== undefined &&
-                  draft.sampleRate !== sampleRate)
-              }
-              onClick={() => {
-                if (stream)
-                  void command({
-                    kind: 'start',
-                    settings: {
-                      name: name.trim(),
-                      library_id: draft.libraryId ?? null,
-                      stream,
-                      rig: draft.rig,
-                      bindings: draft.bindings,
-                      recall: draft.recall ?? null,
-                    },
-                  });
-              }}
-            >
-              Audition preset
-            </Button>
-          )}
-          {configured && (
-            <Button
-              variant="outline"
-              disabled={disabled || audio?.device_owned || starting || stopping}
-              onClick={() => void command({ kind: 'restart' })}
-            >
-              Resume effects
-            </Button>
-          )}
-          {liveOnly && onBrowseLibrary && (
-            <Button variant="ghost" onClick={onBrowseLibrary}>
-              Browse Library
-            </Button>
-          )}
-          {!stream && <p>Choose an audio device in Audio setup first.</p>}
-          {audio?.device_owned && (
-            <p>Stop the current audio session before starting another rig.</p>
-          )}
-          {draft.sampleRate !== undefined &&
-            draft.sampleRate !== sampleRate && (
-              <p>
-                This copy uses {draft.sampleRate} Hz. Match it in Audio setup
-                before recall.
-              </p>
-            )}
-        </ActionRow>
-      )}
-      {!liveOnly && library.length > 0 && (
-        <div className="space-y-2" aria-label="Saved effects rigs">
-          <h3>Saved presets</h3>
-          <ActionRow>
-            {library.map((item) => (
-              <Button
-                key={item.id}
-                variant="outline"
-                disabled={disabled || running}
-                onClick={() => {
-                  setDraft({
-                    libraryId: item.id,
-                    rig: item.preset.rig,
-                    bindings: item.preset.bindings,
-                    recall: item.preset.recall,
-                    sampleRate: item.preset.sample_rate,
-                  });
-                  setName(item.preset.name);
-                }}
-              >
-                {item.preset.name}
-              </Button>
-            ))}
-          </ActionRow>
-        </div>
+          {error && <p role="alert">{error}</p>}
+        </AdjustmentDialog>
       )}
       {namPicker && (
         <ModelPicker

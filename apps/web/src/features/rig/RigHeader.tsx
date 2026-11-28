@@ -3,18 +3,22 @@ import {
   ArrowCounterClockwise,
   ArrowsClockwise,
   FloppyDisk,
-  Lightning,
   Play,
 } from '@phosphor-icons/react';
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { ActionRow } from '@oxidal/design-system/components/form-layout';
 import { Caption } from '@oxidal/design-system/components/text';
+import { useMedia } from '@oxidal/design-system/lib/use-media';
+import { BarSlotContext } from '@oxidal/design-system/patterns/dock-context';
 import { RigHeading } from '@oxidal/design-system/patterns/rig-heading';
+import { PerformButton } from '@oxidal/design-system/patterns/rig-top-bar';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import type { RigAudioState } from '../../api';
+import { setPresetChooser } from '../../commandStore';
 import { WAITING_FOR_DEVICE } from '../../lib/deviceWait';
 import { requestMidiAssignments } from '../../midiNavigation';
 import { choiceKey } from '../../presetChoices';
@@ -22,12 +26,14 @@ import { RigPresetSelector } from '../../RigPresetSelector';
 import { TunerButton } from '../../TunerButton';
 import { StageControls } from '../stage/StageControls';
 import { rigBusy, rigLocked } from './mixedRigViewModel';
+import { usePresetSlot } from './PresetSlot';
 import { RigHeaderDuplicate } from './RigHeaderDuplicate';
 import { historyShortcut } from './rigHistory';
+import { RigPresetPanel } from './RigPresetPanel';
 import type { RigViewProps } from './useMixedRigSession';
 
 /**
- * Rig header: preset selector, Perform, Save, Duplicate, Undo and Redo,
+ * Rig header: preset selector, Perform, Save a copy, Duplicate, Undo and Redo,
  * Tuner, preset actions and audio stop/resume, then the switching,
  * copy-on-edit, unsaved-edit and discard prompts and the audio status line.
  * Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z step through this session's edits, except
@@ -91,6 +97,19 @@ export function RigHeader({ rig, vm }: RigViewProps) {
   } = rig;
   const { changed, disabled, draftCount, performSwitching, running, state } =
     vm;
+  // The dock's Set list tool, while it is open.
+  const presetSlot = usePresetSlot();
+  // The one search plays a preset through this screen, with its unsaved-edit checks.
+  const chooseLatest = useRef(choose);
+  useEffect(() => {
+    chooseLatest.current = choose;
+  });
+  useEffect(() => {
+    setPresetChooser((c) => {
+      void chooseLatest.current(c);
+    });
+    return () => setPresetChooser(null);
+  }, []);
   const chooseFromStopped =
     state.phase === 'stopped' &&
     !!state.configured &&
@@ -101,6 +120,20 @@ export function RigHeader({ rig, vm }: RigViewProps) {
     !rig.readError &&
     !rigLocked(rig) &&
     !switching;
+  // With the floating capsule, Perform sits beside the preset in the capsule.
+  const inCapsule = !!useContext(BarSlotContext)?.capsule;
+  const phone = useMedia('(max-width: 47.99rem)');
+  // The shared Perform button, as Storybook's capsule draws it: the
+  // capsule's height, only its sign on a phone.
+  const performButton = (
+    <PerformButton
+      size={inCapsule ? 'xs' : 'sm'}
+      compact={phone}
+      label="Perform view"
+      disabled={waiting}
+      onPerform={() => setPerforming(true)}
+    />
+  );
   return (
     <>
       <RigHeading
@@ -124,57 +157,41 @@ export function RigHeader({ rig, vm }: RigViewProps) {
             onSelect={(choice) => void choose(choice)}
           />
         }
+        primary={inCapsule ? performButton : undefined}
       >
-        <StageControls connected={connected} compact grouped />
-        <div
-          role="group"
-          aria-label="Playing and saving"
-          className="flex items-center gap-1"
-        >
-          <Button
-            className="max-sm:w-touch max-sm:px-0"
-            aria-label="Perform view"
-            title="Scene pads and effect switches for playing live"
-            disabled={waiting}
-            onClick={() => setPerforming(true)}
-          >
-            <Lightning aria-hidden="true" />
-            <span className="max-sm:sr-only">Perform</span>
-          </Button>
-          <Button
-            variant="outline"
-            className="max-sm:w-touch max-sm:px-0"
-            aria-label="Save copy"
-            title={
-              draftCount
-                ? 'Save or discard your scene updates first'
-                : undefined
-            }
-            disabled={
-              disabled ||
-              !matching ||
-              !!edit ||
-              !!picker ||
-              !!state.save?.running ||
-              draftCount > 0
-            }
-            onClick={() => {
-              setName(matching!.manifest.name);
-              setSaveOpening(state);
-              setError('');
-            }}
-          >
-            <FloppyDisk aria-hidden="true" />
-            <span className="max-sm:sr-only">
-              {state.save?.running ? 'Saving…' : 'Save'}
-            </span>
-          </Button>
-        </div>
+        {/* With the floating capsule, Mute is in the capsule and Protect in its ☰ menu. */}
+        {!inCapsule && <StageControls connected={connected} compact grouped />}
+        {(canUndo || canRedo) && (
+          <div role="group" aria-label="Edit history" className="flex">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Undo edit"
+              title={historyTitle('Undo', '⌘Z or Ctrl+Z')}
+              disabled={!canUndo}
+              onClick={() => void stepHistory(-1)}
+            >
+              <ArrowCounterClockwise aria-hidden="true" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Redo edit"
+              title={historyTitle('Redo', '⇧⌘Z or Ctrl+Shift+Z')}
+              disabled={!canRedo}
+              onClick={() => void stepHistory(1)}
+            >
+              <ArrowClockwise aria-hidden="true" />
+            </Button>
+          </div>
+        )}
+        {/* Save is on the chain bar; Save a copy stays in More. */}
+        {!inCapsule && performButton}
         <div role="group" aria-label="Rig tools" className="flex items-center">
           <TunerButton disabled={!running} compact />
           <Button
             variant="ghost"
-            size="icon"
+            size="sm"
             aria-label="More preset actions"
             aria-haspopup="dialog"
             title="More preset actions"
@@ -189,6 +206,37 @@ export function RigHeader({ rig, vm }: RigViewProps) {
               onCancel={() => setActionsOpen(false)}
             >
               <div className="grid divide-y divide-border [&>button]:h-auto [&>button]:justify-start [&>button]:rounded-none [&>button]:py-2.5 [&>button]:text-left [&>button]:whitespace-normal">
+                <Button
+                  variant="ghost"
+                  type="button"
+                  title={
+                    draftCount
+                      ? 'Save or discard your scene updates first'
+                      : undefined
+                  }
+                  disabled={
+                    disabled ||
+                    !matching ||
+                    !!edit ||
+                    !!picker ||
+                    !!state.save?.running ||
+                    draftCount > 0
+                  }
+                  onClick={() => {
+                    setActionsOpen(false);
+                    setName(matching!.manifest.name);
+                    setSaveOpening(state);
+                    setError('');
+                  }}
+                >
+                  <FloppyDisk aria-hidden="true" />
+                  <span className="grid gap-0.5">
+                    Save a copy…
+                    <Caption as="span" className="font-normal">
+                      Keep this sound under a name, changed or not
+                    </Caption>
+                  </span>
+                </Button>
                 <RigHeaderDuplicate
                   entry={revision ? { kind: 'rig', id: revision } : null}
                   connected={connected}
@@ -247,6 +295,33 @@ export function RigHeader({ rig, vm }: RigViewProps) {
                     </Caption>
                   </span>
                 </Button>
+                {state.device_owned && (
+                  <Button
+                    variant="ghost"
+                    type="button"
+                    aria-label={
+                      state.phase === 'starting'
+                        ? 'Cancel loading'
+                        : 'Stop audio'
+                    }
+                    disabled={
+                      !connected || busy || eqBusy || !!edit || !!picker
+                    }
+                    onClick={() => {
+                      setActionsOpen(false);
+                      void command({ kind: 'stop' });
+                    }}
+                  >
+                    <span className="grid gap-0.5">
+                      {state.phase === 'starting'
+                        ? 'Cancel loading'
+                        : 'Stop audio'}
+                      <Caption as="span" className="font-normal">
+                        Silence the device; Resume starts it again
+                      </Caption>
+                    </span>
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   type="button"
@@ -265,22 +340,19 @@ export function RigHeader({ rig, vm }: RigViewProps) {
               </div>
             </AdjustmentDialog>
           )}
-          {state.device_owned ? (
+          {state.device_owned && state.phase === 'starting' && (
             <Button
               variant="ghost"
-              size="icon"
-              title={
-                state.phase === 'starting' ? 'Cancel loading' : 'Stop audio'
-              }
-              aria-label={
-                state.phase === 'starting' ? 'Cancel loading' : 'Stop audio'
-              }
+              size="sm"
+              title="Cancel loading"
+              aria-label="Cancel loading"
               disabled={!connected || busy || eqBusy || !!edit || !!picker}
               onClick={() => void command({ kind: 'stop' })}
             >
-              {state.phase === 'starting' ? 'Cancel' : 'Stop'}
+              Cancel
             </Button>
-          ) : (
+          )}
+          {!state.device_owned && (
             <Button
               aria-label="Resume audio"
               disabled={!connected || busy}
@@ -292,6 +364,16 @@ export function RigHeader({ rig, vm }: RigViewProps) {
           )}
         </div>
       </RigHeading>
+      {presetSlot &&
+        createPortal(
+          <RigPresetPanel
+            playingKey={revision ? choiceKey({ kind: 'scenes', revision }) : ''}
+            refresh={revision}
+            disabled={(waiting && !chooseFromStopped) || !!copyOnEdit}
+            onSelect={(choice) => void choose(choice)}
+          />,
+          presetSlot,
+        )}
       {performSwitching && (
         <div
           data-rig-switching

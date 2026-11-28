@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { DotsThree, SlidersHorizontal } from '@phosphor-icons/react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Badge } from '@oxidal/design-system/components/badge';
 import { Button } from '@oxidal/design-system/components/button';
@@ -6,9 +7,16 @@ import {
   ActionRow,
   FormField,
 } from '@oxidal/design-system/components/form-layout';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@oxidal/design-system/components/popover';
 import { Caption } from '@oxidal/design-system/components/text';
+import { DockableSheet } from '@oxidal/design-system/patterns/tool-dock';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
+import { setCommands } from '../../commandStore';
 import { SceneChange } from '../../SceneChange';
 import { nativeBypassKey } from '../../sceneNativeBypass';
 import { ScenePads } from '../../ScenePads';
@@ -32,6 +40,8 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
   const [menu, setMenu] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [gridOpen, setGridOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const settings = useSceneSettings({ rig, vm });
   const nativeSettings = useNativeSceneSettings({ rig, vm });
   const {
@@ -87,9 +97,32 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
       ? { ...draftedControls, [sceneId]: values }
       : draftedControls;
   };
-  const activeScene = state.control?.scenes?.scenes.find(
-    (scene) => scene.id === state.control?.scene,
-  );
+  const selectScene = (scene: string) => {
+    const control = current.current?.control;
+    if (control) {
+      setSceneDraft({ session: control.session, scene });
+      void recallScene(scene);
+    }
+  };
+  // The one search lists these scenes while the Rig is showing.
+  const selectLatest = useRef(selectScene);
+  useEffect(() => {
+    selectLatest.current = selectScene;
+  });
+  const sceneList = state.control?.scenes?.scenes;
+  useEffect(() => {
+    setCommands(
+      'rig-scenes',
+      (sceneList ?? []).map((scene, i) => ({
+        id: `scene:${scene.id}`,
+        group: 'Scenes',
+        label: `Scene ${i + 1}: ${scene.name}`,
+        keywords: 'scene recall',
+        run: () => selectLatest.current(scene.id),
+      })),
+    );
+    return () => setCommands('rig-scenes', null);
+  }, [sceneList]);
   return (
     <>
       <SceneGrid rig={rig} vm={vm} open={gridOpen} onOpenChange={setGridOpen} />
@@ -168,40 +201,63 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
       {!!state.control?.scenes?.scenes.length && (
         <ScenePads
           extra={
-            <>
-              <Button
-                variant="outline"
-                disabled={waiting || !matching}
-                onClick={() => setGridOpen(true)}
-              >
-                Edit scenes
-              </Button>
-              {matching && (
-                <SceneChange
-                  preset={matching.manifest.id}
-                  disabled={waiting}
-                  trails={
-                    matching.manifest.extensions['urn:oxidal:authoring']
-                      ?.scene_tails === 'preserve'
-                  }
-                />
-              )}
-              {activeScene && (
+            // As C2: the tabs, then one quiet ⋯ holding the scene tools.
+            <Popover open={optionsOpen} onOpenChange={setOptionsOpen}>
+              <PopoverTrigger asChild>
                 <Button
-                  type="button"
-                  variant="link"
-                  size="sm"
-                  aria-label={`Scene menu for ${activeScene.name}`}
-                  aria-haspopup="dialog"
-                  disabled={waiting}
-                  onClick={() => setMenu(activeScene.id)}
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Scene options"
+                  title="Edit scenes, scene settings and how scenes change"
                 >
-                  Scene ⋯
+                  <DotsThree weight="bold" aria-hidden="true" />
                 </Button>
-              )}
-            </>
+              </PopoverTrigger>
+              <PopoverContent
+                align="end"
+                className="grid w-72 gap-1 p-1.5 [&>button]:justify-start"
+              >
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={waiting || !matching}
+                  onClick={() => {
+                    setOptionsOpen(false);
+                    setGridOpen(true);
+                  }}
+                >
+                  Edit scenes
+                </Button>
+                {editingScene && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setOptionsOpen(false);
+                      setSettingsOpen(true);
+                    }}
+                  >
+                    <SlidersHorizontal aria-hidden="true" /> Scene settings
+                    {settings.offered.length + nativeSettings.offered.length > 0
+                      ? ` · ${settings.offered.length + nativeSettings.offered.length}`
+                      : ''}
+                  </Button>
+                )}
+                {matching && (
+                  <SceneChange
+                    preset={matching.manifest.id}
+                    disabled={waiting}
+                    trails={
+                      matching.manifest.extensions['urn:oxidal:authoring']
+                        ?.scene_tails === 'preserve'
+                    }
+                  />
+                )}
+              </PopoverContent>
+            </Popover>
           }
           onMenu={setMenu}
+          compact
           scenes={state.control.scenes.scenes}
           active={
             state.control.branch_sleep?.active_scene ??
@@ -214,13 +270,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
           }
           fading={!!state.control.scene_transitioning}
           disabled={waiting}
-          onSelect={(scene) => {
-            const control = current.current?.control;
-            if (control) {
-              setSceneDraft({ session: control.session, scene });
-              void recallScene(scene);
-            }
-          }}
+          onSelect={selectScene}
         />
       )}
       {menu && (
@@ -238,100 +288,68 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
         </Caption>
       )}
       {editingScene && (
-        <details
-          className="min-w-0 border-y border-border [&+details]:border-t-0 [&>[data-slot=caption]]:mx-1 [&>[data-slot=caption]]:mb-2.5 [&>summary]:min-w-0 [&>summary]:gap-2 [&>summary]:px-1 [&>summary>:first-child]:shrink-0 [&>summary>:first-child]:font-semibold"
-          open={changed || pending > 0 || undefined}
-        >
-          <summary>
-            <span>
-              {sceneMixChanged ? 'Editing scene' : 'Current scene'} ·{' '}
-              <strong>{editingScene.name}</strong>
-            </span>
-            {sceneMixChanged ? (
-              <Badge>Modified mix</Badge>
-            ) : drafts[editingScene.id] ? (
-              <Badge>Updated · not saved</Badge>
-            ) : (
-              !!sceneMix.length && (
-                <span className="min-w-0 truncate text-xs font-normal text-muted-foreground max-sm:hidden">
-                  {sceneMix
-                    .filter((branch) => branch.value !== 0)
-                    .map(
-                      (branch) =>
-                        `${branch.name} ${Math.round(branch.value * 100)}%`,
-                    )
-                    .join(' · ') || 'All paths muted'}
-                </span>
-              )
-            )}
-          </summary>
-          <Caption>
-            {sceneMixChanged
-              ? 'Path levels changed for this scene. Update scene keeps this mix in your edits; Save keeps it in the preset.'
-              : 'A scene recalls the path levels shown here.'}{' '}
-            Block controls are shared by every scene; use Save to keep those
-            whole-preset edits.
-          </Caption>
-          {!!sceneMix.length && (
+        <>
+          {/* The selected tab names the scene; this line speaks only when
+              the mix or a scene update is not saved yet. */}
+          {(sceneMixChanged || drafts[editingScene.id]) && (
             <div
-              className="flex flex-wrap gap-2 px-1 pb-3"
-              aria-label="Scene mix"
+              className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 px-1 py-2"
+              aria-label="Current scene"
             >
-              {sceneMix.map((branch) => (
-                <Badge
-                  key={branch.name}
-                  data-state={branch.value !== 0 ? 'active' : 'muted'}
-                >
-                  {branch.name} · {Math.round(branch.value * 100)}%
-                </Badge>
-              ))}
+              <span className="min-w-0 text-sm">
+                {sceneMixChanged ? 'Editing scene' : 'Current scene'} ·{' '}
+                <strong>{editingScene.name}</strong>
+              </span>
+              {sceneMixChanged ? (
+                <Badge>Modified mix</Badge>
+              ) : (
+                <Badge>Updated · not saved</Badge>
+              )}
             </div>
           )}
-          <SceneSettings settings={settings} />
-          <NativeSceneSettings settings={nativeSettings} />
-          {tooManySettings && (
-            <p role="alert">
-              Scenes can change at most 32 effect and capture settings together.
-            </p>
-          )}
-          {changed && (
-            <div className="flex flex-wrap items-center gap-2.5 px-1 pb-3 [&_[data-slot=caption]]:m-0">
-              <Button
-                variant="outline"
-                disabled={waiting}
-                onClick={() => void recallScene(editingScene.id)}
-              >
-                Discard changes
+          <DockableSheet
+            id="scene-settings"
+            title={`Scene settings · ${editingScene.name}`}
+            description="What this scene recalls: path levels and the settings it keeps."
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
+            footer={
+              <Button variant="outline" onClick={() => setSettingsOpen(false)}>
+                Done
               </Button>
-              <Button
-                disabled={waiting}
-                onClick={() => {
-                  const session = state.control?.session;
-                  if (!session || tooManySettings) return;
-                  setSceneUpdates({
-                    session,
-                    gains: { ...drafts, [editingScene.id]: editingSceneGains },
-                    added: addedScenes,
-                    controls: withSettings(editingScene.id),
-                    bypass: draftedBypass,
-                    native_controls: withNativeSettings(editingScene.id),
-                    native_bypass: draftedNativeBypass,
-                  });
-                  settings.reset();
-                  nativeSettings.reset();
-                }}
+            }
+          >
+            <Caption className="m-0">
+              {sceneMixChanged
+                ? 'Path levels changed for this scene. Update scene keeps this mix in your edits; Save keeps it in the preset.'
+                : 'A scene recalls the path levels shown here.'}{' '}
+              Block controls are shared by every scene; use Save to keep those
+              whole-preset edits.
+            </Caption>
+            {!!sceneMix.length && (
+              <span
+                className="flex min-w-0 flex-wrap gap-1.5"
+                aria-label="Scene mix"
               >
-                Update scene
-              </Button>
-              <Button
-                variant="outline"
-                disabled={waiting}
-                onClick={() => setNamingScene('')}
-              >
-                Save as new scene…
-              </Button>
-            </div>
-          )}
+                {sceneMix.map((branch) => (
+                  <Badge
+                    key={branch.name}
+                    data-state={branch.value !== 0 ? 'active' : 'muted'}
+                  >
+                    {branch.name} · {Math.round(branch.value * 100)}%
+                  </Badge>
+                ))}
+              </span>
+            )}
+            <SceneSettings settings={settings} />
+            <NativeSceneSettings settings={nativeSettings} />
+            {tooManySettings && (
+              <p role="alert">
+                Scenes can change at most 32 effect and capture settings
+                together.
+              </p>
+            )}
+          </DockableSheet>
           {saveReview && (
             <AdjustmentDialog
               title="Save this preset?"
@@ -482,11 +500,13 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
             </AdjustmentDialog>
           )}
           {(pending > 0 || changed) && (
+            // One row of small buttons, as the Rig surface keeps its actions:
+            // what changed, then the way back, then the ways to keep it.
             <div
-              className="flex flex-wrap items-center gap-2.5 px-1 pb-3 [&_[data-slot=caption]]:m-0"
+              className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5 px-1 pb-2"
               aria-label="Scene edits"
             >
-              <Caption as="span" role="status">
+              <Caption as="span" role="status" className="m-0 mr-auto text-xs">
                 {pending === 0
                   ? 'The mix you hear is not saved in a scene yet.'
                   : pending === 1
@@ -495,17 +515,68 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
                 {addedScenes.length > 0 &&
                   ` New: ${addedScenes.map((scene) => scene.name).join(', ')}.`}
               </Caption>
+              {changed && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={waiting}
+                  onClick={() => void recallScene(editingScene.id)}
+                >
+                  Discard changes
+                </Button>
+              )}
+              {pending > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={waiting}
+                  onClick={() => {
+                    setSceneUpdates(null);
+                    void recallScene(editingScene.id);
+                  }}
+                >
+                  Discard scene updates
+                </Button>
+              )}
+              {changed && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={waiting}
+                    onClick={() => setNamingScene('')}
+                  >
+                    Save as new scene…
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={waiting}
+                    onClick={() => {
+                      const session = state.control?.session;
+                      if (!session || tooManySettings) return;
+                      setSceneUpdates({
+                        session,
+                        gains: {
+                          ...drafts,
+                          [editingScene.id]: editingSceneGains,
+                        },
+                        added: addedScenes,
+                        controls: withSettings(editingScene.id),
+                        bypass: draftedBypass,
+                        native_controls: withNativeSettings(editingScene.id),
+                        native_bypass: draftedNativeBypass,
+                      });
+                      settings.reset();
+                      nativeSettings.reset();
+                    }}
+                  >
+                    Update scene
+                  </Button>
+                </>
+              )}
               <Button
-                variant="outline"
-                disabled={waiting}
-                onClick={() => {
-                  setSceneUpdates(null);
-                  void recallScene(editingScene.id);
-                }}
-              >
-                Discard scene updates
-              </Button>
-              <Button
+                size="sm"
+                variant={changed ? 'outline' : 'default'}
                 disabled={waiting}
                 onClick={() =>
                   changed ? setSaveReview(true) : void saveScenes(false)
@@ -515,7 +586,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
               </Button>
             </div>
           )}
-        </details>
+        </>
       )}
     </>
   );

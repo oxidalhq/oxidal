@@ -54,6 +54,9 @@ export function useToneSource(toneId: number | null, initialTone?: Tone) {
     },
     page: !tone.url || safeLink(tone.url) ? toneLink(tone) : '',
     image: toneImage(tone.id),
+    images: tone.images?.length
+      ? tone.images.slice(0, 8).map((_, i) => toneImage(tone.id, i))
+      : undefined,
     gear: gearLabel(tone.gear),
     format: tone.format.toUpperCase(),
     models: count,

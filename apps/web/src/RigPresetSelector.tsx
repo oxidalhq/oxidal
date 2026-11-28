@@ -1,5 +1,6 @@
 import { ArrowsClockwise, CaretLeft, CaretRight } from '@phosphor-icons/react';
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { Button } from '@oxidal/design-system/components/button';
 import { Loading } from '@oxidal/design-system/components/states';
@@ -10,6 +11,8 @@ import {
   TabsTrigger,
 } from '@oxidal/design-system/components/tabs';
 import { Caption, Title } from '@oxidal/design-system/components/text';
+import { useVerticalRig } from '@oxidal/design-system/lib/use-media';
+import { BarSlotContext } from '@oxidal/design-system/patterns/dock-context';
 import {
   PresetNameButton,
   PresetSteps,
@@ -77,6 +80,11 @@ export function RigPresetSelector({
   disabled: boolean;
   onSelect: (choice: Choice) => void;
 }) {
+  // In the floating capsule the heading is compact: name and ‹ › at the
+  // capsule's height; the rest of the picker goes in the opened capsule.
+  const slots = useContext(BarSlotContext);
+  const phone = useVerticalRig();
+  const inCapsule = heading && !!slots?.capsule;
   const [bank, setBank] = useState<number | null>(null);
   const [items, setItems] = useState<Choice[]>([]);
   const [error, setError] = useState('');
@@ -395,9 +403,11 @@ export function RigPresetSelector({
             : undefined
       }
       className={
-        heading
-          ? 'inline-flex min-h-touch max-w-full items-center gap-2'
-          : 'inline-flex min-h-touch min-w-0 items-center gap-2 border-b border-foreground text-left focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 min-[760px]:border-0 [&_svg]:size-5'
+        inCapsule
+          ? 'inline-flex min-h-control-xs max-w-[20rem] min-w-0 items-center gap-1.5 rounded-lg px-1.5 font-serif text-lg font-semibold hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 max-md:text-base [@media(pointer:coarse)]:min-h-touch'
+          : heading
+            ? 'inline-flex min-h-control max-w-full items-center gap-2 [@media(pointer:coarse)]:min-h-touch'
+            : 'inline-flex min-h-control min-w-0 items-center gap-2 border-b border-foreground text-left focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 min-[760px]:border-0 [&_svg]:size-5 [@media(pointer:coarse)]:min-h-touch'
       }
       disabled={disabled || preparing || (loading && !items.length)}
       onOpen={() => {
@@ -406,7 +416,17 @@ export function RigPresetSelector({
       }}
     >
       {heading ? (
-        <span className="truncate">{name}</span>
+        <span className="truncate">
+          {/* A phone's capsule keeps the room for the sound's own name. */}
+          {inCapsule && name.startsWith('Oxidal · ') ? (
+            <>
+              <span className="max-sm:hidden">Oxidal · </span>
+              {name.slice('Oxidal · '.length)}
+            </>
+          ) : (
+            name
+          )}
+        </span>
       ) : (
         <>
           {playingNumber > 0 && (
@@ -451,53 +471,9 @@ export function RigPresetSelector({
       )}
     </PresetNameButton>
   );
-  return (
-    <div
-      className={
-        heading
-          ? 'flex min-w-0 flex-wrap items-center gap-2'
-          : 'grid min-w-0 gap-1'
-      }
-      aria-label="Preset navigation"
-    >
-      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
-        {heading ? (
-          <Title size="md" className="truncate" aria-label={name}>
-            {nameButton}
-          </Title>
-        ) : (
-          nameButton
-        )}
-        <PresetSteps
-          previous={previous?.name}
-          next={next?.name}
-          disabled={disabled || loading || preparing}
-          onStep={(direction) => choose(direction < 0 ? previous : next)}
-        />
-      </div>
-      {heading && playing.modified && (
-        <span className="text-xs text-brand">Edited</span>
-      )}
-      {backingPreset && (
-        <CueLinkedMix preset={backingPreset} scope="rig" disabled={disabled} />
-      )}
-      {error && (
-        <div
-          className="col-span-full flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground"
-          role="status"
-        >
-          <span>{error}</span>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setLoading(true);
-              setRefresh((v) => v + 1);
-            }}
-          >
-            <ArrowsClockwise aria-hidden="true" /> Retry presets
-          </Button>
-        </div>
-      )}
+  // The picker and the details open the same way from the capsule and the page.
+  const dialogs = (
+    <>
       {preview && (
         <PresetDetailsDialog
           entry={entryOf(preview)}
@@ -658,6 +634,116 @@ export function RigPresetSelector({
           </Caption>
         </AdjustmentDialog>
       )}
+    </>
+  );
+  if (inCapsule)
+    return (
+      <div className="flex min-w-0 items-center" aria-label="Preset navigation">
+        {/* The page's heading is the playing preset, as before the capsule. */}
+        <h2 className="sr-only">{name}</h2>
+        {/* As C2 draws it: ‹ name ⌄ ›. Unsaved edits show on the chain bar
+            (its change count and Edited/Saved); a screen reader still hears it. */}
+        <PresetSteps
+          size="xs"
+          only="previous"
+          previous={previous?.name}
+          next={next?.name}
+          disabled={disabled || loading || preparing}
+          onStep={(direction) => choose(direction < 0 ? previous : next)}
+        />
+        {nameButton}
+        {playing.modified && <span className="sr-only">Edited</span>}
+        <PresetSteps
+          size="xs"
+          only="next"
+          previous={previous?.name}
+          next={next?.name}
+          disabled={disabled || loading || preparing}
+          onStep={(direction) => choose(direction < 0 ? previous : next)}
+        />
+        {error &&
+          (() => {
+            const retry = (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label="Retry presets"
+                title={error}
+                onClick={() => {
+                  setLoading(true);
+                  setRefresh((v) => v + 1);
+                }}
+              >
+                <ArrowsClockwise aria-hidden="true" />
+              </Button>
+            );
+            // A phone's capsule keeps the room for the name: Retry waits in
+            // the opened capsule's tray.
+            return phone && slots?.extras
+              ? createPortal(retry, slots.extras)
+              : retry;
+          })()}
+        {backingPreset &&
+          slots?.extras &&
+          createPortal(
+            <CueLinkedMix
+              preset={backingPreset}
+              scope="rig"
+              disabled={disabled}
+            />,
+            slots.extras,
+          )}
+        {dialogs}
+      </div>
+    );
+  return (
+    <div
+      className={
+        heading
+          ? 'flex min-w-0 flex-wrap items-center gap-2'
+          : 'grid min-w-0 gap-1'
+      }
+      aria-label="Preset navigation"
+    >
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
+        {heading ? (
+          <Title size="md" className="truncate" aria-label={name}>
+            {nameButton}
+          </Title>
+        ) : (
+          nameButton
+        )}
+        <PresetSteps
+          previous={previous?.name}
+          next={next?.name}
+          disabled={disabled || loading || preparing}
+          onStep={(direction) => choose(direction < 0 ? previous : next)}
+        />
+      </div>
+      {heading && playing.modified && (
+        <span className="text-xs text-brand">Edited</span>
+      )}
+      {backingPreset && (
+        <CueLinkedMix preset={backingPreset} scope="rig" disabled={disabled} />
+      )}
+      {error && (
+        <div
+          className="col-span-full flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground"
+          role="status"
+        >
+          <span>{error}</span>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setLoading(true);
+              setRefresh((v) => v + 1);
+            }}
+          >
+            <ArrowsClockwise aria-hidden="true" /> Retry presets
+          </Button>
+        </div>
+      )}
+      {dialogs}
     </div>
   );
 }

@@ -120,6 +120,16 @@ const nextSound = {
   configured: { ...configured, library_id: b.id, name: b.preset.name },
 };
 
+/** Stop audio is in Preset actions beside the Tuner, as on every Rig. */
+async function stopButton(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(
+    await screen.findByRole('button', { name: 'More preset actions' }),
+  );
+  return within(
+    screen.getByRole('dialog', { name: 'Preset actions' }),
+  ).getByRole('button', { name: 'Stop audio' });
+}
+
 beforeEach(() => {
   vi.mocked(graphLibrary).mockResolvedValue([a, b, c]);
   vi.mocked(graphAudioState).mockResolvedValue(running);
@@ -144,12 +154,14 @@ it('shows confirmed playing identity while a copy name is edited', async () => {
   const opening = await screen.findByRole('heading', {
     name: 'Playing effects',
   });
+  expect(screen.getByRole('group', { name: 'Switch preset' })).toBeVisible();
+  // Save is on the chain bar, as on every Rig; it opens the name.
+  await user.click(screen.getByRole('button', { name: /^Save$/ }));
   const name = screen.getByRole('textbox', { name: 'Save as' });
   await user.clear(name);
   await user.type(name, 'New copy');
   expect(opening).toBeVisible();
   expect(onPlaying).toHaveBeenLastCalledWith('Playing effects');
-  expect(screen.getByRole('group', { name: 'Switch preset' })).toBeVisible();
   expect(graphAudioCommand).not.toHaveBeenCalled();
   await user.click(screen.getByRole('button', { name: 'Save preset' }));
   expect(graphAudioCommand).toHaveBeenCalledWith(running, {
@@ -164,7 +176,7 @@ it('shows confirmed playing identity while a copy name is edited', async () => {
     phase: 'stopped',
     device_owned: false,
   });
-  await user.click(screen.getByRole('button', { name: 'Stop audio' }));
+  await user.click(await stopButton(user));
   expect(graphAudioCommand).toHaveBeenLastCalledWith(saved, { kind: 'stop' });
   await waitFor(() => expect(onPlaying).toHaveBeenLastCalledWith(null));
 });
@@ -181,8 +193,7 @@ it('keeps the playing session on cancel and shows the daemon’s Protect refusal
   );
   render(<GraphAuthor connected liveOnly />);
   await screen.findByRole('button', { name: 'Protected', pressed: true });
-  const stop = screen.getByRole('button', { name: 'Stop audio' });
-  await user.click(stop);
+  await user.click(await stopButton(user));
   const dialog = () =>
     screen.getByRole('dialog', { name: 'Stop effects audio?' });
   expect(graphAudioCommand).not.toHaveBeenCalled();
@@ -190,7 +201,7 @@ it('keeps the playing session on cancel and shows the daemon’s Protect refusal
     within(dialog()).getByRole('button', { name: 'Keep playing' }),
   );
   expect(graphAudioCommand).not.toHaveBeenCalled();
-  await user.click(stop);
+  await user.click(await stopButton(user));
   await user.click(
     within(dialog()).getByRole('button', { name: 'Stop without saving' }),
   );
@@ -213,8 +224,10 @@ it('keeps Stop disabled during an active adjustment', async () => {
       edit: { owner: 'other-tab', target: 'fx.gain' },
     },
   });
+  const user = userEvent.setup();
   render(<GraphAuthor connected liveOnly />);
-  const stop = await screen.findByRole('button', { name: 'Stop audio' });
+  await screen.findByRole('heading', { name: 'Playing effects' });
+  const stop = await stopButton(user);
   await waitFor(() => expect(stop).toBeDisabled());
   expect(graphAudioCommand).not.toHaveBeenCalled();
 });
@@ -222,7 +235,7 @@ it('keeps Stop disabled during an active adjustment', async () => {
 it('requires a fresh Stop confirmation if the playing session changes', async () => {
   const user = userEvent.setup();
   render(<GraphAuthor connected liveOnly />);
-  await user.click(await screen.findByRole('button', { name: 'Stop audio' }));
+  await user.click(await stopButton(user));
   const dialog = screen.getByRole('dialog', { name: 'Stop effects audio?' });
   vi.mocked(graphAudioState).mockResolvedValue({
     ...running,

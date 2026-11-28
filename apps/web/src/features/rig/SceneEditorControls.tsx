@@ -1,12 +1,10 @@
-import { Checkbox } from '@oxidal/design-system/components/checkbox';
-import { Caption } from '@oxidal/design-system/components/text';
-
 import { MAX_SCENE_CONTROLS } from '../../sceneEdit';
 import type { useSceneSettings } from './SceneEditorSettings';
+import { SceneSettingsList } from './SceneSettingsList';
 
 const key = (c: { node: string; symbol: string }) => `${c.node}:${c.symbol}`;
 
-/** The list under the scene: tick a changed setting to keep it per scene. */
+/** The effect settings a scene can keep: tick a changed setting to keep it per scene. */
 export function SceneSettings({
   settings,
 }: {
@@ -14,39 +12,26 @@ export function SceneSettings({
 }) {
   if (!settings.offered.length) return null;
   return (
-    <fieldset className="my-2 grid gap-1.5">
-      <legend className="font-semibold">Effect settings in scenes</legend>
-      <Caption>
-        Ticked settings are kept by every scene. Others stay shared by the whole
-        preset.
-      </Caption>
-      <ul className="grid gap-1">
-        {settings.offered.map((s) => (
-          <li key={key(s)}>
-            <label className="flex min-h-touch items-center gap-2">
-              <Checkbox
-                checked={s.inScenes || settings.chosen.has(key(s))}
-                disabled={s.inScenes}
-                onCheckedChange={() => settings.toggle(s)}
-              />
-              <span>
-                {s.label} {s.display}
-                <Caption as="span">
-                  {' '}
-                  · {s.stepped ? 'switches when silent' : 'glides'}
-                  {s.inScenes ? ' · in every scene' : ''}
-                  {s.changed ? ' · changed' : ''}
-                </Caption>
-              </span>
-            </label>
-          </li>
-        ))}
-      </ul>
+    <>
+      <SceneSettingsList
+        title="Effect settings in scenes"
+        help="Ticked settings are kept by every scene. Others stay shared by the whole preset."
+        rows={settings.offered.map((s) => ({
+          key: key(s),
+          label: s.label,
+          display: s.display,
+          how: s.stepped ? 'Switches when silent' : 'Glides',
+          inScenes: s.inScenes,
+          changed: s.changed,
+          checked: s.inScenes || settings.chosen.has(key(s)),
+          onToggle: () => settings.toggle(s),
+        }))}
+      />
       {settings.tooMany && (
         <p role="alert">
           Scenes can change at most {MAX_SCENE_CONTROLS} effect settings.
         </p>
       )}
-    </fieldset>
+    </>
   );
 }

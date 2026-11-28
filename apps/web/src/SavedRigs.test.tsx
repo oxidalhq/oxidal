@@ -157,10 +157,19 @@ it('reports only worker-confirmed Ready and restarts to prepare after confirmati
       title="Oxidal examples"
     />,
   );
-  // Playing + one confirmed alternative; the failed one is not Ready.
-  expect(await screen.findByText('2 of 5 presets ready')).toBeVisible();
-  expect(screen.getAllByText(/Selected · not ready yet/)).toHaveLength(2);
+  // Playing + one confirmed alternative; the failed one is not Ready. The
+  // count is Keep ready's title, and shows in full when it is open.
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: /^Keep ready/ })).toHaveAttribute(
+      'title',
+      '2 of 5 presets ready',
+    ),
+  );
+  expect(screen.getAllByText('Ready')).toHaveLength(1);
+  expect(screen.getAllByText('Not ready yet')).toHaveLength(2);
+  expect(screen.getByText('Unsaved')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: /^Keep ready/ }));
+  expect(screen.getByText('2 of 5 presets ready')).toBeVisible();
   fireEvent.click(
     screen.getByRole('button', { name: 'Prepare & restart audio…' }),
   );
@@ -333,9 +342,17 @@ it('shows set list position on Mine rows and lets extra rows join the set list',
         {
           id: 'chain-1',
           name: 'Chain',
+          caption: 'TONE3000 chain',
+          actions: () => [],
+          onDetails: () => {},
           render: (setList) => (
             <li>
-              <span>{setList.label('chain-1') || 'unknown'}</span>
+              <span>
+                {setList.badge('chain-1')?.text ??
+                  (setList.isMember('chain-1') === false
+                    ? 'Outside the set list'
+                    : 'unknown')}
+              </span>
               <button
                 type="button"
                 onClick={() => setList.toggle('chain-1', 'Chain', true)}
@@ -349,8 +366,10 @@ it('shows set list position on Mine rows and lets extra rows join the set list',
     />,
   );
   expect(await screen.findByText(/In set list #1/)).toBeInTheDocument();
-  // The rhythm row and the extra row are both outside the set list.
-  expect(screen.getAllByText(/Not in set list/)).toHaveLength(2);
+  // Only members carry a chip: the rhythm row has none, and the extra row
+  // knows it is outside the set list.
+  expect(screen.getAllByText(/In set list #/)).toHaveLength(1);
+  expect(screen.getByText('Outside the set list')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Join' }));
   await waitFor(() =>
     expect(libraryCatalog).toHaveBeenCalledWith(
@@ -423,4 +442,99 @@ it('sorts the full paged Library by device addition date and leaves older undate
     older.compareDocumentPosition(unknown) & Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
   expect(rigAudioCommand).not.toHaveBeenCalled();
+});
+
+it('on a wide screen shows the chosen preset beside the list with the menu actions and its chain', async () => {
+  // Pretend the window is 1440 px wide: only the 80rem query matches.
+  vi.stubGlobal(
+    'matchMedia',
+    (query: string) =>
+      ({
+        matches: query === '(min-width: 80rem)',
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }) as unknown as MediaQueryList,
+  );
+  vi.mocked(rigLibrary).mockResolvedValue({
+    presets: [
+      {
+        revision: revisions[0]!,
+        name: 'My lead',
+        origin: 'mine',
+        scenes: ['Clean', 'Lead'],
+        topology: 'scenes',
+        native_instances: 2,
+        lv2_instances: 0,
+        blocks: [{ kind: 'tone3000' }, { kind: 'tone3000' }],
+      },
+      {
+        revision: revisions[1]!,
+        name: 'My rhythm',
+        origin: 'mine',
+        scenes: [],
+        topology: 'serial',
+        native_instances: 1,
+        lv2_instances: 0,
+      },
+    ],
+    next: null,
+  } as never);
+  const details = vi.fn();
+  const manage = vi.fn();
+  try {
+    render(
+      <SavedRigs
+        connected
+        onOpenRig={() => {}}
+        onDetails={details}
+        onManage={manage}
+        onEdit={() => {}}
+      />,
+    );
+    const panel = await screen.findByRole('complementary', {
+      name: 'Preset details',
+    });
+    // The first row is shown at first; its chain strip and set list chip draw.
+    expect(
+      await screen.findByRole('heading', { name: 'My lead' }),
+    ).toBeVisible();
+    expect(await screen.findByText('In set list #1')).toBeVisible();
+    expect(panel).toHaveTextContent('Clean, Lead');
+    expect(panel.querySelectorAll('[data-slot=led]')).toHaveLength(2);
+    // Rows leave their ⋯ out: the panel carries the same actions.
+    expect(
+      screen.queryByRole('button', { name: 'More for My lead' }),
+    ).toBeNull();
+    for (const name of [
+      'Remove from set list',
+      'Duplicate',
+      'Rename',
+      'MIDI',
+      'Details…',
+      'Edit',
+      'Delete…',
+    ])
+      expect(
+        screen.getByRole('button', { name: new RegExp(`^${name}`) }),
+      ).toBeVisible();
+    // Choosing the other row's body shows it; nothing plays.
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Details:\s*My rhythm/ }),
+    );
+    expect(
+      await screen.findByRole('heading', { name: 'My rhythm' }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: /^Delete…/ }));
+    expect(manage).toHaveBeenCalledWith('delete', {
+      kind: 'rig',
+      id: revisions[1],
+      name: 'My rhythm',
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^Details…/ }));
+    expect(details).toHaveBeenCalledWith(revisions[1], 'My rhythm');
+    expect(rigAudioCommand).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

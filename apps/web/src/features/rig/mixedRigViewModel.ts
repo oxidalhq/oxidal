@@ -687,6 +687,19 @@ export function mixedRigViewModel({
       nodes.find((n) => n.id === id)?.kind !== 'tone3000' ||
       nativeTiles(nodes.find((n) => n.id === id)!).length > 0,
   );
+  /** Every block of the chain in route order, whatever its shape: Perform's
+   * scene cards list them with their on/off state (C2). */
+  const chainBlocks: RigBlockVM[] = (
+    canvasRoute ? stepIds(canvasRoute) : nodes.map((n) => n.id)
+  ).flatMap((id) => {
+    const node = nodes.find((n) => n.id === id);
+    if (!node || /-(mono|stereo)$/.test(id)) return [];
+    // A TONE3000 block lists its models as the chain map draws them, with
+    // their own kind (amp, cab, pedal); unknown models fall back to the block.
+    const tiles =
+      node.kind === 'tone3000' ? nativeTiles(node).filter((t) => !t.empty) : [];
+    return tiles.length ? tiles : [describeNode(node).block];
+  });
   const lanedNodes = new Set([
     ...canvasIds,
     // Mono adapters belong to their effect's tile, never a tile of their own.
@@ -852,6 +865,7 @@ export function mixedRigViewModel({
     holdOf,
     nativeSwitch,
     stageLanes,
+    chainBlocks,
     performSwitching,
   };
 }

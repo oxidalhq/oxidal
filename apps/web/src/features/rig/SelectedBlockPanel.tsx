@@ -145,12 +145,18 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
   const effects = pathBlocks(fullRoute, id) ?? 1;
   const why = 'selected-block-why';
   return (
-    <div
-      className="grid gap-3 border-t border-foreground py-3"
-      aria-label="Selected block"
-    >
+    <div className="grid gap-3 py-2 empty:hidden" aria-label="Selected block">
       {(selected?.kind !== 'lv2' || selectedView.branch) && (
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 [&>button]:justify-self-end">
+          {vm.editingScene && (
+            <span className="col-span-full text-xs text-muted-foreground">
+              Scene{' '}
+              {(state.control?.scenes?.scenes.findIndex(
+                (s) => s.id === vm.editingScene!.id,
+              ) ?? 0) + 1}{' '}
+              · {vm.editingScene.name} ›
+            </span>
+          )}
           <h3
             className="selected-block-title col-span-full m-0 min-w-0 truncate leading-tight"
             title={label}
@@ -261,13 +267,13 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
           </Button>
         </ActionRow>
       )}
-      {inLane && (
+      {inLane && (editable || !!(sides[0] && sides[1])) && (
         <div
-          className="grid gap-2 border-t border-border pt-3"
+          className="grid gap-2 pt-2"
           role="group"
           aria-label={`Routing for ${label}`}
         >
-          <p className="m-0 font-bold">
+          <p className="m-0 text-xs font-semibold small-caps text-muted-foreground">
             {inSplit
               ? `Path ${owner!.path + 1} of ${owner!.paths}`
               : sceneOwner
@@ -290,49 +296,53 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
               }
             />
           )}
-          <ActionRow>
-            <Button
-              variant="outline"
-              disabled={busy || !routable}
-              aria-describedby={routable ? undefined : why}
-              title={
-                selectedView.block.kind === 'cab'
-                  ? 'Starts a dual cab: the empty path takes a second cab.'
-                  : undefined
-              }
-              onClick={() => void editChain((route) => routeAddPath(route, id))}
-            >
-              Split here
-            </Button>
-            <Button
-              variant="outline"
-              disabled={busy || !inSplit || full}
-              aria-describedby={inSplit && !full ? undefined : why}
-              onClick={() =>
-                void editChain((route) => routeAddBranch(route, id))
-              }
-            >
-              Add path
-            </Button>
-            <Button
-              variant="outline"
-              disabled={busy || !inSplit || full}
-              aria-describedby={inSplit && !full ? undefined : why}
-              onClick={() =>
-                void editChain((route) => routeCopyBranch(route, id))
-              }
-            >
-              Copy path
-            </Button>
-            <Button
-              variant="ghost"
-              disabled={busy || !inSplit}
-              aria-describedby={inSplit ? undefined : why}
-              onClick={() => setRemoving({ path: owner!.path + 1, effects })}
-            >
-              Remove path
-            </Button>
-          </ActionRow>
+          {editable && (
+            <ActionRow>
+              <Button
+                variant="outline"
+                disabled={busy || !routable}
+                aria-describedby={routable ? undefined : why}
+                title={
+                  selectedView.block.kind === 'cab'
+                    ? 'Starts a dual cab: the empty path takes a second cab.'
+                    : undefined
+                }
+                onClick={() =>
+                  void editChain((route) => routeAddPath(route, id))
+                }
+              >
+                Split here
+              </Button>
+              <Button
+                variant="outline"
+                disabled={busy || !inSplit || full}
+                aria-describedby={inSplit && !full ? undefined : why}
+                onClick={() =>
+                  void editChain((route) => routeAddBranch(route, id))
+                }
+              >
+                Add path
+              </Button>
+              <Button
+                variant="outline"
+                disabled={busy || !inSplit || full}
+                aria-describedby={inSplit && !full ? undefined : why}
+                onClick={() =>
+                  void editChain((route) => routeCopyBranch(route, id))
+                }
+              >
+                Copy path
+              </Button>
+              <Button
+                variant="ghost"
+                disabled={busy || !inSplit}
+                aria-describedby={inSplit ? undefined : why}
+                onClick={() => setRemoving({ path: owner!.path + 1, effects })}
+              >
+                Remove path
+              </Button>
+            </ActionRow>
+          )}
           {routeWhy && (
             <Caption id={why} className="m-0">
               {routeWhy}
