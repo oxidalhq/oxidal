@@ -215,6 +215,24 @@ all-running graph bound it uses when branch sleep is off. Those counts
 describe scheduled processors. Pi measurements are required before assigning
 a processing cost or admitting larger rigs on the strength of branch sleep.
 
+## Changes since saved
+
+Every confirmed control in the rig state carries `saved` while its playing
+value differs from what the saved preset holds. With scenes, the saved value is
+the playing scene's own value when the scene sets that control, so recalling a
+scene is never reported as an edit. Effect settings, bypass, path levels and
+capture settings all use the same field, so a client lists the changes, plays
+the saved sound (send each `saved` value as an ordinary control command) and
+undoes one change without reading the preset file.
+
+## Preset list blocks
+
+Each entry of `GET /api/v1/presets/rigs` carries `blocks`: the preset's capture
+(`tone3000`) and effect (`lv2`, with its `plugin_uri`) blocks in signal order,
+each path of a split in turn before what follows the paths, with `bypassed` for
+a block saved turned off. A library list draws a preset's chain from it without
+opening the preset; it names effects from its own plugin catalog.
+
 ## Whole-native authoring and portable instance settings
 
 Whole-native blocks support live control and EQ edits, NAM and IR audition, and

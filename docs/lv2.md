@@ -394,7 +394,7 @@ plugins and explains unsupported entries. Repeated effects have numbered control
 Audition starts the real graph worker; tapping a parameter previews it immediately, Done
 keeps the adjustment, and Cancel restores its opening value. Save preset stores a named
 copy without interrupting processing. Saved rigs can be recalled after a browser reload.
-The Rig view shows these actual controls and the measured resource strip.
+The Rig view shows these actual controls, with the measured DSP, CPU, xruns and clips in its edge lanes.
 
 LV2 structural additions are currently made while stopped. Live LV2 node insertion, removal
 and reordering, mixed graphs and TONE3000 export remain unfinished. Native New preset and

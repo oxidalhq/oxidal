@@ -11,13 +11,44 @@
 
 See the [screenshots](screenshots.md) for examples.
 
+## The capsule, the chain bar and the dock
+
+Every screen has the Oxidal wordmark and one floating capsule at the top: **☰**
+(tools, display mode, Protect, restart and shut down, About), the page, and
+**Mute**. On the Rig the capsule holds the playing preset with **‹ ›** and
+**Perform**; opening it (pointer, tap or keyboard) adds the pages, Tuner,
+**More**, search and the device status. While a guitar is playing the capsule
+folds into a small bubble after a few seconds; reaching for it brings it back.
+**Settings → Display → Keep the menu open while playing** stops that, and
+**Status at the top** chooses between a status light only when something needs
+attention (Simple) or the light and its word at rest (Detailed). On a phone the
+opened capsule's extras sit in a small tray under it.
+
+On the Rig the chain bar sits under the chain: Map or Tree, the map's zoom,
+fit, centre, list and Follow, **+ Add** after the selected block, the changes
+since saving (each with its own Undo) and **Edited / Saved**, **Save**, how the
+audio stream runs, and **Hide** for the panel. Drag its grip to give the chain
+more or less room; the height and Hide are kept in this browser. **Save a
+copy…** is in **More**. The edge lanes beside the chain show the input and
+output meters, the guitar (under IN), the output level with Mono and boost
+(under OUT), the input peak and the MIDI controller, and DSP, CPU, xruns and
+clips. The scene row's **⋯** holds Edit scenes, Scene settings and Scene
+change.
+
+Player, Stems, Sheet, Set list (Rig), Tuner and Venue EQ open from **☰** into a
+dock at the left, right or bottom of the screen; each tool's **⋯** docks it
+elsewhere, floats it or closes it, and the dock remembers where tools are.
+Moving or closing a tool sends nothing to the device: a playing track keeps
+playing. On a phone the tools share one bottom sheet, and a cued track shows a
+mini player above the bottom tabs.
+
 ## Navigation and recovery
 
 An unsaved Venue EQ edit asks before leaving, including with browser Back or
 a section link. **Keep editing** retains the draft and its preview; **Revert
 and leave** restores the saved EQ before navigating.
 
-Phone navigation and the cued backing player share one bottom area. The page
+Phone navigation and the mini player share one bottom area. The page
 reserves room for both, and adjustment dialogs follow the available viewport
 during rotation and keyboard resizing.
 
@@ -52,7 +83,7 @@ From **Library → New preset**, combine saved native tones with supported
 installed LV2 effects. Compatible saved tones can be split into linked amp and
 cab stages, with effects between them. See [mixed rig setup and limits](mixed-engine.md#separate-ampcab-authoring).
 
-In Rig, **Undo** and **Redo** in the header step through the revisions saved
+In Rig, **Undo** and **Redo** (in the opened capsule and in **More**) step through the revisions saved
 while you edit this preset (Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z or Ctrl+Y; not while
 typing in a field). Each step asks first and replays the earlier revision, with
 its MIDI assignments. MIDI assignments removed with a block do not come back.

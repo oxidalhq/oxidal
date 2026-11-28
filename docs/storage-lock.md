@@ -17,7 +17,7 @@ The browser and daemon cannot choose paths or boot arguments. They send only `lo
 
 Effect-pack changes independently read the active root mount and refuse package work unless it is currently writable. A scheduled Unlocked mode does not permit apt before the restart; a scheduled Locked mode does not stop apt while the current system remains Unlocked.
 
-Settings → Maintenance shows the active and next-boot modes, why a pre-layout installation is unavailable and the restart confirmation. Storage maintenance state does not compete with DSP and playback telemetry in the persistent resource strip. Device power remains a separate typed command and still refuses while network recovery is pending.
+Settings → Maintenance shows the active and next-boot modes, why a pre-layout installation is unavailable and the restart confirmation. Storage maintenance state does not compete with DSP and playback telemetry in the device status (the capsule and the Rig's edge lanes). Device power remains a separate typed command and still refuses while network recovery is pending.
 
 ## Qualification boundary
 
