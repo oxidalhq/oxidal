@@ -236,11 +236,14 @@ export function RigTile({
   onSelect,
   drag,
   dropBefore,
+  movable,
 }: {
   block: RigBlockVM;
   selected: boolean;
   disabled?: boolean;
   onSelect: () => void;
+  /** It can be dragged by something around it (the tree's own drag). */
+  movable?: boolean;
   /** Present when the tile can be dragged to another place. */
   drag?: {
     onPointerDown: (e: ReactPointerEvent<HTMLButtonElement>) => void;
@@ -263,6 +266,7 @@ export function RigTile({
       selected={selected}
       tint={block.tint}
       lifted={!!drag?.style}
+      movable={movable ?? !!drag}
       className="group-data-[orientation=vertical]/chain:w-full data-drop-before:outline-2 data-drop-before:outline-brand data-lifted:pointer-events-none data-movable:select-none max-lg:group-data-[orientation=horizontal]/chain:w-36 max-lg:group-data-[orientation=horizontal]/route:w-36"
       data-tile={block.id}
       data-flip={block.id}

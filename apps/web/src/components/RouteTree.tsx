@@ -505,6 +505,7 @@ function Block(props: Props & { drag: Drag; id: string }) {
                 block={t}
                 selected={props.selected === t.id}
                 disabled={props.disabled}
+                movable={canMove && !!props.onMove}
                 onSelect={() => {
                   if (!drag.consumeClick()) props.onSelect(t.id);
                 }}
