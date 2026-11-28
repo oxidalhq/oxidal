@@ -1,6 +1,6 @@
+import { GitFork, Plus } from '@phosphor-icons/react';
 import { useState } from 'react';
 
-import { Button } from '@oxidal/design-system/components/button';
 import { Caption } from '@oxidal/design-system/components/text';
 
 import { AdjustmentDialog } from '../../AdjustmentDialog';
@@ -72,28 +72,42 @@ export function RigChainSurfaceChooser({ rig, vm }: RigViewProps) {
     );
   if (choice.kind === 'gap')
     return (
-      <AdjustmentDialog title="Add or split here" onCancel={close}>
-        <div
-          className="grid divide-y divide-border [&>button]:h-auto [&>button]:justify-start [&>button]:rounded-none [&>button]:py-2.5 [&>button]:text-left [&>button]:whitespace-normal"
-          aria-label="Add or split"
-        >
-          <Button
-            variant="outline"
-            onClick={() => setCanvasChoice({ ...choice, kind: 'add' })}
-          >
-            Add effect
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setCanvasChoice({ ...choice, kind: 'split' })}
-          >
-            Split here
-          </Button>
+      <AdjustmentDialog title="On this line" onCancel={close}>
+        {/* As Storybook's menu on a line: one row per choice, with its icon
+            and what it does. */}
+        <div className="grid gap-0.5" aria-label="Add or split">
+          {(
+            [
+              [
+                'add',
+                Plus,
+                'Add a block here',
+                'An effect or a model, on this line.',
+              ],
+              [
+                'split',
+                GitFork,
+                'Branch a parallel path here',
+                'Two paths: what you choose on Path 1, Path 2 empty for another effect.',
+              ],
+            ] as const
+          ).map(([kind, Icon, title, about]) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => setCanvasChoice({ ...choice, kind })}
+              className="grid min-h-touch grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 rounded-lg px-2 py-2.5 text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+            >
+              <Icon aria-hidden="true" className="mt-0.5 size-4" />
+              <span className="grid gap-0.5">
+                <span className="text-sm font-medium">{title}</span>
+                <Caption as="span" className="text-xs">
+                  {about}
+                </Caption>
+              </span>
+            </button>
+          ))}
         </div>
-        <Caption>
-          Split here makes two paths: the effect you choose on Path 1, Path 2
-          empty for another effect.
-        </Caption>
       </AdjustmentDialog>
     );
   return (
