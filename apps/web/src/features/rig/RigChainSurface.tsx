@@ -366,7 +366,7 @@ export function ChainDrawing({
         flowing={flowing}
       />
     );
-  if (!control || props.list) return <RouteTree {...props} />;
+  if (!control || props.list) return <RouteTree {...props} flowing={flowing} />;
   return (
     <PanZoom
       control={control}
@@ -376,7 +376,7 @@ export function ChainDrawing({
       className={vertical ? 'px-page pt-2 pb-3' : undefined}
     >
       <div className="p-4">
-        <RouteTree {...props} />
+        <RouteTree {...props} flowing={flowing} />
       </div>
     </PanZoom>
   );

@@ -29,7 +29,8 @@ import { pathMix, type RouteAt } from '../rigRoute';
  * phone the line and its arrow point down.
  */
 const LINK = [
-  'group/gap relative grid min-h-touch w-11 shrink-0 place-items-center',
+  // `route-link`: the theme moves its dashes while the sound flows.
+  'route-link group/gap relative grid min-h-touch w-11 shrink-0 place-items-center',
   'before:absolute before:inset-x-0 before:top-1/2 before:h-0 before:border-t before:border-dashed before:border-wire',
   'after:absolute after:top-1/2 after:right-0 after:-translate-y-1/2 after:border-y-4 after:border-l-[6px] after:border-y-transparent after:border-l-wire',
   'group-data-[orientation=vertical]/route:min-h-5 group-data-[orientation=vertical]/route:w-13 group-data-[orientation=vertical]/route:has-[button]:min-h-touch',
@@ -88,6 +89,8 @@ export type RouteTreeProps = Props;
 
 type Props = {
   route: IdStep[];
+  /** Audio is running: the lines between blocks show the sound flowing. */
+  flowing?: boolean;
   /** The tiles one block draws (a TONE3000 block may draw several). */
   tiles: (id: string) => RigBlockVM[];
   selected?: string;
@@ -171,6 +174,7 @@ export function RouteTree(props: Props) {
       ref={root}
       className="route-canvas group/route relative min-w-0 data-dragging:select-none"
       data-orientation={vertical ? 'vertical' : 'horizontal'}
+      data-flowing={props.flowing || undefined}
       role="group"
       aria-label={label}
       data-dragging={drag.active || undefined}
